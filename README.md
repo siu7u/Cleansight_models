@@ -17,16 +17,28 @@ Cleansight_models/
   负责在线加载模型、接入视频流、逐帧推理、可视化和告警
 ```
 
-当前模型集仍处于实验和登记阶段。YOLO 新模型后续给到后，需要重新钉定 YOLO 版本、重新生成特征，并重跑时序模型评估。
+## 当前任务状态
+
+详细进度见 `TASK_STATUS.md`。
+
+当前已完成基础模型集搭建、三套时序模型模板、YOLO 分组训练流水线、首轮 YOLO 训练验证、registry 登记、benchmark 骨架和 ModelScope 上传目录整理。
+
+当前仍未达到生产晋升状态：
+
+- YOLO 两个分组模型均已训练和验证，但验收结果为 FAIL。
+- 三个时序模型均已训练和评估，但刷洗类召回未达到临时目标。
+- 时序模型仍基于 `legacy-20d-v1` 历史 20 维特征，尚未用新 YOLO 分组特征重训。
+- 3 分钟端到端 benchmark 的评分器已跑通，但真实后端 prediction JSON 仍需由 CleanSightBackend 导出。
 
 ## 目录结构
 
 ```text
 .
+├── TASK_STATUS.md               # 当前任务完成情况和剩余 TODO
 ├── yolo-detection/              # YOLO 检测模型集中管理仓库
 │   ├── data/                    # 数据视图 A 引用说明
-│   ├── scripts/                 # YOLO 训练、评估、预测脚本
-│   ├── registry/yolo-v1/        # yolo-v1 版本登记
+│   ├── pipeline/                # 当前 YOLO 分组训练流水线
+│   ├── registry/                # yolo-group*-v1 版本登记
 │   ├── templates/               # YOLO 评估报告模板
 │   └── docs/PIPELINE.md         # 历史 YOLO -> MS-TCN 流程说明
 ├── temporal-gru/                # GRU 因果时序模型
@@ -186,6 +198,7 @@ PYTHONDONTWRITEBYTECODE=1 ../../CleanSightBackend/.venv/bin/python \
 ## 文档索引
 
 ```text
+TASK_STATUS.md
 temporal-gru/REPORT.md
 temporal-gru/CARD.md
 temporal-causal-tcn/REPORT.md
@@ -193,23 +206,36 @@ temporal-causal-tcn/CARD.md
 temporal-transformer/REPORT.md
 temporal-transformer/CARD.md
 yolo-detection/data/DATASET_VIEW_A.md
-yolo-detection/registry/yolo-v1/eval_report.md
+yolo-detection/registry/yolo-group1-large-v1/eval_report.md
+yolo-detection/registry/yolo-group2-small-v1/eval_report.md
 yolo-detection/templates/eval_report_template.md
 ```
 
 ## YOLO 管理状态
 
-`yolo-detection/` 已建立集中式 YOLO 管理骨架，并登记了 `yolo-v1` 的配置和报告模板。
+`yolo-detection/` 已建立集中式 YOLO 管理目录，并接入 `yolo-detection/pipeline/` 作为当前训练流水线。
 
-当前 YOLO 评估仍未完成：
+当前 YOLO 已按目标特性拆为两个并行检测分组：
 
-- `mAP@0.5`：TODO
-- `mAP@0.5:0.95`：TODO
-- 逐类 AP / Recall：TODO
-- 小目标召回：TODO
-- 单帧延迟：TODO
+| 版本 | 分组 | 类别 | 权重 | 结论 |
+| --- | --- | --- | --- | --- |
+| `yolo-group1-large-v1` | `group1_large` | hand / scope_control_body / scope_mid_section | `yolo-detection/pipeline/runs/group1_large/weights/best.pt` | FAIL |
+| `yolo-group2-small-v1` | `group2_small` | syringe / air_gun / scope_distal_end | `yolo-detection/pipeline/runs/group2_small/weights/best.pt` | FAIL |
 
-新 YOLO 模型给到后，需要补齐 `yolo-detection/registry/yolo-v1/eval_report.md` 和 `metrics.json`，再更新各时序模型的 `pin.yaml`。
+当前 YOLO 验收结果：
+
+| 分组 | mAP@0.5 | mAP@0.5:0.95 | Precision | Recall | 主要问题 |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `group1_large` | 0.522 | 0.181 | 0.594 | 0.501 | `scope_control_body` 和 `scope_mid_section` 召回不足 |
+| `group2_small` | 0.343 | 0.200 | 0.351 | 0.394 | 小目标整体不足，`syringe` / `scope_distal_end` 暂无法评估 |
+
+报告位置：
+
+- `yolo-detection/registry/yolo-group1-large-v1/eval_report.md`
+- `yolo-detection/registry/yolo-group2-small-v1/eval_report.md`
+- `benchmark/single_model/yolo_summary.md`
+
+权重文件不进入 git，已整理到 `modelscope_upload/` 供上传 ModelScope。
 
 ## 上线前门禁
 
@@ -248,10 +274,12 @@ model-bundle/
 
 ## 后续 TODO
 
-- 等待新 YOLO 模型，补齐检测评估报告。
-- 用最终 YOLO + 标准 `feature_mapping.py` 重新生成特征。
-- 重跑 GRU / Causal TCN / Transformer。
-- 测量三个模型的单 tick 延迟。
-- 增加窗口大小实验：32 / 64 / 96 / 128。
-- 优化刷洗召回，重点关注 `Long_Brushing` 和 `Short_Brushing`。
-- 建立统一 benchmark 输出，减少手工整理报告。
+- 上传 `modelscope_upload/` 下的 YOLO 与时序权重到 ModelScope，并回填真实地址、revision 或 tag。
+- 补充或重切小目标验证集，解决 `syringe` / `scope_distal_end` 无法评估的问题。
+- 提升 YOLO 弱项类别召回，尤其是 `scope_control_body`、`scope_mid_section`、`air_gun`。
+- 用新 YOLO 分组模型生成最终特征，并让离线训练特征与在线推理特征共用同一个 `step()`。
+- 基于新特征重训 GRU / Causal TCN / Transformer。
+- 测量三个时序模型的单 tick 延迟，并写回 `CARD.md`。
+- 在 CleanSightBackend 中导出真实 `clean_001.prediction.json`，完成 3 分钟端到端真实验收。
+- 完善 `pin.yaml` schema 和一键复刻脚本，支持按版本拉齐 dataset / YOLO / temporal model / feature_mapping。
+
