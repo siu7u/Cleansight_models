@@ -1,0 +1,7 @@
+# 拉取 / 转换(00_status、01_pull、02_build)只需这三个:
+opencv-python-headless
+numpy
+pyyaml
+# 训练 / 验证(03_train、04_validate)另需 ultralytics(含 torch、cv2,大件)。
+# 建议装在本项目自己的 .venv 里,保持自包含。
+ultralytics

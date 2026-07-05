@@ -1,0 +1,46 @@
+# yolo_pipeline 中央配置。改这里,不要改脚本。
+# ---------------------------------------------------------------------------
+
+# 分组:组名 -> 该组的 YOLO 显示名列表(顺序即 class id,各组从 0 开始)。
+# 未列入任何组的检测类(如 short_brush、brush_tip_out)自动忽略。
+# 加类别只能追加到列表末尾——插中间会打乱已训权重的 class id 映射。
+groups:
+  group1_large: [hand, scope_control_body, scope_mid_section]
+  group2_small: [syringe, air_gun, scope_distal_end]
+
+# 已通过人工质检、允许进数据集的视频(文件名,可只写前缀);留空 [] = 全部。
+# 新视频审核合格后追加到这里。
+only_videos:
+  - 687e3c78-clip_1781155551819_1781155629509.mp4
+  - 218f9117-clip_1781583985044_1781584006285.mp4
+  - b004acff-clip_1781584008145_1781584016511.mp4
+  - 05ba4406-clip_1781584018103_1781584033616.mp4
+  - 9f93cf16-clip_1781584034867_1781584043290.mp4
+  - af0e7803-clip_1781584048438_1781584063735.mp4
+  - 7e8f5b4f-clip_1781584064111_1781584068667.mp4
+  - ed1f1353-clip_1781659288372_1781659325362.mp4
+  - 4807dbbe-clip_1781659328328_1781659467929.mp4
+  - 65d70028-clip_1781661552468_1781661702909.mp4
+# 抽帧 / 图像
+stride: 12          # 每隔多少真实帧抽一张(30fps 下 12 ≈ 每秒 2.5 张)
+jpg_quality: 90
+
+# 稳定切分参数(与 splits.yaml 顶部保持一致;splits.yaml 是分配的唯一真源)
+val_ratio: 0.2      # 未归属视频确定性回填时,落到 val 的比例
+seed: 1337          # 确定性 hash 的盐;改了会重排未来的新视频分配(不动已有)
+
+# 训练超参
+train:
+  model: yolo11n.pt   # nano:小数据集 + 快;要更准换 yolo11s.pt
+  epochs: 100
+  imgsz: 640
+  batch: 16
+  patience: 20        # 连续多少 epoch 无提升则早停
+
+# 验收标准(可调)。04_validate 用它判 PASS/FAIL。
+# 当前数据集很小,大概率 FAIL,属实——数据变多后再收紧。
+acceptance:
+  overall_map50: 0.5       # 整体 mAP@0.5 下限
+  overall_map50_95: 0.3    # 整体 mAP@0.5:0.95 下限
+  per_class_recall: 0.7    # 逐类 recall 下限(漏检代价高)
+  per_class_precision: 0.5 # 逐类 precision 下限

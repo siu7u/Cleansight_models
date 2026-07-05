@@ -1,0 +1,23 @@
+# 稳定切分的唯一真源:视频(文件名去扩展名)-> split。
+#
+# 规则(见 pipeline/split.py):
+#   - 已在 assignments 里的视频:永远用这里写的 split,人工可改、永不自动重排。
+#   - 不在的视频:00_status.py --assign 会按 hash(seed:stem) 确定性回填并写回这里。
+#   - split 取值:train / val / test / e2e_test(后两者可手工标,供时序模型共用)。
+#   - 一个视频的所有帧只进它的 split,绝不跨 split(杜绝泄漏)。
+#
+# val_ratio / seed 与 config.yaml 保持一致;以 config.yaml 为准。
+val_ratio: 0.2
+seed: 1337
+
+assignments:
+  05ba4406-clip_1781584018103_1781584033616: train
+  218f9117-clip_1781583985044_1781584006285: train
+  4807dbbe-clip_1781659328328_1781659467929: val
+  65d70028-clip_1781661552468_1781661702909: train
+  687e3c78-clip_1781155551819_1781155629509: train
+  7e8f5b4f-clip_1781584064111_1781584068667: train
+  9f93cf16-clip_1781584034867_1781584043290: train
+  af0e7803-clip_1781584048438_1781584063735: train
+  b004acff-clip_1781584008145_1781584016511: train
+  ed1f1353-clip_1781659288372_1781659325362: val

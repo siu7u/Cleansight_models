@@ -1,0 +1,17 @@
+case_id: clean_001
+video: benchmark/e2e_3min/cases/clean_001.mp4
+duration_sec: 180
+expected:
+  result: pass
+  required_actions:
+    - Long_Brushing
+    - Short_Brushing
+  phases:
+    - name: Long_Brushing
+      start_sec: 30
+      end_sec: 90
+    - name: Short_Brushing
+      start_sec: 90
+      end_sec: 150
+  allowed_time_error_sec: 5
+

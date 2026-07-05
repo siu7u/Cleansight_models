@@ -1,0 +1,47 @@
+{
+  "version": "yolo-group1-large-v1",
+  "group": "group1_large",
+  "dataset_view_a": "project-10-at-2026-07-04-11-10-13954db4",
+  "weights": "yolo-detection/pipeline/runs/group1_large/weights/best.pt",
+  "overall": {
+    "map50": 0.522,
+    "map50_95": 0.181,
+    "precision": 0.594,
+    "recall": 0.501
+  },
+  "per_class": {
+    "hand": {
+      "precision": 0.782,
+      "recall": 0.714,
+      "map50": 0.773
+    },
+    "scope_control_body": {
+      "precision": 0.188,
+      "recall": 0.249,
+      "map50": 0.125
+    },
+    "scope_mid_section": {
+      "precision": 0.811,
+      "recall": 0.538,
+      "map50": 0.668
+    }
+  },
+  "small_object": {},
+  "runtime": {
+    "device": "NVIDIA GeForce RTX 4060 Laptop GPU",
+    "single_frame_latency_ms": 2.0,
+    "preprocess_ms": 1.1,
+    "postprocess_ms": 1.3
+  },
+  "acceptance": {
+    "status": "fail",
+    "report": "yolo-detection/pipeline/runs/group1_large/acceptance_report.md",
+    "failed_items": [
+      "整体 mAP50-95 0.181 < 0.3",
+      "scope_control_body recall 0.249 < 0.7",
+      "scope_control_body precision 0.188 < 0.5",
+      "scope_mid_section recall 0.538 < 0.7"
+    ]
+  },
+  "status": "validated_failed"
+}
