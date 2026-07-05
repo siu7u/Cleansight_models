@@ -1,0 +1,30 @@
+model:
+  name: temporal-transformer
+  version: v1
+  repo: TODO
+  revision: TODO
+
+dataset:
+  view_b: endo-project-v1
+  path: data/Endo_Project
+  source: legacy MS-TCN2 Endo_Project
+
+detection:
+  yolo_version: yolo-v1
+  registry_path: ../yolo-detection/registry/yolo-v1
+  feature_dim: 20
+
+feature_mapping:
+  version: legacy-20d-v1
+  file: feature_mapping.py
+  sha256: TODO
+  notes: replace with 64D mapping after TODO-M4 is finalized
+
+runtime:
+  online_causal: true
+  receptive_field_frames: 64
+  input_fps: TODO
+  output_labels:
+    - Idle
+    - Long_Brushing
+    - Short_Brushing

@@ -1,0 +1,11 @@
+version: yolo-group1-large-v1
+source: cleansight-yolo-pipeline-main
+group: group1_large
+classes:
+  0: hand
+  1: scope_control_body
+  2: scope_mid_section
+notes:
+  - 类别顺序来自 cleansight-yolo-pipeline-main/config.yaml。
+  - 只能在列表末尾追加类别，不能插入或重排，否则会打乱 class id。
+

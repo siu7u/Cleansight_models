@@ -1,0 +1,11 @@
+version: yolo-group2-small-v1
+source: cleansight-yolo-pipeline-main
+group: group2_small
+classes:
+  0: syringe
+  1: air_gun
+  2: scope_distal_end
+notes:
+  - 类别顺序来自 cleansight-yolo-pipeline-main/config.yaml。
+  - 该组包含小目标，验收时需要重点关注逐类召回和小目标召回。
+

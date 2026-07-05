@@ -1,0 +1,124 @@
+# CleanSight model-set gitignore
+#
+# Keep source code, configs, registry metadata, model cards, and reports in git.
+# Keep raw media, generated datasets, training outputs, local secrets, and large
+# model binaries out of git. Version large weights with ModelScope or Git LFS.
+
+# ---------------------------------------------------------------------------
+# OS / editor noise
+# ---------------------------------------------------------------------------
+.DS_Store
+._*
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# ---------------------------------------------------------------------------
+# Python cache / tooling cache
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# ---------------------------------------------------------------------------
+# Local environments and secrets
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+env/
+ENV/
+
+# ---------------------------------------------------------------------------
+# Logs, temporary files, and local scratch output
+# ---------------------------------------------------------------------------
+*.log
+logs/
+tmp/
+temp/
+.cache/
+
+# ---------------------------------------------------------------------------
+# Raw media and generated datasets
+# ---------------------------------------------------------------------------
+datasets/
+**/raw/videos/
+**/raw/media/
+**/raw/downloads/
+**/datasets/
+
+# ---------------------------------------------------------------------------
+# Feature stores and derived temporal datasets
+# ---------------------------------------------------------------------------
+**/data/Endo_Project/
+**/data/raw/
+**/data/processed/
+**/data/features/
+**/data/groundTruth/
+**/data/ground_truth/
+**/data/cache/
+**/*.npy
+**/*.npz
+
+# ---------------------------------------------------------------------------
+# Training outputs and experiment artifacts
+# ---------------------------------------------------------------------------
+**/checkpoints/
+**/runs/
+**/outputs/
+**/results/
+**/experiments/
+**/wandb/
+**/mlruns/
+
+# YOLO local assets that are not registry metadata.
+yolo-detection/base_weights/
+yolo-detection/experiments/
+
+# Keep benchmark scripts and markdown summaries, but ignore bulky benchmark
+# outputs unless explicitly promoted into reports.
+benchmark/**/outputs/
+benchmark/**/predictions/
+benchmark/**/visualizations/
+benchmark/**/*.mp4
+benchmark/**/*.avi
+benchmark/**/*.mov
+
+# ---------------------------------------------------------------------------
+# Large model binaries
+# ---------------------------------------------------------------------------
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.engine
+*.trt
+*.torchscript
+*.safetensors
+
+# Registry metadata should stay visible even though model binaries are ignored.
+!**/registry/
+!**/registry/**
+!**/registry/**/*.md
+!**/registry/**/*.json
+!**/registry/**/*.yaml
+!**/registry/**/*.yml
+
+# ---------------------------------------------------------------------------
+# Legacy imported source snapshots
+# ---------------------------------------------------------------------------
+CausalModel-master/
+cleansight-yolo-pipeline-main/
+references
+modelscope_upload

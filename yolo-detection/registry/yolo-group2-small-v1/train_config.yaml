@@ -1,0 +1,20 @@
+version: yolo-group2-small-v1
+source: cleansight-yolo-pipeline-main
+framework: ultralytics
+architecture: yolo11n
+group: group2_small
+dataset_view_a: pending
+image_size: 640
+epochs: 100
+batch_size: 16
+patience: 20
+stride: 12
+acceptance:
+  overall_map50: 0.5
+  overall_map50_95: 0.3
+  per_class_recall: 0.7
+  per_class_precision: 0.5
+notes:
+  - 真实权重应来自 cleansight-yolo-pipeline-main/runs/group2_small/weights/best.pt。
+  - 当前 registry 为新 YOLO 分组模型登记骨架，等验证集和验收报告完成后回填指标。
+
