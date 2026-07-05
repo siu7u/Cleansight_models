@@ -10,6 +10,13 @@
 - 单模型 benchmark 回答“模型本身准不准”。
 - 端到端 benchmark 回答“完整业务流程能不能判断对”。
 
+## 当前状态
+
+- YOLO 单模型 benchmark 已能汇总训练验证结果，当前两个分组均为 FAIL。
+- 3 分钟端到端 benchmark 评分器已可运行，能根据 prediction JSON 输出 PASS / FAIL、动作召回和阶段时间误差。
+- `benchmark/e2e_3min/reports/clean_001.md` 当前只代表评分器在给定 prediction JSON 时跑通；真实后端在线推理导出的 `clean_001.prediction.json` 仍待接入。
+- 时序单模型 benchmark 需要继续补齐延迟结果，并将结果写回各模型 `CARD.md`。
+
 ## 单模型 YOLO
 
 从模型集根目录执行：
