@@ -1,0 +1,159 @@
+version: 1
+
+defaults:
+  python: current
+
+models:
+  - id: yolo.group1_large
+    family: yolo
+    adapter: yolo_pipeline
+    workdir: yolo-detection/pipeline
+    target: group1_large
+    input:
+      dataset: datasets/group1_large/data.yaml
+      format: ultralytics-yolo
+      labels: [hand, scope_control_body, scope_mid_section]
+    output:
+      checkpoint: runs/group1_large/weights/best.pt
+      report: runs/group1_large/acceptance_report.md
+    commands:
+      train: [03_train.py, group1_large]
+      eval: [04_validate.py, group1_large]
+
+  - id: yolo.group2_small
+    family: yolo
+    adapter: yolo_pipeline
+    workdir: yolo-detection/pipeline
+    target: group2_small
+    input:
+      dataset: datasets/group2_small/data.yaml
+      format: ultralytics-yolo
+      labels: [syringe, air_gun, scope_distal_end]
+    output:
+      checkpoint: runs/group2_small/weights/best.pt
+      report: runs/group2_small/acceptance_report.md
+    commands:
+      train: [03_train.py, group2_small]
+      eval: [04_validate.py, group2_small]
+
+  - id: temporal.gru
+    family: temporal
+    adapter: temporal_main
+    workdir: temporal-gru
+    target: gru
+    input:
+      feature_mapping: legacy-20d-v1
+      input_dim: 20
+      window: 64
+      labels: [Idle, Long_Brushing, Short_Brushing]
+    output:
+      checkpoint: registry/gru-v1/gru-final-20260704-150629.pt
+      report: REPORT.md
+      card: CARD.md
+      pin: pin.yaml
+    commands:
+      train:
+        - main.py
+        - --mode
+        - full
+        - --model
+        - gru
+        - --epochs
+        - "10"
+        - --window
+        - "64"
+        - --verbose
+        - --output_dir
+        - experiments/gru
+      eval:
+        - tools/eval_temporal_detailed.py
+        - --repo
+        - temporal-gru
+        - --model
+        - gru
+        - --checkpoint
+        - registry/gru-v1/gru-final-20260704-150629.pt
+
+  - id: temporal.tcn
+    family: temporal
+    adapter: temporal_main
+    workdir: temporal-causal-tcn
+    target: tcn
+    input:
+      feature_mapping: legacy-20d-v1
+      input_dim: 20
+      window: 64
+      labels: [Idle, Long_Brushing, Short_Brushing]
+    output:
+      checkpoint: registry/tcn-v1/tcn-final-20260704-160652.pt
+      report: REPORT.md
+      card: CARD.md
+      pin: pin.yaml
+    commands:
+      train:
+        - main.py
+        - --mode
+        - full
+        - --model
+        - tcn
+        - --epochs
+        - "10"
+        - --window
+        - "64"
+        - --verbose
+        - --output_dir
+        - experiments/tcn
+      eval:
+        - tools/eval_temporal_detailed.py
+        - --repo
+        - temporal-causal-tcn
+        - --model
+        - tcn
+        - --checkpoint
+        - registry/tcn-v1/tcn-final-20260704-160652.pt
+
+  - id: temporal.transformer
+    family: temporal
+    adapter: temporal_main
+    workdir: temporal-transformer
+    target: transformer
+    input:
+      feature_mapping: legacy-20d-v1
+      input_dim: 20
+      window: 64
+      labels: [Idle, Long_Brushing, Short_Brushing]
+    output:
+      checkpoint: registry/transformer-v1/transformer-final-20260704-161653.pt
+      report: REPORT.md
+      card: CARD.md
+      pin: pin.yaml
+    commands:
+      train:
+        - main.py
+        - --mode
+        - full
+        - --model
+        - transformer
+        - --epochs
+        - "10"
+        - --window
+        - "64"
+        - --verbose
+        - --output_dir
+        - experiments/transformer
+      eval:
+        - tools/eval_temporal_detailed.py
+        - --repo
+        - temporal-transformer
+        - --model
+        - transformer
+        - --checkpoint
+        - registry/transformer-v1/transformer-final-20260704-161653.pt
+
+benchmarks:
+  single_model_yolo:
+    command: [benchmark/single_model/run_yolo_benchmark.py, --skip-run]
+  single_model_temporal:
+    command: [benchmark/single_model/run_temporal_benchmark.py]
+  temporal_feed_mode:
+    command: [benchmark/temporal_feed_mode/run_feed_mode_benchmark.py]
