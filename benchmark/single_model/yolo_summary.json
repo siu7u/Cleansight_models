@@ -1,7 +1,7 @@
 {
   "benchmark": "single_model_yolo",
   "pipeline": "yolo-detection/pipeline",
-  "validate_exit_code": 2,
+  "validate_exit_code": 0,
   "groups": [
     {
       "group": "group1_large",
@@ -52,22 +52,10 @@
       },
       "per_class": [
         {
-          "class": "syringe",
-          "precision": null,
-          "recall": null,
-          "map50": null
-        },
-        {
           "class": "air_gun",
           "precision": 0.351,
           "recall": 0.394,
           "map50": 0.343
-        },
-        {
-          "class": "scope_distal_end",
-          "precision": null,
-          "recall": null,
-          "map50": null
         }
       ],
       "reasons": [
