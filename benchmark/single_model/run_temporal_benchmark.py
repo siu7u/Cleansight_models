@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run detailed eval and latency for the three temporal baseline models."""
+"""运行三个时序基线模型的详细评测和延迟评测。"""
 
 from __future__ import annotations
 
@@ -39,6 +39,12 @@ DEFAULT_MODELS = [
 
 
 def run_json(cmd: list[str], cwd: Path) -> tuple[dict | None, str, int]:
+    """运行 benchmark 子进程，并从 stdout 中解析第一个 JSON 对象。
+
+    返回可解析的 JSON、用于排查问题的合并日志，以及进程退出码。子进程可能会
+    加载 checkpoint 或使用 CUDA。
+    """
+
     proc = subprocess.run(cmd, cwd=cwd, text=True, capture_output=True)
     text = proc.stdout.strip()
     data = None
@@ -54,6 +60,8 @@ def run_json(cmd: list[str], cwd: Path) -> tuple[dict | None, str, int]:
 
 
 def benchmark_model(item: dict) -> dict:
+    """对一个时序模型运行详细评测和延迟测量。"""
+
     repo = ROOT / item["repo"]
     eval_cmd = [
         sys.executable,
@@ -94,6 +102,8 @@ def benchmark_model(item: dict) -> dict:
 
 
 def write_summary(results: list[dict]) -> None:
+    """将时序单模型 benchmark 汇总写成 JSON 和 Markdown。"""
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     (OUT_DIR / "temporal_summary.json").write_text(json.dumps(results, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -123,6 +133,8 @@ def write_summary(results: list[dict]) -> None:
 
 
 def main() -> int:
+    """解析命令行参数，运行选定的时序 benchmark，并返回整体状态。"""
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", choices=[m["name"] for m in DEFAULT_MODELS], help="只跑一个模型")
     args = parser.parse_args()
@@ -136,4 +148,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

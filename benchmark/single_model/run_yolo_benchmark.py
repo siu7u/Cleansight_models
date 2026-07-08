@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run and summarize YOLO single-model benchmark for grouped CleanSight models."""
+"""运行并汇总 CleanSight 分组 YOLO 模型的单模型 benchmark。"""
 
 from __future__ import annotations
 
@@ -17,6 +17,8 @@ OUT_DIR = ROOT / "benchmark" / "single_model"
 
 
 def parse_report(path: Path) -> dict:
+    """解析一份 YOLO 验收 Markdown 报告，提取 benchmark 字段。"""
+
     text = path.read_text(encoding="utf-8")
     result = {
         "group": path.parent.name,
@@ -62,12 +64,16 @@ def parse_report(path: Path) -> dict:
 
 
 def run_validate(groups: list[str]) -> int:
+    """对指定 YOLO 分组调用 `04_validate.py`，并返回退出码。"""
+
     cmd = [sys.executable, "04_validate.py", *groups]
     proc = subprocess.run(cmd, cwd=PIPELINE)
     return proc.returncode
 
 
 def collect_groups(requested: list[str]) -> list[str]:
+    """解析命令行指定的 YOLO 分组，或从 pipeline 配置读取全部分组。"""
+
     if requested:
         return requested
     cfg = PIPELINE / "config.yaml"
@@ -88,6 +94,8 @@ def collect_groups(requested: list[str]) -> list[str]:
 
 
 def write_summary(items: list[dict], validate_code: int) -> None:
+    """将 YOLO 单模型 benchmark 汇总写成 JSON 和 Markdown。"""
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     payload = {
         "benchmark": "single_model_yolo",
@@ -137,6 +145,8 @@ def write_summary(items: list[dict], validate_code: int) -> None:
 
 
 def main() -> int:
+    """运行或汇总分组检测 checkpoint 的 YOLO 验证报告。"""
+
     parser = argparse.ArgumentParser()
     parser.add_argument("groups", nargs="*", help="只验证指定 YOLO 分组，例如 group1_large")
     parser.add_argument("--skip-run", action="store_true", help="只汇总已有报告，不调用 04_validate.py")

@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Score a 3-minute CleanSight end-to-end benchmark case.
+"""评测一个 3 分钟 CleanSight 端到端 benchmark case。
 
-This script is intentionally independent from the online service. It scores an
-exported prediction timeline. The online workflow only needs to export JSON in
-the format below:
+该脚本刻意与在线服务解耦，只评测导出的预测时间线。在线 workflow 只需要导出
+如下格式的 JSON：
 
 {
   "case_id": "clean_001",
@@ -27,22 +26,34 @@ OUT_DIR = ROOT / "benchmark" / "e2e_3min" / "reports"
 
 
 def load_yaml(path: Path) -> dict:
+    """加载一个端到端 benchmark case YAML 文件。"""
+
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
 def load_prediction(path: Path | None) -> dict | None:
+    """加载 workflow 导出的预测结果；未提供时返回 None 表示待接入。"""
+
     if path is None:
         return None
     return json.loads(path.read_text(encoding="utf-8"))
 
 
 def overlap_seconds(a: dict, b: dict) -> float:
+    """返回两个动作时间段之间的重叠秒数。"""
+
     start = max(float(a["start_sec"]), float(b["start_sec"]))
     end = min(float(a["end_sec"]), float(b["end_sec"]))
     return max(0.0, end - start)
 
 
 def score_case(case: dict, prediction: dict | None) -> dict:
+    """用导出的端到端预测结果评测一个 3 分钟 case。
+
+    prediction 格式是 Backend 或等价离线 workflow 导出的动作时间线 JSON。
+    未提供 prediction 时输出 PENDING 报告而不是失败，方便先审阅 case 定义。
+    """
+
     expected = case.get("expected", {})
     required = expected.get("required_actions", [])
     phases = expected.get("phases", [])
@@ -99,6 +110,8 @@ def score_case(case: dict, prediction: dict | None) -> dict:
 
 
 def write_report(case: dict, score: dict, out: Path) -> None:
+    """为一个端到端 case 的评分结果写出易读的 Markdown 报告。"""
+
     out.parent.mkdir(parents=True, exist_ok=True)
     lines = [
         f"# 3 分钟端到端 Benchmark：{case['case_id']}",
@@ -140,6 +153,8 @@ def write_report(case: dict, score: dict, out: Path) -> None:
 
 
 def main() -> int:
+    """解析命令行输入，评测一个 benchmark case，并写出报告。"""
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", required=True, help="case yaml 路径")
     parser.add_argument("--prediction", help="workflow 导出的预测 JSON")
@@ -160,4 +175,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
