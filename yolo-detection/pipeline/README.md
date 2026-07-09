@@ -99,12 +99,12 @@ export LS_HOST=http://<LS地址>:8080 LS_TOKEN=<AccessToken>
 ```bash
 .venv/bin/python 03_train.py           # 各组训练;权重落 runs/<组>/weights/best.pt
 .venv/bin/python 03_train.py --version v1
-.venv/bin/python 04_validate.py        # 验证集指标 + 验收报告 runs/<组>/acceptance_report.md
+.venv/bin/python 04_validate.py        # 验证集指标 + 当前报告 + timestamp 归档报告
 ```
 
 - 训练:`config.train.model`(默认 `yolo11n.pt`),**各组一套独立权重**;超参在 `config.train`(epochs 100 / imgsz 640 / batch 16 / patience 20)。
 - 版本导出:训练后会把 `best.pt` 额外复制到 `versioned_weights/<模型名>-v<版本>/best.pt`,例如 `versioned_weights/yolo-small-v1/best.pt`。不传 `--version` 时会按已有目录自动递增为下一版,例如已有 `v1` 后下次导出 `v2`。
-- 评估:在 **val** 上跑 `ultralytics.val`,取逐类 P/R/mAP 对照 `config.acceptance` 判 PASS/FAIL;**任一组 FAIL → 退出码非零**,可做交付卡口。
+- 评估:在 **val** 上跑 `ultralytics.val`,取逐类 P/R/mAP 对照 `config.acceptance` 判 PASS/FAIL;**任一组 FAIL → 退出码非零**,可做交付卡口。每次验证会更新 `runs/<组>/acceptance_report.md`,同时另存一份 `runs/<组>/reports/acceptance_report-<timestamp>.md` 历史归档,避免覆盖旧结果。
 
 ### 场景三:增量更新(有新导出/新视频时——每次这么走)
 

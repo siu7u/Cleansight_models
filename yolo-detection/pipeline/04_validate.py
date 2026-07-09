@@ -2,6 +2,7 @@
 """
 在验证集上评测各组权重,输出逐类指标 + 按 config.acceptance 判 PASS/FAIL,并写验收报告。
 有任一组 FAIL 时进程退出码非零(便于交付卡口 / CI)。
+同时写入 timestamp 归档报告,避免覆盖历史验收结果。
 
 需 torch + ultralytics —— 用本项目 .venv/bin/python(见 requirements.txt)。
 
@@ -9,12 +10,19 @@
     <py> 04_validate.py                # 全部有权重的组
     <py> 04_validate.py group2_small   # 只验某组
 """
+from datetime import datetime
 import sys
 
 from utils.common import ROOT, load_config
 
 DATASETS = ROOT / "datasets"
 RUNS = ROOT / "runs"
+
+
+def timestamp() -> str:
+    """Return a filesystem-safe validation report timestamp."""
+
+    return datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
 def evaluate(group, thr):
@@ -65,6 +73,8 @@ def evaluate(group, thr):
 
 
 def write_report(group, overall, per_class, passed, reasons, thr):
+    """Write the current acceptance report and a timestamped archive copy."""
+
     lines = [f"# 验收报告 · {group}", "",
              f"结论: **{'PASS ✅' if passed else 'FAIL ❌'}**", "",
              "## 整体指标", "",
@@ -84,8 +94,13 @@ def write_report(group, overall, per_class, passed, reasons, thr):
         lines += ["全部达标。"]
     out = RUNS / group / "acceptance_report.md"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return out
+    text = "\n".join(lines) + "\n"
+    out.write_text(text, encoding="utf-8")
+
+    archive = RUNS / group / "reports" / f"acceptance_report-{timestamp()}.md"
+    archive.parent.mkdir(parents=True, exist_ok=True)
+    archive.write_text(text, encoding="utf-8")
+    return out, archive
 
 
 def main():
@@ -114,8 +129,9 @@ def main():
         for pc in per_class:
             print(f"    {pc['name']:22s} P={pc['precision']:.3f} R={pc['recall']:.3f} "
                   f"mAP50={pc['map50']:.3f}")
-        report = write_report(g, overall, per_class, passed, reasons, thr)
+        report, archive = write_report(g, overall, per_class, passed, reasons, thr)
         print(f"  结论: {'PASS ✅' if passed else 'FAIL ❌'}   报告: {report}")
+        print(f"  归档报告: {archive}")
         if not passed:
             any_fail = True
             for r in reasons:
