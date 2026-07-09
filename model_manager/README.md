@@ -62,6 +62,18 @@ model_manager/models.yaml
 ../CleanSightBackend/.venv/bin/python model_manager/manager.py eval --family temporal
 ```
 
+预览 YOLO 完整流水线：
+
+```bash
+../CleanSightBackend/.venv/bin/python model_manager/manager.py pipeline --model yolo.group1_large
+```
+
+真正执行 YOLO 完整流水线：
+
+```bash
+../CleanSightBackend/.venv/bin/python model_manager/manager.py pipeline --model yolo.group1_large --run
+```
+
 运行集中 benchmark：
 
 ```bash
@@ -81,6 +93,9 @@ temporal.transformer
 ## 注意事项
 
 - 不传 `--run` 时只打印命令，不会实际训练或评测。
+- `pipeline` 目前只登记给 YOLO 模型，顺序为 `00_status.py`、`01_pull_data.py`、`00_status.py --assign`、`02_build_dataset.py`、`03_train.py`、`04_validate.py`。
+- `pipeline --run` 会在任一步失败时停止；`04_validate.py` 验收 FAIL 时也会返回非零退出码，但报告仍会写到 `runs/<组>/acceptance_report.md`。
+- 执行子命令时会自动读取模型集根目录 `.env`，用于给 `01_pull_data.py` 传入 `LS_HOST`、`LS_TOKEN` 等变量；日志只显示 key 名，不显示 token 值。
 - 当前时序 v1 checkpoint 输入维度为 20，仍使用 `legacy-20d-v1`。
 - 新版 YOLO 到 64 维 feature mapping 的训练闭环完成后，需要更新 `models.yaml` 中的 `input_dim`、`feature_mapping` 和 checkpoint。
 - 如果改变数据集、类别、特征映射或 checkpoint，应同步更新 `CARD.md`、`pin.yaml` 和 benchmark 报告。

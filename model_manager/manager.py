@@ -9,6 +9,7 @@ temporal-* 仓库的前提下，集中管理不同模型的输入、输出和命
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -20,6 +21,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG = Path(__file__).with_name("models.yaml")
+ENV_FILES = [ROOT / ".env"]
 
 
 @dataclass(frozen=True)
@@ -82,6 +84,42 @@ def build_python_command(args: list[str]) -> list[str]:
     return [sys.executable, *args]
 
 
+def parse_env_file(path: Path) -> dict[str, str]:
+    """读取简单 .env 文件，返回可传给子进程的环境变量。"""
+
+    values: dict[str, str] = {}
+    if not path.exists():
+        return values
+    for line in path.read_text(encoding="utf-8").splitlines():
+        text = line.strip()
+        if not text or text.startswith("#") or "=" not in text:
+            continue
+        if text.startswith("export "):
+            text = text[len("export "):].strip()
+        key, value = text.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip("'\"")
+        if key:
+            values[key] = value
+    return values
+
+
+def build_subprocess_env() -> dict[str, str]:
+    """合并当前环境和仓库 .env；已有系统环境变量优先。"""
+
+    env = os.environ.copy()
+    loaded_keys: set[str] = set()
+    for path in ENV_FILES:
+        for key, value in parse_env_file(path).items():
+            if key not in env:
+                env[key] = value
+                loaded_keys.add(key)
+    if loaded_keys:
+        names = [key if key != "LS_TOKEN" else "LS_TOKEN=<hidden>" for key in sorted(loaded_keys)]
+        print(f"[env] loaded from .env: {', '.join(names)}")
+    return env
+
+
 def command_for(spec: ModelSpec, action: str) -> tuple[list[str], Path]:
     """返回某个模型某个动作的命令和工作目录。
 
@@ -98,6 +136,19 @@ def command_for(spec: ModelSpec, action: str) -> tuple[list[str], Path]:
     if spec.family == "temporal" and action == "eval":
         cwd = ROOT
     return cmd, cwd
+
+
+def commands_for(spec: ModelSpec, action: str) -> list[tuple[list[str], Path]]:
+    """返回某个动作的一组命令；单步动作也规范为单元素列表。"""
+
+    commands = spec.raw.get("commands", {})
+    if action not in commands:
+        raise KeyError(f"{spec.id} 不支持动作: {action}")
+
+    raw = commands[action]
+    if raw and all(isinstance(item, list) for item in raw):
+        return [(build_python_command([str(part) for part in step]), spec.workdir) for step in raw]
+    return [command_for(spec, action)]
 
 
 def list_models(models: dict[str, ModelSpec]) -> None:
@@ -138,15 +189,29 @@ def status_models(models: dict[str, ModelSpec]) -> int:
 
 
 def run_action(spec: ModelSpec, action: str, dry_run: bool) -> int:
-    """执行或预览某个模型的训练/评测动作。"""
+    """执行或预览某个模型的单步或多步动作。"""
 
-    cmd, cwd = command_for(spec, action)
     print(f"[{spec.id}] {action}")
-    print(f"  cwd: {cwd.relative_to(ROOT)}")
-    print(f"  cmd: {' '.join(cmd)}")
-    if dry_run:
-        return 0
-    return subprocess.run(cmd, cwd=cwd).returncode
+    env = None if dry_run else build_subprocess_env()
+    for index, (cmd, cwd) in enumerate(commands_for(spec, action), start=1):
+        prefix = f"  step {index}: " if action == "pipeline" else "  "
+        print(f"{prefix}cwd: {cwd.relative_to(ROOT)}")
+        print(f"{prefix}cmd: {' '.join(cmd)}")
+        if dry_run:
+            continue
+        code = subprocess.run(cmd, cwd=cwd, env=env).returncode
+        if code != 0:
+            print(f"  failed at step {index} with exit code {code}")
+            return code
+    return 0
+
+
+def ensure_action_supported(specs: list[ModelSpec], action: str) -> None:
+    """提前检查所选模型是否都支持目标动作。"""
+
+    unsupported = [spec.id for spec in specs if action not in spec.raw.get("commands", {})]
+    if unsupported:
+        raise SystemExit(f"{action} 不支持这些模型: {', '.join(unsupported)}")
 
 
 def run_benchmark(name: str, dry_run: bool) -> int:
@@ -187,7 +252,7 @@ def main() -> int:
     sub.add_parser("list", help="列出模型清单")
     sub.add_parser("status", help="检查 checkpoint/report 等登记产物")
 
-    for name in ("train", "eval"):
+    for name in ("train", "eval", "pipeline"):
         p = sub.add_parser(name, help=f"运行或预览 {name} 动作")
         p.add_argument("--model", help="指定模型 id，例如 temporal.gru")
         p.add_argument("--family", choices=["yolo", "temporal"], help="按模型族筛选")
@@ -205,10 +270,11 @@ def main() -> int:
         return 0
     if args.command == "status":
         return status_models(models)
-    if args.command in {"train", "eval"}:
+    if args.command in {"train", "eval", "pipeline"}:
         selected = select_models(models, args.model, args.family)
         if not selected:
             raise SystemExit("没有匹配的模型")
+        ensure_action_supported(selected, args.command)
         codes = [run_action(spec, args.command, dry_run=not args.run) for spec in selected]
         return 0 if all(code == 0 for code in codes) else 2
     if args.command == "benchmark":
