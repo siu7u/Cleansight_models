@@ -28,7 +28,7 @@ yolo_pipeline/
     split.py             # 稳定切分逻辑(读写 splits.yaml)
     stats.py             # 样本分布统计(训练帧粒度,扫描落盘 label)
   raw/
-    exports/             # LS 导出的 JSON(入库);脚本取文件名排序最后一份
+    exports/             # LS 导出的 JSON(入库);脚本按文件名排序合并全部 JSON
     videos/              # 01_pull 下载的原始视频(不入库)
   datasets/<组>/         # 02_build 产出的 YOLO 数据集(不入库)
   runs/<组>/             # 03_train / 04_validate 的权重与报告(不入库)
@@ -98,10 +98,12 @@ export LS_HOST=http://<LS地址>:8080 LS_TOKEN=<AccessToken>
 
 ```bash
 .venv/bin/python 03_train.py           # 各组训练;权重落 runs/<组>/weights/best.pt
+.venv/bin/python 03_train.py --version v1
 .venv/bin/python 04_validate.py        # 验证集指标 + 验收报告 runs/<组>/acceptance_report.md
 ```
 
 - 训练:`config.train.model`(默认 `yolo11n.pt`),**各组一套独立权重**;超参在 `config.train`(epochs 100 / imgsz 640 / batch 16 / patience 20)。
+- 版本导出:训练后会把 `best.pt` 额外复制到 `versioned_weights/<模型名>-v<版本>/best.pt`,例如 `versioned_weights/yolo-small-v1/best.pt`。不传 `--version` 时会按已有目录自动递增为下一版,例如已有 `v1` 后下次导出 `v2`。
 - 评估:在 **val** 上跑 `ultralytics.val`,取逐类 P/R/mAP 对照 `config.acceptance` 判 PASS/FAIL;**任一组 FAIL → 退出码非零**,可做交付卡口。
 
 ### 场景三:增量更新(有新导出/新视频时——每次这么走)
@@ -137,7 +139,7 @@ export LS_HOST=http://<LS地址>:8080 LS_TOKEN=<AccessToken>
 ### 1. 数据来源与关联
 
 - **视频**:存 LS 服务器,`01_pull_data.py` 下到 `raw/videos/`;**身份 = 文件名 stem**(如 `687e3c78-clip_<起>_<止>`)。
-- **标注**:LS 导出 JSON 放 `raw/exports/`,脚本取**文件名排序最后一份**。同一份导出里 bbox(`videorectangle`)与时序(`timelinelabels`)聚合,本流程**只消费 bbox**。
+- **标注**:LS 导出 JSON 放 `raw/exports/`,脚本会按文件名排序**合并全部 JSON**。如果同一个 task 或同一个视频在多个导出中重复出现,文件名排序靠后的导出覆盖靠前的导出。同一份导出里 bbox(`videorectangle`)与时序(`timelinelabels`)聚合,本流程**只消费 bbox**。
 - 视频与标注靠 `task.data.video` 的文件名关联;`00_status.py` 就是对齐"导出 / 磁盘 / splits / 白名单"四方。
 
 ### 2. 关键帧对齐(不做就框漂移 + 尾部丢标注)
