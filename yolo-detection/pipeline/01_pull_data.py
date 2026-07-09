@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-从 Label Studio 服务器下载导出 JSON 引用的原始视频到 raw/videos/。
+从 Label Studio 服务器下载 raw/exports/ 全部导出 JSON 引用的原始视频到 raw/videos/。
 
 JSON 只存路径引用(data.video),视频本体在服务器。已存在且非空的文件会 [skip]。
 下载后做完整性抽查:优先 ffprobe 读时长/帧数;没有 ffprobe 时退化为"大小 > 0"。
@@ -46,10 +46,9 @@ def main():
         sys.exit("请先设置环境变量 LS_HOST 和 LS_TOKEN(见脚本头部说明)")
 
     load_config()  # 目前不需要具体项,仅确认配置可读
-    json_path = lsexport.latest_export()
     lsexport.VIDEO_DIR.mkdir(parents=True, exist_ok=True)
-    tasks = lsexport.load_tasks(json_path)
-    print(f"导出: {json_path.name}  共 {len(tasks)} 个 task -> {lsexport.VIDEO_DIR}")
+    tasks, export_paths = lsexport.load_all_tasks()
+    print(f"导出: {len(export_paths)} 份 JSON, 最新 {export_paths[-1].name}  合并后 {len(tasks)} 个 task -> {lsexport.VIDEO_DIR}")
 
     ok, skip, fail, bad = 0, 0, 0, []
     for t in tasks:

@@ -18,16 +18,46 @@ EXPORT_DIR = ROOT / "raw" / "exports"
 VIDEO_DIR = ROOT / "raw" / "videos"
 
 
-def latest_export(export_dir: Path = EXPORT_DIR) -> Path:
-    """取 raw/exports/ 下文件名排序最后一个 JSON。"""
+def export_files(export_dir: Path = EXPORT_DIR) -> list[Path]:
+    """Return all Label Studio export JSON files sorted by filename."""
+
     files = sorted(export_dir.glob("*.json"))
     if not files:
         raise SystemExit(f"raw/exports/ 下没有导出 JSON: {export_dir}")
-    return files[-1]
+    return files
+
+
+def latest_export(export_dir: Path = EXPORT_DIR) -> Path:
+    """取 raw/exports/ 下文件名排序最后一个 JSON。"""
+
+    return export_files(export_dir)[-1]
 
 
 def load_tasks(json_path: Path):
     return json.load(open(json_path, encoding="utf-8"))
+
+
+def task_key(task) -> str:
+    """Return a stable merge key for a Label Studio task."""
+
+    task_id = task.get("id")
+    if task_id is not None:
+        return f"id:{task_id}"
+    name = task_video_name(task)
+    if name:
+        return f"video:{name}"
+    return f"object:{id(task)}"
+
+
+def load_all_tasks(export_dir: Path = EXPORT_DIR) -> tuple[list[dict], list[Path]]:
+    """Load and merge all export JSON files; later filenames override duplicates."""
+
+    files = export_files(export_dir)
+    merged: dict[str, dict] = {}
+    for path in files:
+        for task in load_tasks(path):
+            merged[task_key(task)] = task
+    return list(merged.values()), files
 
 
 def task_video_name(task) -> str:

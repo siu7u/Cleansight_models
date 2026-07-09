@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 LS 导出 JSON + 视频 -> YOLO 目标检测数据集,按 splits.yaml 稳定切分(整段路由)。
+raw/exports/ 下全部 JSON 会按文件名排序合并;同一 task/video 后面的导出覆盖前面的导出。
 
 与旧 01_to_yolo.py 的唯一行为差别:train/val 不再按抽帧序号切,而是**按视频**——
 一个视频的所有帧全部进它在 splits.yaml 里的 split,杜绝时间相邻泄漏、且可复现。
@@ -54,10 +55,9 @@ def main():
     stride = cfg.get("stride", 12)
     jpg_q = cfg.get("jpg_quality", 90)
 
-    json_path = lsexport.latest_export()
-    tasks = lsexport.load_tasks(json_path)
+    tasks, export_paths = lsexport.load_all_tasks()
     sp = splitmod.load()
-    print(f"导出: {json_path.name}  共 {len(tasks)} 个 task")
+    print(f"导出: {len(export_paths)} 份 JSON, 最新 {export_paths[-1].name}  合并后 {len(tasks)} 个 task")
 
     # 先确定每个"待处理视频"的 split;缺归属就拦下(除非 --auto-assign)
     pending = []  # (task_index, task, name, split)

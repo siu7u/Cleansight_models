@@ -3,7 +3,7 @@
 对账 / 增量前置:把四方来源对齐,告诉你每次该做什么。
 
 四方:
-  - LS 导出 JSON(raw/exports/ 最新一份)—— 标注侧"应该有"的视频
+  - LS 导出 JSON(raw/exports/ 全部 JSON 合并)—— 标注侧"应该有"的视频
   - raw/videos/ ——   实际下载到磁盘的视频
   - splits.yaml ——    已归属 split 的视频
   - config.only_videos —— 已人工质检合格(白名单)
@@ -30,8 +30,7 @@ def gather():
     only = cfg.get("only_videos") or []
     label2group = lsexport.build_label_index(cfg["groups"])
 
-    json_path = lsexport.latest_export()
-    tasks = lsexport.load_tasks(json_path)
+    tasks, export_paths = lsexport.load_all_tasks()
     sp = splitmod.load()
     assignments = sp.get("assignments", {})
 
@@ -68,7 +67,7 @@ def gather():
     for stem, s in assignments.items():
         row(stem)["split"] = s
 
-    return cfg, json_path, sp, rows
+    return cfg, export_paths, sp, rows
 
 
 def classify(rows):
@@ -122,8 +121,8 @@ def print_cats(cats):
 
 def main():
     do_assign = "--assign" in sys.argv[1:]
-    cfg, json_path, sp, rows = gather()
-    print(f"导出: {json_path.name}   视频目录: {lsexport.VIDEO_DIR}")
+    cfg, export_paths, sp, rows = gather()
+    print(f"导出: {len(export_paths)} 份 JSON, 最新 {export_paths[-1].name}   视频目录: {lsexport.VIDEO_DIR}")
     print_table(rows)
     cats = classify(rows)
     print_cats(cats)
