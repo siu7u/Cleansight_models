@@ -250,6 +250,16 @@ yolo-detection/templates/eval_report_template.md
 
 当前三模型的 `CARD.md` 已记录参数量、因果性和评估指标，但单 tick 延迟与离线-在线落差仍待测。
 
+CARD 上线门禁脚本：
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 tools/validate_card_gate.py temporal-gru/CARD.md
+PYTHONDONTWRITEBYTECODE=1 python3 tools/validate_card_gate.py temporal-causal-tcn/CARD.md
+PYTHONDONTWRITEBYTECODE=1 python3 tools/validate_card_gate.py temporal-transformer/CARD.md
+```
+
+任何模型上线前 `CARD.md` 必须补齐部署机实测运行延迟、感受域/因果性和模型参数量。字段为 `待测`、`TODO` 或非因果时，门禁失败；MS-TCN 这类非因果模型只能作为离线上限参考，不进入在线部署。
+
 ## 与 CleanSightBackend 的接入关系
 
 模型训练和评估在本仓库完成。真正在线推理应接入：
@@ -282,4 +292,3 @@ model-bundle/
 - 测量三个时序模型的单 tick 延迟，并写回 `CARD.md`。
 - 在 CleanSightBackend 中导出真实 `clean_001.prediction.json`，完成 3 分钟端到端真实验收。
 - 完善 `pin.yaml` schema 和一键复刻脚本，支持按版本拉齐 dataset / YOLO / temporal model / feature_mapping。
-

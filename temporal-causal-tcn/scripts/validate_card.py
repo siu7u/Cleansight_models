@@ -4,14 +4,13 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
 
-REQUIRED_TERMS = [
-    "single_tick_latency",
-    "receptive_field_frames",
-    "params",
-]
+from tools.validate_card_gate import validate_card
 
 
 def main() -> int:
@@ -20,12 +19,11 @@ def main() -> int:
     args = parser.parse_args()
 
     path = Path(args.card)
-    text = path.read_text(encoding="utf-8")
-    missing = [term for term in REQUIRED_TERMS if term not in text]
-    if missing:
+    errors = validate_card(path)
+    if errors:
         print(f"card validation failed: {path}")
-        for term in missing:
-            print(f"missing: {term}")
+        for error in errors:
+            print(f"missing gate: {error}")
         return 1
     print(f"card validation passed: {path}")
     return 0
