@@ -19,6 +19,13 @@ models:
     commands:
       train: [03_train.py, group1_large]
       eval: [04_validate.py, group1_large]
+      pipeline:
+        - [00_status.py]
+        - [01_pull_data.py]
+        - [00_status.py, --assign]
+        - [02_build_dataset.py]
+        - [03_train.py, group1_large]
+        - [04_validate.py, group1_large]
 
   - id: yolo.group2_small
     family: yolo
@@ -35,6 +42,13 @@ models:
     commands:
       train: [03_train.py, group2_small]
       eval: [04_validate.py, group2_small]
+      pipeline:
+        - [00_status.py]
+        - [01_pull_data.py]
+        - [00_status.py, --assign]
+        - [02_build_dataset.py]
+        - [03_train.py, group2_small]
+        - [04_validate.py, group2_small]
 
   - id: temporal.gru
     family: temporal
@@ -56,8 +70,6 @@ models:
         - main.py
         - --mode
         - full
-        - --model
-        - gru
         - --epochs
         - "10"
         - --window
@@ -94,8 +106,6 @@ models:
         - main.py
         - --mode
         - full
-        - --model
-        - tcn
         - --epochs
         - "10"
         - --window
@@ -132,8 +142,6 @@ models:
         - main.py
         - --mode
         - full
-        - --model
-        - transformer
         - --epochs
         - "10"
         - --window
