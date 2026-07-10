@@ -7,11 +7,14 @@ import argparse
 import json
 import subprocess
 import sys
+import re
+from datetime import datetime
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = ROOT / "benchmark" / "single_model"
+LATEST_DIR = OUT_DIR / "latest"
 
 DEFAULT_MODELS = [
     {
@@ -36,6 +39,16 @@ DEFAULT_MODELS = [
         "window": 64,
     },
 ]
+
+
+def build_run_id(version: str | None) -> str:
+    """生成用于归档 benchmark summary 的版本化运行编号。"""
+
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    if not version:
+        return timestamp
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", version.strip()).strip("-")
+    return f"{slug or 'version'}-{timestamp}"
 
 
 def run_json(cmd: list[str], cwd: Path) -> tuple[dict | None, str, int]:
@@ -101,14 +114,31 @@ def benchmark_model(item: dict) -> dict:
     }
 
 
-def write_summary(results: list[dict]) -> None:
+def write_summary(results: list[dict], version: str | None) -> tuple[Path, Path]:
     """将时序单模型 benchmark 汇总写成 JSON 和 Markdown。"""
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    (OUT_DIR / "temporal_summary.json").write_text(json.dumps(results, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    LATEST_DIR.mkdir(parents=True, exist_ok=True)
+    archive_dir = OUT_DIR / "reports"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    run_id = build_run_id(version)
+    payload = {
+        "benchmark": "single_model_temporal",
+        "version": version,
+        "run_id": run_id,
+        "models": results,
+    }
+    json_text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+    latest_json = LATEST_DIR / "temporal_summary.json"
+    archive_json = archive_dir / f"temporal_summary_{run_id}.json"
+    latest_json.write_text(json_text, encoding="utf-8")
+    archive_json.write_text(json_text, encoding="utf-8")
 
     lines = [
         "# 时序单模型 Benchmark 汇总",
+        "",
+        f"- 版本：`{version or run_id}`",
+        f"- 归档编号：`{run_id}`",
         "",
         "| 模型 | checkpoint | Idle Recall | Long Recall | Short Recall | 延迟 | 状态 |",
         "| --- | --- | ---: | ---: | ---: | ---: | --- |",
@@ -129,7 +159,12 @@ def write_summary(results: list[dict]) -> None:
                 status=status,
             )
         )
-    (OUT_DIR / "temporal_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    md_text = "\n".join(lines) + "\n"
+    latest_md = LATEST_DIR / "temporal_summary.md"
+    archive_md = archive_dir / f"temporal_summary_{run_id}.md"
+    latest_md.write_text(md_text, encoding="utf-8")
+    archive_md.write_text(md_text, encoding="utf-8")
+    return latest_md, archive_md
 
 
 def main() -> int:
@@ -137,12 +172,14 @@ def main() -> int:
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", choices=[m["name"] for m in DEFAULT_MODELS], help="只跑一个模型")
+    parser.add_argument("--version", help="为本次 benchmark summary 指定版本名，例如 temporal-v2")
     args = parser.parse_args()
 
     selected = [m for m in DEFAULT_MODELS if not args.model or m["name"] == args.model]
     results = [benchmark_model(item) for item in selected]
-    write_summary(results)
-    print(f"已写入 {OUT_DIR / 'temporal_summary.md'}")
+    latest_md, archive_md = write_summary(results, args.version)
+    print(f"已写入 {latest_md}")
+    print(f"已归档 {archive_md}")
     return 0 if all(r["eval_exit_code"] == 0 and r["latency_exit_code"] == 0 for r in results) else 2
 
 

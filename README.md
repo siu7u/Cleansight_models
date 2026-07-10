@@ -233,7 +233,7 @@ yolo-detection/templates/eval_report_template.md
 
 - `yolo-detection/registry/yolo-group1-large-v1/eval_report.md`
 - `yolo-detection/registry/yolo-group2-small-v1/eval_report.md`
-- `benchmark/single_model/yolo_summary.md`
+- `benchmark/single_model/latest/yolo_summary.md`
 
 权重文件不进入 git，已整理到 `modelscope_upload/` 供上传 ModelScope。
 

@@ -17,8 +17,10 @@ yolo_pipeline/
   00_status.py           # 对账 / 增量前置:列出待办;--assign 回填 split
   01_pull_data.py        # 从 LS 下视频到 raw/videos/ + 完整性抽查
   02_build_dataset.py    # 转 YOLO,按 splits.yaml 整段路由,并打印样本分布
+  02_import_modelscope_dataset.py # 把 ModelScope 已打包检测数据追加进分组数据集
   03_train.py            # 各组训练
   04_validate.py         # 验证集指标 + 验收判定 + 报告
+  download_modelscope_dataset.py # 下载 ModelScope 数据集到 raw/modelscope/
   config.yaml            # 中央配置:分组 / 白名单 / 抽帧 / 切分 / 超参 / 验收阈值 —— 改这里
   splits.yaml            # 视频 -> split 划分清单,稳定切分的唯一真源(入库)
   requirements.txt
@@ -30,12 +32,14 @@ yolo_pipeline/
   raw/
     exports/             # LS 导出的 JSON(入库);脚本按文件名排序合并全部 JSON
     videos/              # 01_pull 下载的原始视频(不入库)
-  datasets/<组>/         # 02_build 产出的 YOLO 数据集(不入库)
+    modelscope/          # ModelScope 下载的数据集(不入库)
+  datasets/<组>/         # 02_build / 02_import 产出的 YOLO 数据集(不入库)
   runs/<组>/             # 03_train / 04_validate 的权重与报告(不入库)
+  versioned_weights/     # 03_train 额外导出的版本化 best.pt(不入库)
   .venv/                 # 本项目虚拟环境(不入库)
 ```
 
-入库的只有:脚本、`config.yaml`、`splits.yaml`、`requirements.txt`、`raw/exports/` 里的导出 JSON。`raw/videos/`、`datasets/`、`runs/`、`.venv/` 及 `*.pt`/`*.mp4` 均由 `.gitignore` 排除。
+入库的只有:脚本、`config.yaml`、`splits.yaml`、`requirements.txt`、`raw/exports/` 里的导出 JSON。`raw/videos/`、`raw/modelscope/`、`datasets/`、`runs/`、`versioned_weights/`、`.venv/` 及 `*.pt`/`*.mp4` 均由 `.gitignore` 排除。
 
 ### 各部分功能定位
 
@@ -44,13 +48,14 @@ yolo_pipeline/
 | `00_status.py` | **对账中枢**:比对"导出 / 磁盘 / splits / 白名单"四方,列出待办;`--assign` 把已质检视频确定性回填 split | 每次开工、每次增量前先跑 |
 | `01_pull_data.py` | **取数**:按导出 JSON 引用从 LS 服务器下视频到 `raw/videos/`,并做完整性抽查 | 有"未下载"视频时 |
 | `02_build_dataset.py` | **转换**:导出 JSON + 视频 → 标准 YOLO 数据集,按 `splits.yaml` 整段路由;生成后打印样本分布与告警 | 数据/切分变化后重建 |
+| `02_import_modelscope_dataset.py` | **外部数据导入**:把 ModelScope 的 `images` + `frames` 映射进当前分组数据集 | 下载了 ModelScope 数据、且需要加入训练/测试时 |
 | `03_train.py` | **训练**:各组一套独立权重,device 自动选 MPS/CUDA/CPU | 数据集就绪、要出/更新权重时 |
-| `04_validate.py` | **验收**:验证集跑指标、对照阈值判 PASS/FAIL、写报告,任一组 FAIL 退出码非零 | 训练后、交付卡口 |
+| `04_validate.py` | **验收/测试**:指定 split 跑指标、对照阈值判 PASS/FAIL、写报告,任一组 FAIL 退出码非零 | 训练后、交付卡口、版本化权重测试 |
 | `config.yaml` | **唯一改动入口**:分组、白名单、抽帧、切分参数、超参、验收阈值全在这 | 调任何行为先改它,别改脚本 |
 | `splits.yaml` | **切分的唯一真源**:视频 stem → split,人工可改、入库 | 手工调整 train/val/test 归属 |
 | `utils/` | 编排脚本共用逻辑,尤其 `lsexport.py`(fps 对齐/插值/坐标)集中一份 | 改脚本时复用,别各写一套 |
 
-**产物**(均不入库):`datasets/<组>/`、`runs/<组>/weights/best.pt`、`runs/<组>/acceptance_report.md`。
+**产物**(均不入库):`datasets/<组>/`、`runs/<组>/weights/best.pt`、`runs/<组>/acceptance_report.md`、`versioned_weights/<模型名>-v*/best.pt`。
 
 ---
 
@@ -99,12 +104,54 @@ export LS_HOST=http://<LS地址>:8080 LS_TOKEN=<AccessToken>
 ```bash
 .venv/bin/python 03_train.py           # 各组训练;权重落 runs/<组>/weights/best.pt
 .venv/bin/python 03_train.py --version v1
-.venv/bin/python 04_validate.py        # 验证集指标 + 当前报告 + timestamp 归档报告
+.venv/bin/python 04_validate.py        # val 指标 + 当前报告 + timestamp 归档报告
+.venv/bin/python 04_validate.py --split test  # holdout test 指标 + test 报告
 ```
 
 - 训练:`config.train.model`(默认 `yolo11n.pt`),**各组一套独立权重**;超参在 `config.train`(epochs 100 / imgsz 640 / batch 16 / patience 20)。
 - 版本导出:训练后会把 `best.pt` 额外复制到 `versioned_weights/<模型名>-v<版本>/best.pt`,例如 `versioned_weights/yolo-small-v1/best.pt`。不传 `--version` 时会按已有目录自动递增为下一版,例如已有 `v1` 后下次导出 `v2`。
-- 评估:在 **val** 上跑 `ultralytics.val`,取逐类 P/R/mAP 对照 `config.acceptance` 判 PASS/FAIL;**任一组 FAIL → 退出码非零**,可做交付卡口。每次验证会更新 `runs/<组>/acceptance_report.md`,同时另存一份 `runs/<组>/reports/acceptance_report-<timestamp>.md` 历史归档,避免覆盖旧结果。
+- 评估:默认在 **val** 上跑 `ultralytics.val`,取逐类 P/R/mAP 对照 `config.acceptance` 判 PASS/FAIL;**任一组 FAIL → 退出码非零**,可做交付卡口。每次验证会更新 `runs/<组>/acceptance_report.md`,同时另存一份 `runs/<组>/reports/acceptance_report_val-<timestamp>.md` 历史归档,避免覆盖旧结果。最终 holdout 可用 `04_validate.py --split test`,报告写到 `runs/<组>/acceptance_report_test.md`。
+- 版本化权重测试:`04_validate.py` 默认测试 `runs/<组>/weights/best.pt`;要测试某个导出版权重,用 `--weights` 指定路径,且一次只测一个分组。
+
+例如测试新训练的 `yolo-large-v2`:
+
+```bash
+.venv/bin/python 04_validate.py group1_large \
+  --weights versioned_weights/yolo-large-v2/best.pt
+
+.venv/bin/python 04_validate.py group1_large \
+  --split test \
+  --weights versioned_weights/yolo-large-v2/best.pt
+```
+
+分组和版本目录要对应:`yolo-large-v*` 对应 `group1_large`,`yolo-small-v*` 对应 `group2_small`。
+
+### 场景二补充:导入 ModelScope 已打包数据
+
+先下载数据集。token 放到环境变量 `MODELSCOPE_TOKEN` 或仓库根目录 `.env` 中,不要写进代码:
+
+```bash
+.venv/bin/python download_modelscope_dataset.py --workers 1
+```
+
+下载目录为 `raw/modelscope/cleansight-ActionMixed`。ModelScope 下载的 `cleansight-ActionMixed` 已经是图片 + YOLO 标签结构,但目录语义与本流水线不同:
+
+- `images/{train,val,test}` 是检测训练图片。
+- `frames/{train,val,test}` 是检测框标签,类别来自 `frames/data.yaml`。
+- `labels/{train,val,test}` 是动作阶段标签,不是 YOLO 检测框标签。
+
+接入检测训练时,先把它追加进当前分组数据集:
+
+```bash
+.venv/bin/python 02_build_dataset.py
+.venv/bin/python 02_import_modelscope_dataset.py
+.venv/bin/python 03_train.py --version v2
+.venv/bin/python 04_validate.py
+```
+
+`02_import_modelscope_dataset.py` 会读取 `raw/modelscope/cleansight-ActionMixed/images` 和 `raw/modelscope/cleansight-ActionMixed/frames`,按 `config.groups` 把全局 8 类映射成 `group1_large` / `group2_small` 两套数据。导入样本会带 `ms_` 文件名前缀,可重复运行覆盖同名导入样本。`test` 会进入 `datasets/<组>/images/test` 和 `labels/test`,不参与训练,只用于 `04_validate.py --split test`。
+
+注意:`02_build_dataset.py` 会清空并重建 `datasets/<组>/images` 和 `labels`,所以只要重跑过 `02_build_dataset.py`,就要再跑一次 `02_import_modelscope_dataset.py`,否则 ModelScope 样本不会进入本轮训练/测试数据集。
 
 ### 场景三:增量更新(有新导出/新视频时——每次这么走)
 
@@ -115,6 +162,7 @@ export LS_HOST=http://<LS地址>:8080 LS_TOKEN=<AccessToken>
 # 人工质检合格的,追加到 config.yaml 的 only_videos
 .venv/bin/python 00_status.py --assign # 回填"未归属"(已有视频 split 不变 -> 天然增量)
 .venv/bin/python 02_build_dataset.py   # 重建数据集
+.venv/bin/python 02_import_modelscope_dataset.py # 如使用 ModelScope 数据,重建后重新导入
 .venv/bin/python 04_validate.py        # (如重训了)重新验收
 ```
 
@@ -181,7 +229,7 @@ datasets/<组>/
 
 ### 6. 模型验收标准
 
-`04_validate.py` 在**验证集**上跑 `ultralytics.val`,取逐类 P/R/mAP 对照 `config.acceptance` 判 PASS/FAIL,写 `runs/<组>/acceptance_report.md`。默认门槛(在 `config.yaml` 调整):
+`04_validate.py` 默认在**验证集 val** 上跑 `ultralytics.val`,取逐类 P/R/mAP 对照 `config.acceptance` 判 PASS/FAIL,写 `runs/<组>/acceptance_report.md`。上线前可用 `--split test` 在 holdout test 上做最终测试,写 `runs/<组>/acceptance_report_test.md`。默认门槛(在 `config.yaml` 调整):
 
 | 项 | 默认门槛 | 说明 |
 |----|---------|------|

@@ -16,10 +16,12 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import re
 import statistics
 import sys
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
@@ -30,6 +32,7 @@ import torch
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DATA_DIR = ROOT.parent / "CleanSightBackend" / "MS-TCN2" / "data" / "Endo_Project"
 OUT_DIR = ROOT / "benchmark" / "temporal_feed_mode"
+LATEST_DIR = OUT_DIR / "latest"
 
 DEFAULT_MODELS = {
     "gru": {
@@ -51,6 +54,16 @@ DEFAULT_MODELS = {
         "window": 64,
     },
 }
+
+
+def build_run_id(version: str | None) -> str:
+    """生成用于归档 benchmark summary 的版本化运行编号。"""
+
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    if not version:
+        return timestamp
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", version.strip()).strip("-")
+    return f"{slug or 'version'}-{timestamp}"
 
 
 @dataclass
@@ -434,17 +447,31 @@ def run_one(model_name: str, args: argparse.Namespace) -> dict:
     }
 
 
-def write_outputs(results: list[dict]) -> None:
+def write_outputs(results: list[dict], version: str | None) -> tuple[Path, Path]:
     """在 `benchmark/temporal_feed_mode` 下写入 JSON 和 Markdown 报告。"""
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    (OUT_DIR / "feed_mode_summary.json").write_text(
-        json.dumps(results, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    LATEST_DIR.mkdir(parents=True, exist_ok=True)
+    archive_dir = OUT_DIR / "reports"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    run_id = build_run_id(version)
+    payload = {
+        "benchmark": "temporal_feed_mode",
+        "version": version,
+        "run_id": run_id,
+        "models": results,
+    }
+    json_text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+    latest_json = LATEST_DIR / "feed_mode_summary.json"
+    archive_json = archive_dir / f"feed_mode_summary_{run_id}.json"
+    latest_json.write_text(json_text, encoding="utf-8")
+    archive_json.write_text(json_text, encoding="utf-8")
 
     lines = [
         "# 时序喂法 Benchmark：整段喂 vs 流式喂",
+        "",
+        f"- 版本：`{version or run_id}`",
+        f"- 归档编号：`{run_id}`",
         "",
         "本报告比较同一 checkpoint 在两种输入方式下的结果：",
         "",
@@ -499,7 +526,12 @@ def write_outputs(results: list[dict]) -> None:
             )
         lines.append("")
 
-    (OUT_DIR / "feed_mode_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    md_text = "\n".join(lines) + "\n"
+    latest_md = LATEST_DIR / "feed_mode_summary.md"
+    archive_md = archive_dir / f"feed_mode_summary_{run_id}.md"
+    latest_md.write_text(md_text, encoding="utf-8")
+    archive_md.write_text(md_text, encoding="utf-8")
+    return latest_md, archive_md
 
 
 def main() -> int:
@@ -512,12 +544,14 @@ def main() -> int:
     parser.add_argument("--device", default="auto", help="auto/cpu/cuda")
     parser.add_argument("--max-videos", type=int, help="只评测前 N 个视频；不传则全量")
     parser.add_argument("--max-frames", type=int, help="每个视频最多取前 N 帧；不传则全量")
+    parser.add_argument("--version", help="为本次 benchmark summary 指定版本名，例如 temporal-v2")
     args = parser.parse_args()
 
     selected = [args.model] if args.model else list(DEFAULT_MODELS)
     results = [run_one(model_name, args) for model_name in selected]
-    write_outputs(results)
-    print(f"已写入 {OUT_DIR / 'feed_mode_summary.md'}")
+    latest_md, archive_md = write_outputs(results, args.version)
+    print(f"已写入 {latest_md}")
+    print(f"已归档 {archive_md}")
     return 0
 
 
