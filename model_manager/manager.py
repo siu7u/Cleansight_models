@@ -214,7 +214,19 @@ def ensure_action_supported(specs: list[ModelSpec], action: str) -> None:
         raise SystemExit(f"{action} 不支持这些模型: {', '.join(unsupported)}")
 
 
-def run_benchmark(name: str, dry_run: bool) -> int:
+def run_benchmark(
+    name: str,
+    dry_run: bool,
+    version: str | None = None,
+    model: str | None = None,
+    split: str | None = None,
+    weights: str | None = None,
+    summaries: list[str] | None = None,
+    card: str | None = None,
+    latency_ms: float | None = None,
+    causality: str | None = None,
+    num_params: int | None = None,
+) -> int:
     """执行或预览清单中的集中 benchmark。"""
 
     catalog = load_catalog()
@@ -222,6 +234,26 @@ def run_benchmark(name: str, dry_run: bool) -> int:
     if name not in benchmarks:
         raise KeyError(f"未知 benchmark: {name}")
     cmd = build_python_command([str(part) for part in benchmarks[name]["command"]])
+    if name == "single_model_yolo" and (model or split or weights):
+        cmd = [part for part in cmd if part != "--skip-run"]
+    if version:
+        cmd.extend(["--version", version])
+    if model:
+        cmd.extend(["--model", model])
+    if split:
+        cmd.extend(["--split", split])
+    if weights:
+        cmd.extend(["--weights", weights])
+    for summary in summaries or []:
+        cmd.extend(["--summary", summary])
+    if card:
+        cmd.extend(["--card", card])
+    if latency_ms is not None:
+        cmd.extend(["--latency-ms", str(latency_ms)])
+    if causality:
+        cmd.extend(["--causality", causality])
+    if num_params is not None:
+        cmd.extend(["--num-params", str(num_params)])
     print(f"[benchmark] {name}")
     print("  cwd: .")
     print(f"  cmd: {' '.join(cmd)}")
@@ -259,8 +291,17 @@ def main() -> int:
         p.add_argument("--run", action="store_true", help="真正执行；不传则只打印命令")
 
     bench = sub.add_parser("benchmark", help="运行或预览集中 benchmark")
-    bench.add_argument("name", choices=["single_model_yolo", "single_model_temporal", "temporal_feed_mode"])
+    bench.add_argument("name", choices=["single_model_yolo", "single_model_temporal", "temporal_feed_mode", "release_gate"])
     bench.add_argument("--run", action="store_true", help="真正执行；不传则只打印命令")
+    bench.add_argument("--version", help="为 benchmark summary 指定版本名，例如 yolo-large-v2")
+    bench.add_argument("--model", help="传给 benchmark runner 的模型 id 或模型名")
+    bench.add_argument("--split", help="传给 benchmark runner 的数据 split,例如 val/test")
+    bench.add_argument("--weights", help="传给 benchmark runner 的权重路径")
+    bench.add_argument("--summary", action="append", help="传给 release_gate 的 benchmark summary JSON;可传多次")
+    bench.add_argument("--card", help="传给 release_gate 的 CARD.md 路径")
+    bench.add_argument("--latency-ms", type=float, help="传给 release_gate 的部署机实测延迟")
+    bench.add_argument("--causality", help="传给 release_gate 的因果性/感受域声明")
+    bench.add_argument("--num-params", type=int, help="传给 release_gate 的模型参数量")
 
     args = parser.parse_args()
     models = load_models()
@@ -278,7 +319,19 @@ def main() -> int:
         codes = [run_action(spec, args.command, dry_run=not args.run) for spec in selected]
         return 0 if all(code == 0 for code in codes) else 2
     if args.command == "benchmark":
-        return run_benchmark(args.name, dry_run=not args.run)
+        return run_benchmark(
+            args.name,
+            dry_run=not args.run,
+            version=args.version,
+            model=args.model,
+            split=args.split,
+            weights=args.weights,
+            summaries=args.summary,
+            card=args.card,
+            latency_ms=args.latency_ms,
+            causality=args.causality,
+            num_params=args.num_params,
+        )
 
     raise SystemExit(f"未知命令: {args.command}")
 

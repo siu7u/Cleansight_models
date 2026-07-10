@@ -28,14 +28,16 @@
 默认会调用：
 
 ```text
-cleansight-yolo-pipeline-main/04_validate.py
+yolo-detection/pipeline/04_validate.py
 ```
 
 并把各组报告汇总到：
 
 ```text
-benchmark/single_model/yolo_summary.md
-benchmark/single_model/yolo_summary.json
+benchmark/single_model/latest/yolo_summary.md
+benchmark/single_model/latest/yolo_summary.json
+benchmark/single_model/reports/yolo_summary_<version-or-timestamp>.md
+benchmark/single_model/reports/yolo_summary_<version-or-timestamp>.json
 ```
 
 只验证指定组：
@@ -51,6 +53,25 @@ benchmark/single_model/yolo_summary.json
 ../CleanSightBackend/.venv/bin/python benchmark/single_model/run_yolo_benchmark.py --skip-run
 ```
 
+为本次汇总指定版本名：
+
+```bash
+../CleanSightBackend/.venv/bin/python benchmark/single_model/run_yolo_benchmark.py --skip-run --version yolo-large-v2
+```
+
+推荐在评估版本化权重时显式绑定模型 id、权重和 split：
+
+```bash
+../CleanSightBackend/.venv/bin/python model_manager/manager.py benchmark single_model_yolo \
+  --model yolo.group1_large \
+  --weights yolo-detection/pipeline/versioned_weights/yolo-large-v2/best.pt \
+  --split val \
+  --version yolo-large-v2 \
+  --run
+```
+
+此时 summary JSON 会记录 `schema_version`、`model_id`、`checkpoint`、`dataset.split`、`metrics` 和 `gates`，后续 release gate 可以直接读取 JSON，不需要解析 Markdown。
+
 ## 单模型时序
 
 从模型集根目录执行：
@@ -62,8 +83,16 @@ benchmark/single_model/yolo_summary.json
 输出：
 
 ```text
-benchmark/single_model/temporal_summary.md
-benchmark/single_model/temporal_summary.json
+benchmark/single_model/latest/temporal_summary.md
+benchmark/single_model/latest/temporal_summary.json
+benchmark/single_model/reports/temporal_summary_<version-or-timestamp>.md
+benchmark/single_model/reports/temporal_summary_<version-or-timestamp>.json
+```
+
+为本次汇总指定版本名：
+
+```bash
+../CleanSightBackend/.venv/bin/python benchmark/single_model/run_temporal_benchmark.py --version temporal-v2
 ```
 
 该脚本会依次调用已有的：
@@ -71,6 +100,35 @@ benchmark/single_model/temporal_summary.json
 ```text
 tools/eval_temporal_detailed.py
 tools/measure_temporal_latency.py
+```
+
+## Release Gate
+
+上线门禁会读取一个或多个 benchmark summary JSON,并检查上线前三项必填:
+
+- 运行延迟:部署机实测,用 `--latency-ms` 或 CARD 里的延迟记录提供。
+- 感受域/因果性:在线模型必须是因果或 by-construction causal,用 `--causality` 或 CARD 记录提供。
+- 模型参数量:用 `--num-params` 或 CARD 记录提供。
+
+输出:
+
+```text
+benchmark/release_gate/latest/release_gate.md
+benchmark/release_gate/latest/release_gate.json
+benchmark/release_gate/reports/release_gate_<version-or-timestamp>.md
+benchmark/release_gate/reports/release_gate_<version-or-timestamp>.json
+```
+
+示例:
+
+```bash
+../CleanSightBackend/.venv/bin/python model_manager/manager.py benchmark release_gate \
+  --summary benchmark/single_model/latest/yolo_summary.json \
+  --version yolo-large-v2 \
+  --latency-ms 12.3 \
+  --causality by-construction-causal \
+  --num-params 256131 \
+  --run
 ```
 
 ## 3 分钟端到端

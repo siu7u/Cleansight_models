@@ -41,8 +41,16 @@
 ## 输出
 
 ```text
-benchmark/temporal_feed_mode/feed_mode_summary.md
-benchmark/temporal_feed_mode/feed_mode_summary.json
+benchmark/temporal_feed_mode/latest/feed_mode_summary.md
+benchmark/temporal_feed_mode/latest/feed_mode_summary.json
+benchmark/temporal_feed_mode/reports/feed_mode_summary_<version-or-timestamp>.md
+benchmark/temporal_feed_mode/reports/feed_mode_summary_<version-or-timestamp>.json
+```
+
+可以用 `--version` 指定本次 summary 的版本名：
+
+```bash
+../CleanSightBackend/.venv/bin/python benchmark/temporal_feed_mode/run_feed_mode_benchmark.py --version temporal-v2
 ```
 
 ## 指标说明

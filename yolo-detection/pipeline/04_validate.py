@@ -9,8 +9,12 @@
 用法(在 yolo_pipeline/ 下执行):
     <py> 04_validate.py                # 全部有权重的组
     <py> 04_validate.py group2_small   # 只验某组
+    <py> 04_validate.py --split test   # 在 holdout test 上评估
+    <py> 04_validate.py group1_large --weights versioned_weights/yolo-large-v2/best.pt
 """
+import argparse
 from datetime import datetime
+from pathlib import Path
 import sys
 
 from utils.common import ROOT, load_config
@@ -20,25 +24,44 @@ RUNS = ROOT / "runs"
 
 
 def timestamp() -> str:
-    """Return a filesystem-safe validation report timestamp."""
+    """返回适合文件名使用的验证报告时间戳。"""
 
     return datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
-def evaluate(group, thr):
-    """跑 val,返回 (metrics_dict, per_class_list, passed, reasons)。"""
+def parse_args():
+    """解析要验证的分组、数据 split 和可选权重路径。"""
+
+    parser = argparse.ArgumentParser(description="Validate grouped YOLO detectors.")
+    parser.add_argument("groups", nargs="*", help="只验证指定分组;不填则验证全部有权重的组")
+    parser.add_argument(
+        "--split",
+        choices=("val", "test"),
+        default="val",
+        help="评估数据 split。val 用于训练后验收,test 用于最终 holdout 评估。",
+    )
+    parser.add_argument(
+        "--weights",
+        help="指定单个分组要评估的权重路径;不填则使用 runs/<组>/weights/best.pt。",
+    )
+    return parser.parse_args()
+
+
+def evaluate(group, thr, split, weight_override=None):
+    """跑指定 split,返回 (metrics_dict, per_class_list, passed, reasons)。"""
     from ultralytics import YOLO
 
     data = DATASETS / group / "data.yaml"
-    weight = RUNS / group / "weights" / "best.pt"
+    weight = weight_override or (RUNS / group / "weights" / "best.pt")
+    weight = weight if weight.is_absolute() else ROOT / weight
     if not weight.exists():
         return None, None, None, [f"缺权重 {weight},先跑 03_train.py"]
     if not data.exists():
         return None, None, None, [f"缺 data.yaml {data},先跑 02_build_dataset.py"]
 
     model = YOLO(str(weight))
-    m = model.val(data=str(data), split="val", verbose=False,
-                  project=str(RUNS), name=f"{group}_val", exist_ok=True)
+    m = model.val(data=str(data), split=split, verbose=False,
+                  project=str(RUNS), name=f"{group}_{split}", exist_ok=True)
     names = model.names
     box = m.box
 
@@ -72,10 +95,12 @@ def evaluate(group, thr):
     return overall, per_class, (len(reasons) == 0), reasons
 
 
-def write_report(group, overall, per_class, passed, reasons, thr):
-    """Write the current acceptance report and a timestamped archive copy."""
+def write_report(group, split, checkpoint, overall, per_class, passed, reasons, thr):
+    """写入当前验收报告,并额外保存一份带时间戳的归档报告。"""
 
     lines = [f"# 验收报告 · {group}", "",
+             f"数据集 split: `{split}`", "",
+             f"权重: `{checkpoint}`", "",
              f"结论: **{'PASS ✅' if passed else 'FAIL ❌'}**", "",
              "## 整体指标", "",
              "| 指标 | 值 | 门槛 |", "|------|----|----|",
@@ -92,34 +117,43 @@ def write_report(group, overall, per_class, passed, reasons, thr):
         lines += ["## 未达标项", ""] + [f"- {r}" for r in reasons]
     else:
         lines += ["全部达标。"]
-    out = RUNS / group / "acceptance_report.md"
+    out_name = "acceptance_report.md" if split == "val" else f"acceptance_report_{split}.md"
+    out = RUNS / group / out_name
     out.parent.mkdir(parents=True, exist_ok=True)
     text = "\n".join(lines) + "\n"
     out.write_text(text, encoding="utf-8")
 
-    archive = RUNS / group / "reports" / f"acceptance_report-{timestamp()}.md"
+    archive = RUNS / group / "reports" / f"acceptance_report_{split}-{timestamp()}.md"
     archive.parent.mkdir(parents=True, exist_ok=True)
     archive.write_text(text, encoding="utf-8")
     return out, archive
 
 
 def main():
+    args = parse_args()
     cfg = load_config()
     thr = cfg["acceptance"]
-    requested = [a for a in sys.argv[1:] if not a.startswith("-")]
-    if requested:
-        groups = requested
+    if args.groups:
+        groups = args.groups
     elif RUNS.exists():
         groups = [p.name for p in sorted(RUNS.iterdir()) if p.is_dir()]
     else:
         groups = []
     if not groups:
         raise SystemExit("没有可验证的组(先 03_train.py),或显式传组名。")
+    if args.weights and len(groups) != 1:
+        raise SystemExit("--weights 只能在验证单个分组时使用,例如: 04_validate.py group1_large --weights ...")
+
+    weight_override = None
+    if args.weights:
+        weight_override = Path(args.weights)
 
     any_fail = False
     for g in groups:
-        print(f"\n=== 验证 {g} ===")
-        overall, per_class, passed, reasons = evaluate(g, thr)
+        print(f"\n=== 验证 {g} split={args.split} ===")
+        checkpoint = weight_override or (RUNS / g / "weights" / "best.pt")
+        checkpoint = checkpoint if checkpoint.is_absolute() else ROOT / checkpoint
+        overall, per_class, passed, reasons = evaluate(g, thr, args.split, weight_override)
         if overall is None:
             print(f"  [skip] {'; '.join(reasons)}")
             any_fail = True
@@ -129,7 +163,7 @@ def main():
         for pc in per_class:
             print(f"    {pc['name']:22s} P={pc['precision']:.3f} R={pc['recall']:.3f} "
                   f"mAP50={pc['map50']:.3f}")
-        report, archive = write_report(g, overall, per_class, passed, reasons, thr)
+        report, archive = write_report(g, args.split, checkpoint, overall, per_class, passed, reasons, thr)
         print(f"  结论: {'PASS ✅' if passed else 'FAIL ❌'}   报告: {report}")
         print(f"  归档报告: {archive}")
         if not passed:
