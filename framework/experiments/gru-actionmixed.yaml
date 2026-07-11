@@ -1,0 +1,37 @@
+# GRU 时序参照实验（消费真实 cleansight-ActionMixed 数据集）。
+# 数据 loader 按 features 契约（bbox→40维）+ feeding 契约（windowed_causal 加窗）
+# 一次性把数据转成模型输入；用数据集内建的 train/val/test 目录切分。
+
+family: gru
+
+task: temporal
+
+# 喂入模式：训练与评估共用同一个（训练怎么喂，评估就怎么喂）。
+feeding: windowed_causal
+
+model:
+  input_dim: 40          # 8 检测类 × [presence, cx, cy, w, h]
+  num_classes: 6         # labels/data.yaml: idle/air_injection/flush/long_brush_insert/long_brush_withdraw/short_brush_cleaning
+  hidden: 128
+  num_layers: 3
+
+data:
+  name: cleansight-ActionMixed
+  root: /Users/weichenyin/src/CleanSightDataset/yolo_pipeline/datasets/cleansight-ActionMixed
+  action_mapping: labels/data.yaml   # YAML: action_id -> 名称
+  labels_dir: labels                 # labels/<split>/<video>.mp4.txt : "frame_id action_id"
+  frames_dir: frames                 # frames/<split>/<video>-<frame:06d>.txt : bbox → 40维特征
+  split_train: train                 # 直接用内建目录，不用 idx
+  split_eval: test                   # 评估用哪个目录（train/val/test）
+
+feature_schema:
+  dim: 40
+  version: actionmixed-bbox-8cls-v1
+  # 布局：每 5 维一类，顺序同 frames/data.yaml（hand, scope_control_body, scope_mid_section,
+  # scope_distal_end, syringe, air_gun, short_brush, brush_tip_out），每类 [presence, cx, cy, w, h]。
+
+train:
+  epochs: 20
+  lr: 0.001
+  batch_size: 32
+  window: 16          # 必须 ≤ 最短视频的采样帧数（本数据集最短约 35 帧）
