@@ -20,16 +20,17 @@ REQUIRED_TOP_KEYS = ("family", "model", "task", "feeding", "data")
 
 
 def load_config(path: str | Path) -> dict:
-    """读取 YAML 实验配置：先做框架层通用校验，再委托任务层校验专属字段。"""
+    """读取 YAML 实验配置，只做**格式中立**的框架层通用校验。
+
+    任务/纵专属校验（feature_schema、input_dim、data_yaml…）由各纵编排器的
+    ``validate_config`` 负责，在 CLI 分派器里于本函数之后调用。core 因此**不 import
+    任何纵**，脊柱不反依赖 temporal/detection。
+    """
 
     data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError(f"配置文件顶层必须是映射: {path}")
     validate_config(data)
-    # 任务专属校验（延迟 import 避免与 tasks 层的循环依赖）。
-    from ..tasks import get_task
-
-    get_task(data["task"]).validate_config(data)
     return data
 
 

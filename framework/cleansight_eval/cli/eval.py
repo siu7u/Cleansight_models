@@ -12,7 +12,7 @@ from pathlib import Path
 
 from ..core.config import load_config
 from ..core.environment import now_stamp, pick_device
-from ..tasks import get_task
+from ._registry import get_vertical
 
 
 def parse_args(argv=None):
@@ -39,13 +39,14 @@ def main(argv=None) -> list[str]:
     args = parse_args(argv)
     cfg = load_config(args.config)
     device = pick_device()
-    task = get_task(cfg["task"])
+    vertical = get_vertical(cfg["task"])
+    vertical.validate_config(cfg)  # 纵专属校验（core 不再代劳）
 
     out_dir = _resolve_out_dir(args.ckpt, args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     feeding_name = cfg["feeding"]
-    envelope = task.evaluate(cfg, args.ckpt, feeding_name, device)
+    envelope = vertical.evaluate(cfg, args.ckpt, feeding_name, device)
     path = out_dir / f"{envelope.family}-{feeding_name}-{now_stamp()}.envelope.json"
     envelope.write(path)
     print(f"[eval] {feeding_name}: {path}")

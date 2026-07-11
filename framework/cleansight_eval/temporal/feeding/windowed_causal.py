@@ -14,9 +14,9 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from ..tasks.temporal.metrics import causal_decision
-from ..tasks.temporal.types import build_dataset
-from .base import FeedingResult
+from ..metrics import causal_decision
+from ..types import build_dataset
+from .result import FeedingResult
 
 IDLE_ID = 0
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from .base import FeedingResult
+from .result import FeedingResult
 
 
 class FullSequenceFeeding:

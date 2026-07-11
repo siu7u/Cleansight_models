@@ -1,8 +1,11 @@
-"""时序任务实现（TemporalTask）。
+"""时序纵编排（TemporalOrchestrator）。
 
-训练/评估主体逻辑从 ``cli/train.py`` 与 ``cli/eval.py`` 原样迁入，行为不变；
-CLI 退化为分派器。时序专属的配置校验（feature_schema / input_dim / num_classes）
-也随之下沉到本任务，框架层不再强制这些字段（§4.2）。
+时序纵自持训练/评估主体：forward/loss 循环、指标口径、喂入语义。CLI 只按
+``cfg["task"]`` 分派到本编排器。时序专属的配置校验（feature_schema / input_dim /
+num_classes）也在本纵内完成，core 不再强制这些字段（§4.2）。
+
+本编排器与 detection 纵**不共享**任何 family/feeding/task 抽象；两纵仅在 core 的
+信封与矩阵处汇合。
 """
 
 from __future__ import annotations
@@ -18,20 +21,20 @@ except ImportError:  # tqdm 可选，缺失时退化为原样迭代
     def tqdm(iterable, **_kwargs):
         return iterable
 
-from ...core.checkpoint import load_checkpoint, save_checkpoint
-from ...core.environment import now_stamp, set_seed
-from ...core.envelope import EvalEnvelope
-from ...core.integrity import check_envelope_complete, check_feature_schema
-from ...core.run import RunContext
-from ...feeding import get_feeding
-from ...feeding.perf import measure_single_tick, not_applicable_perf
-from ...families import get_family
+from ..core.checkpoint import load_checkpoint, save_checkpoint
+from ..core.environment import now_stamp, set_seed
+from ..core.envelope import EvalEnvelope
+from ..core.integrity import check_envelope_complete, check_feature_schema
+from ..core.run import RunContext
+from .feeding import get_feeding
+from .perf import measure_single_tick, not_applicable_perf
+from .family import get_family
 from .loader import load_split
 from .metrics import compute_temporal_metrics
 from .types import build_dataset, compute_class_weights
 
 
-class TemporalTask:
+class TemporalOrchestrator:
     task_id = "temporal"
 
     def validate_config(self, cfg: dict) -> None:
