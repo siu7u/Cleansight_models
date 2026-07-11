@@ -125,3 +125,10 @@ modelscope_upload
 .codex
 raw
 
+# ---------------------------------------------------------------------------
+# Framework experiment CONFIGS are the 实验配置层 (source/config), keep tracked
+# even though **/experiments/ above ignores training-output experiment dirs.
+# ---------------------------------------------------------------------------
+!framework/experiments/
+!framework/experiments/**
+

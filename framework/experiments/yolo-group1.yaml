@@ -1,0 +1,28 @@
+# YOLO 检测参照实验配置（实验配置层，需求 §6.4）。
+# 单帧无状态检测：消费 cleansight-yolo-pipeline 产出的标准 YOLO 数据集。
+# 与时序实验共用同一 train/eval 入口，只出事实信封、不判达标（§13.4 / §13.11）。
+
+family: yolo
+
+task: detection
+
+# 喂入模式：单帧无状态（§5.2），训练与评估共用。检测只有这一种喂入语义。
+feeding: single_frame
+
+model:
+  weights: yolo11n.pt   # nano：小数据 + 快；要更准换 yolo11s.pt
+  imgsz: 640
+
+data:
+  name: group1_large
+  # 指向数据构建流水线（cleansight-dataset）产出的数据集清单；不复制。
+  data_yaml: ../cleansight-dataset/cleansight-yolo-pipeline/datasets/group1_large/data.yaml
+  eval_split: val        # 评估用的 split（train/val/test）
+
+train:
+  epochs: 100
+  batch: 16
+  patience: 20
+
+# 无 feature_schema：检测输入是图像，不依赖上游特征向量。
+# 无 acceptance：业务门槛由人工/模型管理仓库判断，代码只出事实（§4.5 / §13.11）。
