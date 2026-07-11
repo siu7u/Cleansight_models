@@ -11,7 +11,7 @@ import argparse
 
 from ..core.config import apply_overrides, load_config
 from ..core.environment import pick_device
-from ..tasks import get_task
+from ._registry import get_vertical
 
 
 def parse_args(argv=None):
@@ -34,8 +34,9 @@ def main(argv=None) -> str:
         {"epochs": args.epochs, "lr": args.lr, "batch_size": args.batch_size, "window": args.window},
     )
     device = pick_device()
-    task = get_task(cfg["task"])
-    return task.train(cfg, runs_dir=args.runs_dir, seed=args.seed, device=device)
+    vertical = get_vertical(cfg["task"])
+    vertical.validate_config(cfg)  # 纵专属校验（core 不再代劳）
+    return vertical.train(cfg, runs_dir=args.runs_dir, seed=args.seed, device=device)
 
 
 if __name__ == "__main__":

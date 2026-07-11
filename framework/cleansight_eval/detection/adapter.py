@@ -1,15 +1,15 @@
-"""YOLO 检测模型族（封装 ultralytics）。
+"""YOLO 检测适配器（封装 ultralytics，检测纵专属）。
 
-模型族契约按任务分化（§4.2）：时序族 ``ModelFamily`` 返回 ``[B,T,C]`` logits，
-而 YOLO 的训练/验证由 ultralytics 封装，暴露的是 ``train`` / ``val``。二者都由
-``get_family(family_id)`` 取用，由所属 Task 决定调用哪套方法。
+检测纵不套用任何跨域 family Protocol：ultralytics 自持训练/验证，本适配器只暴露
+``train`` / ``val`` 两个方法，由 ``get_adapter(family_id)`` 取用。这与 temporal 纵的
+family 是**两套不相交的契约**——故意不强行统一。
 
-同时这里也充当**检测任务的 data loader**：与时序任务"读原始数据+按 features/feeding
-契约转成模型输入"对应，检测的 features 契约就是**图像**、feeding 契约是 **single_frame**，
-ultralytics 从 ``data.yaml`` 一次性读入 images/labels 并自持批处理——无需另写 loader。
+本适配器同时充当**检测的 data loader**：检测的 features 契约就是**图像**、feeding
+契约是 **single_frame**，ultralytics 从 ``data.yaml`` 一次性读入 images/labels 并自持
+批处理——无需另写 loader。
 
 ultralytics/torch 为重依赖，全部在方法内部 import，使仅做数据/纯逻辑的场景
-（如检测指标单元测试）无需安装它们。
+（如检测指标单元测试、注入假 adapter 的冒烟）无需安装它们。
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ def _ul_device(device) -> str:
     return t  # "mps" / "cpu"
 
 
-class YoloFamily:
+class YoloAdapter:
     family_id = "yolo"
 
     def train(self, weights, data_yaml, train_cfg: dict, imgsz: int, device, project, name):
@@ -90,5 +90,12 @@ class YoloFamily:
         }
 
 
-def get_family() -> YoloFamily:
-    return YoloFamily()
+_ADAPTERS = {
+    YoloAdapter.family_id: YoloAdapter,
+}
+
+
+def get_adapter(family_id: str) -> YoloAdapter:
+    if family_id not in _ADAPTERS:
+        raise KeyError(f"未注册的检测适配器: {family_id}；已注册: {sorted(_ADAPTERS)}")
+    return _ADAPTERS[family_id]()

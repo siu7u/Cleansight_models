@@ -12,7 +12,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from ...core.envelope import MetricValue
+from ..core.envelope import MetricValue
 
 # 口径版本：任何影响数值的口径变化都应递增版本号。
 SPEC_ACC = "acc/frame-wise/v1"

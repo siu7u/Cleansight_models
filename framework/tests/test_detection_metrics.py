@@ -8,7 +8,7 @@
 """
 
 from cleansight_eval.core.envelope import MetricState
-from cleansight_eval.tasks.detection.metrics import build_detection_metrics
+from cleansight_eval.detection.metrics import build_detection_metrics
 
 
 def _fake_val():

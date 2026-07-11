@@ -1,6 +1,6 @@
 """检测任务指标组装（任务层，与 ultralytics 解耦）。
 
-输入是一份已从 ultralytics 结果中抽出的**普通 dict**（见 ``YoloFamily.val``），
+输入是一份已从 ultralytics 结果中抽出的**普通 dict**（见 ``YoloAdapter.val``），
 本模块只负责把它翻译成三态 ``MetricValue``。这样单元测试无需安装 ultralytics
 即可覆盖最关键的对齐逻辑（§8.2 / §10）：
 
@@ -11,7 +11,7 @@
 
 from __future__ import annotations
 
-from ...core.envelope import MetricValue
+from ..core.envelope import MetricValue
 
 SPEC_MAP50 = "map/coco-0.5/v1"
 SPEC_MAP50_95 = "map/coco-0.5:0.95/v1"

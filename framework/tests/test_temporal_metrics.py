@@ -1,7 +1,7 @@
 """时序指标口径可独立测试（需求 §12.3）。"""
 
 from cleansight_eval.core.envelope import MetricState
-from cleansight_eval.tasks.temporal.metrics import (
+from cleansight_eval.temporal.metrics import (
     SPEC_ACC,
     compute_temporal_metrics,
     edit_score,

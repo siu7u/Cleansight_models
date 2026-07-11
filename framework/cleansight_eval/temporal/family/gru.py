@@ -45,7 +45,3 @@ class GruFamily:
         }
         meta.update(extra)
         return meta
-
-
-def get_family() -> GruFamily:
-    return GruFamily()

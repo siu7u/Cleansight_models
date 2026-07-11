@@ -5,7 +5,7 @@ import torch
 
 from cleansight_eval.core.checkpoint import load_checkpoint, save_checkpoint
 from cleansight_eval.core.integrity import CompatibilityError
-from cleansight_eval.families import get_family
+from cleansight_eval.temporal.family import get_family
 
 
 def _make_ckpt(tmp_path):

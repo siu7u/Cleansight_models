@@ -1,20 +1,19 @@
-"""喂入模式注册表（train/eval 中立的共享轴）。新增模式在此登记，配置以名字引用。
+"""时序喂入模式注册表（temporal 纵内部）。
 
-一个实验用**顶层单个 ``feeding`` 字段**表达喂入模式，训练与评估共用同一个。
-CLI/任务通过 ``get_feeding(name)`` 取用，不 import 具体模式。
+新增模式在此登记，配置以名字引用。一个实验用顶层单个 ``feeding`` 字段表达喂入
+模式，训练与评估共用同一个。这是**时序专属**的注册表：``single_frame`` 那种检测
+语义不在此列 —— 检测纵自持推理，不借道喂入模式。
 """
 
 from __future__ import annotations
 
 from .full_sequence import FullSequenceFeeding
-from .single_frame import SingleFrameFeeding
 from .stateful import StatefulFeeding
 from .windowed_causal import WindowedCausalFeeding
 
 _MODES = {
     FullSequenceFeeding.name: FullSequenceFeeding,
     WindowedCausalFeeding.name: WindowedCausalFeeding,
-    SingleFrameFeeding.name: SingleFrameFeeding,
     StatefulFeeding.name: StatefulFeeding,
 }
 
