@@ -1,8 +1,8 @@
-"""跨纵单一矩阵守卫（拆分后最关键的不变量，需求 §9）。
+"""跨流水线单一矩阵守卫（简化后最关键的不变量，需求 §9）。
 
-temporal 与 detection 是两个独立纵，但两者的信封必须能汇入**同一份**异构矩阵：
-不同纵有不同指标列、三态严格区分、不生成综合分数。这是外部模型管理仓库消费的
-唯一产出，拆分绝不能把它拆成两份。
+时序与检测是三条独立流水线，但它们的信封必须能汇入**同一份**异构矩阵：不同流水线有
+不同指标列、三态严格区分、不生成综合分数。这是外部模型管理仓库消费的唯一产出，简化绝不
+能把它拆成两份。
 """
 
 from cleansight_eval.core.envelope import EvalEnvelope, MetricState, MetricValue
@@ -11,10 +11,9 @@ from cleansight_eval.core.matrix import build_matrix, collect_envelopes, render_
 
 def _temporal_env() -> EvalEnvelope:
     return EvalEnvelope(
-        family="gru",
+        model_type="gru",
         model_id="gru-128h",
-        task="temporal",
-        feeding="windowed_causal",
+        pipeline="sliding_window_temporal",
         checkpoint="runs/gru/checkpoints/x.pt",
         dataset="endo-v1",
         feature_schema={"dim": 40, "version": "actionmixed-bbox-8cls-v1"},
@@ -31,10 +30,9 @@ def _temporal_env() -> EvalEnvelope:
 
 def _detection_env() -> EvalEnvelope:
     return EvalEnvelope(
-        family="yolo",
+        model_type="yolo",
         model_id="yolo-group1",
-        task="detection",
-        feeding="single_frame",
+        pipeline="detection",
         checkpoint="runs/yolo/checkpoints/best.pt",
         dataset="group1_large",
         feature_schema={"modality": "image", "imgsz": 640},
@@ -55,7 +53,7 @@ def test_two_verticals_fold_into_one_heterogeneous_matrix(tmp_path):
     _detection_env().write(runs / "yolo" / "evals" / "b.envelope.json")
 
     envs = collect_envelopes(runs)
-    assert len(envs) == 2  # 同一次扫描收纳两纵
+    assert len(envs) == 2  # 同一次扫描收纳两域
 
     matrix = build_matrix(envs)
     cols = set(matrix["metric_columns"])
@@ -63,7 +61,7 @@ def test_two_verticals_fold_into_one_heterogeneous_matrix(tmp_path):
     assert {"accuracy", "edit", "mAP@0.5", "recall:scope_ctrl"} <= cols
     assert {"perf.latency_mean_ms"} <= cols
 
-    rows = {r["family"]: r for r in matrix["rows"]}
+    rows = {r["model_type"]: r for r in matrix["rows"]}
     gru, yolo = rows["gru"], rows["yolo"]
 
     # 时序行没有检测列 → 空白（既非 N/A 也非 MISSING）

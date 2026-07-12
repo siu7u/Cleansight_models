@@ -1,13 +1,17 @@
-"""时序任务指标（任务层）。
+"""时序指标与延迟测量（两条时序流水线共用）。
 
 从 ``temporal-*/util.py`` 迁移的口径一致实现：edit 距离、segmental F1、逐帧
 accuracy，以及因果平滑决策 ``causal_decision``。每个指标声明口径版本 ``spec``
 （需求 §8.2），已计算的指标以 ``MetricValue`` 三态信封返回。
 
-口径与原实现保持一致，未做数值改动，便于与旧 benchmark 对齐验收。
+延迟测量（``measure_single_tick`` / ``not_applicable_perf``）也放这里：滑窗流水线测单
+tick 延迟，全序列流水线标 N/A 而非造假。口径与原实现保持一致，未做数值改动，便于与旧
+benchmark 对齐验收。
 """
 
 from __future__ import annotations
+
+import time
 
 import numpy as np
 import torch
@@ -18,6 +22,7 @@ from ..core.envelope import MetricValue
 SPEC_ACC = "acc/frame-wise/v1"
 SPEC_EDIT = "edit/levenstein-norm/v1"
 SPEC_F1 = "segmental_f1/iou/v1"
+SPEC_LATENCY = "latency/single_tick_ms/v1"
 
 BG_CLASS = ["background"]
 
@@ -147,3 +152,48 @@ def compute_temporal_metrics(pred_labels: list[str], gt_labels: list[str]) -> di
         f1 = round(2.0 * precision * recall / (precision + recall + 1e-8) * 100, 2)
         out[f"f1@{overlap}"] = MetricValue.computed(f1, spec=SPEC_F1)
     return out
+
+
+def measure_single_tick(
+    model, window: int, input_dim: int, device, warmup: int = 20, runs: int = 200
+) -> dict[str, MetricValue]:
+    """测量单窗口 ``[1, window, input_dim]`` 前向延迟（取末帧，模拟滑窗流式一 tick）。"""
+
+    model.eval()
+    x = torch.randn(1, window, input_dim, device=device)
+
+    def _tick():
+        return model(x)[0, -1]  # 末帧 logits，滑窗流式的一步
+
+    with torch.no_grad():
+        for _ in range(warmup):
+            _tick()
+        if device.type == "cuda":
+            torch.cuda.synchronize()
+
+        samples = []
+        for _ in range(runs):
+            t0 = time.perf_counter()
+            _tick()
+            if device.type == "cuda":
+                torch.cuda.synchronize()
+            samples.append((time.perf_counter() - t0) * 1000.0)
+
+    samples.sort()
+    mean_ms = sum(samples) / len(samples)
+    median_ms = samples[len(samples) // 2]
+    p95_ms = samples[min(len(samples) - 1, int(0.95 * len(samples)))]
+    spec = f"{SPEC_LATENCY}; device={device}; window={window}; warmup={warmup}; runs={runs}"
+    return {
+        "latency_mean_ms": MetricValue.computed(round(mean_ms, 4), spec=spec),
+        "latency_median_ms": MetricValue.computed(round(median_ms, 4), spec=spec),
+        "latency_p95_ms": MetricValue.computed(round(p95_ms, 4), spec=spec),
+    }
+
+
+def not_applicable_perf(reason: str = "该流水线不测量实时延迟") -> dict[str, MetricValue]:
+    return {
+        "latency_mean_ms": MetricValue.not_applicable(reason, spec=SPEC_LATENCY),
+        "latency_median_ms": MetricValue.not_applicable(reason, spec=SPEC_LATENCY),
+        "latency_p95_ms": MetricValue.not_applicable(reason, spec=SPEC_LATENCY),
+    }
