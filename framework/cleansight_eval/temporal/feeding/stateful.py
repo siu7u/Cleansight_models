@@ -13,6 +13,7 @@ from .result import FeedingResult
 class StatefulFeeding:
     name = "stateful"
     requires_performance = True
+    train_batch_size = None
 
     def evaluate(self, family, model, datasets, device) -> FeedingResult:
         raise NotImplementedError(

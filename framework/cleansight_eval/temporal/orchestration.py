@@ -13,7 +13,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
+from torch.utils.data import ConcatDataset, DataLoader
 
 try:
     from tqdm import tqdm
@@ -31,7 +31,7 @@ from .perf import measure_single_tick, not_applicable_perf
 from .family import get_family
 from .loader import load_split
 from .metrics import compute_temporal_metrics
-from .types import build_dataset, compute_class_weights
+from .util import compute_class_weights
 
 
 class TemporalOrchestrator:
@@ -51,8 +51,8 @@ class TemporalOrchestrator:
                 raise ValueError(f"时序任务 data 段缺少必要字段: {k}（用数据集内建目录切分）")
         # 喂入模式（训练与评估共用同一个）必须已注册，且能用于训练。
         feeding = get_feeding(cfg["feeding"])
-        if not hasattr(feeding, "build_training_dataset"):
-            raise ValueError(f"喂入模式 {feeding.name} 不能用于时序训练（未实现 build_training_dataset）")
+        if not hasattr(feeding, "build_datasets"):
+            raise ValueError(f"喂入模式 {feeding.name} 不能用于时序训练（未实现 build_datasets）")
 
     def train(self, cfg: dict, runs_dir: str, seed: int, device) -> str:
         train_cfg = cfg["train"]
@@ -72,16 +72,28 @@ class TemporalOrchestrator:
         if problems:
             raise ValueError("特征 schema 与配置不兼容:\n  - " + "\n  - ".join(problems))
 
-        # 本实验的喂入模式（训练与评估共用），由它构造训练数据（窗口/末帧规格的单一真源）。
+        # 训练前钩子（统一契约）：让 family 有机会按训练数据准备（如离线分割 fit 归一化统计）。
+        # GRU 等无需归一化的族为空操作——编排器无条件调用，不按模型类型分支。
+        family.prepare(model, features)
+
+        # 本实验的喂入模式（训练与评估共用），由它构造样本容器（窗口/末帧规格的单一真源）。
+        # build_datasets 是训练与评估共用的核心构造；训练侧再 ConcatDataset 拼接成一个可批处理集。
+        # batch 策略由喂入模式决定：全序列变长→逐条(1)，窗口样本→用 cfg 的 batch_size。
         feeding = get_feeding(cfg["feeding"])
-        train_ds = feeding.build_training_dataset(features, truths, list(range(len(features))), window)
-        train_loader = DataLoader(train_ds, batch_size=train_cfg.get("batch_size", 32), shuffle=True)
+        train_ds = ConcatDataset(feeding.build_datasets(features, truths, list(range(len(features))), window))
+        batch_size = feeding.train_batch_size or train_cfg.get("batch_size", 32)
+        train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
 
         weights = compute_class_weights(train_loader)
         criterion = nn.CrossEntropyLoss(
             weight=torch.tensor([weights[i] for i in sorted(weights)], dtype=torch.float32).to(device)
         )
-        optimizer = torch.optim.Adam(model.parameters(), lr=train_cfg.get("lr", 1e-3))
+        optimizer = torch.optim.Adam(
+            model.parameters(),
+            lr=train_cfg.get("lr", 1e-3),
+            weight_decay=train_cfg.get("weight_decay", 0.0),
+        )
+        grad_clip = train_cfg.get("grad_clip")  # 值驱动（非模型分支）：缺省则不裁剪
 
         model.train()
         epochs = train_cfg.get("epochs", 20)
@@ -92,6 +104,8 @@ class TemporalOrchestrator:
                 loss = family.compute_loss(logits, y, criterion)
                 optimizer.zero_grad()
                 loss.backward()
+                if grad_clip:
+                    nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
                 optimizer.step()
 
         ckpt_path = run.checkpoints_dir / f"{cfg['family']}-final-{now_stamp()}.pt"
@@ -124,10 +138,11 @@ class TemporalOrchestrator:
         window = meta.get("window", cfg["train"].get("window", 64))
         features, truths, id2name = load_split(cfg["data"], cfg["data"]["split_eval"], window=window)
         idx_to_action = id2name  # {action_id: name}
-        test_ds = build_dataset(features, truths, idx=list(range(len(features))), window=window)
-        datasets = list(test_ds.datasets)
 
+        # 评估集与训练集共用同一核心构造（feeding.build_datasets）：各喂入模式自持样本形态，
+        # 编排器不再硬编码窗口容器（消除全序列寄生 EndoDataset 的巧合）。
         mode = get_feeding(feeding_name)
+        datasets = mode.build_datasets(features, truths, list(range(len(features))), window)
         result = mode.evaluate(family, model, datasets, device)
 
         all_preds = np.concatenate(result.video_preds)

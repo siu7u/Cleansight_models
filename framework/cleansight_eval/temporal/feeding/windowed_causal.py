@@ -5,35 +5,56 @@
 视频开始前 reset。迁移自 ``temporal_main.eval_model`` 的流式循环与 benchmark 的
 ``predict_streaming``。
 
-**训练与实时评估共用这同一喂入模式**：训练侧 ``build_training_dataset`` 按"窗口+末帧"
-打包样本（单一真源），评估侧 ``evaluate`` 逐窗推理。二者是同一喂入规格的两个消费者。
+**训练与实时评估共用这同一喂入模式**：``build_datasets`` 按"窗口+末帧"打包样本（单一
+真源，训练/评估共用的核心构造），评估侧 ``evaluate`` 逐窗推理。二者是同一喂入规格的两个消费者。
 """
 
 from __future__ import annotations
 
 import numpy as np
 import torch
+from torch.utils.data import Dataset
 
 from ..metrics import causal_decision
-from ..types import build_dataset
 from .result import FeedingResult
 
 IDLE_ID = 0
 
 
+class EndoDataset(Dataset):
+    """因果滑窗数据集：样本为 ``[window, F]``，标签为窗口最后一帧类别。
+
+    窗口/末帧规格由本喂入模式拥有（与 ``FullSequenceFeeding`` 的整段+逐帧相对）。
+    """
+
+    def __init__(self, features: np.ndarray, labels, window: int = 64):
+        self.x = torch.from_numpy(features).float()
+        self.y = torch.tensor(labels, dtype=torch.long)
+        self.w = window
+
+    def __len__(self):
+        return len(self.x) - self.w + 1
+
+    def __getitem__(self, idx):
+        x = self.x[idx : idx + self.w]
+        y = self.y[idx + self.w - 1]
+        return x, y
+
+
 class WindowedCausalFeeding:
     name = "windowed_causal"
     requires_performance = True
+    train_batch_size = None  # None → 用 cfg 的 train.batch_size（窗口样本可批处理）
 
     def __init__(self, min_duration: int = 25):
         self.min_duration = min_duration
 
-    def build_training_dataset(self, features, truths, idx, window):
-        """训练侧：训练数据 = 本喂入模式的样本形态（窗口 + 末帧标签）。
+    def build_datasets(self, features, truths, idx, window):
+        """按视频构造样本容器（训练与评估共用的核心构造）：窗口 + 末帧标签。
 
-        这使"训练用哪种喂入"成为显式选择，而非隐式硬编码；窗口/末帧规格由本模式拥有。
+        窗口/末帧规格由本模式拥有；训练侧再 ConcatDataset 拼接、评估侧逐视频消费。
         """
-        return build_dataset(features, truths, idx=idx, window=window)
+        return [EndoDataset(features[i], truths[i], window) for i in idx]
 
     def evaluate(self, family, model, datasets, device) -> FeedingResult:
         model.eval()

@@ -8,9 +8,11 @@
 from __future__ import annotations
 
 from .gru import GruFamily
+from .mstcn import MstcnFamily
 
 _FAMILIES = {
     GruFamily.family_id: GruFamily,
+    MstcnFamily.family_id: MstcnFamily,
 }
 
 
