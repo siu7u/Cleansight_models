@@ -38,6 +38,8 @@ class YoloAdapter:
         from ultralytics import YOLO
 
         model = YOLO(str(weights))
+        # project 必须传绝对路径：ultralytics 对相对 project 不照单全收，会把它拼到
+        # 自身 settings 的 runs_dir（默认 runs/detect）下，导致产物落到预期之外的目录。
         model.train(
             data=str(data_yaml),
             epochs=train_cfg.get("epochs", 100),
@@ -45,11 +47,13 @@ class YoloAdapter:
             batch=train_cfg.get("batch", 16),
             patience=train_cfg.get("patience", 20),
             device=_ul_device(device),
-            project=str(project),
+            project=str(Path(project).resolve()),
             name=str(name),
             exist_ok=True,
         )
-        best = Path(project) / str(name) / "weights" / "best.pt"
+        # best.pt 路径以 ultralytics 实际落盘为准（trainer.best），不手工拼，免受
+        # 其 save_dir 解析规则影响。
+        best = Path(model.trainer.best)
         num_params = sum(p.numel() for p in model.model.parameters())
         names = {int(k): v for k, v in dict(model.names).items()}
         return best, num_params, names, len(names)
