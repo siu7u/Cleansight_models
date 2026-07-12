@@ -13,6 +13,7 @@ import torch.nn as nn
 
 from .gru import GRUClassifier
 from .mstcn import MSTCN
+from .mstcn2 import MSTCN2
 
 
 def _build_gru(cfg: dict) -> nn.Module:
@@ -32,10 +33,24 @@ def _build_mstcn(cfg: dict) -> nn.Module:
     )
 
 
+def _build_mstcn2(cfg: dict) -> nn.Module:
+    return MSTCN2(
+        in_dim=cfg["input_dim"],
+        classes=cfg["num_classes"],
+        hidden=cfg.get("hidden", 64),
+        num_stages=cfg.get("num_stages", 4),
+        num_layers=cfg.get("num_layers", 10),
+        dropout=cfg.get("dropout", 0.3),
+        tmse_weight=cfg.get("tmse_weight", 0.15),
+        tmse_clip=cfg.get("tmse_clip", 4.0),
+    )
+
+
 # type -> {build: cfg->nn.Module, causal: bool}
 _MODELS = {
     "gru": {"build": _build_gru, "causal": True},
     "mstcn": {"build": _build_mstcn, "causal": False},
+    "mstcn2": {"build": _build_mstcn2, "causal": False},
 }
 
 

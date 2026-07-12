@@ -21,8 +21,8 @@
 
 | 层 | 目录 | 职责 |
 |---|---|---|
-| **公共层** | `cleansight_eval/core/` | run 组织、配置（格式中立）、环境、checkpoint 重建元信息 + 守卫、结果三态信封、异构矩阵、完整性检查、`feature_schema` 契约 |
-| **时序域** | `cleansight_eval/temporal/` | 两条时序流水线（`full_sequence_pipeline` / `sliding_window_pipeline`）+ 共享的 `data`（loader + meta）/ `metrics`（指标 + 延迟）/ `util`；模型在 `models/`（`gru`/`mstcn` + 注册表） |
+| **公共层** | `cleansight_eval/core/` | run 组织、配置（格式中立）、环境、checkpoint 重建元信息 + 守卫、结果三态信封、异构矩阵、完整性检查（含特征维度契约校验） |
+| **时序域** | `cleansight_eval/temporal/` | 两条时序流水线（`full_sequence_pipeline` / `sliding_window_pipeline`）+ 共享的 `data`（loader + meta）/ `metrics`（指标 + 延迟）/ `util`；模型在 `models/`（`gru`/`mstcn`/`mstcn2` + 注册表） |
 | **检测域** | `cleansight_eval/detection/` | 单帧检测流水线（`pipeline`）+ 薄 ultralytics 适配器（`yolo`）+ 指标 |
 | CLI | `cleansight_eval/cli/` | `train`/`eval` 按 `pipeline` 分派（`_registry.py`）；`matrix` 汇总三类信封成单一矩阵 |
 | 实验配置层 | `experiments/` | 流水线 + 模型类型/规模 + 数据 + 特征 + 训练参数 |
@@ -41,6 +41,8 @@
   全序列与检测绝不产生虚假实时延迟——延迟标记为 `N/A`。
 - **异构评估矩阵**（`core/matrix.py`）：允许不同模型不同指标列，不生成综合分数。
 - **不含业务门槛/自动晋升判断**：只产出评估事实（晋升决定由人负责）。
+
+> 抽象/复用/过度设计的取舍准则见仓库级 [`docs/DESIGN.md`](../docs/DESIGN.md)。
 
 ## 环境准备
 
@@ -64,10 +66,13 @@ cd framework
 ```
 
 - **训练**读配置、跑训练、落 checkpoint（+ 重建元信息 sidecar），打印 `run_dir` 与
-  `checkpoint` 路径。`--epochs/--lr/--batch_size/--window` 可临时覆盖配置，不改文件。
+  `checkpoint` 路径。`-S/--set 点路径=值`（可多次）临时覆盖配置、不改文件；核心 CLI **不预设
+  任何纵的调参名**，各纵按自己超参词汇寻址，如 `-S train.epochs=5`（两纵通用）、`-S train.batch=8`
+  （检测/ultralytics）、`-S train.window=32`（时序滑窗）。
 - **评估**加载 checkpoint 时校验重建元信息，错配即抛 `CompatibilityError`；产出一份三态信封
   写入同 run 的 `evals/`。训练与评估同属一条流水线，输入构造与输出语义一致。
-- **矩阵**把 `runs/` 下所有信封汇成一张异构矩阵（`matrix.json` 机读 + `matrix.md` 人读）。
+- **矩阵**把 `runs/` 下所有信封汇成一张异构矩阵（`matrix.json` 机读 + `matrix.md` 人读）；
+  `--pipeline <名>` 只汇总某一类流水线做同类对比（输出带 `.<名>` 后缀，不覆盖全量矩阵）。
 
 > **目录全自动**：训练每跑一次开一个 run 目录 `runs/<type>-<时间戳>/`（下挂 `checkpoints/`、
 > `evals/`、`config.resolved.json`、`env.json`）；评估输出目录从 `--ckpt` 向上自动定位到同 run
@@ -132,7 +137,7 @@ python -m cleansight_eval.cli.matrix --runs runs
 
 ```yaml
 model:
-  type: gru            # ✅ 模型注册表键：gru（因果，两条都可）/ mstcn（非因果，仅全序列）
+  type: gru            # ✅ 模型注册表键：gru（因果，两条都可）/ mstcn·mstcn2（非因果，仅全序列）
   input_dim: 40        # ✅ 特征维；须等于 loader 产出（8 检测类 × 5）
   num_classes: 6       # ✅ 动作类数；须等于 labels/data.yaml 的 names 数
   hidden: 128          # 模型超参（gru/mstcn 均用 hidden）
@@ -195,7 +200,9 @@ cd framework && python -m pytest tests -q   # 需已激活项目 venv
 - **新增时序模型**（Transformer / causal-TCN…）：在 `temporal/models/` 加一个纯 `nn.Module`
   文件（输入 `[B,T,F]`→输出 `[B,T,C]`），并在 `temporal/models/__init__.py` 的注册表登记一行
   `{"build": ..., "causal": <bool>}`。`causal=True` 才允许进滑窗流水线。**两条时序流水线零改动**
-  即可复用——监督口径与推理由流水线拥有，模型只管网络结构。可选：模型若需输入归一化，实现
-  `fit_normalization(features)` 方法即可（全序列流水线会 duck-type 调用，如 MS-TCN）。
+  即可复用——监督口径与推理由流水线拥有，模型只管网络结构。**可选 duck-type 钩子**（有则调、
+  无则退化，不写基类）让个别模型携带自身训练细节而不污染脊柱：`fit_normalization(features)`
+  训练前按训练集统计写归一化 buffer（如 MS-TCN）；`compute_loss(x, y, criterion)` 让模型自持
+  训练配方（如 MS-TCN++ 的多 stage 深监督 + T-MSE，仅全序列流水线调用）。
 - **新增检测器**（DETR…）：在 `detection/yolo.py` 旁加适配器并在 `get_adapter` 登记，暴露
   `train`/`val` 即可，不需实现任何时序接口。
