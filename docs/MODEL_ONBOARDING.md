@@ -35,6 +35,7 @@
 | 数据加载 / 特征化 | **共享** | `temporal/data.py:load_split` |
 | 网络结构 | **模型变** | `temporal/models/<name>.py`（纯 `nn.Module`） |
 | 训练前归一化（可选） | 模型可选提供 | 模型的 `fit_normalization(features)` 方法 |
+| 训练配方（可选，深监督等） | 模型可选提供 | 模型的 `compute_loss(x, y, criterion)` 方法（仅全序列调用） |
 | **loss 监督粒度**（末帧 vs 逐帧） | **流水线决定** | `sliding_window_pipeline` / `full_sequence_pipeline` |
 | 切窗 / 组 dataset / 评估循环 / 平滑 | **流水线决定** | 同上两个流水线文件 |
 | 是否测延迟 | **流水线决定** | 滑窗测、全序列 N/A |
@@ -42,9 +43,11 @@
 | 指标（acc/edit/F1@k）/ 延迟测量 | **共享** | `temporal/metrics.py` |
 | checkpoint 读写 / envelope / 完整性 | **共享** | `core/*` |
 
-参照两个现成实现：
+参照三个现成实现：
 - **GRU**（因果）：无归一化；可用于**两条**时序流水线。
 - **MS-TCN**（非因果）：`fit_normalization` 用训练集拟合 z-score 写入 buffer；只能用于**全序列**。
+- **MS-TCN++**（`mstcn2`，非因果）：在 MS-TCN 基础上另实现 `compute_loss`（多 stage 深监督 +
+  T-MSE），把训练配方随架构走；`forward` 仍守 `[B,T,F]->[B,T,C]`，只能用于**全序列**。
 
 ## 1.2 新接入一个时序模型：要实现什么
 
@@ -63,8 +66,12 @@ class MyNet(nn.Module):
     def forward(self, x):        # x:[B,T,F] -> [B,T,C]
         ...
 
-    # 可选：模型若需输入归一化，实现此方法，全序列流水线会 duck-type 调用
+    # 可选钩子（duck-type，有则调、无则退化，不写基类）：
+    # 1) 模型若需输入归一化，实现此方法，训练前按训练集统计写 buffer
     def fit_normalization(self, features): ...
+    # 2) 模型若自持训练配方（多 stage 深监督 / T-MSE 等），实现此方法（仅全序列流水线调用）；
+    #    流水线仍把类别加权 CE 作为 criterion 传入，缺此方法则退化为单前向逐帧 CE
+    def compute_loss(self, x, y, criterion): ...
 ```
 
 ### B. 注册：`temporal/models/__init__.py` 的 `_MODELS`

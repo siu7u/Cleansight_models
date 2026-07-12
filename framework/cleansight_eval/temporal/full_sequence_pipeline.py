@@ -3,9 +3,15 @@
 一条完整的训练+评估单元：一次看到完整特征序列 ``[1, T, F]``、**逐帧监督**、逐帧 argmax
 推理。训练与评估使用同一种数据组织（整段序列 + 逐帧标签），不测实时延迟（离线，标 N/A）。
 
-模型作为可替换组件（GRU / MS-TCN…）由 ``model.type`` 选取，只需满足 ``[B,T,F] -> [B,T,C]``
-的前向约定；监督口径与推理方式由本流水线拥有，不写在模型里。数据读取/指标/延迟工具与
-滑窗流水线共享（``data`` / ``metrics``），但绝不跨到 detection 域。
+模型作为可替换组件（GRU / MS-TCN / MS-TCN++…）由 ``model.type`` 选取，只需满足
+``[B,T,F] -> [B,T,C]`` 的前向约定；监督口径（逐帧 CE、类别加权）与推理方式（逐帧 argmax）
+由本流水线拥有，不写在模型里。数据读取/指标/延迟工具与滑窗流水线共享（``data`` /
+``metrics``），但绝不跨到 detection 域。
+
+两个 **可选 duck-type 钩子**（有则调、无则退化，不写基类）让个别模型携带自身的训练细节而
+不污染通用脊柱：``fit_normalization(features)`` 训练前按训练集统计写归一化 buffer；
+``compute_loss(x, y, criterion)`` 让模型自持训练配方（如 MS-TCN++ 的多 stage 深监督 +
+T-MSE），流水线仍把类别加权 CE 作为监督口径传入。缺钩子的模型走默认单前向逐帧 CE。
 """
 
 from __future__ import annotations
@@ -118,9 +124,14 @@ class FullSequenceTemporalPipeline:
         for _epoch in tqdm(range(1, epochs + 1), desc="train"):
             for x, y in train_loader:
                 x, y = x.to(device), y.to(device)
-                logits = model(x)  # [B, T, C]
-                # 逐帧监督：整段序列每帧都算 CE（与滑窗末帧监督相对）。
-                loss = criterion(logits.reshape(-1, logits.shape[-1]), y.reshape(-1))
+                # 逐帧监督：整段序列每帧都算 CE（与滑窗末帧监督相对）。模型若自带训练配方
+                # （duck-type ``compute_loss``，如 MS-TCN++ 的多 stage 深监督 + T-MSE），则监督
+                # 随架构走，只把类别加权 CE 作为口径传入；否则退化为单前向逐帧 CE。
+                if hasattr(model, "compute_loss"):
+                    loss = model.compute_loss(x, y, criterion)
+                else:
+                    logits = model(x)  # [B, T, C]
+                    loss = criterion(logits.reshape(-1, logits.shape[-1]), y.reshape(-1))
                 optimizer.zero_grad()
                 loss.backward()
                 if grad_clip:
