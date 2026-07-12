@@ -1,8 +1,8 @@
 """训练入口：python -m cleansight_eval.cli.train --config <yaml>。
 
-配置驱动同架构变体（需求 §4.3 / §7.2）。本入口只做**分派**：加载配置、选设备、
-应用 CLI 覆盖项，然后交给 ``get_task(cfg["task"]).train(...)``。训练主体（时序的
-forward/loss 循环、检测的 ultralytics 封装）各由所属任务实现（§4.2 / §6.2）。
+配置驱动同架构变体。本入口只做**分派**：加载配置、选设备、应用 CLI 覆盖项，然后交给
+``get_pipeline(cfg["pipeline"]).train(...)``。训练主体（时序的 forward/loss 循环、检测的
+ultralytics 封装）各由所属流水线实现。
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import argparse
 
 from ..core.config import apply_overrides, load_config
 from ..core.environment import pick_device
-from ._registry import get_vertical
+from ._registry import get_pipeline
 
 
 def parse_args(argv=None):
@@ -34,9 +34,9 @@ def main(argv=None) -> str:
         {"epochs": args.epochs, "lr": args.lr, "batch_size": args.batch_size, "window": args.window},
     )
     device = pick_device()
-    vertical = get_vertical(cfg["task"])
-    vertical.validate_config(cfg)  # 纵专属校验（core 不再代劳）
-    return vertical.train(cfg, runs_dir=args.runs_dir, seed=args.seed, device=device)
+    pipeline = get_pipeline(cfg["pipeline"])
+    pipeline.validate_config(cfg)  # 流水线专属校验（core 不再代劳）
+    return pipeline.train(cfg, runs_dir=args.runs_dir, seed=args.seed, device=device)
 
 
 if __name__ == "__main__":

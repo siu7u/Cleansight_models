@@ -4,7 +4,7 @@
 自身对应的模型配置；评估时不能因错误配置而静默加载。
 
 实现方式：权重存 ``<path>``，重建元信息存 sidecar ``<path>.meta.json``。
-元信息包含 family、模型配置、feature schema、input_dim/num_classes/window、task。
+元信息包含 type、模型配置、feature schema、input_dim/num_classes/window、pipeline。
 """
 
 from __future__ import annotations
@@ -26,8 +26,8 @@ def meta_path_for(checkpoint_path: str | Path) -> Path:
 def save_checkpoint(path: str | Path, state_dict: dict, meta: dict) -> Path:
     """保存权重与重建元信息。
 
-    ``meta`` 至少应包含 family、input_dim、num_classes；建议补充 model 配置、
-    feature_schema、window、task，以便评估阶段无需人工重复填写即可重建模型。
+    ``meta`` 至少应包含 type、input_dim、num_classes；建议补充 model 配置、
+    feature_schema、window、pipeline，以便评估阶段无需人工重复填写即可重建模型。
     """
 
     path = Path(path)

@@ -15,11 +15,12 @@ from .environment import capture_env, now_stamp
 
 
 class RunContext:
-    def __init__(self, root: str | Path, family: str, run_id: str | None = None):
-        self.run_id = run_id or f"{family}-{now_stamp()}"
+    def __init__(self, root: str | Path, label: str, run_id: str | None = None):
+        # label 只是 run 目录名前缀（通常取 model.type），与模型语义无关。
+        self.run_id = run_id or f"{label}-{now_stamp()}"
         self.dir = Path(root) / self.run_id
         self.dir.mkdir(parents=True, exist_ok=True)
-        self.family = family
+        self.label = label
 
     @property
     def checkpoints_dir(self) -> Path:

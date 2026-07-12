@@ -1,23 +1,25 @@
-"""task → 纵编排器 的分派表（唯一同时 import 两纵的地方）。
+"""pipeline → 流水线类 的分派表（唯一同时 import 三条流水线的地方）。
 
-CLI 的组合根（composition root）：core 不知道纵的存在、两纵互不 import，唯有此处
-按 ``cfg["task"]`` 把请求分派到对应纵的编排器。编排器靠**同名方法约定**被 duck-type
-调用（``validate_config`` / ``train`` / ``evaluate``）——这是编排（脊柱关切）的约定，
-不是模型语义 Protocol，故无需 ``tasks/base.py``。
+CLI 的组合根（composition root）：core 不知道流水线的存在、各流水线互不 import，唯有此处
+按 ``cfg["pipeline"]`` 把请求分派到对应流水线。流水线靠**同名方法约定**被 duck-type 调用
+（``validate_config`` / ``train`` / ``evaluate``）——这是编排（脊柱关切）的约定，不是模型
+Protocol，故无需基类。
 """
 
 from __future__ import annotations
 
-from ..detection.orchestration import DetectionOrchestrator
-from ..temporal.orchestration import TemporalOrchestrator
+from ..detection.pipeline import DetectionPipeline
+from ..temporal.full_sequence_pipeline import FullSequenceTemporalPipeline
+from ..temporal.sliding_window_pipeline import SlidingWindowTemporalPipeline
 
-_VERTICALS = {
-    TemporalOrchestrator.task_id: TemporalOrchestrator,
-    DetectionOrchestrator.task_id: DetectionOrchestrator,
+_PIPELINES = {
+    DetectionPipeline.pipeline_name: DetectionPipeline,
+    FullSequenceTemporalPipeline.pipeline_name: FullSequenceTemporalPipeline,
+    SlidingWindowTemporalPipeline.pipeline_name: SlidingWindowTemporalPipeline,
 }
 
 
-def get_vertical(task: str):
-    if task not in _VERTICALS:
-        raise KeyError(f"未注册的任务/纵: {task}；已注册: {sorted(_VERTICALS)}")
-    return _VERTICALS[task]()
+def get_pipeline(pipeline: str):
+    if pipeline not in _PIPELINES:
+        raise KeyError(f"未注册的流水线: {pipeline}；已注册: {sorted(_PIPELINES)}")
+    return _PIPELINES[pipeline]()

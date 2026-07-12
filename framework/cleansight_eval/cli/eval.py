@@ -1,8 +1,8 @@
 """评估入口：python -m cleansight_eval.cli.eval --config <yaml> --ckpt <path>。
 
-只做**分派**：在本实验的喂入模式（``cfg["feeding"]``，与训练同一个）下调用
-``get_task(cfg["task"]).evaluate(...)``，得到一份三态信封并落盘。重建模型、指标口径、
-喂入语义等由所属任务实现（§4.2）。训练怎么喂，评估就怎么喂，不做多模式扫描。
+只做**分派**：按 ``cfg["pipeline"]`` 调用 ``get_pipeline(...).evaluate(...)``，得到一份三态
+信封并落盘。重建模型、指标口径、推理语义等由所属流水线实现。训练与评估同属一条流水线，
+输入构造与输出语义一致，不做多模式扫描。
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from pathlib import Path
 
 from ..core.config import load_config
 from ..core.environment import now_stamp, pick_device
-from ._registry import get_vertical
+from ._registry import get_pipeline
 
 
 def parse_args(argv=None):
@@ -39,17 +39,16 @@ def main(argv=None) -> list[str]:
     args = parse_args(argv)
     cfg = load_config(args.config)
     device = pick_device()
-    vertical = get_vertical(cfg["task"])
-    vertical.validate_config(cfg)  # 纵专属校验（core 不再代劳）
+    pipeline = get_pipeline(cfg["pipeline"])
+    pipeline.validate_config(cfg)  # 流水线专属校验（core 不再代劳）
 
     out_dir = _resolve_out_dir(args.ckpt, args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    feeding_name = cfg["feeding"]
-    envelope = vertical.evaluate(cfg, args.ckpt, feeding_name, device)
-    path = out_dir / f"{envelope.family}-{feeding_name}-{now_stamp()}.envelope.json"
+    envelope = pipeline.evaluate(cfg, args.ckpt, device)
+    path = out_dir / f"{envelope.pipeline}-{envelope.model_type}-{now_stamp()}.envelope.json"
     envelope.write(path)
-    print(f"[eval] {feeding_name}: {path}")
+    print(f"[eval] {envelope.pipeline}: {path}")
     return [str(path)]
 
 

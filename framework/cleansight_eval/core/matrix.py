@@ -42,10 +42,9 @@ def build_matrix(envelopes: list[EvalEnvelope]) -> dict:
             cells[f"perf.{name}"] = mv.to_dict()
         rows.append(
             {
-                "family": env.family,
+                "model_type": env.model_type,
                 "model_id": env.model_id,
-                "task": env.task,
-                "feeding": env.feeding,
+                "pipeline": env.pipeline,
                 "checkpoint": env.checkpoint,
                 "dataset": env.dataset,
                 "feature_schema": env.feature_schema,
@@ -72,13 +71,13 @@ def render_markdown(matrix: dict) -> str:
     """渲染人读 Markdown 表格。"""
 
     cols = matrix["metric_columns"]
-    header = ["family", "model_id", "feeding", "params", "integrity"] + cols
+    header = ["model_type", "model_id", "pipeline", "params", "integrity"] + cols
     lines = ["| " + " | ".join(header) + " |", "| " + " | ".join(["---"] * len(header)) + " |"]
     for row in matrix["rows"]:
         base = [
-            row["family"],
+            row["model_type"],
             row["model_id"],
-            row["feeding"],
+            row["pipeline"],
             str(row.get("num_params") if row.get("num_params") is not None else ""),
             "ok" if row.get("integrity_ok") else "check",
         ]
