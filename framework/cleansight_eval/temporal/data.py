@@ -1,8 +1,9 @@
-"""时序任务的 data loader（cleansight-ActionMixed 格式）。
+"""时序数据与 checkpoint 元信息（两条时序流水线共用）。
 
-按用户定的原则：每类模型一个 loader，按 **features 契约**（bbox→40 维）和 **feeding
-契约**（下游加窗）一次性把原始数据转成模型输入。本模块只负责"读原始数据 + 按 features
-契约特征化"，加窗/整段等样本构造交给喂入模式（``feeding.*.build_datasets``）。
+按 **features 契约**（bbox→40 维）把原始 cleansight-ActionMixed 数据读成逐帧特征序列。
+本模块只负责"读原始数据 + 按 features 契约特征化"；加窗/整段等样本构造由各流水线自持
+（见 ``full_sequence_pipeline`` / ``sliding_window_pipeline``）。另提供 checkpoint 重建
+元信息的构造助手 ``build_temporal_meta``，两条时序流水线复用同一份口径。
 
 真实数据格式（已按 train/val/test 目录切分）：
 
@@ -58,7 +59,7 @@ def load_split(data_cfg: dict, split: str, window: int | None = None):
 
     features_list[i] 形如 ``[T_i, 40]``（float32），truths_list[i] 形如 ``[T_i]``（int64），
     索引与 ``labels/<split>/`` 下的视频对齐。若给了 ``window``，跳过 ``T < window`` 的
-    过短序列（窗口喂入 EndoDataset 无法开窗）并告警。
+    过短序列（窗口喂入 SlidingWindowDataset 无法开窗）并告警。
     """
     root = Path(data_cfg["root"])
     labels_dir = root / data_cfg.get("labels_dir", "labels") / split
@@ -66,7 +67,7 @@ def load_split(data_cfg: dict, split: str, window: int | None = None):
     id2name = load_action_mapping(root, data_cfg.get("action_mapping", "labels/data.yaml"))
 
     if not labels_dir.is_dir():
-        raise SystemExit(f"labels split 目录不存在: {labels_dir}")
+        raise FileNotFoundError(f"labels split 目录不存在: {labels_dir}")
 
     features, truths = [], []
     for label_file in sorted(labels_dir.glob("*.txt")):
@@ -92,5 +93,38 @@ def load_split(data_cfg: dict, split: str, window: int | None = None):
         truths.append(np.asarray(action_ids, dtype=np.int64))
 
     if not features:
-        raise SystemExit(f"{labels_dir} 下没有可用序列（可能都短于 window={window}）")
+        raise ValueError(f"{labels_dir} 下没有可用序列（可能都短于 window={window}）")
     return features, truths, id2name
+
+
+def build_temporal_meta(
+    model_cfg: dict,
+    feature_schema: dict,
+    pipeline: str,
+    window: int,
+    num_params: int,
+    train_cfg: dict,
+    trained_at: str,
+    extra: dict | None = None,
+) -> dict:
+    """构造 checkpoint 重建元信息（两条时序流水线共用口径）。
+
+    ``type`` 取自 ``model_cfg["type"]``，是 checkpoint 自描述与兼容校验的硬性键
+    （见 core.integrity.check_checkpoint_config）。``extra`` 供个别模型补充字段
+    （如 MS-TCN 的 ``normalizer``）。
+    """
+    meta = {
+        "type": model_cfg["type"],
+        "input_dim": model_cfg["input_dim"],
+        "num_classes": model_cfg["num_classes"],
+        "model": model_cfg,
+        "feature_schema": feature_schema,
+        "pipeline": pipeline,
+        "window": window,
+        "num_params": num_params,
+        "trained_at": trained_at,
+        "train": train_cfg,
+    }
+    if extra:
+        meta.update(extra)
+    return meta

@@ -47,10 +47,8 @@ def _make_actionmixed(root, seed=0):
 
 def _write_config(path, data_root):
     cfg = {
-        "family": "gru",
-        "model": {"input_dim": 40, "num_classes": 6, "hidden": 16, "num_layers": 1},
-        "task": "temporal",
-        "feeding": "windowed_causal",  # 训练与评估共用同一喂入模式
+        "pipeline": "sliding_window_temporal",
+        "model": {"type": "gru", "input_dim": 40, "num_classes": 6, "hidden": 16, "num_layers": 1},
         "data": {
             "name": "synthetic-actionmixed",
             "root": str(data_root),
@@ -78,19 +76,19 @@ def test_end_to_end(tmp_path):
     assert (tmp_path / "runs").exists()
     assert ckpt.endswith(".pt")
 
-    # eval → 一份信封（训练怎么喂，评估就怎么喂，不做多模式扫描）
+    # eval → 一份信封（训练与评估同属一条流水线，输入构造与输出语义一致）
     envelopes = eval_cli.main(["--config", str(cfg_path), "--ckpt", ckpt])
     assert len(envelopes) == 1
     data = json.loads(open(envelopes[0]).read())
-    assert data["feeding"] == "windowed_causal"
+    assert data["pipeline"] == "sliding_window_temporal"
     assert data["metrics"]["acc"]["state"] in (
         MetricState.COMPUTED.value,
         MetricState.MISSING.value,
     )
-    # 与训练一致的有界因果窗：测实时延迟、记录窗口与冷启动语义
+    # 滑窗流水线：测实时延迟、记录窗口与冷启动语义
     assert data["performance"]["latency_mean_ms"]["state"] == MetricState.COMPUTED.value
-    assert data["feeding_semantics"]["window"] == 8
-    assert "cold_start" in data["feeding_semantics"]
+    assert data["inference_semantics"]["window"] == 8
+    assert "cold_start" in data["inference_semantics"]
 
     # matrix
     matrix_json = matrix_cli.main(["--runs", str(runs_dir)])

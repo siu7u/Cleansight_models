@@ -1,0 +1,38 @@
+# MS-TCN++ 全序列时序参照实验（消费真实 cleansight-ActionMixed 数据集）。
+# 相对简化版 mstcn 的"++"：多 stage 精化（深监督）+ 双膨胀预测生成层 + T-MSE 平滑损失。
+# 全序列流水线：一次看到完整序列、逐帧监督、逐帧 argmax 推理；离线不测延迟（标 N/A）。
+
+pipeline: full_sequence_temporal
+
+model:
+  type: mstcn2           # 双向非因果，只能进全序列流水线（滑窗会因 causal=False 拒绝）
+  input_dim: 40          # 复用 40 维特征：8 检测类 × [presence, cx, cy, w, h]
+  num_classes: 6         # idle/air_injection/flush/long_brush_insert/long_brush_withdraw/short_brush_cleaning
+  # 规模按本数据集实测收敛（train 仅 10 段视频/~3300 帧）：论文默认 4×10×64=830k 严重过拟合，
+  # 压到 3×5×16=22k 后 test 全指标反超简化版 mstcn（见下）。更大数据集可回调至论文量级。
+  hidden: 16             # 预测生成/精化 stage 通道数
+  num_stages: 3          # 1 预测生成 + 2 精化（深监督：每 stage 都算损失）
+  num_layers: 5          # 每 stage 膨胀层数（感受野 ~2^layers）
+  dropout: 0.3
+  tmse_weight: 0.15      # T-MSE 平滑权重 λ（对齐 MS-TCN 论文）
+  tmse_clip: 4.0         # T-MSE 截断阈 τ（损失上界 τ²=16）
+
+data:
+  name: cleansight-ActionMixed
+  root: /abs/path/to/cleansight-ActionMixed   # 改成本机数据集根的绝对路径
+  action_mapping: labels/data.yaml   # YAML: action_id -> 名称
+  labels_dir: labels                 # labels/<split>/<video>.mp4.txt : "frame_id action_id"
+  frames_dir: frames                 # frames/<split>/<video>-<frame:06d>.txt : bbox → 40维特征
+  split_train: train
+  split_eval: test
+
+feature_schema:
+  dim: 40
+  version: actionmixed-bbox-8cls-v1
+  # 布局同 GRU/MS-TCN 实验：每 5 维一类，顺序同 frames/data.yaml，每类 [presence, cx, cy, w, h]。
+
+train:
+  epochs: 80             # 多 stage 收敛比单 stage 慢，给足轮数（>80 无进一步增益）
+  lr: 0.0005             # MS-TCN 论文量级（0.0005），配 Adam
+  grad_clip: 5.0
+  # 全序列以 batch_size=1 逐条喂入（变长序列），无需在此指定 batch_size/window。

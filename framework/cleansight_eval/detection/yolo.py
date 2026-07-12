@@ -1,12 +1,10 @@
-"""YOLO 检测适配器（封装 ultralytics，检测纵专属）。
+"""YOLO 检测适配器（封装 ultralytics，检测流水线专属）。
 
-检测纵不套用任何跨域 family Protocol：ultralytics 自持训练/验证，本适配器只暴露
-``train`` / ``val`` 两个方法，由 ``get_adapter(family_id)`` 取用。这与 temporal 纵的
-family 是**两套不相交的契约**——故意不强行统一。
+ultralytics 自持训练/验证，本适配器只暴露 ``train`` / ``val`` 两个方法，由
+``get_adapter(model_type)`` 取用。检测与时序两域故意不强行统一为同一套契约。
 
-本适配器同时充当**检测的 data loader**：检测的 features 契约就是**图像**、feeding
-契约是 **single_frame**，ultralytics 从 ``data.yaml`` 一次性读入 images/labels 并自持
-批处理——无需另写 loader。
+本适配器同时充当**检测的 data loader**：检测的输入就是**图像**、语义是**单帧无状态**，
+ultralytics 从 ``data.yaml`` 一次性读入 images/labels 并自持批处理——无需另写 loader。
 
 ultralytics/torch 为重依赖，全部在方法内部 import，使仅做数据/纯逻辑的场景
 （如检测指标单元测试、注入假 adapter 的冒烟）无需安装它们。
@@ -27,7 +25,7 @@ def _ul_device(device) -> str:
 
 
 class YoloAdapter:
-    family_id = "yolo"
+    model_type = "yolo"
 
     def train(self, weights, data_yaml, train_cfg: dict, imgsz: int, device, project, name):
         """训练 YOLO，返回 (best_pt, num_params, names, nc)。
@@ -95,11 +93,11 @@ class YoloAdapter:
 
 
 _ADAPTERS = {
-    YoloAdapter.family_id: YoloAdapter,
+    YoloAdapter.model_type: YoloAdapter,
 }
 
 
-def get_adapter(family_id: str) -> YoloAdapter:
-    if family_id not in _ADAPTERS:
-        raise KeyError(f"未注册的检测适配器: {family_id}；已注册: {sorted(_ADAPTERS)}")
-    return _ADAPTERS[family_id]()
+def get_adapter(model_type: str) -> YoloAdapter:
+    if model_type not in _ADAPTERS:
+        raise KeyError(f"未注册的检测适配器: {model_type}；已注册: {sorted(_ADAPTERS)}")
+    return _ADAPTERS[model_type]()

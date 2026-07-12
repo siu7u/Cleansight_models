@@ -22,7 +22,7 @@ _NO_SAMPLE = "验证集无该类样本，无法评估"
 
 
 def build_detection_metrics(val: dict) -> dict[str, MetricValue]:
-    """把 ``YoloFamily.val`` 的输出翻译为三态指标字典。
+    """把 ``YoloAdapter.val`` 的输出翻译为三态指标字典。
 
     ``val`` 约定字段：
       - ``map50`` / ``map50_95`` / ``precision`` / ``recall``：整体标量；

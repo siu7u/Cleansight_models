@@ -1,14 +1,12 @@
-"""检测纵编排（DetectionOrchestrator）。
+"""单帧检测流水线（DetectionPipeline）。
 
-消费 cleansight-yolo-pipeline 产出的标准 YOLO 数据集（images/labels/data.yaml），
-用 ultralytics 训练/验证，**只产事实信封**：mAP / P / R 逐类三态指标 + 完整性，
-不含任何业务门槛、不判 PASS/FAIL、不设非零退出码（对齐 §4.5 / §10 / §13.11，
-替代 pipeline 里带门禁的 04_validate.py）。
+一条完整的训练+评估单元：消费 cleansight-yolo-pipeline 产出的标准 YOLO 数据集
+（images/labels/data.yaml），用 ultralytics 训练/验证，**只产事实信封**：mAP / P / R 逐类
+三态指标 + 完整性，不含任何业务门槛、不判 PASS/FAIL、不设非零退出码。
 
-检测是**单帧无状态**语义：本纵自持推理（ultralytics.val），不借道任何喂入模式抽象。
-单帧语义写成模块常量 ``SINGLE_FRAME_SEMANTICS`` 直接挂进信封；实时延迟标 N/A（离线
-检测不测实时延迟，§8.4）。本纵与 temporal 纵不共享 family/feeding/task 抽象，仅在
-core 信封与矩阵处汇合。
+检测是**单帧无状态**语义：流水线自持推理（ultralytics.val），单帧语义写成模块常量
+``SINGLE_FRAME_SEMANTICS`` 直接挂进信封；实时延迟标 N/A（离线检测不测实时延迟）。检测域
+与时序域不共享任何数据/模型抽象，仅在 core 的信封与矩阵处汇合。
 """
 
 from __future__ import annotations
@@ -17,13 +15,13 @@ import json
 
 from ..core.checkpoint import load_meta, meta_path_for
 from ..core.environment import now_stamp, set_seed
-from ..core.envelope import EvalEnvelope, MetricValue
+from ..core.envelope import EvalEnvelope, MetricValue, format_params
 from ..core.integrity import assert_checkpoint_config, check_envelope_complete
 from ..core.run import RunContext
-from .adapter import get_adapter
 from .metrics import build_detection_metrics
+from .yolo import get_adapter
 
-# 单帧无状态喂入语义（此前借道 feeding/single_frame.py 的 .semantics，现降为纵内常量）。
+# 单帧无状态推理语义（挂进信封的 inference_semantics）。
 SINGLE_FRAME_SEMANTICS = {
     "mode": "single_frame",
     "sees": "one_image",
@@ -46,23 +44,23 @@ def _na_performance(reason: str) -> dict[str, MetricValue]:
     }
 
 
-class DetectionOrchestrator:
-    task_id = "detection"
+class DetectionPipeline:
+    pipeline_name = "detection"
 
     def validate_config(self, cfg: dict) -> None:
+        if "type" not in cfg.get("model", {}):
+            raise ValueError("检测流水线 model 段需包含 type（如 yolo）")
         data = cfg.get("data", {})
         if "data_yaml" not in data:
-            raise ValueError("检测任务 data 段需包含 data_yaml（指向 YOLO 数据集的 data.yaml）")
-        if cfg.get("feeding") != "single_frame":
-            raise ValueError("检测纵喂入模式固定为 single_frame（单帧无状态）")
+            raise ValueError("检测流水线 data 段需包含 data_yaml（指向 YOLO 数据集的 data.yaml）")
 
     def train(self, cfg: dict, runs_dir: str, seed: int, device) -> str:
         set_seed(seed)
-        adapter = get_adapter(cfg["family"])
         model_cfg = cfg["model"]
+        adapter = get_adapter(model_cfg["type"])
         train_cfg = cfg.get("train", {})
 
-        run = RunContext(runs_dir, family=cfg["family"])
+        run = RunContext(runs_dir, label=model_cfg["type"])
         run.save_config(cfg)
         run.save_env(device, seed=seed)
 
@@ -78,10 +76,10 @@ class DetectionOrchestrator:
             name=name,
         )
 
-        # sidecar 重建/溯源元信息：让 YOLO 权重也能进异构矩阵、被 load_meta 校验（§7.2/§8.1）。
+        # sidecar 重建/溯源元信息：让 YOLO 权重也能进异构矩阵、被 load_meta 校验。
         meta = {
-            "family": cfg["family"],
-            "task": cfg["task"],
+            "type": model_cfg["type"],
+            "pipeline": self.pipeline_name,
             "nc": nc,
             "names": names,
             "num_params": num_params,
@@ -98,33 +96,32 @@ class DetectionOrchestrator:
         print(f"[train] checkpoint={best_pt}")
         return str(best_pt)
 
-    def evaluate(self, cfg: dict, ckpt: str, feeding_name: str, device) -> EvalEnvelope:
-        meta = load_meta(ckpt)  # 缺 sidecar 直接报错，拒绝盲加载（§8.1）
-        assert_checkpoint_config(meta, {"family": cfg["family"]})
+    def evaluate(self, cfg: dict, ckpt: str, device) -> EvalEnvelope:
+        model_cfg = cfg["model"]
+        meta = load_meta(ckpt)  # 缺 sidecar 直接报错，拒绝盲加载
+        assert_checkpoint_config(meta, {"type": model_cfg["type"]})
 
-        adapter = get_adapter(cfg["family"])
-
+        adapter = get_adapter(model_cfg["type"])
         val = adapter.val(
             weights=ckpt,
             data_yaml=cfg["data"]["data_yaml"],
             split=cfg["data"].get("eval_split", "val"),
-            imgsz=cfg["model"].get("imgsz", 640),
+            imgsz=model_cfg.get("imgsz", 640),
             device=device,
         )
         metrics = build_detection_metrics(val)
         performance = _na_performance(reason="单帧检测评估不测实时延迟")
 
         envelope = EvalEnvelope(
-            family=cfg["family"],
-            model_id=f"{cfg['family']}-{cfg['data'].get('name', '')}",
-            task=cfg["task"],
-            feeding=feeding_name,
+            model_type=model_cfg["type"],
+            model_id=f"{model_cfg['type']}-{format_params(meta.get('num_params'))}",
+            pipeline=self.pipeline_name,
             checkpoint=str(ckpt),
             dataset=cfg["data"].get("name", cfg["data"]["data_yaml"]),
-            feature_schema={"modality": "image", "imgsz": cfg["model"].get("imgsz", 640)},
+            feature_schema={"modality": "image", "imgsz": model_cfg.get("imgsz", 640)},
             metrics=metrics,
             performance=performance,
-            feeding_semantics=SINGLE_FRAME_SEMANTICS,
+            inference_semantics=SINGLE_FRAME_SEMANTICS,
             num_params=meta.get("num_params"),
             timestamp=now_stamp(),
         )

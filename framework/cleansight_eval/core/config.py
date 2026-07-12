@@ -7,24 +7,26 @@
 
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-# 框架层只校验与模型语义无关的通用字段（§4.2）。feature_schema、train、
-# model.input_dim/num_classes 等是**任务专属**要求，下沉到各 Task.validate_config，
-# 否则检测这类无特征向量的任务连配置都过不了。
-# feeding：本实验的喂入模式，**训练与评估共用同一个**（训练怎么喂，评估就怎么喂）。
-REQUIRED_TOP_KEYS = ("family", "model", "task", "feeding", "data")
+# 框架层只校验与模型语义无关的通用字段。feature_schema、train、model.input_dim/
+# num_classes 等是**流水线专属**要求，下沉到各 Pipeline.validate_config，否则检测这类
+# 无特征向量的流水线连配置都过不了。
+# pipeline：本实验属于哪条流水线（detection / full_sequence_temporal /
+# sliding_window_temporal）；训练与评估同属一条，输入构造与输出语义一致。
+REQUIRED_TOP_KEYS = ("pipeline", "model", "data")
 
 
 def load_config(path: str | Path) -> dict:
     """读取 YAML 实验配置，只做**格式中立**的框架层通用校验。
 
-    任务/纵专属校验（feature_schema、input_dim、data_yaml…）由各纵编排器的
+    流水线专属校验（feature_schema、input_dim、data_yaml…）由各流水线的
     ``validate_config`` 负责，在 CLI 分派器里于本函数之后调用。core 因此**不 import
-    任何纵**，脊柱不反依赖 temporal/detection。
+    任何流水线**，脊柱不反依赖 temporal/detection。
     """
 
     data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
@@ -35,20 +37,40 @@ def load_config(path: str | Path) -> dict:
 
 
 def validate_config(cfg: dict) -> None:
-    """框架层通用结构校验（不含任何任务专属字段）。"""
+    """框架层通用结构校验（不含任何流水线专属字段）。"""
 
     missing = [k for k in REQUIRED_TOP_KEYS if k not in cfg]
     if missing:
         raise ValueError(f"配置缺少必要字段: {missing}")
-    if not isinstance(cfg["feeding"], str) or not cfg["feeding"]:
-        raise ValueError("feeding 必须是非空字符串（训练与评估共用的喂入模式），如 windowed_causal")
+    if not isinstance(cfg["pipeline"], str) or not cfg["pipeline"]:
+        raise ValueError(
+            "pipeline 必须是非空字符串，如 sliding_window_temporal / full_sequence_temporal / detection"
+        )
 
 
-def apply_overrides(cfg: dict, overrides: dict[str, Any]) -> dict:
-    """把 CLI 传入的覆盖项应用到 train 段（如 epochs/lr/batch_size/window）。"""
+def apply_overrides(cfg: dict, overrides: list[tuple[str, Any]]) -> dict:
+    """把 CLI 传入的通用覆盖项按**点路径**写入配置副本，不改动入参。
 
-    out = {**cfg, "train": {**cfg.get("train", {})}}
-    for key, value in overrides.items():
-        if value is not None:
-            out["train"][key] = value
+    覆盖项是 ``(点路径, 值)`` 序列，如 ``("train.epochs", 5)`` / ``("train.batch", 8)``。
+    核心 CLI 因此**不预设任何纵的调参名**——每条纵的 trainer 有各自超参词汇（torch 的
+    ``batch_size`` vs ultralytics 的 ``batch``），寻址交给调用方，脊柱只做通用点路径写入。
+    """
+
+    out = copy.deepcopy(cfg)
+    for dotted, value in overrides:
+        _set_dotted(out, dotted, value)
     return out
+
+
+def _set_dotted(d: dict, dotted: str, value: Any) -> None:
+    """按 ``a.b.c`` 点路径写入嵌套字典，沿途缺失的中间层按需建成 dict。"""
+
+    keys = dotted.split(".")
+    cur = d
+    for k in keys[:-1]:
+        nxt = cur.get(k)
+        if not isinstance(nxt, dict):
+            nxt = {}
+            cur[k] = nxt
+        cur = nxt
+    cur[keys[-1]] = value

@@ -13,11 +13,18 @@ from pathlib import Path
 from .envelope import EvalEnvelope, MetricState
 
 
-def collect_envelopes(runs_dir: str | Path) -> list[EvalEnvelope]:
-    """递归扫描 runs 目录下所有 ``*.envelope.json``。"""
+def collect_envelopes(runs_dir: str | Path, pipeline: str | None = None) -> list[EvalEnvelope]:
+    """递归扫描 runs 目录下所有 ``*.envelope.json``。
+
+    ``pipeline`` 非空时只保留该类流水线（detection / full_sequence_temporal /
+    sliding_window_temporal），用于"每次只看一类模型"的同类对比。
+    """
 
     runs_dir = Path(runs_dir)
-    return [EvalEnvelope.read(p) for p in sorted(runs_dir.rglob("*.envelope.json"))]
+    envs = [EvalEnvelope.read(p) for p in sorted(runs_dir.rglob("*.envelope.json"))]
+    if pipeline is not None:
+        envs = [e for e in envs if e.pipeline == pipeline]
+    return envs
 
 
 def _metric_columns(envelopes: list[EvalEnvelope]) -> list[str]:
@@ -42,10 +49,9 @@ def build_matrix(envelopes: list[EvalEnvelope]) -> dict:
             cells[f"perf.{name}"] = mv.to_dict()
         rows.append(
             {
-                "family": env.family,
+                "model_type": env.model_type,
                 "model_id": env.model_id,
-                "task": env.task,
-                "feeding": env.feeding,
+                "pipeline": env.pipeline,
                 "checkpoint": env.checkpoint,
                 "dataset": env.dataset,
                 "feature_schema": env.feature_schema,
@@ -72,13 +78,13 @@ def render_markdown(matrix: dict) -> str:
     """渲染人读 Markdown 表格。"""
 
     cols = matrix["metric_columns"]
-    header = ["family", "model_id", "feeding", "params", "integrity"] + cols
+    header = ["model_type", "model_id", "pipeline", "params", "integrity"] + cols
     lines = ["| " + " | ".join(header) + " |", "| " + " | ".join(["---"] * len(header)) + " |"]
     for row in matrix["rows"]:
         base = [
-            row["family"],
+            row["model_type"],
             row["model_id"],
-            row["feeding"],
+            row["pipeline"],
             str(row.get("num_params") if row.get("num_params") is not None else ""),
             "ok" if row.get("integrity_ok") else "check",
         ]
@@ -91,17 +97,24 @@ def render_markdown(matrix: dict) -> str:
     return "# 评估矩阵\n\n" + "\n".join(lines) + "\n" + note
 
 
-def write_matrix(runs_dir: str | Path, out_dir: str | Path | None = None) -> tuple[Path, Path]:
-    """汇总并写出 ``matrix.json`` 与 ``matrix.md``。"""
+def write_matrix(
+    runs_dir: str | Path, out_dir: str | Path | None = None, pipeline: str | None = None
+) -> tuple[Path, Path]:
+    """汇总并写出 ``matrix.json`` 与 ``matrix.md``。
+
+    ``pipeline`` 非空时只汇总该类流水线，输出文件名带 ``.<pipeline>`` 后缀，避免
+    覆盖全量 matrix。
+    """
 
     runs_dir = Path(runs_dir)
     out_dir = Path(out_dir) if out_dir else runs_dir
     out_dir.mkdir(parents=True, exist_ok=True)
-    envelopes = collect_envelopes(runs_dir)
+    envelopes = collect_envelopes(runs_dir, pipeline)
     matrix = build_matrix(envelopes)
 
-    json_path = out_dir / "matrix.json"
-    md_path = out_dir / "matrix.md"
+    stem = f"matrix.{pipeline}" if pipeline else "matrix"
+    json_path = out_dir / f"{stem}.json"
+    md_path = out_dir / f"{stem}.md"
     json_path.write_text(json.dumps(matrix, indent=2, ensure_ascii=False), encoding="utf-8")
     md_path.write_text(render_markdown(matrix), encoding="utf-8")
     return json_path, md_path

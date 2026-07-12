@@ -19,6 +19,22 @@ from pathlib import Path
 from typing import Any
 
 
+def format_params(n: int | None) -> str:
+    """把参数量格式化成紧凑标注（如 ``51k`` / ``1.2M``），供 model_id 区分同构不同规模。
+
+    纯整数格式化，与模型语义无关：脊柱不理解模型内部，只把已存于信封的 num_params
+    渲染成人读标注。缺失（老 checkpoint 未记）时给 ``?``，不伪造数字。
+    """
+
+    if not n:
+        return "?"
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if n >= 1_000:
+        return f"{n / 1_000:.0f}k"
+    return str(n)
+
+
 class MetricState(str, Enum):
     NOT_APPLICABLE = "not_applicable"
     MISSING = "missing"
@@ -77,30 +93,29 @@ class MetricValue:
 class EvalEnvelope:
     """一次评估运行的结构化产出（机读 + 人读的单一来源）。
 
-    同一个 checkpoint 在不同喂入模式（full_sequence / windowed_causal）下会产生各自
-    独立的信封；矩阵层再把它们横向汇总。
+    ``model_type`` 标识可替换的模型组件（gru / mstcn / yolo），``pipeline`` 标识它所属的
+    完整流水线（sliding_window_temporal / full_sequence_temporal / detection）——后者已同时
+    编码了域与推理方式，故不再单列 task/feeding。矩阵层把异构信封横向汇总。
     """
 
-    family: str
+    model_type: str
     model_id: str
-    task: str
-    feeding: str
+    pipeline: str
     checkpoint: str
     dataset: str
     feature_schema: dict = field(default_factory=dict)
     metrics: dict[str, MetricValue] = field(default_factory=dict)
     performance: dict[str, MetricValue] = field(default_factory=dict)
-    feeding_semantics: dict = field(default_factory=dict)
+    inference_semantics: dict = field(default_factory=dict)
     integrity: dict = field(default_factory=dict)
     num_params: int | None = None
     timestamp: str | None = None
 
     def to_dict(self) -> dict:
         return {
-            "family": self.family,
+            "model_type": self.model_type,
             "model_id": self.model_id,
-            "task": self.task,
-            "feeding": self.feeding,
+            "pipeline": self.pipeline,
             "checkpoint": self.checkpoint,
             "dataset": self.dataset,
             "feature_schema": self.feature_schema,
@@ -108,17 +123,16 @@ class EvalEnvelope:
             "timestamp": self.timestamp,
             "metrics": {k: v.to_dict() for k, v in self.metrics.items()},
             "performance": {k: v.to_dict() for k, v in self.performance.items()},
-            "feeding_semantics": self.feeding_semantics,
+            "inference_semantics": self.inference_semantics,
             "integrity": self.integrity,
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "EvalEnvelope":
         return cls(
-            family=data["family"],
+            model_type=data["model_type"],
             model_id=data["model_id"],
-            task=data["task"],
-            feeding=data["feeding"],
+            pipeline=data["pipeline"],
             checkpoint=data["checkpoint"],
             dataset=data["dataset"],
             feature_schema=data.get("feature_schema", {}),
@@ -126,7 +140,7 @@ class EvalEnvelope:
             timestamp=data.get("timestamp"),
             metrics={k: MetricValue.from_dict(v) for k, v in data.get("metrics", {}).items()},
             performance={k: MetricValue.from_dict(v) for k, v in data.get("performance", {}).items()},
-            feeding_semantics=data.get("feeding_semantics", {}),
+            inference_semantics=data.get("inference_semantics", {}),
             integrity=data.get("integrity", {}),
         )
 

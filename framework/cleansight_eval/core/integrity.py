@@ -18,7 +18,7 @@ class CompatibilityError(Exception):
 def check_checkpoint_config(meta: dict, expected: dict | None) -> list[str]:
     """比对 checkpoint 元信息与期望配置，返回不兼容项列表。
 
-    只比较会改变输入输出契约或权重形状的字段：family、input_dim、num_classes。
+    只比较会改变输入输出契约或权重形状的字段：type、input_dim、num_classes。
     ``window`` 等不改变权重形状的超参数只提示、不算硬性不兼容。
     """
 
@@ -26,7 +26,7 @@ def check_checkpoint_config(meta: dict, expected: dict | None) -> list[str]:
         return []
 
     problems: list[str] = []
-    for key in ("family", "input_dim", "num_classes"):
+    for key in ("type", "input_dim", "num_classes"):
         if key in expected and key in meta and meta[key] != expected[key]:
             problems.append(f"{key}: checkpoint={meta[key]!r} != expected={expected[key]!r}")
     return problems
@@ -58,7 +58,7 @@ def check_envelope_complete(envelope: Any) -> dict:
     """检查信封是否具备最小可解释字段，返回完整性报告（不做达标判断）。"""
 
     report: dict[str, Any] = {"ok": True, "issues": []}
-    required = ("family", "task", "feeding", "checkpoint", "dataset")
+    required = ("model_type", "pipeline", "checkpoint", "dataset")
     for key in required:
         if not getattr(envelope, key, None):
             report["ok"] = False

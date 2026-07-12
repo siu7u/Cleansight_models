@@ -1,8 +1,8 @@
 """端到端冒烟：MS-TCN 离线分割 train → eval → matrix（合成迷你 ActionMixed）。
 
-机械验证离线纵全链路：full_sequence 训练路径（逐帧全序列监督）、family.prepare 归一化
-统计写入 buffer 且随 checkpoint 存取复现、评估延迟标 N/A（离线不测实时延迟）、信封汇入
-异构矩阵。数值对齐验收需在有真实数据的机器上执行。
+机械验证全序列流水线全链路：逐帧全序列监督训练、fit_normalization 归一化统计写入 buffer
+且随 checkpoint 存取复现、评估延迟标 N/A（离线不测实时延迟）、信封汇入异构矩阵。数值对齐
+验收需在有真实数据的机器上执行。
 """
 
 import json
@@ -45,12 +45,10 @@ def _make_actionmixed(root, seed=0):
                 (root / "frames" / split / f"{vid}.mp4-{fid:06d}.txt").write_text("\n".join(lines) + "\n")
 
 
-def _write_config(path, data_root):
+def _write_config(path, data_root, model=None):
     cfg = {
-        "family": "mstcn",
-        "task": "temporal",
-        "feeding": "full_sequence",  # 离线全序列（训练评估共用）
-        "model": {"arch": "ms_tcn", "input_dim": 40, "num_classes": 6, "hidden": 16},
+        "pipeline": "full_sequence_temporal",
+        "model": model or {"type": "mstcn", "input_dim": 40, "num_classes": 6, "hidden": 16},
         "data": {
             "name": "synthetic-actionmixed",
             "root": str(data_root),
@@ -61,7 +59,7 @@ def _write_config(path, data_root):
             "split_eval": "test",
         },
         "feature_schema": {"dim": 40, "version": "actionmixed-bbox-8cls-v1"},
-        "train": {"epochs": 1, "lr": 0.01, "batch_size": 1, "window": 1, "grad_clip": 5.0},
+        "train": {"epochs": 1, "lr": 0.01, "grad_clip": 5.0},
     }
     path.write_text(yaml.safe_dump(cfg, allow_unicode=True))
 
@@ -77,7 +75,7 @@ def test_mstcn_end_to_end(tmp_path):
     ckpt = train_cli.main(["--config", str(cfg_path), "--runs-dir", str(runs_dir)])
     assert ckpt.endswith(".pt")
 
-    # 归一化统计已由 prepare 写入 buffer 并随 checkpoint 持久化（非直通初值）。
+    # 归一化统计已由 fit_normalization 写入 buffer 并随 checkpoint 持久化（非直通初值）。
     blob = torch.load(ckpt, map_location="cpu", weights_only=False)
     state = blob["state_dict"] if "state_dict" in blob else blob
     assert "norm_mean" in state and "norm_std" in state
@@ -87,16 +85,52 @@ def test_mstcn_end_to_end(tmp_path):
     envelopes = eval_cli.main(["--config", str(cfg_path), "--ckpt", ckpt])
     assert len(envelopes) == 1
     data = json.loads(open(envelopes[0]).read())
-    assert data["feeding"] == "full_sequence"
+    assert data["pipeline"] == "full_sequence_temporal"
     assert data["metrics"]["acc"]["state"] in (
         MetricState.COMPUTED.value,
         MetricState.MISSING.value,
     )
     # 离线不测实时延迟：三态为 N/A（不是 0、不是缺失）
     assert data["performance"]["latency_mean_ms"]["state"] == MetricState.NOT_APPLICABLE.value
-    assert data["feeding_semantics"]["mode"] == "full_sequence"
+    assert data["inference_semantics"]["mode"] == "full_sequence"
 
     # matrix：mstcn 信封正常汇入
     matrix_json = matrix_cli.main(["--runs", str(runs_dir)])
     matrix = json.loads(open(matrix_json).read())
     assert len(matrix["rows"]) == 1
+
+
+def test_mstcn2_end_to_end(tmp_path):
+    """MS-TCN++（多 stage 深监督 + T-MSE）走 compute_loss 钩子的全链路冒烟。"""
+    data_root = tmp_path / "cleansight-ActionMixed"
+    _make_actionmixed(data_root)
+    cfg_path = tmp_path / "mstcn2.yaml"
+    _write_config(
+        cfg_path,
+        data_root,
+        model={
+            "type": "mstcn2",
+            "input_dim": 40,
+            "num_classes": 6,
+            "hidden": 16,
+            "num_stages": 2,
+            "num_layers": 4,
+        },
+    )
+    runs_dir = tmp_path / "runs"
+
+    # train：走 compute_loss（多 stage + T-MSE），归一化 buffer 随 checkpoint 持久化。
+    ckpt = train_cli.main(["--config", str(cfg_path), "--runs-dir", str(runs_dir)])
+    blob = torch.load(ckpt, map_location="cpu", weights_only=False)
+    state = blob["state_dict"] if "state_dict" in blob else blob
+    assert "norm_mean" in state and "norm_std" in state
+    assert not torch.allclose(state["norm_std"], torch.ones_like(state["norm_std"]))
+    # 多 stage：至少有 1 个精化 stage 的参数（refines.0.*）随权重存在。
+    assert any(k.startswith("refines.0.") for k in state)
+
+    # eval → 一份信封：离线全序列，延迟标 N/A，推理只取最后 stage。
+    envelopes = eval_cli.main(["--config", str(cfg_path), "--ckpt", ckpt])
+    data = json.loads(open(envelopes[0]).read())
+    assert data["model_type"] == "mstcn2"
+    assert data["performance"]["latency_mean_ms"]["state"] == MetricState.NOT_APPLICABLE.value
+    assert data["inference_semantics"]["mode"] == "full_sequence"
