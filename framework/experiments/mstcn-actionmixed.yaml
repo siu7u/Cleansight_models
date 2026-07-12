@@ -1,0 +1,37 @@
+# MS-TCN 离线分割参照实验（消费真实 cleansight-ActionMixed 数据集）。
+# 离线双向：一次看到完整序列、非因果膨胀卷积、逐帧监督；延迟标 N/A。
+# 与 GRU/YOLO 共用同一 train/eval 入口，只出事实信封、不判达标。
+
+family: mstcn
+
+task: temporal
+
+# 喂入模式：离线全序列（训练评估共用）。full_sequence 会以 train_batch_size=1 逐条喂入。
+feeding: full_sequence
+
+model:
+  arch: ms_tcn           # 当前仅 ms_tcn；ASFormer/BiGRU 后续同 family 加分支
+  input_dim: 40          # 复用 40 维 loader：8 检测类 × [presence, cx, cy, w, h]
+  num_classes: 6         # idle/air_injection/flush/long_brush_insert/long_brush_withdraw/short_brush_cleaning
+  hidden: 32             # MS-TCN 简化 baseline 默认
+
+data:
+  name: cleansight-ActionMixed
+  root: /Users/weichenyin/src/CleanSightDataset/yolo_pipeline/datasets/cleansight-ActionMixed
+  action_mapping: labels/data.yaml   # YAML: action_id -> 名称
+  labels_dir: labels                 # labels/<split>/<video>.mp4.txt : "frame_id action_id"
+  frames_dir: frames                 # frames/<split>/<video>-<frame:06d>.txt : bbox → 40维特征
+  split_train: train
+  split_eval: test
+
+feature_schema:
+  dim: 40
+  version: actionmixed-bbox-8cls-v1
+  # 布局同 GRU 实验：每 5 维一类，顺序同 frames/data.yaml，每类 [presence, cx, cy, w, h]。
+
+train:
+  epochs: 20
+  lr: 0.002              # 对齐 changhai baseline
+  batch_size: 1          # full_sequence 会以 train_batch_size=1 覆盖，写此仅为显式
+  window: 1              # full_sequence 忽略；仅为满足 schema 校验
+  grad_clip: 5.0         # 可选：梯度裁剪（对齐 baseline）

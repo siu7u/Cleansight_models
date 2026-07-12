@@ -2,7 +2,7 @@
 
 按用户定的原则：每类模型一个 loader，按 **features 契约**（bbox→40 维）和 **feeding
 契约**（下游加窗）一次性把原始数据转成模型输入。本模块只负责"读原始数据 + 按 features
-契约特征化"，加窗交给喂入模式（``feeding.build_training_dataset`` / ``build_dataset``）。
+契约特征化"，加窗/整段等样本构造交给喂入模式（``feeding.*.build_datasets``）。
 
 真实数据格式（已按 train/val/test 目录切分）：
 
@@ -58,7 +58,7 @@ def load_split(data_cfg: dict, split: str, window: int | None = None):
 
     features_list[i] 形如 ``[T_i, 40]``（float32），truths_list[i] 形如 ``[T_i]``（int64），
     索引与 ``labels/<split>/`` 下的视频对齐。若给了 ``window``，跳过 ``T < window`` 的
-    过短序列（EndoDataset 无法开窗）并告警。
+    过短序列（窗口喂入 EndoDataset 无法开窗）并告警。
     """
     root = Path(data_cfg["root"])
     labels_dir = root / data_cfg.get("labels_dir", "labels") / split
