@@ -15,12 +15,18 @@ def parse_args(argv=None):
     p = argparse.ArgumentParser(description="cleansight_eval 评估矩阵")
     p.add_argument("--runs", required=True, help="包含 *.envelope.json 的运行目录")
     p.add_argument("--out", default=None, help="矩阵输出目录，默认与 --runs 相同")
+    p.add_argument(
+        "--pipeline",
+        default=None,
+        help="只汇总该类流水线（detection / full_sequence_temporal / sliding_window_temporal），"
+        "便于同类模型对比；缺省汇总全部",
+    )
     return p.parse_args(argv)
 
 
 def main(argv=None):
     args = parse_args(argv)
-    json_path, md_path = write_matrix(args.runs, args.out)
+    json_path, md_path = write_matrix(args.runs, args.out, args.pipeline)
     print(f"[matrix] {json_path}")
     print(f"[matrix] {md_path}")
     return str(json_path)

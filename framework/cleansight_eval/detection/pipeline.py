@@ -15,7 +15,7 @@ import json
 
 from ..core.checkpoint import load_meta, meta_path_for
 from ..core.environment import now_stamp, set_seed
-from ..core.envelope import EvalEnvelope, MetricValue
+from ..core.envelope import EvalEnvelope, MetricValue, format_params
 from ..core.integrity import assert_checkpoint_config, check_envelope_complete
 from ..core.run import RunContext
 from .metrics import build_detection_metrics
@@ -114,7 +114,7 @@ class DetectionPipeline:
 
         envelope = EvalEnvelope(
             model_type=model_cfg["type"],
-            model_id=f"{model_cfg['type']}-{cfg['data'].get('name', '')}",
+            model_id=f"{model_cfg['type']}-{format_params(meta.get('num_params'))}",
             pipeline=self.pipeline_name,
             checkpoint=str(ckpt),
             dataset=cfg["data"].get("name", cfg["data"]["data_yaml"]),

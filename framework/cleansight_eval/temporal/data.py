@@ -67,7 +67,7 @@ def load_split(data_cfg: dict, split: str, window: int | None = None):
     id2name = load_action_mapping(root, data_cfg.get("action_mapping", "labels/data.yaml"))
 
     if not labels_dir.is_dir():
-        raise SystemExit(f"labels split 目录不存在: {labels_dir}")
+        raise FileNotFoundError(f"labels split 目录不存在: {labels_dir}")
 
     features, truths = [], []
     for label_file in sorted(labels_dir.glob("*.txt")):
@@ -93,7 +93,7 @@ def load_split(data_cfg: dict, split: str, window: int | None = None):
         truths.append(np.asarray(action_ids, dtype=np.int64))
 
     if not features:
-        raise SystemExit(f"{labels_dir} 下没有可用序列（可能都短于 window={window}）")
+        raise ValueError(f"{labels_dir} 下没有可用序列（可能都短于 window={window}）")
     return features, truths, id2name
 
 

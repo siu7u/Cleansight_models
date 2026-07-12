@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 from typing import Any
 
@@ -47,11 +48,29 @@ def validate_config(cfg: dict) -> None:
         )
 
 
-def apply_overrides(cfg: dict, overrides: dict[str, Any]) -> dict:
-    """把 CLI 传入的覆盖项应用到 train 段（如 epochs/lr/batch_size/window）。"""
+def apply_overrides(cfg: dict, overrides: list[tuple[str, Any]]) -> dict:
+    """把 CLI 传入的通用覆盖项按**点路径**写入配置副本，不改动入参。
 
-    out = {**cfg, "train": {**cfg.get("train", {})}}
-    for key, value in overrides.items():
-        if value is not None:
-            out["train"][key] = value
+    覆盖项是 ``(点路径, 值)`` 序列，如 ``("train.epochs", 5)`` / ``("train.batch", 8)``。
+    核心 CLI 因此**不预设任何纵的调参名**——每条纵的 trainer 有各自超参词汇（torch 的
+    ``batch_size`` vs ultralytics 的 ``batch``），寻址交给调用方，脊柱只做通用点路径写入。
+    """
+
+    out = copy.deepcopy(cfg)
+    for dotted, value in overrides:
+        _set_dotted(out, dotted, value)
     return out
+
+
+def _set_dotted(d: dict, dotted: str, value: Any) -> None:
+    """按 ``a.b.c`` 点路径写入嵌套字典，沿途缺失的中间层按需建成 dict。"""
+
+    keys = dotted.split(".")
+    cur = d
+    for k in keys[:-1]:
+        nxt = cur.get(k)
+        if not isinstance(nxt, dict):
+            nxt = {}
+            cur[k] = nxt
+        cur = nxt
+    cur[keys[-1]] = value
