@@ -23,7 +23,7 @@ except ImportError:  # tqdm 可选，缺失时退化为原样迭代
 
 from ..core.checkpoint import load_checkpoint, save_checkpoint
 from ..core.environment import now_stamp, set_seed
-from ..core.envelope import EvalEnvelope
+from ..core.envelope import EvalEnvelope, format_params
 from ..core.integrity import check_envelope_complete, check_feature_schema
 from ..core.run import RunContext
 from .data import build_temporal_meta, load_split
@@ -172,7 +172,7 @@ class FullSequenceTemporalPipeline:
 
         envelope = EvalEnvelope(
             model_type=meta["type"],
-            model_id=f"{meta['type']}-{model_cfg.get('hidden', '')}h",
+            model_id=f"{meta['type']}-{format_params(meta.get('num_params'))}",
             pipeline=self.pipeline_name,
             checkpoint=str(ckpt),
             dataset=cfg["data"].get("name", cfg["data"].get("root")),
