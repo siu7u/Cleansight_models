@@ -29,11 +29,28 @@ def load_config(path: str | Path) -> dict:
     任何流水线**，脊柱不反依赖 temporal/detection。
     """
 
-    data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    cfg_path = Path(path).resolve()
+    data = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError(f"配置文件顶层必须是映射: {path}")
+    resolve_relative_paths(data, cfg_path.parent)
     validate_config(data)
     return data
+
+
+def resolve_relative_paths(cfg: dict, base_dir: Path) -> None:
+    """把配置中的本地文件路径按配置文件目录解析成绝对路径。"""
+
+    data = cfg.get("data")
+    if not isinstance(data, dict):
+        return
+    for key in ("data_yaml", "root"):
+        value = data.get(key)
+        if not isinstance(value, str):
+            continue
+        p = Path(value).expanduser()
+        if not p.is_absolute():
+            data[key] = str((base_dir / p).resolve())
 
 
 def validate_config(cfg: dict) -> None:

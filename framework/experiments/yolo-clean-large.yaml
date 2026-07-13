@@ -1,0 +1,19 @@
+# YOLO large-object detector evaluation config.
+
+pipeline: detection
+
+model:
+  type: yolo
+  weights: yolo11n.pt
+  imgsz: 640
+  allow_missing_meta: true
+
+data:
+  name: group1_large
+  data_yaml: ../../yolo-detection/pipeline/datasets/group1_large/data.yaml
+  eval_split: val
+
+train:
+  epochs: 100
+  batch: 16
+  patience: 20

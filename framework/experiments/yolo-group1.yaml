@@ -12,8 +12,8 @@ model:
 
 data:
   name: group1_large
-  # 指向数据构建流水线（cleansight-dataset）产出的数据集清单；不复制。改成本机数据集 data.yaml 路径。
-  data_yaml: /abs/path/to/group1_large/data.yaml
+  # 指向 YOLO 数据构建流水线产出的数据集清单；不复制数据集本体。
+  data_yaml: ../../yolo-detection/pipeline/datasets/group1_large/data.yaml
   eval_split: val        # 评估用的 split（train/val/test）
 
 train:
