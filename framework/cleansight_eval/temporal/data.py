@@ -54,22 +54,18 @@ def load_action_mapping(root: Path, rel: str) -> dict:
     return {int(k): v for k, v in names.items()}
 
 
-def load_split(data_cfg: dict, split: str, window: int | None = None):
-    """读某个 split 目录的全部视频，返回 (features_list, truths_list, id2name)。
+def _iter_split_sequences(data_cfg: dict, split: str, window: int | None = None):
+    """按 ``labels/<split>/`` 遍历可用视频，产出 ``(stem, frame_ids, action_ids)``。
 
-    features_list[i] 形如 ``[T_i, 40]``（float32），truths_list[i] 形如 ``[T_i]``（int64），
-    索引与 ``labels/<split>/`` 下的视频对齐。若给了 ``window``，跳过 ``T < window`` 的
-    过短序列（窗口喂入 SlidingWindowDataset 无法开窗）并告警。
+    单一的排序与跳过口径：``sorted`` 字典序、丢弃无有效 "frame_id action_id" 行的空文件、
+    （给了 ``window`` 时）跳过过短序列。``load_split`` 与 ``split_video_names`` 共用此生成器，
+    保证特征/标签/视频名三者索引严格对齐（可视化据此把预测贴回正确视频）。
     """
     root = Path(data_cfg["root"])
     labels_dir = root / data_cfg.get("labels_dir", "labels") / split
-    frames_dir = root / data_cfg.get("frames_dir", "frames") / split
-    id2name = load_action_mapping(root, data_cfg.get("action_mapping", "labels/data.yaml"))
-
     if not labels_dir.is_dir():
         raise FileNotFoundError(f"labels split 目录不存在: {labels_dir}")
 
-    features, truths = [], []
     for label_file in sorted(labels_dir.glob("*.txt")):
         stem = label_file.name[:-4]  # 去掉 ".txt"，保留 "<video>.mp4"
         frame_ids, action_ids = [], []
@@ -81,11 +77,25 @@ def load_split(data_cfg: dict, split: str, window: int | None = None):
             action_ids.append(int(parts[1]))
         if not frame_ids:
             continue
-
         if window is not None and len(frame_ids) < window:
             print(f"  [skip] {label_file.name}: 采样帧 {len(frame_ids)} < window {window}")
             continue
+        yield stem, frame_ids, action_ids
 
+
+def load_split(data_cfg: dict, split: str, window: int | None = None):
+    """读某个 split 目录的全部视频，返回 (features_list, truths_list, id2name)。
+
+    features_list[i] 形如 ``[T_i, 40]``（float32），truths_list[i] 形如 ``[T_i]``（int64），
+    索引与 ``labels/<split>/`` 下的视频对齐（同 ``split_video_names`` 的顺序）。若给了
+    ``window``，跳过 ``T < window`` 的过短序列（窗口喂入 SlidingWindowDataset 无法开窗）并告警。
+    """
+    root = Path(data_cfg["root"])
+    frames_dir = root / data_cfg.get("frames_dir", "frames") / split
+    id2name = load_action_mapping(root, data_cfg.get("action_mapping", "labels/data.yaml"))
+
+    features, truths = [], []
+    for stem, frame_ids, action_ids in _iter_split_sequences(data_cfg, split, window):
         feats = np.stack(
             [featurize_frame_bbox(frames_dir / f"{stem}-{fid:06d}.txt") for fid in frame_ids]
         ).astype(np.float32)  # [T, 40]
@@ -93,8 +103,13 @@ def load_split(data_cfg: dict, split: str, window: int | None = None):
         truths.append(np.asarray(action_ids, dtype=np.int64))
 
     if not features:
-        raise ValueError(f"{labels_dir} 下没有可用序列（可能都短于 window={window}）")
+        raise ValueError(f"{root / data_cfg.get('labels_dir', 'labels') / split} 下没有可用序列（可能都短于 window={window}）")
     return features, truths, id2name
+
+
+def split_video_names(data_cfg: dict, split: str, window: int | None = None) -> list[str]:
+    """与 ``load_split`` 完全一致顺序的视频名列表（供可视化把逐帧预测贴回具体视频）。"""
+    return [stem for stem, _fids, _acts in _iter_split_sequences(data_cfg, split, window)]
 
 
 def build_temporal_meta(

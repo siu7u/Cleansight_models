@@ -49,6 +49,18 @@ def main(argv=None) -> list[str]:
     path = out_dir / f"{envelope.pipeline}-{envelope.model_type}-{now_stamp()}.envelope.json"
     envelope.write(path)
     print(f"[eval] {envelope.pipeline}: {path}")
+
+    # 可视化旁路（duck-type 钩子，仅个别流水线提供）：出图便于评估时肉眼快速发现错分。
+    # 隔离于信封主流程之外——出图失败（如缺 matplotlib）只跳过并告警，绝不拖垮评估。
+    if hasattr(pipeline, "visualize"):
+        viz_dir = out_dir.parent / "viz" if out_dir.name == "evals" else out_dir / "viz"
+        try:
+            viz_paths = pipeline.visualize(cfg, args.ckpt, device, viz_dir)
+            if viz_paths:
+                print(f"[eval] viz: {len(viz_paths)} page(s) -> {Path(viz_paths[0]).parent}")
+        except Exception as exc:  # 呈现层不影响评估事实的产出
+            print(f"[eval] viz skipped: {exc}")
+
     return [str(path)]
 
 

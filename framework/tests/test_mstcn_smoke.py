@@ -6,6 +6,7 @@
 """
 
 import json
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -134,3 +135,7 @@ def test_mstcn2_end_to_end(tmp_path):
     assert data["model_type"] == "mstcn2"
     assert data["performance"]["latency_mean_ms"]["state"] == MetricState.NOT_APPLICABLE.value
     assert data["inference_semantics"]["mode"] == "full_sequence"
+
+    # 评估旁路自动出图：run 的 viz/ 下应有该 split 的分段条带图（按页切分，至少第一页）。
+    run_dir = Path(ckpt).parents[1]  # <run>/checkpoints/<ckpt> → <run>
+    assert (run_dir / "viz" / "segmentation-test-p01.png").exists()

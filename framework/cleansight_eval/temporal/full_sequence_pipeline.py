@@ -32,10 +32,33 @@ from ..core.environment import now_stamp, set_seed
 from ..core.envelope import EvalEnvelope, format_params
 from ..core.integrity import check_envelope_complete, check_feature_schema
 from ..core.run import RunContext
-from .data import build_temporal_meta, load_split
+from .data import build_temporal_meta, load_split, split_video_names
 from .metrics import compute_temporal_metrics, not_applicable_perf
 from .models import build_model
 from .util import compute_class_weights
+
+
+def _load_eval_model(cfg: dict, ckpt: str, device):
+    """按 checkpoint 自描述 meta 重建评估用模型（评估/可视化共用同一路径）。"""
+    model_cfg = cfg["model"]
+    expected = {"type": model_cfg["type"], "input_dim": model_cfg["input_dim"], "num_classes": model_cfg["num_classes"]}
+    state_dict, meta = load_checkpoint(ckpt, expected=expected, map_location=device)
+    model = build_model(meta["model"]).to(device)
+    model.load_state_dict(state_dict)
+    model.eval()
+    return model, meta
+
+
+def _infer_split(model, features, device) -> list:
+    """逐视频整段前向 + 逐帧 argmax，返回与 features 对齐的预测序列列表。"""
+    preds = []
+    with torch.no_grad():
+        for feats in features:
+            x = torch.from_numpy(feats).float().unsqueeze(0).to(device)  # [1, T, F]
+            logits = model(x)  # [1, T, C]
+            preds.append(torch.argmax(logits[0], dim=-1).cpu().numpy().astype(np.int64))
+    return preds
+
 
 FULL_SEQUENCE_SEMANTICS = {
     "mode": "full_sequence",
@@ -156,27 +179,12 @@ class FullSequenceTemporalPipeline:
         return str(ckpt_path)
 
     def evaluate(self, cfg: dict, ckpt: str, device) -> EvalEnvelope:
-        model_cfg = cfg["model"]
-        expected = {"type": model_cfg["type"], "input_dim": model_cfg["input_dim"], "num_classes": model_cfg["num_classes"]}
-        state_dict, meta = load_checkpoint(ckpt, expected=expected, map_location=device)
-
-        model = build_model(meta["model"]).to(device)
-        model.load_state_dict(state_dict)
-
+        model, meta = _load_eval_model(cfg, ckpt, device)
         features, truths, id2name = load_split(cfg["data"], cfg["data"]["split_eval"])
 
-        model.eval()
-        video_preds, video_gts = [], []
-        with torch.no_grad():
-            for feats, gt in zip(features, truths):
-                x = torch.from_numpy(feats).float().unsqueeze(0).to(device)  # [1, T, F]
-                logits = model(x)  # [1, T, C]
-                preds = torch.argmax(logits[0], dim=-1).cpu().numpy().astype(np.int64)
-                video_preds.append(preds)
-                video_gts.append(gt)
-
+        video_preds = _infer_split(model, features, device)
         all_preds = np.concatenate(video_preds)
-        all_gts = np.concatenate(video_gts)
+        all_gts = np.concatenate(truths)
         pred_labels = [id2name[p] for p in all_preds]
         gt_labels = [id2name[g] for g in all_gts]
         metrics = compute_temporal_metrics(pred_labels, gt_labels)
@@ -196,3 +204,30 @@ class FullSequenceTemporalPipeline:
         )
         envelope.integrity = check_envelope_complete(envelope)
         return envelope
+
+    def visualize(self, cfg: dict, ckpt: str, device, out_dir) -> list[str]:
+        """评估旁路的可视化钩子：出逐视频 GT vs 预测 分段条带图，肉眼快速定位错分。
+
+        与 ``evaluate`` 同一套模型重建 + 逐帧推理（数据小，重跑一次前向可忽略），因此图上
+        预测严格等于评估所用预测。视频多时**按页切分**（每页 ``eval.viz_per_page`` 个，默认
+        6），返回各页 PNG 路径。matplotlib 经 lazy import 只在此触达——训练/评估不出图就不
+        引入该依赖。可用 ``eval.visualize: false`` 关闭；缺 matplotlib 时由调用方降级跳过。
+        """
+        eval_cfg = cfg.get("eval", {})
+        if not eval_cfg.get("visualize", True):
+            return []
+        from . import viz  # lazy：把 matplotlib 依赖限制在出图路径
+
+        split = cfg["data"]["split_eval"]
+        model, meta = _load_eval_model(cfg, ckpt, device)
+        features, truths, id2name = load_split(cfg["data"], split)
+        names = split_video_names(cfg["data"], split)
+        preds = _infer_split(model, features, device)
+        paths = viz.render_segmentation(
+            preds, truths, id2name, names,
+            title_prefix=f"{meta['type']} | {split}",
+            out_dir=out_dir,
+            base_name=f"segmentation-{split}",
+            per_page=eval_cfg.get("viz_per_page", 6),
+        )
+        return [str(p) for p in paths]
