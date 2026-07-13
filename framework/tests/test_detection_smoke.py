@@ -39,6 +39,12 @@ def _write_ckpt_with_meta(tmp_path):
     return str(ckpt)
 
 
+def _write_ckpt_without_meta(tmp_path):
+    ckpt = tmp_path / "external.pt"
+    ckpt.write_bytes(b"not-a-real-weight")
+    return str(ckpt)
+
+
 def _cfg():
     return {
         "pipeline": "detection",
@@ -76,6 +82,29 @@ def test_evaluate_rejects_type_mismatch(tmp_path, monkeypatch):
 
     with pytest.raises(CompatibilityError):
         det.DetectionPipeline().evaluate(cfg, ckpt, torch.device("cpu"))
+
+
+def test_evaluate_allows_missing_meta_when_configured(tmp_path, monkeypatch):
+    monkeypatch.setattr(det, "get_adapter", lambda mt: _FakeAdapter())
+    ckpt = _write_ckpt_without_meta(tmp_path)
+    cfg = _cfg()
+    cfg["model"]["allow_missing_meta"] = True
+
+    env = det.DetectionPipeline().evaluate(cfg, ckpt, torch.device("cpu"))
+
+    assert env.model_type == "yolo"
+    assert env.model_id == "yolo-?"
+    assert env.num_params is None
+    assert env.integrity["ok"] is True
+
+
+def test_evaluate_rejects_missing_meta_by_default(tmp_path, monkeypatch):
+    monkeypatch.setattr(det, "get_adapter", lambda mt: _FakeAdapter())
+    ckpt = _write_ckpt_without_meta(tmp_path)
+    import pytest
+
+    with pytest.raises(FileNotFoundError):
+        det.DetectionPipeline().evaluate(_cfg(), ckpt, torch.device("cpu"))
 
 
 def test_detection_envelope_folds_into_matrix(tmp_path, monkeypatch):

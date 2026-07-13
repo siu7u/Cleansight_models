@@ -8,6 +8,7 @@ model:
   type: yolo            # 检测适配器 key
   weights: yolo11n.pt   # nano：小数据 + 快；要更准换 yolo11s.pt
   imgsz: 640
+  allow_missing_meta: true  # 外部导入的 .pt 可先评估；正式归档建议补 .pt.meta.json
 
 data:
   name: group1_large

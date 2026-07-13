@@ -98,8 +98,21 @@ class DetectionPipeline:
 
     def evaluate(self, cfg: dict, ckpt: str, device) -> EvalEnvelope:
         model_cfg = cfg["model"]
-        meta = load_meta(ckpt)  # 缺 sidecar 直接报错，拒绝盲加载
-        assert_checkpoint_config(meta, {"type": model_cfg["type"]})
+        try:
+            meta = load_meta(ckpt)
+            assert_checkpoint_config(meta, {"type": model_cfg["type"]})
+        except FileNotFoundError:
+            if not model_cfg.get("allow_missing_meta", False):
+                raise
+            meta = {
+                "type": model_cfg["type"],
+                "pipeline": self.pipeline_name,
+                "dataset": cfg["data"].get("name", cfg["data"]["data_yaml"]),
+                "data_yaml": cfg["data"]["data_yaml"],
+                "model": model_cfg,
+                "num_params": None,
+                "source": "missing_meta_fallback",
+            }
 
         adapter = get_adapter(model_cfg["type"])
         val = adapter.val(
