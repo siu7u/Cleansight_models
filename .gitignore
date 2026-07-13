@@ -132,3 +132,6 @@ raw
 !framework/experiments/
 !framework/experiments/**
 
+
+# Added by ggshield
+.cache_ggshield
