@@ -91,6 +91,8 @@ yolo-detection/experiments/
 benchmark/**/outputs/
 benchmark/**/predictions/
 benchmark/**/visualizations/
+benchmark/**/latest/
+benchmark/**/reports/
 benchmark/**/*.mp4
 benchmark/**/*.avi
 benchmark/**/*.mov
@@ -124,4 +126,4 @@ references
 modelscope_upload
 .codex
 raw
-
+.cache_ggshield

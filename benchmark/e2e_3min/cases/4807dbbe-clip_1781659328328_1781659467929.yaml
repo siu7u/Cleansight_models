@@ -1,0 +1,35 @@
+case_id: 4807dbbe-clip_1781659328328_1781659467929
+source_task_id: 59
+video: 4807dbbe-clip_1781659328328_1781659467929.mp4
+duration_sec: 139.633
+expected:
+  result: pass
+  required_actions:
+  - Long_Brushing
+  - Short_Brushing
+  phases:
+  - name: long_brush_insert
+    start_sec: 1.708
+    end_sec: 8.0
+  - name: long_brush_withdraw
+    start_sec: 10.751
+    end_sec: 15.876
+  - name: long_brush_insert
+    start_sec: 19.001
+    end_sec: 31.21
+  - name: long_brush_withdraw
+    start_sec: 33.502
+    end_sec: 38.919
+  - name: long_brush_insert
+    start_sec: 42.336
+    end_sec: 53.503
+  - name: long_brush_withdraw
+    start_sec: 58.128
+    end_sec: 62.795
+  - name: air_injection
+    start_sec: 117.34
+    end_sec: 123.049
+  - name: air_injection
+    start_sec: 129.383
+    end_sec: 135.8
+  allowed_time_error_sec: 5.0

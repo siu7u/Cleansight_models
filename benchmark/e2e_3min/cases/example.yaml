@@ -1,0 +1,17 @@
+case_id: clean_001
+source_task_id: null
+video: clean_001.mp4
+duration_sec: 180.0
+expected:
+  result: pass
+  required_actions:
+    - Long_Brushing
+    - Short_Brushing
+  phases:
+    - name: Long_Brushing
+      start_sec: 30.0
+      end_sec: 90.0
+    - name: Short_Brushing
+      start_sec: 100.0
+      end_sec: 130.0
+  allowed_time_error_sec: 5.0
