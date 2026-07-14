@@ -12,70 +12,15 @@ import argparse
 import os
 import subprocess
 import sys
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
-import yaml
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
+from model_manager.catalog import CATALOG, ROOT, ModelSpec, load_catalog, load_models  # noqa: E402
 
-ROOT = Path(__file__).resolve().parents[1]
-CATALOG = Path(__file__).with_name("models.yaml")
 ENV_FILES = [ROOT / ".env"]
-
-
-@dataclass(frozen=True)
-class ModelSpec:
-    """模型清单中的单个模型条目。
-
-    `raw` 保留 YAML 原始字段，供后续扩展更多模型族或输出检查规则。
-    """
-
-    id: str
-    family: str
-    adapter: str
-    workdir: Path
-    target: str
-    raw: dict[str, Any]
-
-    @property
-    def checkpoint(self) -> Path | None:
-        """返回模型登记的 checkpoint 路径；未声明时返回 None。"""
-
-        value = self.raw.get("output", {}).get("checkpoint")
-        return self.workdir / value if value else None
-
-    @property
-    def report(self) -> Path | None:
-        """返回模型登记的评估报告路径；未声明时返回 None。"""
-
-        value = self.raw.get("output", {}).get("report")
-        return self.workdir / value if value else None
-
-
-def load_catalog(path: Path = CATALOG) -> dict[str, Any]:
-    """读取模型管理清单，并返回 YAML 对象。"""
-
-    return yaml.safe_load(path.read_text(encoding="utf-8"))
-
-
-def load_models(path: Path = CATALOG) -> dict[str, ModelSpec]:
-    """读取所有模型条目，并按模型 id 建立索引。"""
-
-    catalog = load_catalog(path)
-    models: dict[str, ModelSpec] = {}
-    for item in catalog.get("models", []):
-        workdir = ROOT / item["workdir"]
-        spec = ModelSpec(
-            id=item["id"],
-            family=item["family"],
-            adapter=item["adapter"],
-            workdir=workdir,
-            target=item["target"],
-            raw=item,
-        )
-        models[spec.id] = spec
-    return models
 
 
 def build_python_command(args: list[str]) -> list[str]:

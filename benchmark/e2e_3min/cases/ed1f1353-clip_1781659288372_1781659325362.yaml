@@ -1,0 +1,17 @@
+case_id: ed1f1353-clip_1781659288372_1781659325362
+source_task_id: 58
+video: ed1f1353-clip_1781659288372_1781659325362.mp4
+duration_sec: 37.0
+expected:
+  result: pass
+  required_actions:
+  - Long_Brushing
+  - Short_Brushing
+  phases:
+  - name: short_brush_cleaning
+    start_sec: 6.292
+    end_sec: 8.5
+  - name: short_brush_cleaning
+    start_sec: 8.875
+    end_sec: 11.083
+  allowed_time_error_sec: 5.0

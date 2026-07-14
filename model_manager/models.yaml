@@ -3,160 +3,104 @@ version: 1
 defaults:
   python: current
 
-models:
-  - id: yolo.group1_large
+profiles:
+  yolo_pipeline:
     family: yolo
     adapter: yolo_pipeline
     workdir: yolo-detection/pipeline
+    input:
+      format: ultralytics-yolo
+    output:
+      checkpoint: runs/{target}/weights/best.pt
+      report: runs/{target}/acceptance_report.md
+    commands:
+      train: [03_train.py, "{target}"]
+      eval: [04_validate.py, "{target}"]
+      pipeline:
+        - [00_status.py]
+        - [01_pull_data.py]
+        - [00_status.py, --assign]
+        - [02_build_dataset.py]
+        - [03_train.py, "{target}"]
+        - [04_validate.py, "{target}"]
+
+  temporal_legacy_20d:
+    family: temporal
+    adapter: temporal_main
+    input:
+      feature_mapping: legacy-20d-v1
+      input_dim: 20
+      window: 64
+      labels: [Idle, Long_Brushing, Short_Brushing]
+    output:
+      report: REPORT.md
+      card: CARD.md
+      pin: pin.yaml
+    evaluation:
+      testset_id: temporal.endo-project-v1.test
+      inference_mode: raw_last_frame
+    commands:
+      train:
+        - main.py
+        - --mode
+        - full
+        - --epochs
+        - "10"
+        - --window
+        - "64"
+        - --verbose
+        - --output_dir
+        - experiments/{target}
+      eval:
+        - tools/eval_temporal_detailed.py
+        - --repo
+        - "{workdir}"
+        - --model
+        - "{target}"
+        - --checkpoint
+        - "{checkpoint}"
+
+models:
+  - id: yolo.group1_large
+    profile: yolo_pipeline
     target: group1_large
     input:
       dataset: datasets/group1_large/data.yaml
-      format: ultralytics-yolo
       labels: [hand, scope_control_body, scope_mid_section]
-    output:
-      checkpoint: runs/group1_large/weights/best.pt
-      report: runs/group1_large/acceptance_report.md
-    commands:
-      train: [03_train.py, group1_large]
-      eval: [04_validate.py, group1_large]
-      pipeline:
-        - [00_status.py]
-        - [01_pull_data.py]
-        - [00_status.py, --assign]
-        - [02_build_dataset.py]
-        - [03_train.py, group1_large]
-        - [04_validate.py, group1_large]
+    evaluation:
+      testset_id: yolo.group1_large.test
+      inference_mode: detection
 
   - id: yolo.group2_small
-    family: yolo
-    adapter: yolo_pipeline
-    workdir: yolo-detection/pipeline
+    profile: yolo_pipeline
     target: group2_small
     input:
       dataset: datasets/group2_small/data.yaml
-      format: ultralytics-yolo
       labels: [syringe, air_gun, scope_distal_end]
-    output:
-      checkpoint: runs/group2_small/weights/best.pt
-      report: runs/group2_small/acceptance_report.md
-    commands:
-      train: [03_train.py, group2_small]
-      eval: [04_validate.py, group2_small]
-      pipeline:
-        - [00_status.py]
-        - [01_pull_data.py]
-        - [00_status.py, --assign]
-        - [02_build_dataset.py]
-        - [03_train.py, group2_small]
-        - [04_validate.py, group2_small]
+    evaluation:
+      testset_id: yolo.group2_small.test
+      inference_mode: detection
 
   - id: temporal.gru
-    family: temporal
-    adapter: temporal_main
+    profile: temporal_legacy_20d
     workdir: temporal-gru
     target: gru
-    input:
-      feature_mapping: legacy-20d-v1
-      input_dim: 20
-      window: 64
-      labels: [Idle, Long_Brushing, Short_Brushing]
     output:
       checkpoint: registry/gru-v1/gru-final-20260704-150629.pt
-      report: REPORT.md
-      card: CARD.md
-      pin: pin.yaml
-    commands:
-      train:
-        - main.py
-        - --mode
-        - full
-        - --epochs
-        - "10"
-        - --window
-        - "64"
-        - --verbose
-        - --output_dir
-        - experiments/gru
-      eval:
-        - tools/eval_temporal_detailed.py
-        - --repo
-        - temporal-gru
-        - --model
-        - gru
-        - --checkpoint
-        - registry/gru-v1/gru-final-20260704-150629.pt
 
   - id: temporal.tcn
-    family: temporal
-    adapter: temporal_main
+    profile: temporal_legacy_20d
     workdir: temporal-causal-tcn
     target: tcn
-    input:
-      feature_mapping: legacy-20d-v1
-      input_dim: 20
-      window: 64
-      labels: [Idle, Long_Brushing, Short_Brushing]
     output:
       checkpoint: registry/tcn-v1/tcn-final-20260704-160652.pt
-      report: REPORT.md
-      card: CARD.md
-      pin: pin.yaml
-    commands:
-      train:
-        - main.py
-        - --mode
-        - full
-        - --epochs
-        - "10"
-        - --window
-        - "64"
-        - --verbose
-        - --output_dir
-        - experiments/tcn
-      eval:
-        - tools/eval_temporal_detailed.py
-        - --repo
-        - temporal-causal-tcn
-        - --model
-        - tcn
-        - --checkpoint
-        - registry/tcn-v1/tcn-final-20260704-160652.pt
 
   - id: temporal.transformer
-    family: temporal
-    adapter: temporal_main
+    profile: temporal_legacy_20d
     workdir: temporal-transformer
     target: transformer
-    input:
-      feature_mapping: legacy-20d-v1
-      input_dim: 20
-      window: 64
-      labels: [Idle, Long_Brushing, Short_Brushing]
     output:
       checkpoint: registry/transformer-v1/transformer-final-20260704-161653.pt
-      report: REPORT.md
-      card: CARD.md
-      pin: pin.yaml
-    commands:
-      train:
-        - main.py
-        - --mode
-        - full
-        - --epochs
-        - "10"
-        - --window
-        - "64"
-        - --verbose
-        - --output_dir
-        - experiments/transformer
-      eval:
-        - tools/eval_temporal_detailed.py
-        - --repo
-        - temporal-transformer
-        - --model
-        - transformer
-        - --checkpoint
-        - registry/transformer-v1/transformer-final-20260704-161653.pt
 
 benchmarks:
   single_model_yolo:

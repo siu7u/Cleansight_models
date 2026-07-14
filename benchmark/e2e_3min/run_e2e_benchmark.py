@@ -16,12 +16,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 import yaml
 
-
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from benchmark.core.metrics import timeline_metrics
+
+
 OUT_DIR = ROOT / "benchmark" / "e2e_3min" / "reports"
 
 
@@ -65,6 +71,7 @@ def score_case(case: dict, prediction: dict | None) -> dict:
             "status": "PENDING",
             "reason": "缺少 prediction JSON；需要先跑线上或离线 workflow 导出动作时间线。",
             "action_recall": {},
+            "timeline_metrics": None,
             "phase_errors": [],
             "result_match": None,
             "alarms": [],
@@ -97,12 +104,14 @@ def score_case(case: dict, prediction: dict | None) -> dict:
             }
         )
 
+    timeline = timeline_metrics(actions, phases)
     result_match = prediction.get("result") == expected.get("result")
     passed = result_match and all(action_recall.values()) and all(item.get("matched") for item in phase_errors)
     return {
         "case_id": case["case_id"],
         "status": "PASS" if passed else "FAIL",
         "action_recall": action_recall,
+        "timeline_metrics": timeline,
         "phase_errors": phase_errors,
         "result_match": result_match,
         "alarms": prediction.get("alarms", []),
@@ -146,10 +155,43 @@ def write_report(case: dict, score: dict, out: Path) -> None:
     if not score.get("phase_errors"):
         lines.append("| 待接入 | 待接入 | NA | NA |")
 
+    timeline = score.get("timeline_metrics")
+    if timeline:
+        lines += [
+            "",
+            "## 时间线 IoU / F1",
+            "",
+            "按动作名称做一对一 temporal IoU 匹配；重复预测会计为 FP，漏检阶段会计为 FN。",
+            "",
+            "| IoU 阈值 | TP | FP | FN | Precision | Recall | F1 | Mean matched IoU | 边界 MAE 秒 |",
+            "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+        for threshold, item in timeline.get("details_at_iou", {}).items():
+            lines.append(
+                "| {threshold} | {tp} | {fp} | {fn} | {precision:.3f} | {recall:.3f} | "
+                "{f1:.3f} | {mean_iou} | {boundary_mae} |".format(
+                    threshold=threshold,
+                    tp=item["tp"],
+                    fp=item["fp"],
+                    fn=item["fn"],
+                    precision=item["precision"],
+                    recall=item["recall"],
+                    f1=item["f1"],
+                    mean_iou=_fmt_optional(item.get("mean_matched_iou")),
+                    boundary_mae=_fmt_optional(item.get("boundary_mae")),
+                )
+            )
+
     if score.get("reason"):
         lines += ["", "## 待完成", "", f"- {score['reason']}"]
 
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _fmt_optional(value) -> str:
+    if value is None:
+        return "NA"
+    return f"{float(value):.3f}"
 
 
 def main() -> int:

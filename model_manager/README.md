@@ -20,7 +20,28 @@
 model_manager/models.yaml
 ```
 
-每个模型记录：
+清单支持 `profiles`。公共字段写在 profile 中，单个模型只写差异项。
+
+例如 YOLO 模型现在复用 `yolo_pipeline` profile；新增同类 YOLO 时通常只需要填：
+
+- `id`
+- `profile: yolo_pipeline`
+- `target`
+- `input.dataset`
+- `input.labels`
+- `evaluation.testset_id`
+
+时序 v1 模型复用 `temporal_legacy_20d` profile；新增同类时序模型通常只需要填：
+
+- `id`
+- `profile: temporal_legacy_20d`
+- `workdir`
+- `target`
+- `output.checkpoint`
+
+profile 和模型条目会递归合并，模型条目优先。字符串中可使用 `{id}`、`{target}`、`{workdir}`、`{checkpoint}` 这几个占位符，解析时会自动展开。
+
+合并后的每个模型记录包含：
 
 - `id`：统一模型 id，例如 `temporal.gru`
 - `family`：模型族，例如 `yolo` 或 `temporal`

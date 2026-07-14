@@ -1,0 +1,47 @@
+case_id: 65d70028-clip_1781661552468_1781661702909
+source_task_id: 61
+video: 65d70028-clip_1781661552468_1781661702909.mp4
+duration_sec: 150.467
+expected:
+  result: pass
+  required_actions:
+  - Long_Brushing
+  - Short_Brushing
+  phases:
+  - name: long_brush_insert
+    start_sec: 0.042
+    end_sec: 8.334
+  - name: long_brush_withdraw
+    start_sec: 8.417
+    end_sec: 12.292
+  - name: long_brush_insert
+    start_sec: 14.584
+    end_sec: 23.376
+  - name: long_brush_withdraw
+    start_sec: 23.751
+    end_sec: 35.002
+  - name: flush
+    start_sec: 73.837
+    end_sec: 77.504
+  - name: flush
+    start_sec: 77.921
+    end_sec: 87.922
+  - name: flush
+    start_sec: 88.547
+    end_sec: 93.339
+  - name: flush
+    start_sec: 93.755
+    end_sec: 100.006
+  - name: flush
+    start_sec: 100.839
+    end_sec: 105.006
+  - name: flush
+    start_sec: 105.839
+    end_sec: 113.756
+  - name: flush
+    start_sec: 114.173
+    end_sec: 118.757
+  - name: flush
+    start_sec: 119.382
+    end_sec: 122.715
+  allowed_time_error_sec: 5.0
