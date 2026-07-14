@@ -102,6 +102,14 @@ tools/eval_temporal_detailed.py
 tools/measure_temporal_latency.py
 ```
 
+其中 `eval_temporal_detailed.py` 会按视频分别推理并保存逐视频预测 artifact，
+再基于该 artifact 计算 frame accuracy、edit 和 segmental F1，避免把多个
+独立视频拼成一条序列。`measure_temporal_latency.py` 只测单个随机
+`[1, window, input_dim]` 张量的模型 forward microbenchmark，输出字段为
+`model_forward_mean_ms`、`model_forward_median_ms`、`model_forward_p95_ms`。
+该结果不包含特征读取、窗口维护、后处理、YOLO 特征提取或端到端 IO，不能
+直接当作部署端到端延迟。
+
 ## Release Gate
 
 上线门禁会读取一个或多个 benchmark summary JSON,并检查上线前三项必填:

@@ -108,8 +108,12 @@ def parse_report(path: Path, model_id: str | None, split: str, checkpoint: Path 
         "status": "PASS" if "PASS" in text else "FAIL" if "FAIL" in text else "UNKNOWN",
         "overall": {},
         "per_class": [],
+        "artifacts": {},
         "reasons": [],
     }
+    artifact_match = re.search(r"逐图预测:\s*`([^`]+)`", text)
+    if artifact_match:
+        result["artifacts"]["predictions"] = artifact_match.group(1)
 
     for name, key in [
         ("mAP@0.5", "map50"),
@@ -331,6 +335,7 @@ def main() -> int:
                     "status": "MISSING",
                     "overall": {},
                     "per_class": [],
+                    "artifacts": {},
                     "metrics": {"overall": {}, "per_class": []},
                     "gates": {
                         "status": "MISSING",

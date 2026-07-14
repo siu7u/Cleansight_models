@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure single-window temporal model forward latency."""
+"""测量单窗口时序模型 forward microbenchmark 延迟。"""
 
 from __future__ import annotations
 
@@ -14,6 +14,8 @@ import torch
 
 
 def build_model(model_name: str, input_dim: int, num_classes: int):
+    """按旧模型目录中的公开类名构造 `[B,T,F] -> [B,T,C]` 分类器。"""
+
     if model_name == "gru":
         from model import GRUClassifier
 
@@ -65,16 +67,28 @@ def main() -> int:
             samples.append((time.perf_counter() - start) * 1000.0)
 
     result = {
+        "schema_version": 1,
         "model": args.model,
         "checkpoint": args.checkpoint,
         "device": str(device),
+        "latency_scope": "model_forward_single_window",
+        "latency_scope_note": (
+            "Only measures one random [1, window, input_dim] tensor forward pass; "
+            "excludes feature loading, window maintenance, post-processing, YOLO feature extraction, and end-to-end IO."
+        ),
         "window": args.window,
         "input_dim": args.input_dim,
+        "batch_size": 1,
+        "warmup": args.warmup,
         "repeat": args.repeat,
-        "mean_ms": round(statistics.mean(samples), 4),
-        "median_ms": round(statistics.median(samples), 4),
-        "p95_ms": round(sorted(samples)[int(0.95 * (len(samples) - 1))], 4),
+        "model_forward_mean_ms": round(statistics.mean(samples), 4),
+        "model_forward_median_ms": round(statistics.median(samples), 4),
+        "model_forward_p95_ms": round(sorted(samples)[int(0.95 * (len(samples) - 1))], 4),
     }
+    # 兼容旧 summary/release 脚本；新代码应优先读取 model_forward_* 字段。
+    result["mean_ms"] = result["model_forward_mean_ms"]
+    result["median_ms"] = result["model_forward_median_ms"]
+    result["p95_ms"] = result["model_forward_p95_ms"]
     print(json.dumps(result, indent=2, ensure_ascii=False))
     return 0
 

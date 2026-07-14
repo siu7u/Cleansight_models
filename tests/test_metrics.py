@@ -60,6 +60,34 @@ class TemporalMetricTests(unittest.TestCase):
         self.assertEqual(details["tp"], 2)
         self.assertEqual(details["f1"], 1.0)
 
+    def test_all_wrong_segments_count_fp_and_fn(self) -> None:
+        result = temporal_metrics(
+            {"a": [1, 1, 1]},
+            {"a": [2, 2, 2]},
+            labels=[0, 1, 2],
+            thresholds=(0.5,),
+        )
+        details = result["segment"]["details_at_iou"]["0.50"]
+        self.assertEqual((details["tp"], details["fp"], details["fn"]), (0, 1, 1))
+        self.assertEqual(details["precision"], 0.0)
+        self.assertEqual(details["recall"], 0.0)
+        self.assertEqual(details["f1"], 0.0)
+
+    def test_empty_prediction_and_truth_is_perfect_absence(self) -> None:
+        result = temporal_metrics(
+            {"a": []},
+            {"a": []},
+            labels=[0, 1],
+            thresholds=(0.5,),
+        )
+        self.assertEqual(result["frame"]["num_frames"], 0)
+        self.assertIsNone(result["frame"]["accuracy"])
+        self.assertEqual(result["segment"]["details_at_iou"]["0.50"]["f1"], 1.0)
+
+    def test_missing_item_is_rejected_before_metric_aggregation(self) -> None:
+        with self.assertRaisesRegex(ValueError, "missing_pred"):
+            temporal_metrics({"a": [1]}, {"a": [1], "b": [1]}, labels=[1])
+
     def test_warmup_and_invalid_predictions_are_excluded(self) -> None:
         result = temporal_metrics(
             {"a": [-1, -1, 1, 1]},

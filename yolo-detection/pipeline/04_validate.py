@@ -48,22 +48,28 @@ def parse_args():
 
 
 def evaluate(group, thr, split, weight_override=None):
-    """跑指定 split,返回 (metrics_dict, per_class_list, passed, reasons)。"""
+    """跑指定 split,返回 (metrics_dict, per_class_list, passed, reasons, artifacts)。"""
     from ultralytics import YOLO
 
     data = DATASETS / group / "data.yaml"
     weight = weight_override or (RUNS / group / "weights" / "best.pt")
     weight = weight if weight.is_absolute() else ROOT / weight
     if not weight.exists():
-        return None, None, None, [f"缺权重 {weight},先跑 03_train.py"]
+        return None, None, None, [f"缺权重 {weight},先跑 03_train.py"], {}
     if not data.exists():
-        return None, None, None, [f"缺 data.yaml {data},先跑 02_build_dataset.py"]
+        return None, None, None, [f"缺 data.yaml {data},先跑 02_build_dataset.py"], {}
 
     model = YOLO(str(weight))
     m = model.val(data=str(data), split=split, verbose=False,
-                  project=str(RUNS), name=f"{group}_{split}", exist_ok=True)
+                  project=str(RUNS), name=f"{group}_{split}", exist_ok=True,
+                  save_json=True)
     names = model.names
     box = m.box
+    save_dir = Path(getattr(m, "save_dir", RUNS / f"{group}_{split}"))
+    prediction_candidates = sorted(save_dir.glob("*.json")) if save_dir.exists() else []
+    artifacts = {}
+    if prediction_candidates:
+        artifacts["predictions"] = str(prediction_candidates[-1])
 
     overall = {
         "map50": float(box.map50), "map50_95": float(box.map),
@@ -92,12 +98,13 @@ def evaluate(group, thr, split, weight_override=None):
         if pc["precision"] < thr["per_class_precision"]:
             reasons.append(f"{pc['name']} precision {pc['precision']:.3f} < {thr['per_class_precision']}")
 
-    return overall, per_class, (len(reasons) == 0), reasons
+    return overall, per_class, (len(reasons) == 0), reasons, artifacts
 
 
-def write_report(group, split, checkpoint, overall, per_class, passed, reasons, thr):
+def write_report(group, split, checkpoint, overall, per_class, passed, reasons, thr, artifacts=None):
     """写入当前验收报告,并额外保存一份带时间戳的归档报告。"""
 
+    artifacts = artifacts or {}
     lines = [f"# 验收报告 · {group}", "",
              f"数据集 split: `{split}`", "",
              f"权重: `{checkpoint}`", "",
@@ -117,6 +124,8 @@ def write_report(group, split, checkpoint, overall, per_class, passed, reasons, 
         lines += ["## 未达标项", ""] + [f"- {r}" for r in reasons]
     else:
         lines += ["全部达标。"]
+    if artifacts.get("predictions"):
+        lines += ["", "## 预测 Artifact", "", f"- 逐图预测: `{artifacts['predictions']}`"]
     out_name = "acceptance_report.md" if split == "val" else f"acceptance_report_{split}.md"
     out = RUNS / group / out_name
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -153,7 +162,7 @@ def main():
         print(f"\n=== 验证 {g} split={args.split} ===")
         checkpoint = weight_override or (RUNS / g / "weights" / "best.pt")
         checkpoint = checkpoint if checkpoint.is_absolute() else ROOT / checkpoint
-        overall, per_class, passed, reasons = evaluate(g, thr, args.split, weight_override)
+        overall, per_class, passed, reasons, artifacts = evaluate(g, thr, args.split, weight_override)
         if overall is None:
             print(f"  [skip] {'; '.join(reasons)}")
             any_fail = True
@@ -163,9 +172,11 @@ def main():
         for pc in per_class:
             print(f"    {pc['name']:22s} P={pc['precision']:.3f} R={pc['recall']:.3f} "
                   f"mAP50={pc['map50']:.3f}")
-        report, archive = write_report(g, args.split, checkpoint, overall, per_class, passed, reasons, thr)
+        report, archive = write_report(g, args.split, checkpoint, overall, per_class, passed, reasons, thr, artifacts)
         print(f"  结论: {'PASS ✅' if passed else 'FAIL ❌'}   报告: {report}")
         print(f"  归档报告: {archive}")
+        if artifacts.get("predictions"):
+            print(f"  逐图预测 artifact: {artifacts['predictions']}")
         if not passed:
             any_fail = True
             for r in reasons:

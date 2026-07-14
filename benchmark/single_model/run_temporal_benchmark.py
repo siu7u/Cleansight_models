@@ -140,13 +140,13 @@ def write_summary(results: list[dict], version: str | None) -> tuple[Path, Path]
         f"- 版本：`{version or run_id}`",
         f"- 归档编号：`{run_id}`",
         "",
-        "| 模型 | checkpoint | Idle Recall | Long Recall | Short Recall | 延迟 | 状态 |",
+        "| 模型 | checkpoint | Idle Recall | Long Recall | Short Recall | Model-forward 延迟 | 状态 |",
         "| --- | --- | ---: | ---: | ---: | ---: | --- |",
     ]
     for item in results:
         recalls = (item.get("eval") or {}).get("per_class_recall", {})
         latency = item.get("latency") or {}
-        latency_value = latency.get("mean_ms") or latency.get("avg_ms") or latency.get("single_tick_latency_ms")
+        latency_value = latency.get("model_forward_mean_ms") or latency.get("mean_ms") or latency.get("avg_ms")
         status = "OK" if item["eval_exit_code"] == 0 and item["latency_exit_code"] == 0 else "CHECK"
         lines.append(
             "| {name} | `{ckpt}` | {idle} | {long} | {short} | {latency} | {status} |".format(
