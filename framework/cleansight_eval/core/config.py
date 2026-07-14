@@ -1,0 +1,93 @@
+"""实验配置加载、覆盖与有效性检查（framework 层）。
+
+配置驱动同架构变体（需求 §4.3）：族、规模、任务、执行模式、数据、特征、
+训练与评估参数、指标都由 YAML 表达。本模块只做与模型语义无关的加载与结构
+校验，不理解具体模型。
+"""
+
+from __future__ import annotations
+
+import copy
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+# 框架层只校验与模型语义无关的通用字段。feature_schema、train、model.input_dim/
+# num_classes 等是**流水线专属**要求，下沉到各 Pipeline.validate_config，否则检测这类
+# 无特征向量的流水线连配置都过不了。
+# pipeline：本实验属于哪条流水线（detection / full_sequence_temporal /
+# sliding_window_temporal）；训练与评估同属一条，输入构造与输出语义一致。
+REQUIRED_TOP_KEYS = ("pipeline", "model", "data")
+
+
+def load_config(path: str | Path) -> dict:
+    """读取 YAML 实验配置，只做**格式中立**的框架层通用校验。
+
+    流水线专属校验（feature_schema、input_dim、data_yaml…）由各流水线的
+    ``validate_config`` 负责，在 CLI 分派器里于本函数之后调用。core 因此**不 import
+    任何流水线**，脊柱不反依赖 temporal/detection。
+    """
+
+    cfg_path = Path(path).resolve()
+    data = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"配置文件顶层必须是映射: {path}")
+    resolve_relative_paths(data, cfg_path.parent)
+    validate_config(data)
+    return data
+
+
+def resolve_relative_paths(cfg: dict, base_dir: Path) -> None:
+    """把配置中的本地文件路径按配置文件目录解析成绝对路径。"""
+
+    data = cfg.get("data")
+    if not isinstance(data, dict):
+        return
+    for key in ("data_yaml", "root"):
+        value = data.get(key)
+        if not isinstance(value, str):
+            continue
+        p = Path(value).expanduser()
+        if not p.is_absolute():
+            data[key] = str((base_dir / p).resolve())
+
+
+def validate_config(cfg: dict) -> None:
+    """框架层通用结构校验（不含任何流水线专属字段）。"""
+
+    missing = [k for k in REQUIRED_TOP_KEYS if k not in cfg]
+    if missing:
+        raise ValueError(f"配置缺少必要字段: {missing}")
+    if not isinstance(cfg["pipeline"], str) or not cfg["pipeline"]:
+        raise ValueError(
+            "pipeline 必须是非空字符串，如 sliding_window_temporal / full_sequence_temporal / detection"
+        )
+
+
+def apply_overrides(cfg: dict, overrides: list[tuple[str, Any]]) -> dict:
+    """把 CLI 传入的通用覆盖项按**点路径**写入配置副本，不改动入参。
+
+    覆盖项是 ``(点路径, 值)`` 序列，如 ``("train.epochs", 5)`` / ``("train.batch", 8)``。
+    核心 CLI 因此**不预设任何纵的调参名**——每条纵的 trainer 有各自超参词汇（torch 的
+    ``batch_size`` vs ultralytics 的 ``batch``），寻址交给调用方，脊柱只做通用点路径写入。
+    """
+
+    out = copy.deepcopy(cfg)
+    for dotted, value in overrides:
+        _set_dotted(out, dotted, value)
+    return out
+
+
+def _set_dotted(d: dict, dotted: str, value: Any) -> None:
+    """按 ``a.b.c`` 点路径写入嵌套字典，沿途缺失的中间层按需建成 dict。"""
+
+    keys = dotted.split(".")
+    cur = d
+    for k in keys[:-1]:
+        nxt = cur.get(k)
+        if not isinstance(nxt, dict):
+            nxt = {}
+            cur[k] = nxt
+        cur = nxt
+    cur[keys[-1]] = value
