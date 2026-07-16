@@ -2,7 +2,7 @@
 
 CLI 的组合根（composition root）：core 不知道流水线的存在、各流水线互不 import，唯有此处
 按 ``cfg["pipeline"]`` 把请求分派到对应流水线。流水线靠**同名方法约定**被 duck-type 调用
-（``validate_config`` / ``train`` / ``evaluate``）——这是编排（脊柱关切）的约定，不是模型
+（``validate_config`` / ``train`` / ``predict`` / ``evaluate``）——这是编排（脊柱关切）的约定，不是模型
 Protocol，故无需基类。
 """
 

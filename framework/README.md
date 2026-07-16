@@ -21,7 +21,7 @@
 
 | 层 | 目录 | 职责 |
 |---|---|---|
-| **公共层** | `cleansight_eval/core/` | run 组织、配置（格式中立）、环境、checkpoint 重建元信息 + 守卫、结果三态信封、异构矩阵、完整性检查（含特征维度契约校验） |
+| **公共层** | `cleansight_eval/core/` | run 组织、配置（格式中立）、环境、checkpoint 重建元信息 + 守卫、模型执行事实 `PredictionOutput`、结果三态信封、异构矩阵、完整性检查（含特征维度契约校验） |
 | **时序域** | `cleansight_eval/temporal/` | 两条时序流水线（`full_sequence_pipeline` / `sliding_window_pipeline`）+ 共享的 `data`（loader + meta）/ `metrics`（指标 + 延迟）/ `util`；模型在 `models/`（`gru`/`mstcn`/`mstcn2`/`transformer` + 注册表） |
 | **检测域** | `cleansight_eval/detection/` | 单帧检测流水线（`pipeline`）+ 薄 ultralytics 适配器（`yolo`）+ 指标 |
 | CLI | `cleansight_eval/cli/` | `train`/`eval` 按 `pipeline` 分派（`_registry.py`）；`matrix` 汇总三类信封成单一矩阵 |
@@ -39,6 +39,8 @@
   feature schema；加载时校验，错配立即抛 `CompatibilityError`，不静默加载。
 - **推理语义显式**（挂进信封 `inference_semantics`）：滑窗记录窗口/推进/冷启动/reset/平滑；
   全序列与检测绝不产生虚假实时延迟——延迟标记为 `N/A`。
+- **执行与判分分层**（`core/execution.py`）：三条 pipeline 的 `predict()` 只产逐视频/逐图预测、
+  真值、原生验证输出和原始耗时样本；兼容入口 `evaluate()` 再把这些事实转换为指标和信封。
 - **异构评估矩阵**（`core/matrix.py`）：允许不同模型不同指标列，不生成综合分数。
 - **不含业务门槛/自动晋升判断**：只产出评估事实（晋升决定由人负责）。
 
@@ -69,7 +71,7 @@ cd framework
   `checkpoint` 路径。`-S/--set 点路径=值`（可多次）临时覆盖配置、不改文件；核心 CLI **不预设
   任何纵的调参名**，各纵按自己超参词汇寻址，如 `-S train.epochs=5`（两纵通用）、`-S train.batch=8`
   （检测/ultralytics）、`-S train.window=32`（时序滑窗）。
-- **评估**加载 checkpoint 时校验重建元信息，错配即抛 `CompatibilityError`；产出 schema v2
+- **评估**加载 checkpoint 时校验重建元信息，调用统一 `predict()` 后再计算指标；产出 schema v2
   三态信封写入同 run 的 `evals/`，逐视频/逐图预测写入 `artifacts/`。信封同时记录 testset
   fingerprint、checkpoint SHA-256、device、配置/环境引用和 artifact SHA-256。
 - **矩阵**把 `runs/` 下所有信封汇成一张异构矩阵（`matrix.json` 机读 + `matrix.md` 人读）；

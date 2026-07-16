@@ -15,7 +15,8 @@ import json
 
 from ..core.checkpoint import load_meta, meta_path_for
 from ..core.environment import now_stamp, set_seed
-from ..core.envelope import EvalEnvelope, MetricValue, format_params
+from ..core.envelope import EvalEnvelope, MetricValue
+from ..core.execution import PredictionOutput, format_params
 from ..core.integrity import assert_checkpoint_config, check_envelope_complete
 from ..core.run import RunContext
 from .metrics import build_detection_metrics
@@ -96,7 +97,9 @@ class DetectionPipeline:
         print(f"[train] checkpoint={best_pt}")
         return str(best_pt)
 
-    def evaluate(self, cfg: dict, ckpt: str, device) -> EvalEnvelope:
+    def predict(self, cfg: dict, ckpt: str, device) -> PredictionOutput:
+        """运行检测验证和逐图推理，返回不含 framework 指标判分的事实。"""
+
         model_cfg = cfg["model"]
         try:
             meta = load_meta(ckpt)
@@ -115,42 +118,86 @@ class DetectionPipeline:
             }
 
         adapter = get_adapter(model_cfg["type"])
+        split = cfg["data"].get("eval_split", "val")
         val = adapter.val(
             weights=ckpt,
             data_yaml=cfg["data"]["data_yaml"],
-            split=cfg["data"].get("eval_split", "val"),
+            split=split,
             imgsz=model_cfg.get("imgsz", 640),
             device=device,
         )
-        metrics = build_detection_metrics(val)
-        performance = _na_performance(reason="单帧检测评估不测实时延迟")
 
-        envelope = EvalEnvelope(
+        raw_predictions: dict = {}
+        labels = val.get("names", {})
+        errors: list[str] = []
+        if hasattr(adapter, "predict"):
+            try:
+                raw = adapter.predict(
+                    weights=ckpt,
+                    data_yaml=cfg["data"]["data_yaml"],
+                    split=split,
+                    imgsz=model_cfg.get("imgsz", 640),
+                    device=device,
+                )
+                raw_predictions = raw.get("items", {})
+                labels = raw.get("labels", labels)
+            except Exception as exc:
+                errors.append(f"逐图预测生成失败: {type(exc).__name__}: {exc}")
+
+        return PredictionOutput(
             model_type=model_cfg["type"],
             model_id=f"{model_cfg['type']}-{format_params(meta.get('num_params'))}",
             pipeline=self.pipeline_name,
             checkpoint=str(ckpt),
             dataset=cfg["data"].get("name", cfg["data"]["data_yaml"]),
+            predictions=raw_predictions,
+            labels=labels,
             feature_schema={"modality": "image", "imgsz": model_cfg.get("imgsz", 640)},
+            inference_semantics=dict(SINGLE_FRAME_SEMANTICS),
+            num_params=meta.get("num_params"),
+            native_metrics=val,
+            metadata={
+                "split": split,
+                "prediction_format": "class_confidence_xywhn",
+                "data_yaml": str(cfg["data"]["data_yaml"]),
+                "input_shape": ["B", 3, model_cfg.get("imgsz", 640), model_cfg.get("imgsz", 640)],
+            },
+            errors=errors,
+        )
+
+    def evaluate(self, cfg: dict, ckpt: str, device) -> EvalEnvelope:
+        """兼容评估入口：消费 ``predict`` 的事实输出并组装既有信封。"""
+
+        output = self.predict(cfg, ckpt, device)
+        metrics = build_detection_metrics(output.native_metrics)
+        performance = _na_performance(reason="单帧检测评估不测实时延迟")
+
+        envelope = EvalEnvelope(
+            model_type=output.model_type,
+            model_id=output.model_id,
+            pipeline=self.pipeline_name,
+            checkpoint=output.checkpoint,
+            dataset=output.dataset,
+            feature_schema=output.feature_schema,
             metrics=metrics,
             performance=performance,
-            inference_semantics=SINGLE_FRAME_SEMANTICS,
-            num_params=meta.get("num_params"),
+            inference_semantics=output.inference_semantics,
+            num_params=output.num_params,
             timestamp=now_stamp(),
         )
-        if hasattr(adapter, "prediction_artifact") and cfg.get("evaluation", {}).get("save_predictions", True):
-            try:
-                envelope.pending_artifacts["predictions"] = adapter.prediction_artifact(
-                    weights=ckpt,
-                    data_yaml=cfg["data"]["data_yaml"],
-                    split=cfg["data"].get("eval_split", "val"),
-                    imgsz=model_cfg.get("imgsz", 640),
-                    device=device,
-                )
-            except Exception as exc:  # 指标已完成时保留结果，并把 artifact 故障写进信封
-                envelope.artifacts["predictions"] = {
-                    "state": "missing",
-                    "reason": f"逐图预测 artifact 生成失败: {type(exc).__name__}: {exc}",
-                }
+        if output.predictions and cfg.get("evaluation", {}).get("save_predictions", True):
+            envelope.pending_artifacts["predictions"] = {
+                "schema_version": 1,
+                "task_type": "detection",
+                "prediction_format": output.metadata["prediction_format"],
+                "split": output.metadata["split"],
+                "labels": output.labels,
+                "items": output.predictions,
+            }
+        elif output.errors:
+            envelope.artifacts["predictions"] = {
+                "state": "missing",
+                "reason": output.errors[0],
+            }
         envelope.integrity = check_envelope_complete(envelope)
         return envelope

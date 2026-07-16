@@ -18,24 +18,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from .execution import format_params
+
 
 SCHEMA_VERSION = 2
-
-
-def format_params(n: int | None) -> str:
-    """把参数量格式化成紧凑标注（如 ``51k`` / ``1.2M``），供 model_id 区分同构不同规模。
-
-    纯整数格式化，与模型语义无关：脊柱不理解模型内部，只把已存于信封的 num_params
-    渲染成人读标注。缺失（老 checkpoint 未记）时给 ``?``，不伪造数字。
-    """
-
-    if not n:
-        return "?"
-    if n >= 1_000_000:
-        return f"{n / 1_000_000:.1f}M"
-    if n >= 1_000:
-        return f"{n / 1_000:.0f}k"
-    return str(n)
 
 
 class MetricState(str, Enum):

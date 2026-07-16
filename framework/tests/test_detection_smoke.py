@@ -10,6 +10,7 @@ import torch
 
 from cleansight_eval.core.checkpoint import meta_path_for
 from cleansight_eval.core.envelope import MetricState
+from cleansight_eval.core.execution import PredictionOutput
 from cleansight_eval.core.matrix import build_matrix
 from cleansight_eval.detection import pipeline as det
 
@@ -28,6 +29,13 @@ class _FakeAdapter:
                 "hand": {"precision": 0.8, "recall": 0.7, "map50": 0.75},
                 "scope_mid_section": {"precision": 0.0, "recall": 0.0, "map50": 0.0},
             },
+        }
+
+    def predict(self, **_kwargs):
+        return {
+            "split": "val",
+            "labels": {"0": "hand", "1": "scope_control_body", "2": "scope_mid_section"},
+            "items": {"frame-0001.jpg": {"predictions": []}},
         }
 
 
@@ -69,6 +77,19 @@ def test_evaluate_produces_wellformed_envelope(tmp_path, monkeypatch):
     assert env.metrics["mAP@0.5"].state is MetricState.COMPUTED
     assert env.metrics["recall:scope_control_body"].state is MetricState.MISSING
     assert env.performance["latency_mean_ms"].state is MetricState.NOT_APPLICABLE
+
+
+def test_predict_returns_native_facts_without_framework_metrics(tmp_path, monkeypatch):
+    monkeypatch.setattr(det, "get_adapter", lambda mt: _FakeAdapter())
+    ckpt = _write_ckpt_with_meta(tmp_path)
+
+    output = det.DetectionPipeline().predict(_cfg(), ckpt, torch.device("cpu"))
+
+    assert isinstance(output, PredictionOutput)
+    assert output.model_id == "yolo-2.6M"
+    assert output.native_metrics["map50"] == 0.612345
+    assert list(output.predictions) == ["frame-0001.jpg"]
+    assert "metrics" not in output.to_dict()
 
 
 def test_evaluate_rejects_type_mismatch(tmp_path, monkeypatch):

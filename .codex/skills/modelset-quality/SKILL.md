@@ -192,6 +192,10 @@ Treat the model repo as the asset and benchmark source. Treat `CleanSightBackend
 
 Before preparing a commit, check status and keep generated artifacts intentional.
 
+本仓库的 Git commit message 默认使用中文描述。若采用 Conventional Commits，允许保留
+`feat`、`fix`、`refactor` 等英文 type 和英文 scope，但冒号后的提交主题必须使用中文；除非
+用户明确要求其他语言。提交前应确认 message 准确概括本次实际暂存内容。
+
 Do not commit unless explicitly intended:
 
 - `.pt`, `.pth`, `.onnx`, `.engine`

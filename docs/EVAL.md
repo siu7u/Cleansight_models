@@ -45,6 +45,25 @@ checkpoint 与 sidecar、testset manifest、prediction artifact 都记录 SHA-25
 滑窗是「只能看到历史窗口」的**实时代价**。两者数字之差即为实时化的性能损失。滑窗只接受因果模型，
 非因果模型在配置校验阶段被拒。
 
+### 2.1 模型执行与指标判分边界
+
+三条 pipeline 都实现同一个 duck-type 方法 `predict(cfg, ckpt, device)`，返回
+[`PredictionOutput`](../framework/cleansight_eval/core/execution.py)：
+
+```text
+checkpoint + dataset
+        │
+        ▼
+pipeline.predict() ──► predictions / targets / labels / native_metrics / raw timing
+        │
+        ▼
+pipeline.evaluate() ─► metrics + EvalEnvelope + prediction artifact
+```
+
+`PredictionOutput` 不包含 `MetricValue`、指标 spec、PASS/FAIL 或报告字段，因此 framework 的模型
+运行能力可以被固定 benchmark 直接复用。现有 CLI 仍调用 `evaluate()`；它内部只消费 `predict()`
+输出进行兼容判分，避免一次迁移同时破坏已有 JSON、报告和矩阵。
+
 ## 3. 当前覆盖的指标
 
 ### 3.1 时序（两条时序流水线共用，[temporal/metrics.py](../framework/cleansight_eval/temporal/metrics.py)）
@@ -84,7 +103,9 @@ checkpoint 与 sidecar、testset manifest、prediction artifact 都记录 SHA-25
 |---|---|---|
 | `latency_mean_ms` / `latency_median_ms` / `latency_p95_ms` | `latency/single_tick_ms/v1` | 单窗口 `[1, window, input_dim]` 前向、取末帧的一 tick 耗时 |
 
-- 测量口径：warmup 20 次 + 正式 200 次，CUDA 会同步后计时；`spec` 内记录 `device/window/warmup/runs`。
+- 执行层保存 warmup 20 次 + 正式 200 次的逐次原始样本，CUDA 会同步后计时；评估层再汇总
+  mean/median/p95，并在 `spec` 内记录 `device/window/warmup/runs`。采样 scope 明确为
+  `model_forward_single_window`，不含数据加载、特征提取和报告写盘。
 - **全序列流水线**对这三项标 `not_applicable`（离线一次性推理不代表实时行为），**不造假数字**。
 
 ## 4. 指标 × 流水线 覆盖矩阵

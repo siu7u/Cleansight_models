@@ -17,6 +17,8 @@
 | `model.type` | 具体模型 | 时序：`temporal/models/__init__.py` `_MODELS`；检测：`detection/yolo.py` `_ADAPTERS` |
 
 入口 `cli/train.py:main` / `cli/eval.py:main` → `get_pipeline(cfg["pipeline"])` → 交给对应流水线。
+三条流水线统一提供 `predict()` 产出不含指标口径的 `PredictionOutput`；`evaluate()` 消费该输出并
+维持现有信封、artifact 和报告兼容。接入新流水线时这两个方法都必须提供。
 
 **关键认知**：监督/loss 语义属于**流水线**，不属于模型。全序列一律逐帧 CE、滑窗一律末帧 CE +
 因果平滑。所以模型只需提供网络结构；同一个 `nn.Module`（如 GRU）在两条时序流水线里都能用，

@@ -27,15 +27,16 @@ except ImportError:  # tqdm 可选，缺失时退化为原样迭代
 
 from ..core.checkpoint import load_checkpoint, load_training_checkpoint, save_training_checkpoint
 from ..core.environment import now_stamp, set_seed
-from ..core.envelope import EvalEnvelope, format_params
+from ..core.envelope import EvalEnvelope
+from ..core.execution import PredictionOutput, format_params, sample_callable_latency
 from ..core.history import HistoryWriter
 from ..core.integrity import check_envelope_complete, check_feature_schema
 from ..core.run import RunContext
 from .artifacts import build_prediction_artifact
 from .data import build_temporal_meta, load_split, split_video_names
-from .metrics import causal_decision, compute_temporal_metrics_by_item, measure_single_tick
+from .metrics import compute_temporal_metrics_by_item, summarize_single_tick_timing
 from .models import build_model, is_causal
-from .util import compute_class_weights
+from .util import causal_decision, compute_class_weights
 
 IDLE_ID = 0
 MIN_DURATION = 25  # causal_decision 内部最小持续时长，此处仅用于语义描述
@@ -270,7 +271,9 @@ class SlidingWindowTemporalPipeline:
             run.write_exception_status(exc, epoch=current_epoch)
             raise
 
-    def evaluate(self, cfg: dict, ckpt: str, device) -> EvalEnvelope:
+    def predict(self, cfg: dict, ckpt: str, device) -> PredictionOutput:
+        """运行因果滑窗模型，返回不含指标判分的逐视频预测事实。"""
+
         model_cfg = cfg["model"]
         expected = {"type": model_cfg["type"], "input_dim": model_cfg["input_dim"], "num_classes": model_cfg["num_classes"]}
         state_dict, meta = load_checkpoint(ckpt, expected=expected, map_location=device)
@@ -310,11 +313,6 @@ class SlidingWindowTemporalPipeline:
             for name, video in zip(names, video_gts)
         }
         labels = list(id2name.values())
-        metrics, metric_details = compute_temporal_metrics_by_item(
-            pred_by_item, truth_by_item, labels, return_details=True
-        )
-
-        performance = measure_single_tick(model, window, model_cfg["input_dim"], device)
         semantics = {
             "mode": "windowed_causal",
             "sees": "causal_sliding_window",
@@ -325,26 +323,77 @@ class SlidingWindowTemporalPipeline:
             "smoothing": f"causal_decision(min_duration={MIN_DURATION})",
         }
 
-        envelope = EvalEnvelope(
+        timing = {}
+        evaluation_cfg = cfg.get("evaluation", {})
+        if evaluation_cfg.get("measure_latency", True):
+            latency_input = torch.randn(1, window, model_cfg["input_dim"], device=device)
+
+            def _tick():
+                return model(latency_input)[0, -1]
+
+            timing = sample_callable_latency(
+                _tick,
+                device,
+                warmup=int(evaluation_cfg.get("latency_warmup", 20)),
+                runs=int(evaluation_cfg.get("latency_runs", 200)),
+                scope="model_forward_single_window",
+                context={
+                    "window": window,
+                    "input_dim": model_cfg["input_dim"],
+                    "input_shape": [1, window, model_cfg["input_dim"]],
+                    "output": "last_frame_logits",
+                },
+            )
+
+        return PredictionOutput(
             model_type=meta["type"],
             model_id=f"{meta['type']}-{format_params(meta.get('num_params'))}",
             pipeline=self.pipeline_name,
             checkpoint=str(ckpt),
             dataset=cfg["data"].get("name", cfg["data"].get("root")),
+            predictions=pred_by_item,
+            targets=truth_by_item,
+            labels=labels,
             feature_schema=meta.get("feature_schema", cfg.get("feature_schema", {})),
-            metrics=metrics,
-            metric_details={"temporal": metric_details},
-            performance=performance,
             inference_semantics=semantics,
             num_params=meta.get("num_params"),
+            timing=timing,
+            metadata={
+                "split": cfg["data"]["split_eval"],
+                "window": window,
+                "input_dim": model_cfg["input_dim"],
+                "input_shape": [1, window, model_cfg["input_dim"]],
+            },
+        )
+
+    def evaluate(self, cfg: dict, ckpt: str, device) -> EvalEnvelope:
+        """兼容评估入口：消费 ``predict`` 的事实输出并组装既有信封。"""
+
+        output = self.predict(cfg, ckpt, device)
+        metrics, metric_details = compute_temporal_metrics_by_item(
+            output.predictions, output.targets, output.labels, return_details=True
+        )
+
+        envelope = EvalEnvelope(
+            model_type=output.model_type,
+            model_id=output.model_id,
+            pipeline=self.pipeline_name,
+            checkpoint=output.checkpoint,
+            dataset=output.dataset,
+            feature_schema=output.feature_schema,
+            metrics=metrics,
+            metric_details={"temporal": metric_details},
+            performance=summarize_single_tick_timing(output.timing),
+            inference_semantics=output.inference_semantics,
+            num_params=output.num_params,
             timestamp=now_stamp(),
         )
         envelope.pending_artifacts["predictions"] = build_prediction_artifact(
-            pred_by_item,
-            truth_by_item,
-            labels,
-            window=window,
-            inference_mode=semantics["mode"],
+            output.predictions,
+            output.targets,
+            output.labels,
+            window=output.metadata["window"],
+            inference_mode=output.inference_semantics["mode"],
             prediction_start_frame=0,
         )
         envelope.integrity = check_envelope_complete(envelope)

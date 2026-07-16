@@ -9,6 +9,41 @@ from __future__ import annotations
 from collections import Counter
 
 import numpy as np
+import torch
+
+
+def causal_decision(last, pending, stable, count, num_classes: int | None = None):
+    """滑窗推理的因果平滑：转移先验 + 最小持续时长。
+
+    这是推理后处理而不是评估指标。仅在三分类时应用类别转移先验；其他类别数退化为
+    最小持续时长平滑。``num_classes`` 保留用于兼容历史调用。
+    """
+
+    prob = torch.softmax(last, dim=-1).cpu().numpy()
+    classes = len(prob)
+    transition_prior = np.zeros((classes, classes))
+    if classes == 3:
+        idle_id, long_id, short_id = 0, 1, 2
+        transition_prior[idle_id, idle_id] = 2.0
+        transition_prior[long_id, long_id] = 2.0
+        transition_prior[short_id, short_id] = 1.5
+        transition_prior[long_id, short_id] = -1.0
+        transition_prior[short_id, long_id] = -1.0
+
+    scores = np.zeros(classes)
+    for index in range(classes):
+        scores[index] = np.log(prob[index] + 1e-8) + transition_prior[stable, index]
+    candidate = int(np.argmax(scores))
+
+    min_duration = 25
+    if candidate == pending:
+        count += 1
+    else:
+        pending = candidate
+        count = 1
+    if count >= min_duration:
+        stable = pending if pending is not None else 0
+    return pending, stable, count
 
 
 def compute_class_weights(dataloader) -> dict:

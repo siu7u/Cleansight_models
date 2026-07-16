@@ -12,7 +12,6 @@ benchmark 对齐验收。
 from __future__ import annotations
 
 import sys
-import time
 from pathlib import Path
 from typing import Mapping, Sequence
 
@@ -20,6 +19,8 @@ import numpy as np
 import torch
 
 from ..core.envelope import MetricValue
+from ..core.execution import sample_callable_latency
+from .util import causal_decision  # 历史兼容导出；实现属于推理后处理，不属于指标
 
 # 过渡接入：benchmark 仍位于仓库根目录。兼容从仓库根目录运行
 # ``python -m framework...`` 和进入 framework 后运行 ``python -m cleansight_eval...``。
@@ -106,41 +107,6 @@ def f_score(recognized, ground_truth, overlap, bg_class=BG_CLASS):
             fp += 1
     fn = len(y_label) - sum(hits)
     return float(tp), float(fp), float(fn)
-
-
-def causal_decision(last, pending, stable, count, num_classes: int | None = None):
-    """因果平滑：转移先验 + 最小持续时长，迁移自 util.causal_decision。
-
-    仅在 3 类（Idle/Long/Short）时应用带类别语义的转移先验；其他类别数时退化为
-    仅最小持续时长平滑，避免对未知类别硬编码先验。
-    """
-
-    prob = torch.softmax(last, dim=-1).cpu().numpy()
-    C = len(prob)
-
-    transition_prior = np.zeros((C, C))
-    if C == 3:
-        idle_id, long_id, short_id = 0, 1, 2
-        transition_prior[idle_id, idle_id] = 2.0
-        transition_prior[long_id, long_id] = 2.0
-        transition_prior[short_id, short_id] = 1.5
-        transition_prior[long_id, short_id] = -1.0
-        transition_prior[short_id, long_id] = -1.0
-
-    scores = np.zeros(C)
-    for j in range(C):
-        scores[j] = np.log(prob[j] + 1e-8) + transition_prior[stable, j]
-    candidate = int(np.argmax(scores))
-
-    MIN_DURATION = 25
-    if candidate == pending:
-        count += 1
-    else:
-        pending = candidate
-        count = 1
-    if count >= MIN_DURATION:
-        stable = pending if pending is not None else 0
-    return pending, stable, count
 
 
 def _percent_metric(value, spec: str, reason: str = "指标没有可计算样本") -> MetricValue:
@@ -230,7 +196,7 @@ def compute_temporal_metrics(pred_labels: list[str], gt_labels: list[str]) -> di
 def measure_single_tick(
     model, window: int, input_dim: int, device, warmup: int = 20, runs: int = 200
 ) -> dict[str, MetricValue]:
-    """测量单窗口 ``[1, window, input_dim]`` 前向延迟（取末帧，模拟滑窗流式一 tick）。"""
+    """兼容入口：采集原始单 tick 样本后，按既有口径汇总。"""
 
     model.eval()
     x = torch.randn(1, window, input_dim, device=device)
@@ -238,25 +204,36 @@ def measure_single_tick(
     def _tick():
         return model(x)[0, -1]  # 末帧 logits，滑窗流式的一步
 
-    with torch.no_grad():
-        for _ in range(warmup):
-            _tick()
-        if device.type == "cuda":
-            torch.cuda.synchronize()
+    timing = sample_callable_latency(
+        _tick,
+        device,
+        warmup=warmup,
+        runs=runs,
+        scope="model_forward_single_window",
+        context={"window": window, "input_dim": input_dim, "input_shape": [1, window, input_dim]},
+    )
+    return summarize_single_tick_timing(timing)
 
-        samples = []
-        for _ in range(runs):
-            t0 = time.perf_counter()
-            _tick()
-            if device.type == "cuda":
-                torch.cuda.synchronize()
-            samples.append((time.perf_counter() - t0) * 1000.0)
 
-    samples.sort()
+def summarize_single_tick_timing(timing: dict) -> dict[str, MetricValue]:
+    """把 framework 采集的原始样本转换为旧信封的 mean/median/p95 指标。"""
+
+    samples = sorted(float(value) for value in timing.get("samples_ms", []))
+    if not samples:
+        reason = "未采集到单 tick 延迟样本"
+        return {
+            "latency_mean_ms": MetricValue.missing(reason, spec=SPEC_LATENCY),
+            "latency_median_ms": MetricValue.missing(reason, spec=SPEC_LATENCY),
+            "latency_p95_ms": MetricValue.missing(reason, spec=SPEC_LATENCY),
+        }
     mean_ms = sum(samples) / len(samples)
     median_ms = samples[len(samples) // 2]
     p95_ms = samples[min(len(samples) - 1, int(0.95 * len(samples)))]
-    spec = f"{SPEC_LATENCY}; device={device}; window={window}; warmup={warmup}; runs={runs}"
+    context = timing.get("context") or {}
+    spec = (
+        f"{SPEC_LATENCY}; device={timing.get('device')}; window={context.get('window')}; "
+        f"warmup={timing.get('warmup')}; runs={timing.get('runs')}"
+    )
     return {
         "latency_mean_ms": MetricValue.computed(round(mean_ms, 4), spec=spec),
         "latency_median_ms": MetricValue.computed(round(median_ms, 4), spec=spec),

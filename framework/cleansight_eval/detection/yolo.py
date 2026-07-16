@@ -91,11 +91,11 @@ class YoloAdapter:
             "per_class": per_class,
         }
 
-    def prediction_artifact(self, weights, data_yaml, split: str, imgsz: int, device) -> dict:
-        """逐图推理并返回可归档的检测预测，框使用归一化 ``xywh``。
+    def predict(self, weights, data_yaml, split: str, imgsz: int, device) -> dict:
+        """逐图推理并返回原始检测事实，框使用归一化 ``xywh``。
 
-        artifact 只保存预测；真值仍由钉定的 YOLO testset manifest/data.yaml 提供，二者结合
-        可以复算检测指标。该旁路与 ``val`` 分开，避免依赖 Ultralytics 内部 validator 状态。
+        真值仍由钉定的 YOLO testset manifest/data.yaml 提供。该旁路与 ``val`` 分开，避免
+        依赖 Ultralytics 内部 validator 状态，也不在适配器内决定 artifact schema。
         """
         import yaml
         from ultralytics import YOLO
@@ -139,12 +139,20 @@ class YoloAdapter:
                 ]
             items[Path(result.path).name] = {"predictions": boxes}
         return {
-            "schema_version": 1,
-            "task_type": "detection",
-            "prediction_format": "class_confidence_xywhn",
             "split": split,
             "labels": {str(key): value for key, value in dict(model.names).items()},
             "items": items,
+        }
+
+    def prediction_artifact(self, weights, data_yaml, split: str, imgsz: int, device) -> dict:
+        """历史兼容入口：把 ``predict`` 的事实输出包成检测 artifact v1。"""
+
+        output = self.predict(weights, data_yaml, split, imgsz, device)
+        return {
+            "schema_version": 1,
+            "task_type": "detection",
+            "prediction_format": "class_confidence_xywhn",
+            **output,
         }
 
 

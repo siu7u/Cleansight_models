@@ -31,7 +31,8 @@ except ImportError:  # tqdm 可选，缺失时退化为原样迭代
 
 from ..core.checkpoint import load_checkpoint, load_training_checkpoint, save_training_checkpoint
 from ..core.environment import now_stamp, set_seed
-from ..core.envelope import EvalEnvelope, format_params
+from ..core.envelope import EvalEnvelope
+from ..core.execution import PredictionOutput, format_params
 from ..core.history import HistoryWriter
 from ..core.integrity import check_envelope_complete, check_feature_schema
 from ..core.run import RunContext
@@ -297,7 +298,9 @@ class FullSequenceTemporalPipeline:
             run.write_exception_status(exc, epoch=current_epoch)
             raise
 
-    def evaluate(self, cfg: dict, ckpt: str, device) -> EvalEnvelope:
+    def predict(self, cfg: dict, ckpt: str, device) -> PredictionOutput:
+        """运行全序列模型，返回不含指标判分的逐视频预测事实。"""
+
         model, meta = _load_eval_model(cfg, ckpt, device)
         features, truths, id2name = load_split(cfg["data"], cfg["data"]["split_eval"])
 
@@ -312,30 +315,54 @@ class FullSequenceTemporalPipeline:
             for name, video in zip(names, truths)
         }
         labels = list(id2name.values())
-        metrics, metric_details = compute_temporal_metrics_by_item(
-            pred_by_item, truth_by_item, labels, return_details=True
-        )
 
-        envelope = EvalEnvelope(
+        return PredictionOutput(
             model_type=meta["type"],
             model_id=f"{meta['type']}-{format_params(meta.get('num_params'))}",
             pipeline=self.pipeline_name,
             checkpoint=str(ckpt),
             dataset=cfg["data"].get("name", cfg["data"].get("root")),
+            predictions=pred_by_item,
+            targets=truth_by_item,
+            labels=labels,
             feature_schema=meta.get("feature_schema", cfg.get("feature_schema", {})),
+            inference_semantics=dict(FULL_SEQUENCE_SEMANTICS),
+            num_params=meta.get("num_params"),
+            metadata={
+                "split": cfg["data"]["split_eval"],
+                "input_dim": cfg["model"]["input_dim"],
+                "input_shape": [1, "T", cfg["model"]["input_dim"]],
+            },
+        )
+
+    def evaluate(self, cfg: dict, ckpt: str, device) -> EvalEnvelope:
+        """兼容评估入口：消费 ``predict`` 的事实输出并组装既有信封。"""
+
+        output = self.predict(cfg, ckpt, device)
+        metrics, metric_details = compute_temporal_metrics_by_item(
+            output.predictions, output.targets, output.labels, return_details=True
+        )
+
+        envelope = EvalEnvelope(
+            model_type=output.model_type,
+            model_id=output.model_id,
+            pipeline=self.pipeline_name,
+            checkpoint=output.checkpoint,
+            dataset=output.dataset,
+            feature_schema=output.feature_schema,
             metrics=metrics,
             metric_details={"temporal": metric_details},
             performance=not_applicable_perf("离线全序列不测实时延迟"),
-            inference_semantics=FULL_SEQUENCE_SEMANTICS,
-            num_params=meta.get("num_params"),
+            inference_semantics=output.inference_semantics,
+            num_params=output.num_params,
             timestamp=now_stamp(),
         )
         envelope.pending_artifacts["predictions"] = build_prediction_artifact(
-            pred_by_item,
-            truth_by_item,
-            labels,
+            output.predictions,
+            output.targets,
+            output.labels,
             window=None,
-            inference_mode=FULL_SEQUENCE_SEMANTICS["mode"],
+            inference_mode=output.inference_semantics["mode"],
             prediction_start_frame=0,
         )
         envelope.integrity = check_envelope_complete(envelope)
