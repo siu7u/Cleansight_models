@@ -1,12 +1,12 @@
 """单帧检测流水线（DetectionPipeline）。
 
 一条完整的训练+评估单元：消费 cleansight-yolo-pipeline 产出的标准 YOLO 数据集
-（images/labels/data.yaml），用 ultralytics 训练/验证，**只产事实信封**：mAP / P / R 逐类
+（images/labels/data.yaml），用 ultralytics 训练/验证，**只产事实结果**：mAP / P / R 逐类
 三态指标 + 完整性，不含任何业务门槛、不判 PASS/FAIL、不设非零退出码。
 
 检测是**单帧无状态**语义：流水线自持推理（ultralytics.val），单帧语义写成模块常量
-``SINGLE_FRAME_SEMANTICS`` 直接挂进信封；实时延迟标 N/A（离线检测不测实时延迟）。检测域
-与时序域不共享任何数据/模型抽象，仅在 core 的信封与矩阵处汇合。
+``SINGLE_FRAME_SEMANTICS`` 直接写入结果；实时延迟标 N/A（离线检测不测实时延迟）。检测域
+与时序域不共享任何数据/模型抽象，仅在统一结果与矩阵处汇合。
 """
 
 from __future__ import annotations
@@ -15,14 +15,15 @@ import json
 
 from ..core.checkpoint import load_meta, meta_path_for
 from ..core.environment import now_stamp, set_seed
-from ..core.envelope import EvalEnvelope, MetricValue
+from ..core.envelope import EvaluationResult, MetricValue
 from ..core.execution import PredictionOutput, format_params
-from ..core.integrity import assert_checkpoint_config, check_envelope_complete
+from ..core.integrity import assert_checkpoint_config, check_result_complete
 from ..core.run import RunContext
+from .artifacts import build_prediction_artifact
 from .metrics import build_detection_metrics
 from .yolo import get_adapter
 
-# 单帧无状态推理语义（挂进信封的 inference_semantics）。
+# 单帧无状态推理语义（写入 EvaluationResult.inference）。
 SINGLE_FRAME_SEMANTICS = {
     "mode": "single_frame",
     "sees": "one_image",
@@ -165,14 +166,14 @@ class DetectionPipeline:
             errors=errors,
         )
 
-    def evaluate(self, cfg: dict, ckpt: str, device) -> EvalEnvelope:
-        """兼容评估入口：消费 ``predict`` 的事实输出并组装既有信封。"""
+    def evaluate(self, cfg: dict, ckpt: str, device) -> EvaluationResult:
+        """兼容评估入口：消费 ``predict`` 的事实输出并组装正式 EvaluationResult。"""
 
         output = self.predict(cfg, ckpt, device)
         metrics = build_detection_metrics(output.native_metrics)
         performance = _na_performance(reason="单帧检测评估不测实时延迟")
 
-        envelope = EvalEnvelope(
+        result = EvaluationResult(
             model_type=output.model_type,
             model_id=output.model_id,
             pipeline=self.pipeline_name,
@@ -186,18 +187,16 @@ class DetectionPipeline:
             timestamp=now_stamp(),
         )
         if output.predictions and cfg.get("evaluation", {}).get("save_predictions", True):
-            envelope.pending_artifacts["predictions"] = {
-                "schema_version": 1,
-                "task_type": "detection",
-                "prediction_format": output.metadata["prediction_format"],
-                "split": output.metadata["split"],
-                "labels": output.labels,
-                "items": output.predictions,
-            }
+            result.pending_artifacts["predictions"] = build_prediction_artifact(
+                output.predictions,
+                output.labels,
+                split=output.metadata["split"],
+                prediction_format=output.metadata["prediction_format"],
+            )
         elif output.errors:
-            envelope.artifacts["predictions"] = {
+            result.artifacts["predictions"] = {
                 "state": "missing",
                 "reason": output.errors[0],
             }
-        envelope.integrity = check_envelope_complete(envelope)
-        return envelope
+        result.integrity = check_result_complete(result)
+        return result

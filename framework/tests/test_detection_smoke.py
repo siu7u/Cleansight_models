@@ -77,6 +77,8 @@ def test_evaluate_produces_wellformed_envelope(tmp_path, monkeypatch):
     assert env.metrics["mAP@0.5"].state is MetricState.COMPUTED
     assert env.metrics["recall:scope_control_body"].state is MetricState.MISSING
     assert env.performance["latency_mean_ms"].state is MetricState.NOT_APPLICABLE
+    assert env.pending_artifacts["predictions"]["task_type"] == "detection"
+    assert env.pending_artifacts["predictions"]["prediction_format"] == "class_confidence_xywhn"
 
 
 def test_predict_returns_native_facts_without_framework_metrics(tmp_path, monkeypatch):

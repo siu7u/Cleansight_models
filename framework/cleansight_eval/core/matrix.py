@@ -10,24 +10,31 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .envelope import EvalEnvelope, MetricState
+from .envelope import EvaluationResult, MetricState
 
 
-def collect_envelopes(runs_dir: str | Path, pipeline: str | None = None) -> list[EvalEnvelope]:
-    """递归扫描 runs 目录下所有 ``*.envelope.json``。
+def collect_results(runs_dir: str | Path, pipeline: str | None = None) -> list[EvaluationResult]:
+    """递归扫描 runs 目录下所有历史 envelope 和正式 evaluation result JSON。
 
     ``pipeline`` 非空时只保留该类流水线（detection / full_sequence_temporal /
     sliding_window_temporal），用于"每次只看一类模型"的同类对比。
     """
 
     runs_dir = Path(runs_dir)
-    envs = [EvalEnvelope.read(p) for p in sorted(runs_dir.rglob("*.envelope.json"))]
+    paths = set(runs_dir.rglob("*.envelope.json")) | set(runs_dir.rglob("*.evaluation.json"))
+    envs = [EvaluationResult.read(path) for path in sorted(paths)]
     if pipeline is not None:
         envs = [e for e in envs if e.pipeline == pipeline]
     return envs
 
 
-def _metric_columns(envelopes: list[EvalEnvelope]) -> list[str]:
+def collect_envelopes(runs_dir: str | Path, pipeline: str | None = None) -> list[EvaluationResult]:
+    """历史兼容入口；新代码应使用 ``collect_results``。"""
+
+    return collect_results(runs_dir, pipeline)
+
+
+def _metric_columns(envelopes: list[EvaluationResult]) -> list[str]:
     cols: list[str] = []
     for env in envelopes:
         for name in list(env.metrics) + [f"perf.{k}" for k in env.performance]:
@@ -36,7 +43,7 @@ def _metric_columns(envelopes: list[EvalEnvelope]) -> list[str]:
     return cols
 
 
-def build_matrix(envelopes: list[EvalEnvelope]) -> dict:
+def build_matrix(envelopes: list[EvaluationResult]) -> dict:
     """构建机读矩阵：固定标识列 + 异构指标列，保留三态。"""
 
     columns = _metric_columns(envelopes)
@@ -111,7 +118,7 @@ def write_matrix(
     runs_dir = Path(runs_dir)
     out_dir = Path(out_dir) if out_dir else runs_dir
     out_dir.mkdir(parents=True, exist_ok=True)
-    envelopes = collect_envelopes(runs_dir, pipeline)
+    envelopes = collect_results(runs_dir, pipeline)
     matrix = build_matrix(envelopes)
 
     stem = f"matrix.{pipeline}" if pipeline else "matrix"

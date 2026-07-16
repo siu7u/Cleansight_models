@@ -11,10 +11,11 @@
 三类异构模型放进同一张评估矩阵横向比较，同时保留「哪些数字天然不可比」的信息，不折算成单一分数、
 不做 PASS/FAIL 判断。
 
-## 1. 评估产物：三态信封
+## 1. 评估产物：统一 EvaluationResult
 
-每次评估产出一个 `EvalEnvelope`（[core/envelope.py](../framework/cleansight_eval/core/envelope.py)），
-写为 `<run>/evals/{pipeline}-{model_type}-{timestamp}.envelope.json`。信封里的每个指标不是裸数字，
+每次评估产出一个 `EvaluationResult`，正式定义位于
+[`benchmark/core/result.py`](../benchmark/core/result.py)，写为
+`<run>/evals/{pipeline}-{model_type}-{timestamp}.evaluation.json`。结果里的每个指标不是裸数字，
 而是 `MetricValue`，区分三种状态：
 
 | 状态 | 含义 | 典型场景 |
@@ -29,6 +30,8 @@
 当前落盘格式为 schema v2，记录 `run / model / pipeline / testset / feature_schema /
 metrics.summary / metrics.details / performance / inference / artifacts / limits / integrity`。其中
 checkpoint 与 sidecar、testset manifest、prediction artifact 都记录 SHA-256，便于归档后核验。
+`framework/core/envelope.py` 只保留历史 `EvalEnvelope` import 别名，不再定义第二套 schema；旧
+`*.envelope.json` 仍可读取并参与矩阵汇总。
 
 ## 2. 三条评估流水线
 
@@ -57,12 +60,13 @@ checkpoint + dataset
 pipeline.predict() ──► predictions / targets / labels / native_metrics / raw timing
         │
         ▼
-pipeline.evaluate() ─► metrics + EvalEnvelope + prediction artifact
+pipeline.evaluate() ─► metrics + EvaluationResult + prediction artifact
 ```
 
 `PredictionOutput` 不包含 `MetricValue`、指标 spec、PASS/FAIL 或报告字段，因此 framework 的模型
 运行能力可以被固定 benchmark 直接复用。现有 CLI 仍调用 `evaluate()`；它内部只消费 `predict()`
-输出进行兼容判分，避免一次迁移同时破坏已有 JSON、报告和矩阵。
+输出生成 benchmark 定义的正式结果。framework 负责运行模型和 run 内落盘；benchmark 负责
+结果 schema、三态指标类型、时序/检测 artifact schema 及校验。
 
 ## 3. 当前覆盖的指标
 
@@ -95,7 +99,7 @@ pipeline.evaluate() ─► metrics + EvalEnvelope + prediction artifact
 
 - 逐类指标遍历 `data.yaml` 声明的全部类别：验证集**有样本** → `computed`；**无样本** → `missing`
   （标 `验证集无该类样本，无法评估`，而非 0）。
-- 底层复用 ultralytics `val()`，本模块只把结果翻译成三态信封，不含任何业务门槛或 PASS/FAIL。
+- 底层复用 ultralytics `val()`，本模块只把结果翻译成三态结果，不含任何业务门槛或 PASS/FAIL。
 
 ### 3.3 实时延迟（仅滑窗流水线）
 
@@ -135,13 +139,13 @@ pipeline.evaluate() ─► metrics + EvalEnvelope + prediction artifact
 
 ## 6. 完整性检查
 
-每个信封落盘前经 [core/integrity.py](../framework/cleansight_eval/core/integrity.py) 校验，结果写入
+每个结果落盘前经 [core/integrity.py](../framework/cleansight_eval/core/integrity.py) 校验，结果写入
 `integrity: {ok, checks, issues}`：
 
 - **checkpoint 兼容**：只卡改变张量形状的字段（`type / input_dim / num_classes`），`window` 等可在
   eval 时覆盖不算冲突；不兼容立即报错。
 - **特征维度**：实际特征维度须与期望一致（时序为 40）。
-- **信封完备**：必填字段齐全，且每个 `computed` 指标都带非空 `spec`。
+- **结果完备**：必填字段齐全，且每个 `computed` 指标都带非空 `spec`。
 - **testset 固定**：正式配置通过 `evaluation.testset_id` 关联 `benchmark/testsets.yaml`，记录
   manifest hash 和复合 fingerprint，并执行 train/val/test 源视频泄漏检查。
 - **artifact 可追溯**：要求逐视频/逐图 prediction artifact 存在并带 SHA-256；时序 artifact
@@ -149,19 +153,24 @@ pipeline.evaluate() ─► metrics + EvalEnvelope + prediction artifact
 
 ## 7. 矩阵聚合与可视化
 
-- **聚合**（[core/matrix.py](../framework/cleansight_eval/core/matrix.py)）：递归扫描 `evals/*.envelope.json`，
+- **聚合**（[core/matrix.py](../framework/cleansight_eval/core/matrix.py)）：递归扫描新的
+  `evals/*.evaluation.json` 和历史 `evals/*.envelope.json`，
   可按 pipeline 过滤；固定 ID 列 + 所有模型指标列的并集，逐格保留三态；渲染 Markdown 表并带 `N/A / MISSING /
   空白` 图例。
 - **时序分割可视化**（[temporal/viz.py](../framework/cleansight_eval/temporal/viz.py)）：GT / Pred 双色带状图，
   逐视频对照、标注帧数与帧准确率，分页输出 PNG（默认每页 6 个视频）。
 - **checkpoint 报告**（[core/report.py](../framework/cleansight_eval/core/report.py)）：每个 `.pt` 旁写
   `<checkpoint>.eval.md`，并向同目录唯一的 `EVALUATION_REPORT.md` 追加版本记录。
-- **prediction artifact**：时序保存逐视频预测与真值并支持复算；检测保存逐图类别、置信度与归一化框。
+- **prediction artifact**：schema 与校验统一位于
+  [`benchmark/core/artifacts.py`](../benchmark/core/artifacts.py)。时序保存逐视频预测与真值并支持
+  独立复算；检测保存逐图类别、置信度与归一化框，结合固定 testset 真值后复算指标。
 
 ## 8. 边界（当前不做）
 
 - 不做任何 PASS/FAIL、业务门槛或加权总分——只报原始指标，判定留给使用方。
 - 检测侧逐类只暴露 precision/recall（不含逐类 mAP）。
 - 延迟只测时序滑窗单 tick，不覆盖检测推理延迟、端到端吞吐。
-- framework 与 benchmark 的最终职责拆分尚未完成；当前正式评估仍由 framework CLI 编排，
-  benchmark 已作为时序指标、testset 和时序 artifact 的公共真源。
+- framework CLI 仍负责把“模型运行 → benchmark 结果 → run 内文件”串起来；benchmark 已成为
+  指标、testset、`EvaluationResult v2` 及两类 prediction artifact 的唯一真源。
+- `decision` 是可选门禁字段：普通模型评估不写；release gate 或端到端 benchmark 才写
+  `PASS/FAIL/PENDING/EXPLORATORY`，不会把模型事实默认伪装成 `PENDING`。

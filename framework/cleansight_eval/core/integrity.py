@@ -2,7 +2,7 @@
 
 需求 §10 要求完整性检查只描述"评估是否可解释"，不描述"模型是否达标"。
 本模块提供与模型语义无关的检查：checkpoint 与配置是否兼容、特征 schema 是否
-兼容、信封字段是否齐全。硬性不兼容（例如错配 checkpoint）应直接抛错，避免
+兼容、正式结果字段是否齐全。硬性不兼容（例如错配 checkpoint）应直接抛错，避免
 静默加载错误配置（§7.2 / §8.1）。
 """
 
@@ -54,46 +54,46 @@ def check_feature_schema(actual_dim: int, expected: dict | None) -> list[str]:
     return problems
 
 
-def check_envelope_complete(envelope: Any) -> dict:
-    """检查信封是否具备最小可解释字段，返回完整性报告（不做达标判断）。"""
+def check_result_complete(result: Any) -> dict:
+    """检查评估结果是否具备最小可解释字段，返回完整性报告（不做达标判断）。"""
 
     report: dict[str, Any] = {"ok": True, "checks": {}, "issues": []}
     required = ("model_type", "pipeline", "checkpoint", "dataset")
     for key in required:
-        if not getattr(envelope, key, None):
+        if not getattr(result, key, None):
             report["ok"] = False
             report["issues"].append(f"缺少必要字段: {key}")
 
-    if not envelope.metrics:
+    if not result.metrics:
         report["ok"] = False
         report["issues"].append("没有任何指标")
 
     # 指标口径必须声明（§8.2）：已计算的指标应带 spec。
     from .envelope import MetricState
 
-    for name, mv in envelope.metrics.items():
+    for name, mv in result.metrics.items():
         if mv.state is MetricState.COMPUTED and not mv.spec:
             report["ok"] = False
             report["issues"].append(f"指标 {name} 已计算但未声明口径(spec)")
 
     # CLI 完成 schema v2 溯源信息注入后才执行这些增强检查；pipeline 单测直接调用时
     # run 为空，仍只检查上面的模型事实字段。
-    if envelope.run:
+    if result.run:
         checks = report["checks"]
-        device = envelope.run.get("device")
+        device = result.run.get("device")
         checks["run_context_present"] = bool(
-            envelope.run.get("id") and device not in (None, "", "unknown")
+            result.run.get("id") and device not in (None, "", "unknown")
         )
-        checks["checkpoint_hash_present"] = bool(envelope.checkpoint_info.get("sha256"))
-        checks["testset_registered"] = bool(envelope.testset.get("registered"))
-        checks["testset_fingerprint_present"] = bool(envelope.testset.get("fingerprint_sha256"))
-        validation_errors = envelope.testset.get("validation_errors") or []
+        checks["checkpoint_hash_present"] = bool(result.checkpoint_info.get("sha256"))
+        checks["testset_registered"] = bool(result.testset.get("registered"))
+        checks["testset_fingerprint_present"] = bool(result.testset.get("fingerprint_sha256"))
+        validation_errors = result.testset.get("validation_errors") or []
         checks["testset_validation_passed"] = not validation_errors
-        prediction_ref = envelope.artifacts.get("predictions") or {}
+        prediction_ref = result.artifacts.get("predictions") or {}
         checks["prediction_artifact_present"] = bool(prediction_ref.get("path"))
         checks["prediction_artifact_hashed"] = bool(prediction_ref.get("sha256"))
-        if envelope.pipeline in {"sliding_window_temporal", "full_sequence_temporal"}:
-            checks["metric_details_present"] = bool(envelope.metric_details.get("temporal"))
+        if result.pipeline in {"sliding_window_temporal", "full_sequence_temporal"}:
+            checks["metric_details_present"] = bool(result.metric_details.get("temporal"))
             checks["prediction_artifact_recomputable"] = prediction_ref.get("recomputable") is True
 
         messages = {
@@ -113,3 +113,9 @@ def check_envelope_complete(envelope: Any) -> dict:
         report["issues"].extend(str(item) for item in validation_errors)
         report["ok"] = report["ok"] and all(checks.values())
     return report
+
+
+def check_envelope_complete(envelope: Any) -> dict:
+    """历史兼容名称；正式实现由 ``check_result_complete`` 提供。"""
+
+    return check_result_complete(envelope)

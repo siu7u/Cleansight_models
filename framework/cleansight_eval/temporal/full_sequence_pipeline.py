@@ -31,10 +31,10 @@ except ImportError:  # tqdm 可选，缺失时退化为原样迭代
 
 from ..core.checkpoint import load_checkpoint, load_training_checkpoint, save_training_checkpoint
 from ..core.environment import now_stamp, set_seed
-from ..core.envelope import EvalEnvelope
+from ..core.envelope import EvaluationResult
 from ..core.execution import PredictionOutput, format_params
 from ..core.history import HistoryWriter
-from ..core.integrity import check_envelope_complete, check_feature_schema
+from ..core.integrity import check_feature_schema, check_result_complete
 from ..core.run import RunContext
 from .artifacts import build_prediction_artifact
 from .data import build_temporal_meta, load_split, split_video_names
@@ -335,15 +335,15 @@ class FullSequenceTemporalPipeline:
             },
         )
 
-    def evaluate(self, cfg: dict, ckpt: str, device) -> EvalEnvelope:
-        """兼容评估入口：消费 ``predict`` 的事实输出并组装既有信封。"""
+    def evaluate(self, cfg: dict, ckpt: str, device) -> EvaluationResult:
+        """兼容评估入口：消费 ``predict`` 的事实输出并组装正式 EvaluationResult。"""
 
         output = self.predict(cfg, ckpt, device)
         metrics, metric_details = compute_temporal_metrics_by_item(
             output.predictions, output.targets, output.labels, return_details=True
         )
 
-        envelope = EvalEnvelope(
+        result = EvaluationResult(
             model_type=output.model_type,
             model_id=output.model_id,
             pipeline=self.pipeline_name,
@@ -357,7 +357,7 @@ class FullSequenceTemporalPipeline:
             num_params=output.num_params,
             timestamp=now_stamp(),
         )
-        envelope.pending_artifacts["predictions"] = build_prediction_artifact(
+        result.pending_artifacts["predictions"] = build_prediction_artifact(
             output.predictions,
             output.targets,
             output.labels,
@@ -365,8 +365,8 @@ class FullSequenceTemporalPipeline:
             inference_mode=output.inference_semantics["mode"],
             prediction_start_frame=0,
         )
-        envelope.integrity = check_envelope_complete(envelope)
-        return envelope
+        result.integrity = check_result_complete(result)
+        return result
 
     def visualize(self, cfg: dict, ckpt: str, device, out_dir) -> list[str]:
         """评估旁路的可视化钩子：出逐视频 GT vs 预测 分段条带图，肉眼快速定位错分。

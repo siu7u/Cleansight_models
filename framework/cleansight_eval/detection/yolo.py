@@ -144,18 +144,6 @@ class YoloAdapter:
             "items": items,
         }
 
-    def prediction_artifact(self, weights, data_yaml, split: str, imgsz: int, device) -> dict:
-        """历史兼容入口：把 ``predict`` 的事实输出包成检测 artifact v1。"""
-
-        output = self.predict(weights, data_yaml, split, imgsz, device)
-        return {
-            "schema_version": 1,
-            "task_type": "detection",
-            "prediction_format": "class_confidence_xywhn",
-            **output,
-        }
-
-
 _ADAPTERS = {
     YoloAdapter.model_type: YoloAdapter,
 }

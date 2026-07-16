@@ -21,10 +21,11 @@
 
 | 层 | 目录 | 职责 |
 |---|---|---|
-| **公共层** | `cleansight_eval/core/` | run 组织、配置（格式中立）、环境、checkpoint 重建元信息 + 守卫、模型执行事实 `PredictionOutput`、结果三态信封、异构矩阵、完整性检查（含特征维度契约校验） |
+| **公共层** | `cleansight_eval/core/` | run 组织、配置、环境、checkpoint 守卫、模型执行事实 `PredictionOutput`、结果兼容导出、矩阵、报告与完整性检查 |
+| **评估真源** | `../benchmark/core/` | 指标口径、固定 testset、`EvaluationResult v2`、时序/检测 prediction artifact schema 与校验 |
 | **时序域** | `cleansight_eval/temporal/` | 两条时序流水线（`full_sequence_pipeline` / `sliding_window_pipeline`）+ 共享的 `data`（loader + meta）/ `metrics`（指标 + 延迟）/ `util`；模型在 `models/`（`gru`/`mstcn`/`mstcn2`/`transformer` + 注册表） |
 | **检测域** | `cleansight_eval/detection/` | 单帧检测流水线（`pipeline`）+ 薄 ultralytics 适配器（`yolo`）+ 指标 |
-| CLI | `cleansight_eval/cli/` | `train`/`eval` 按 `pipeline` 分派（`_registry.py`）；`matrix` 汇总三类信封成单一矩阵 |
+| CLI | `cleansight_eval/cli/` | `train`/`eval` 按 `pipeline` 分派；`matrix` 汇总三类正式结果成单一矩阵 |
 | 实验配置层 | `experiments/` | 流水线 + 模型类型/规模 + 数据 + 特征 + 训练参数 |
 
 > 时序共享的 `data`/`metrics`/`artifacts`/`util` **只在两条时序流水线间复用**，绝不跨到 detection——
@@ -33,14 +34,14 @@
 
 ## 核心不变量
 
-- **结果三态**（`core/envelope.py`）：`NOT_APPLICABLE` / `MISSING` / `COMPUTED` 严格区分。
+- **结果三态**（`benchmark/core/result.py`）：`NOT_APPLICABLE` / `MISSING` / `COMPUTED` 严格区分。
   禁止用 0 冒充 N/A、禁止缺失伪装成 N/A。
 - **checkpoint 自带重建元信息**（`core/checkpoint.py`）：保存 `type` + 模型配置 +
   feature schema；加载时校验，错配立即抛 `CompatibilityError`，不静默加载。
-- **推理语义显式**（挂进信封 `inference_semantics`）：滑窗记录窗口/推进/冷启动/reset/平滑；
+- **推理语义显式**（写入正式结果 `inference`）：滑窗记录窗口/推进/冷启动/reset/平滑；
   全序列与检测绝不产生虚假实时延迟——延迟标记为 `N/A`。
 - **执行与判分分层**（`core/execution.py`）：三条 pipeline 的 `predict()` 只产逐视频/逐图预测、
-  真值、原生验证输出和原始耗时样本；兼容入口 `evaluate()` 再把这些事实转换为指标和信封。
+  真值、原生验证输出和原始耗时样本；兼容入口 `evaluate()` 再把这些事实转换为正式评估结果。
 - **异构评估矩阵**（`core/matrix.py`）：允许不同模型不同指标列，不生成综合分数。
 - **不含业务门槛/自动晋升判断**：只产出评估事实（晋升决定由人负责）。
 
@@ -71,10 +72,10 @@ cd framework
   `checkpoint` 路径。`-S/--set 点路径=值`（可多次）临时覆盖配置、不改文件；核心 CLI **不预设
   任何纵的调参名**，各纵按自己超参词汇寻址，如 `-S train.epochs=5`（两纵通用）、`-S train.batch=8`
   （检测/ultralytics）、`-S train.window=32`（时序滑窗）。
-- **评估**加载 checkpoint 时校验重建元信息，调用统一 `predict()` 后再计算指标；产出 schema v2
-  三态信封写入同 run 的 `evals/`，逐视频/逐图预测写入 `artifacts/`。信封同时记录 testset
+- **评估**加载 checkpoint 时校验重建元信息，调用统一 `predict()` 后再计算指标；产出 benchmark
+  定义的 schema v2 `*.evaluation.json` 写入同 run 的 `evals/`，逐视频/逐图预测写入 `artifacts/`。结果同时记录 testset
   fingerprint、checkpoint SHA-256、device、配置/环境引用和 artifact SHA-256。
-- **矩阵**把 `runs/` 下所有信封汇成一张异构矩阵（`matrix.json` 机读 + `matrix.md` 人读）；
+- **矩阵**把 `runs/` 下所有新旧评估结果汇成一张异构矩阵（`matrix.json` 机读 + `matrix.md` 人读）；
   `--pipeline <名>` 只汇总某一类流水线做同类对比（输出带 `.<名>` 后缀，不覆盖全量矩阵）。
 
 > **目录全自动**：训练每跑一次开一个 run 目录 `runs/<type>-<时间戳>/`（下挂 `checkpoints/`、
@@ -115,7 +116,7 @@ python -m cleansight_eval.cli.eval --config experiments/mstcn-actionmixed.yaml \
   --ckpt runs/<run>/checkpoints/best.pt
 ```
 
-### 汇总评估矩阵（三类信封汇入同一张表）
+### 汇总评估矩阵（三类结果汇入同一张表）
 
 ```bash
 python -m cleansight_eval.cli.matrix --runs runs
@@ -191,7 +192,7 @@ train:                 # 整段可选，透传给 ultralytics
   patience: 20
 ```
 
-历史 envelope 不原地覆盖，使用转换命令生成旁路 v2 文件：
+历史 envelope 不原地覆盖，使用转换命令生成旁路 v2 文件；矩阵可同时读取新旧文件：
 
 ```bash
 python -m cleansight_eval.cli.upgrade_envelope \
@@ -206,7 +207,7 @@ cd framework && python -m pytest tests -q   # 需已激活项目 venv
 
 - `test_temporal_metrics.py` / `test_detection_metrics.py`：指标口径独立可测（免 ultralytics）。
 - `test_checkpoint_compat.py`：错配 checkpoint 拒绝加载。
-- `test_envelope_matrix.py` / `test_cross_vertical_matrix.py`：三态、以及**三类信封汇入单一异构
+- `test_envelope_matrix.py` / `test_cross_vertical_matrix.py`：三态、以及**三类结果汇入单一异构
   矩阵**（最关键的不变量守卫）。
 - `test_pipeline_smoke.py` / `test_mstcn_smoke.py`：时序合成数据端到端 train→eval→matrix。
 - `test_detection_smoke.py`：检测流水线端到端（注入假 adapter，免 ultralytics）。

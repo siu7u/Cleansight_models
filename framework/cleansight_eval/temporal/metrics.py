@@ -2,7 +2,7 @@
 
 从 ``temporal-*/util.py`` 迁移的口径一致实现：edit 距离、segmental F1、逐帧
 accuracy，以及因果平滑决策 ``causal_decision``。每个指标声明口径版本 ``spec``
-（需求 §8.2），已计算的指标以 ``MetricValue`` 三态信封返回。
+（需求 §8.2），已计算的指标以 ``MetricValue`` 三态结果返回。
 
 延迟测量（``measure_single_tick`` / ``not_applicable_perf``）也放这里：滑窗流水线测单
 tick 延迟，全序列流水线标 N/A 而非造假。口径与原实现保持一致，未做数值改动，便于与旧
@@ -216,7 +216,7 @@ def measure_single_tick(
 
 
 def summarize_single_tick_timing(timing: dict) -> dict[str, MetricValue]:
-    """把 framework 采集的原始样本转换为旧信封的 mean/median/p95 指标。"""
+    """把 framework 采集的原始样本转换为 EvaluationResult 的 mean/median/p95 指标。"""
 
     samples = sorted(float(value) for value in timing.get("samples_ms", []))
     if not samples:

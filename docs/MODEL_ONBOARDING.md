@@ -18,7 +18,7 @@
 
 入口 `cli/train.py:main` / `cli/eval.py:main` → `get_pipeline(cfg["pipeline"])` → 交给对应流水线。
 三条流水线统一提供 `predict()` 产出不含指标口径的 `PredictionOutput`；`evaluate()` 消费该输出并
-维持现有信封、artifact 和报告兼容。接入新流水线时这两个方法都必须提供。
+生成 benchmark 定义的 `EvaluationResult`、artifact 和报告。接入新流水线时这两个方法都必须提供。
 
 **关键认知**：监督/loss 语义属于**流水线**，不属于模型。全序列一律逐帧 CE、滑窗一律末帧 CE +
 因果平滑。所以模型只需提供网络结构；同一个 `nn.Module`（如 GRU）在两条时序流水线里都能用，
@@ -43,7 +43,7 @@
 | 是否测延迟 | **流水线决定** | 滑窗测、全序列 N/A |
 | 训练主循环 / 优化器 / 梯度裁剪 | **共享**（各流水线内） | 两个流水线的 `train` |
 | 指标适配 / 延迟测量 | **共享** | `temporal/metrics.py`；时序数值真源为 `benchmark/core/metrics.py` |
-| checkpoint 读写 / envelope / 完整性 | **共享** | `core/*` |
+| checkpoint 读写 / EvaluationResult / 完整性 | **共享** | framework `core/*` + benchmark `core/result.py` |
 
 参照四个现成实现：
 - **GRU**（因果）：无归一化；可用于**两条**时序流水线。
@@ -152,7 +152,7 @@ evaluation:
 | 监督口径 | 逐帧 CE | 末帧 CE + 因果平滑 | ultralytics 自持 |
 | data loader | `data.py` 统一（40 维特征序列） | 同左 | adapter 自持（读 data.yaml） |
 | 性能延迟 | N/A | 单 tick 实测 | N/A |
-| 共享出口 | schema v2 envelope / prediction artifact / checkpoint report / matrix | 同左 | 同左 |
+| 共享出口 | EvaluationResult v2 / prediction artifact / checkpoint report / matrix | 同左 | 同左 |
 
 > 设计意图：模型只管网络结构，监督与推理由流水线拥有；时序与检测两域数据格式不同、故意不
 > 强行统一。接时序新模型走 `models/` 注册，接 YOLO 只调配置。

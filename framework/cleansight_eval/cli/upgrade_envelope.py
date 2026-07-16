@@ -6,8 +6,8 @@ import argparse
 import json
 from pathlib import Path
 
-from ..core.envelope import EvalEnvelope
-from ..core.integrity import check_envelope_complete
+from ..core.envelope import EvaluationResult
+from ..core.integrity import check_result_complete
 from ..core.provenance import build_checkpoint_info
 
 
@@ -24,32 +24,32 @@ def main(argv=None) -> str:
     args = parse_args(argv)
     source = Path(args.input)
     raw = json.loads(source.read_text(encoding="utf-8"))
-    envelope = EvalEnvelope.from_dict(raw)
-    if not envelope.run:
-        envelope.run = {
+    result = EvaluationResult.from_dict(raw)
+    if not result.run:
+        result.run = {
             "id": f"legacy-import-{source.stem}",
-            "created_at": envelope.timestamp,
+            "created_at": result.timestamp,
             "device": "unknown",
             "source_envelope": str(source),
         }
-    if not envelope.testset:
-        envelope.testset = {
-            "id": f"legacy:{envelope.dataset}",
+    if not result.testset:
+        result.testset = {
+            "id": f"legacy:{result.dataset}",
             "registered": False,
-            "dataset_version": envelope.dataset,
+            "dataset_version": result.dataset,
             "split": "unknown",
             "purpose": "legacy_import",
             "validation_errors": ["历史 envelope 缺少钉定 testset，不能补造 fingerprint"],
         }
-    checkpoint = Path(envelope.checkpoint)
-    if checkpoint.is_file() and not envelope.checkpoint_info:
-        envelope.checkpoint_info = build_checkpoint_info(checkpoint)
-    envelope.integrity = check_envelope_complete(envelope)
+    checkpoint = Path(result.checkpoint)
+    if checkpoint.is_file() and not result.checkpoint_info:
+        result.checkpoint_info = build_checkpoint_info(checkpoint)
+    result.integrity = check_result_complete(result)
 
     output = Path(args.out) if args.out else source.with_name(source.stem + ".v2.json")
     if output.resolve() == source.resolve():
         raise ValueError("升级默认不允许覆盖历史 envelope，请指定新的 --out")
-    envelope.write(output)
+    result.write(output)
     print(f"[upgrade-envelope] {output}")
     return str(output)
 

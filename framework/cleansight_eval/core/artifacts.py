@@ -11,19 +11,16 @@ from .provenance import sha256_file
 
 
 def _verify_recomputable(payload: dict[str, Any]) -> bool | None:
-    """验证时序 artifact 能被 benchmark 重新计算；检测需结合 testset 真值，返回 None。"""
+    """调用 benchmark 唯一校验器；检测需结合 testset 真值，返回 None。"""
 
-    if payload.get("task_type") != "temporal":
-        return None
     try:
-        from benchmark.core.artifacts import temporal_metrics_from_prediction_artifact
+        from benchmark.core.artifacts import prediction_artifact_recomputable
     except ModuleNotFoundError:  # pragma: no cover - 从 framework 目录执行时触发
         repo_root = Path(__file__).resolve().parents[3]
         if str(repo_root) not in sys.path:
             sys.path.insert(0, str(repo_root))
-        from benchmark.core.artifacts import temporal_metrics_from_prediction_artifact
-    temporal_metrics_from_prediction_artifact(payload)
-    return True
+        from benchmark.core.artifacts import prediction_artifact_recomputable
+    return prediction_artifact_recomputable(payload)
 
 
 def write_json_artifact(
@@ -32,7 +29,7 @@ def write_json_artifact(
     *,
     relative_to: str | Path | None = None,
 ) -> dict[str, Any]:
-    """写 JSON artifact，并返回可写入 envelope 的路径、schema 和 SHA-256。"""
+    """写 JSON artifact，并返回可写入 EvaluationResult 的路径、schema 和 SHA-256。"""
 
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
