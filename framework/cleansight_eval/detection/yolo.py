@@ -91,6 +91,62 @@ class YoloAdapter:
             "per_class": per_class,
         }
 
+    def prediction_artifact(self, weights, data_yaml, split: str, imgsz: int, device) -> dict:
+        """逐图推理并返回可归档的检测预测，框使用归一化 ``xywh``。
+
+        artifact 只保存预测；真值仍由钉定的 YOLO testset manifest/data.yaml 提供，二者结合
+        可以复算检测指标。该旁路与 ``val`` 分开，避免依赖 Ultralytics 内部 validator 状态。
+        """
+        import yaml
+        from ultralytics import YOLO
+
+        data_yaml = Path(data_yaml).resolve()
+        payload = yaml.safe_load(data_yaml.read_text(encoding="utf-8")) or {}
+        root = Path(str(payload.get("path") or data_yaml.parent)).expanduser()
+        if not root.is_absolute():
+            root = (data_yaml.parent / root).resolve()
+        configured = payload.get(split)
+        if configured is None:
+            raise ValueError(f"YOLO data.yaml 未声明 split={split}")
+        sources = configured if isinstance(configured, list) else [configured]
+        resolved_sources = []
+        for value in sources:
+            source = Path(str(value)).expanduser()
+            resolved_sources.append(str(source if source.is_absolute() else (root / source).resolve()))
+
+        model = YOLO(str(weights))
+        items = {}
+        source_arg = resolved_sources[0] if len(resolved_sources) == 1 else resolved_sources
+        for result in model.predict(
+            source=source_arg,
+            imgsz=imgsz,
+            device=_ul_device(device),
+            stream=True,
+            verbose=False,
+        ):
+            boxes = []
+            if result.boxes is not None:
+                xywhn = result.boxes.xywhn.detach().cpu().tolist()
+                classes = result.boxes.cls.detach().cpu().tolist()
+                confidences = result.boxes.conf.detach().cpu().tolist()
+                boxes = [
+                    {
+                        "class_id": int(class_id),
+                        "confidence": float(confidence),
+                        "xywhn": [float(value) for value in coords],
+                    }
+                    for class_id, confidence, coords in zip(classes, confidences, xywhn)
+                ]
+            items[Path(result.path).name] = {"predictions": boxes}
+        return {
+            "schema_version": 1,
+            "task_type": "detection",
+            "prediction_format": "class_confidence_xywhn",
+            "split": split,
+            "labels": {str(key): value for key, value in dict(model.names).items()},
+            "items": items,
+        }
+
 
 _ADAPTERS = {
     YoloAdapter.model_type: YoloAdapter,

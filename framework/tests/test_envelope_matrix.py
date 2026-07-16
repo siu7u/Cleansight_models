@@ -60,3 +60,20 @@ def test_envelope_roundtrip(tmp_path):
     back = EvalEnvelope.read(p)
     assert back.metrics["acc"].value == 88.0
     assert back.performance["latency_mean_ms"].state is MetricState.COMPUTED
+    assert back.to_dict()["schema_version"] == 2
+
+
+def test_read_legacy_v1_envelope():
+    legacy = {
+        "model_type": "gru",
+        "model_id": "gru-old",
+        "pipeline": "sliding_window_temporal",
+        "checkpoint": "old.pt",
+        "dataset": "old-data",
+        "metrics": {"acc": MetricValue.computed(50.0, spec="acc/v1").to_dict()},
+        "performance": {},
+    }
+    env = EvalEnvelope.from_dict(legacy)
+    assert env.model_id == "gru-old"
+    assert env.metrics["acc"].value == 50.0
+    assert env.to_dict()["schema_version"] == 2

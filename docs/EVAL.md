@@ -26,8 +26,9 @@
 配套 `spec`（口径版本号，任何影响数值的口径变化都递增版本）和 `reason`（为何 N/A 或 missing）。
 这样矩阵里 `N/A`、`MISSING`、空白三者语义分明，**不会用 0 冒充「没测」**。
 
-信封同时记录：`model_type / model_id / pipeline / checkpoint / dataset / feature_schema /
-num_params / inference_semantics / integrity / timestamp`。
+当前落盘格式为 schema v2，记录 `run / model / pipeline / testset / feature_schema /
+metrics.summary / metrics.details / performance / inference / artifacts / limits / integrity`。其中
+checkpoint 与 sidecar、testset manifest、prediction artifact 都记录 SHA-256，便于归档后核验。
 
 ## 2. 三条评估流水线
 
@@ -38,7 +39,7 @@ num_params / inference_semantics / integrity / timestamp`。
 |---|---|---|---|
 | `detection` | 单帧目标检测 | `single_frame`，无状态逐图独立推理 | YOLO |
 | `sliding_window_temporal` | 实时行为分割 | `windowed_causal`，滑窗逐帧前进、取窗口末帧决策 | 因果模型（GRU） |
-| `full_sequence_temporal` | 离线行为分割 | `full_sequence`，整段一次前向 | 非因果模型（MS-TCN / MS-TCN++），也可跑因果模型作离线上界 |
+| `full_sequence_temporal` | 离线行为分割 | `full_sequence`，整段一次前向 | 非因果模型（MS-TCN / MS-TCN++ / Transformer），也可跑因果模型作离线上界 |
 
 **滑窗 vs 全序列的意义**：同一时序模型可分别跑两条线——全序列是「看得到全部上下文」的**离线上界**，
 滑窗是「只能看到历史窗口」的**实时代价**。两者数字之差即为实时化的性能损失。滑窗只接受因果模型，
@@ -50,13 +51,19 @@ num_params / inference_semantics / integrity / timestamp`。
 
 | 指标 | spec | 粒度 | 定义 |
 |---|---|---|---|
-| 帧准确率 `acc` | `acc/frame-wise/v1` | 帧级 | `100 × 正确帧 / 总帧` |
-| 编辑分 `edit` | `edit/levenstein-norm/v1` | 段级 | 段序列的归一化 Levenshtein：`(1 − D/max(m,n))×100` |
-| 分段 F1 `f1@0.1` / `f1@0.25` / `f1@0.5` | `segmental_f1/iou/v1` | 段级 | 按 IoU 阈值匹配段，三个重叠阈值各出一个 F1 |
+| 帧准确率 `acc` | `accuracy/frame-wise/percent/v2` | 帧级 | `100 × 正确帧 / 总帧` |
+| 编辑分 `edit` | `edit/levenshtein-item-mean/percent/v2` | 逐视频段级 | 各视频分别算段序列 Levenshtein，再按视频平均 |
+| 分段 F1 `f1@0.1/0.25/0.5` | `segmental_f1/label-aware-one-to-one-iou/percent/v2` | 段级 | 同类别片段按 IoU 一对一匹配 |
+| `tp/fp/fn@0.5` | `segmental_counts/label-aware-one-to-one-iou/v2` | 段级 | 主阈值 0.5 的匹配计数 |
+| `precision/recall@0.5` | `segmental_precision/recall/.../percent/v2` | 段级 | 由主阈值 TP/FP/FN 得出 |
+| `temporal_iou@0.5` | `temporal_iou/matched-segment-mean/percent/v2` | 段级 | 已匹配片段的平均 IoU |
+| `frame.macro_f1/macro_iou/micro_f1` | `classification/per-class/percent/v2` | 帧级 | 混淆矩阵派生的总体分类指标 |
 
-- **段的定义**：`get_labels_start_end_time` 把连续同类、非 `background` 的帧归成一段。
-- **三件套的分工**：`acc` 看逐帧对错，`edit` 看段序列的顺序，`f1@IoU` 看段的时间重叠质量。
-- **注意**：时序侧**不**输出逐类 precision/recall（逐类 P/R 仅检测侧有）。
+- 数值真源是 [`benchmark/core/metrics.py`](../benchmark/core/metrics.py)，framework 只做 0..1 到
+  0..100 的三态适配。
+- `metrics.summary` 保留主指标；所有 IoU 阈值详情、逐类 P/R/F1/IoU 和混淆矩阵放在
+  `metrics.details.temporal`，避免矩阵横向无限膨胀。
+- 所有视频保持独立边界，禁止把不同视频先拼成一条序列再算 Edit/F1。
 
 ### 3.2 检测（[detection/metrics.py](../framework/cleansight_eval/detection/metrics.py)）
 
@@ -87,6 +94,8 @@ num_params / inference_semantics / integrity / timestamp`。
 | 帧准确率 acc | ✓ | ✓ | — |
 | 编辑分 edit | ✓ | ✓ | — |
 | 分段 F1@0.1/0.25/0.5 | ✓ | ✓ | — |
+| TP/FP/FN、P/R、Temporal IoU@0.5 | ✓ | ✓ | — |
+| 帧级 macro/micro、逐类 P/R/F1/IoU | ✓ | ✓ | — |
 | mAP@0.5 / @0.5:0.95 | — | — | ✓ |
 | precision / recall（整体） | — | — | ✓ |
 | precision/recall（逐类） | — | — | ✓ / MISSING |
@@ -106,12 +115,16 @@ num_params / inference_semantics / integrity / timestamp`。
 ## 6. 完整性检查
 
 每个信封落盘前经 [core/integrity.py](../framework/cleansight_eval/core/integrity.py) 校验，结果写入
-`integrity: {ok, issues}`：
+`integrity: {ok, checks, issues}`：
 
 - **checkpoint 兼容**：只卡改变张量形状的字段（`type / input_dim / num_classes`），`window` 等可在
   eval 时覆盖不算冲突；不兼容立即报错。
 - **特征维度**：实际特征维度须与期望一致（时序为 40）。
 - **信封完备**：必填字段齐全，且每个 `computed` 指标都带非空 `spec`。
+- **testset 固定**：正式配置通过 `evaluation.testset_id` 关联 `benchmark/testsets.yaml`，记录
+  manifest hash 和复合 fingerprint，并执行 train/val/test 源视频泄漏检查。
+- **artifact 可追溯**：要求逐视频/逐图 prediction artifact 存在并带 SHA-256；时序 artifact
+  还会实际调用 benchmark 复算，确认 `recomputable=true`。
 
 ## 7. 矩阵聚合与可视化
 
@@ -120,10 +133,14 @@ num_params / inference_semantics / integrity / timestamp`。
   空白` 图例。
 - **时序分割可视化**（[temporal/viz.py](../framework/cleansight_eval/temporal/viz.py)）：GT / Pred 双色带状图，
   逐视频对照、标注帧数与帧准确率，分页输出 PNG（默认每页 6 个视频）。
+- **checkpoint 报告**（[core/report.py](../framework/cleansight_eval/core/report.py)）：每个 `.pt` 旁写
+  `<checkpoint>.eval.md`，并向同目录唯一的 `EVALUATION_REPORT.md` 追加版本记录。
+- **prediction artifact**：时序保存逐视频预测与真值并支持复算；检测保存逐图类别、置信度与归一化框。
 
 ## 8. 边界（当前不做）
 
 - 不做任何 PASS/FAIL、业务门槛或加权总分——只报原始指标，判定留给使用方。
-- 时序侧不含逐类 precision/recall、不含混淆矩阵。
 - 检测侧逐类只暴露 precision/recall（不含逐类 mAP）。
 - 延迟只测时序滑窗单 tick，不覆盖检测推理延迟、端到端吞吐。
+- framework 与 benchmark 的最终职责拆分尚未完成；当前正式评估仍由 framework CLI 编排，
+  benchmark 已作为时序指标、testset 和时序 artifact 的公共真源。

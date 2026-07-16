@@ -19,17 +19,21 @@ model:
 
 data:
   name: cleansight-ActionMixed
-  root: /abs/path/to/cleansight-ActionMixed   # 改成本机数据集根的绝对路径
+  root: ../../yolo-detection/pipeline/raw/modelscope/cleansight-ActionMixed
   action_mapping: labels/data.yaml   # YAML: action_id -> 名称
   labels_dir: labels                 # labels/<split>/<video>.mp4.txt : "frame_id action_id"
   frames_dir: frames                 # frames/<split>/<video>-<frame:06d>.txt : bbox → 40维特征
   split_train: train
+  split_val: val
   split_eval: test
 
 feature_schema:
   dim: 40
   version: actionmixed-bbox-8cls-v1
   # 布局同 GRU/MS-TCN 实验：每 5 维一类，顺序同 frames/data.yaml，每类 [presence, cx, cy, w, h]。
+
+evaluation:
+  testset_id: temporal.actionmixed-v1.test
 
 train:
   epochs: 80             # 多 stage 收敛比单 stage 慢，给足轮数（>80 无进一步增益）

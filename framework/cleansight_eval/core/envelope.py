@@ -19,6 +19,9 @@ from pathlib import Path
 from typing import Any
 
 
+SCHEMA_VERSION = 2
+
+
 def format_params(n: int | None) -> str:
     """把参数量格式化成紧凑标注（如 ``51k`` / ``1.2M``），供 model_id 区分同构不同规模。
 
@@ -110,25 +113,75 @@ class EvalEnvelope:
     integrity: dict = field(default_factory=dict)
     num_params: int | None = None
     timestamp: str | None = None
+    run: dict = field(default_factory=dict)
+    testset: dict = field(default_factory=dict)
+    checkpoint_info: dict = field(default_factory=dict)
+    metric_details: dict = field(default_factory=dict)
+    artifacts: dict = field(default_factory=dict)
+    limits: dict = field(default_factory=lambda: {"is_smoke": False})
+    pending_artifacts: dict = field(default_factory=dict, repr=False, compare=False)
 
     def to_dict(self) -> dict:
+        """按 schema v2 输出；内部仍保留扁平属性以兼容报告和矩阵代码。"""
+
+        checkpoint = {"path": self.checkpoint, **self.checkpoint_info}
         return {
-            "model_type": self.model_type,
-            "model_id": self.model_id,
+            "schema_version": SCHEMA_VERSION,
+            "result_type": "model_evaluation",
+            "run": self.run or {"created_at": self.timestamp},
+            "model": {
+                "type": self.model_type,
+                "id": self.model_id,
+                "num_params": self.num_params,
+                "checkpoint": checkpoint,
+            },
             "pipeline": self.pipeline,
-            "checkpoint": self.checkpoint,
-            "dataset": self.dataset,
+            "testset": self.testset or {"dataset_version": self.dataset},
             "feature_schema": self.feature_schema,
-            "num_params": self.num_params,
-            "timestamp": self.timestamp,
-            "metrics": {k: v.to_dict() for k, v in self.metrics.items()},
+            "metrics": {
+                "summary": {k: v.to_dict() for k, v in self.metrics.items()},
+                "details": self.metric_details,
+            },
             "performance": {k: v.to_dict() for k, v in self.performance.items()},
-            "inference_semantics": self.inference_semantics,
+            "inference": self.inference_semantics,
+            "artifacts": self.artifacts,
+            "limits": self.limits,
             "integrity": self.integrity,
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "EvalEnvelope":
+        """读取 schema v2，并兼容没有 ``schema_version`` 的历史 v1 envelope。"""
+
+        if int(data.get("schema_version", 1)) >= 2:
+            model = data.get("model") or {}
+            checkpoint = model.get("checkpoint") or {}
+            if isinstance(checkpoint, str):
+                checkpoint = {"path": checkpoint}
+            metrics = data.get("metrics") or {}
+            summary = metrics.get("summary", {}) if "summary" in metrics else metrics
+            run = data.get("run") or {}
+            testset = data.get("testset") or {}
+            return cls(
+                model_type=model["type"],
+                model_id=model["id"],
+                pipeline=data["pipeline"],
+                checkpoint=checkpoint.get("path", ""),
+                dataset=str(testset.get("dataset_version") or testset.get("id") or ""),
+                feature_schema=data.get("feature_schema", {}),
+                num_params=model.get("num_params"),
+                timestamp=run.get("created_at"),
+                metrics={k: MetricValue.from_dict(v) for k, v in summary.items()},
+                performance={k: MetricValue.from_dict(v) for k, v in data.get("performance", {}).items()},
+                inference_semantics=data.get("inference", {}),
+                integrity=data.get("integrity", {}),
+                run=run,
+                testset=testset,
+                checkpoint_info={k: v for k, v in checkpoint.items() if k != "path"},
+                metric_details=metrics.get("details", {}),
+                artifacts=data.get("artifacts", {}),
+                limits=data.get("limits", {"is_smoke": False}),
+            )
         return cls(
             model_type=data["model_type"],
             model_id=data["model_id"],

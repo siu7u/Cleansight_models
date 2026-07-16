@@ -12,6 +12,8 @@
 
 from __future__ import annotations
 
+import time
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -23,13 +25,15 @@ except ImportError:  # tqdm 可选，缺失时退化为原样迭代
     def tqdm(iterable, **_kwargs):
         return iterable
 
-from ..core.checkpoint import load_checkpoint, save_checkpoint
+from ..core.checkpoint import load_checkpoint, load_training_checkpoint, save_training_checkpoint
 from ..core.environment import now_stamp, set_seed
 from ..core.envelope import EvalEnvelope, format_params
+from ..core.history import HistoryWriter
 from ..core.integrity import check_envelope_complete, check_feature_schema
 from ..core.run import RunContext
-from .data import build_temporal_meta, load_split
-from .metrics import causal_decision, compute_temporal_metrics, measure_single_tick
+from .artifacts import build_prediction_artifact
+from .data import build_temporal_meta, load_split, split_video_names
+from .metrics import causal_decision, compute_temporal_metrics_by_item, measure_single_tick
 from .models import build_model, is_causal
 from .util import compute_class_weights
 
@@ -52,6 +56,63 @@ class SlidingWindowDataset(Dataset):
         x = self.x[idx : idx + self.w]
         y = self.y[idx + self.w - 1]
         return x, y
+
+
+def _loss_is_finite(loss: torch.Tensor) -> bool:
+    """训练可靠性护栏：NaN/Inf loss 立即中断并写入 run status。"""
+
+    return bool(torch.isfinite(loss.detach()).cpu().item())
+
+
+def _metric_value(metrics: dict, name: str):
+    value = metrics.get(name)
+    return None if value is None or value.value is None else float(value.value)
+
+
+def _validation_split_name(cfg: dict) -> str:
+    """训练期 validation 优先用 split_val；旧配置没有时回退 split_eval。"""
+
+    data = cfg["data"]
+    return data.get("split_val") or data["split_eval"]
+
+
+def _evaluate_sliding_window(model, datasets, id2name, criterion, device) -> dict:
+    """按视频逐窗 validation，返回 loss 与末帧预测指标。"""
+
+    model.eval()
+    losses: list[float] = []
+    video_preds, video_gts = [], []
+    with torch.no_grad():
+        for ds in datasets:
+            preds = []
+            gts = []
+            for i in range(len(ds)):
+                x, y = ds[i]
+                x = x.unsqueeze(0).to(device)
+                y = y.unsqueeze(0).to(device)
+                logits = model(x)
+                loss = criterion(logits[:, -1, :], y)
+                losses.append(float(loss.detach().cpu().item()))
+                preds.append(int(torch.argmax(logits[0, -1], dim=-1).cpu().item()))
+                gts.append(int(y.cpu().item()))
+            video_preds.append(np.asarray(preds, dtype=np.int64))
+            video_gts.append(np.asarray(gts, dtype=np.int64))
+
+    pred_by_item = {
+        f"video-{index:04d}": [id2name[int(value)] for value in video]
+        for index, video in enumerate(video_preds)
+    }
+    truth_by_item = {
+        f"video-{index:04d}": [id2name[int(value)] for value in video]
+        for index, video in enumerate(video_gts)
+    }
+    metrics = compute_temporal_metrics_by_item(pred_by_item, truth_by_item, list(id2name.values()))
+    return {
+        "val_loss": float(np.mean(losses)) if losses else None,
+        "val_acc": _metric_value(metrics, "acc"),
+        "val_edit": _metric_value(metrics, "edit"),
+        "val_f1_0.5": _metric_value(metrics, "f1@0.5"),
+    }
 
 
 class SlidingWindowTemporalPipeline:
@@ -80,68 +141,134 @@ class SlidingWindowTemporalPipeline:
         model_cfg = cfg["model"]
         window = train_cfg.get("window", 64)
 
-        set_seed(seed)
-        model = build_model(model_cfg).to(device)
-
         run = RunContext(runs_dir, label=model_cfg["type"])
         run.save_config(cfg)
         run.save_env(device, seed=seed)
+        run.write_status("running", stage="initializing")
 
-        features, truths, _ = load_split(cfg["data"], cfg["data"]["split_train"], window=window)
-        problems = check_feature_schema(features[0].shape[1], cfg.get("feature_schema"))
-        if problems:
-            raise ValueError("特征 schema 与配置不兼容:\n  - " + "\n  - ".join(problems))
+        current_epoch = None
+        try:
+            set_seed(seed)
+            model = build_model(model_cfg).to(device)
 
-        if hasattr(model, "fit_normalization"):
-            model.fit_normalization(features)
+            features, truths, _ = load_split(cfg["data"], cfg["data"]["split_train"], window=window)
+            problems = check_feature_schema(features[0].shape[1], cfg.get("feature_schema"))
+            if problems:
+                raise ValueError("特征 schema 与配置不兼容:\n  - " + "\n  - ".join(problems))
+            val_split = _validation_split_name(cfg)
+            val_features, val_truths, val_id2name = load_split(cfg["data"], val_split, window=window)
 
-        # 窗口 + 末帧标签：窗口样本可批处理，用 cfg 的 batch_size。
-        train_ds = ConcatDataset(
-            [SlidingWindowDataset(features[i], truths[i], window) for i in range(len(features))]
-        )
-        train_loader = DataLoader(train_ds, batch_size=train_cfg.get("batch_size", 32), shuffle=True)
+            resume_path = train_cfg.get("resume")
+            if hasattr(model, "fit_normalization") and not resume_path:
+                model.fit_normalization(features)
 
-        weights = compute_class_weights(train_loader)
-        criterion = nn.CrossEntropyLoss(
-            weight=torch.tensor([weights[i] for i in sorted(weights)], dtype=torch.float32).to(device)
-        )
-        optimizer = torch.optim.Adam(
-            model.parameters(),
-            lr=train_cfg.get("lr", 1e-3),
-            weight_decay=train_cfg.get("weight_decay", 0.0),
-        )
-        grad_clip = train_cfg.get("grad_clip")
+            # 窗口 + 末帧标签：窗口样本可批处理，用 cfg 的 batch_size。
+            train_ds = ConcatDataset(
+                [SlidingWindowDataset(features[i], truths[i], window) for i in range(len(features))]
+            )
+            train_loader = DataLoader(train_ds, batch_size=train_cfg.get("batch_size", 32), shuffle=True)
+            val_datasets = [SlidingWindowDataset(val_features[i], val_truths[i], window) for i in range(len(val_features))]
 
-        model.train()
-        epochs = train_cfg.get("epochs", 20)
-        for _epoch in tqdm(range(1, epochs + 1), desc="train"):
-            for x, y in train_loader:
-                x, y = x.to(device), y.to(device)
-                logits = model(x)  # [B, window, C]
-                # 因果契约：只对窗口最后一帧计算损失。
-                loss = criterion(logits[:, -1, :], y)
-                optimizer.zero_grad()
-                loss.backward()
-                if grad_clip:
-                    nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-                optimizer.step()
+            weights = compute_class_weights(train_loader)
+            criterion = nn.CrossEntropyLoss(
+                weight=torch.tensor([weights[i] for i in sorted(weights)], dtype=torch.float32).to(device)
+            )
+            optimizer = torch.optim.Adam(
+                model.parameters(),
+                lr=train_cfg.get("lr", 1e-3),
+                weight_decay=train_cfg.get("weight_decay", 0.0),
+            )
+            grad_clip = train_cfg.get("grad_clip")
+            start_epoch = 1
+            best_metric = {"name": "val_acc", "mode": "max", "value": None, "epoch": None}
 
-        ckpt_path = run.checkpoints_dir / f"{model_cfg['type']}-final-{now_stamp()}.pt"
-        extra = {"normalizer": "zscore/train-set/buffers/v1"} if hasattr(model, "fit_normalization") else None
-        meta = build_temporal_meta(
-            model_cfg,
-            cfg.get("feature_schema", {}),
-            pipeline=self.pipeline_name,
-            window=window,
-            num_params=sum(p.numel() for p in model.parameters()),
-            train_cfg=train_cfg,
-            trained_at=now_stamp(),
-            extra=extra,
-        )
-        save_checkpoint(ckpt_path, model.state_dict(), meta)
-        print(f"[train] run_dir={run.dir}")
-        print(f"[train] checkpoint={ckpt_path}")
-        return str(ckpt_path)
+            if resume_path:
+                expected = {"type": model_cfg["type"], "input_dim": model_cfg["input_dim"], "num_classes": model_cfg["num_classes"]}
+                payload, _meta = load_training_checkpoint(resume_path, expected=expected, map_location=device)
+                model.load_state_dict(payload["model_state"])
+                optimizer.load_state_dict(payload["optimizer_state"])
+                start_epoch = int(payload["epoch"]) + 1
+                best_metric.update(payload.get("best_metric") or {})
+                run.write_status("running", stage="resumed", resume=str(resume_path), start_epoch=start_epoch)
+
+            extra = {"normalizer": "zscore/train-set/buffers/v1"} if hasattr(model, "fit_normalization") else None
+            meta = build_temporal_meta(
+                model_cfg,
+                cfg.get("feature_schema", {}),
+                pipeline=self.pipeline_name,
+                window=window,
+                num_params=sum(p.numel() for p in model.parameters()),
+                train_cfg=train_cfg,
+                trained_at=now_stamp(),
+                extra=extra,
+            )
+            history = HistoryWriter(
+                run.history_path,
+                ["epoch", "train_loss", "val_loss", "val_acc", "val_edit", "val_f1_0.5", "lr", "epoch_sec", "checkpoint_best", "checkpoint_last", "status"],
+            )
+            best_path = run.checkpoints_dir / "best.pt"
+            last_path = run.checkpoints_dir / "last.pt"
+
+            epochs = train_cfg.get("epochs", 20)
+            if start_epoch > epochs:
+                run.write_status(
+                    "succeeded",
+                    stage="already_complete",
+                    best_metric=best_metric,
+                    best_checkpoint=str(best_path),
+                    last_checkpoint=str(last_path),
+                )
+                return str(best_path if best_path.exists() else last_path)
+
+            for epoch in tqdm(range(start_epoch, epochs + 1), desc="train"):
+                current_epoch = epoch
+                epoch_start = time.perf_counter()
+                model.train()
+                losses: list[float] = []
+                for x, y in train_loader:
+                    x, y = x.to(device), y.to(device)
+                    logits = model(x)  # [B, window, C]
+                    loss = criterion(logits[:, -1, :], y)
+                    if not _loss_is_finite(loss):
+                        raise FloatingPointError(f"epoch={epoch}: loss is NaN/Inf")
+                    optimizer.zero_grad()
+                    loss.backward()
+                    if grad_clip:
+                        nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+                    optimizer.step()
+                    losses.append(float(loss.detach().cpu().item()))
+
+                validation = _evaluate_sliding_window(model, val_datasets, val_id2name, criterion, device)
+                train_loss = float(np.mean(losses)) if losses else None
+                val_acc = validation["val_acc"]
+                improved = val_acc is not None and (
+                    best_metric["value"] is None or val_acc > float(best_metric["value"])
+                )
+                if improved:
+                    best_metric.update({"value": val_acc, "epoch": epoch})
+                    save_training_checkpoint(best_path, model=model, optimizer=optimizer, epoch=epoch, meta=meta, best_metric=best_metric)
+                save_training_checkpoint(last_path, model=model, optimizer=optimizer, epoch=epoch, meta=meta, best_metric=best_metric)
+                row = {
+                    "epoch": epoch,
+                    "train_loss": train_loss,
+                    **validation,
+                    "lr": optimizer.param_groups[0]["lr"],
+                    "epoch_sec": round(time.perf_counter() - epoch_start, 4),
+                    "checkpoint_best": str(best_path) if best_path.exists() else "",
+                    "checkpoint_last": str(last_path),
+                    "status": "ok",
+                }
+                history.append(row)
+                run.write_status("running", stage="epoch_complete", epoch=epoch, best_metric=best_metric, last_checkpoint=str(last_path))
+
+            run.write_status("succeeded", best_metric=best_metric, best_checkpoint=str(best_path), last_checkpoint=str(last_path), history=str(run.history_path))
+            print(f"[train] run_dir={run.dir}")
+            print(f"[train] best_checkpoint={best_path}")
+            print(f"[train] last_checkpoint={last_path}")
+            return str(best_path if best_path.exists() else last_path)
+        except Exception as exc:
+            run.write_exception_status(exc, epoch=current_epoch)
+            raise
 
     def evaluate(self, cfg: dict, ckpt: str, device) -> EvalEnvelope:
         model_cfg = cfg["model"]
@@ -173,11 +300,19 @@ class SlidingWindowTemporalPipeline:
                 video_preds.append(preds)
                 video_gts.append(ds.y.numpy())
 
-        all_preds = np.concatenate(video_preds)
-        all_gts = np.concatenate(video_gts)
-        pred_labels = [id2name[p] for p in all_preds]
-        gt_labels = [id2name[g] for g in all_gts]
-        metrics = compute_temporal_metrics(pred_labels, gt_labels)
+        names = split_video_names(cfg["data"], cfg["data"]["split_eval"], window=window)
+        pred_by_item = {
+            name: [id2name[int(value)] for value in video]
+            for name, video in zip(names, video_preds)
+        }
+        truth_by_item = {
+            name: [id2name[int(value)] for value in video]
+            for name, video in zip(names, video_gts)
+        }
+        labels = list(id2name.values())
+        metrics, metric_details = compute_temporal_metrics_by_item(
+            pred_by_item, truth_by_item, labels, return_details=True
+        )
 
         performance = measure_single_tick(model, window, model_cfg["input_dim"], device)
         semantics = {
@@ -198,10 +333,19 @@ class SlidingWindowTemporalPipeline:
             dataset=cfg["data"].get("name", cfg["data"].get("root")),
             feature_schema=meta.get("feature_schema", cfg.get("feature_schema", {})),
             metrics=metrics,
+            metric_details={"temporal": metric_details},
             performance=performance,
             inference_semantics=semantics,
             num_params=meta.get("num_params"),
             timestamp=now_stamp(),
+        )
+        envelope.pending_artifacts["predictions"] = build_prediction_artifact(
+            pred_by_item,
+            truth_by_item,
+            labels,
+            window=window,
+            inference_mode=semantics["mode"],
+            prediction_start_frame=0,
         )
         envelope.integrity = check_envelope_complete(envelope)
         return envelope

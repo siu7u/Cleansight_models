@@ -24,6 +24,7 @@ def parse_args(argv=None):
     p.add_argument("--config", required=True, help="实验配置 YAML")
     p.add_argument("--runs-dir", default="runs", help="运行输出根目录")
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--resume", help="从完整训练 checkpoint（通常是 checkpoints/last.pt）恢复")
     p.add_argument(
         "-S",
         "--set",
@@ -64,6 +65,8 @@ def _parse_overrides(items: list[str]) -> list[tuple[str, Any]]:
 def main(argv=None) -> str:
     args = parse_args(argv)
     cfg = apply_overrides(load_config(args.config), _parse_overrides(args.overrides))
+    if args.resume:
+        cfg.setdefault("train", {})["resume"] = args.resume
     device = pick_device()
     pipeline = get_pipeline(cfg["pipeline"])
     pipeline.validate_config(cfg)  # 流水线专属校验（core 不再代劳）

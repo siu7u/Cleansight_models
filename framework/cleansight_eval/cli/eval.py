@@ -10,8 +10,12 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from ..core.artifacts import write_json_artifact
 from ..core.config import load_config
 from ..core.environment import now_stamp, pick_device
+from ..core.integrity import check_envelope_complete
+from ..core.provenance import build_checkpoint_info, build_run_info, resolve_testset_info, sha256_file
+from ..core.report import write_checkpoint_reports
 from ._registry import get_pipeline
 
 
@@ -46,9 +50,23 @@ def main(argv=None) -> list[str]:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     envelope = pipeline.evaluate(cfg, args.ckpt, device)
-    path = out_dir / f"{envelope.pipeline}-{envelope.model_type}-{now_stamp()}.envelope.json"
-    envelope.write(path)
-    print(f"[eval] {envelope.pipeline}: {path}")
+    stamp = envelope.timestamp or now_stamp()
+    run_info, run_dir = build_run_info(args.ckpt, args.config, device)
+    checkpoint_info = build_checkpoint_info(args.ckpt, run_dir)
+    envelope.run = run_info
+    envelope.testset = resolve_testset_info(cfg)
+    envelope.checkpoint_info = checkpoint_info
+    envelope.limits = cfg.get("evaluation", {}).get("limits", {"is_smoke": False})
+
+    artifacts_dir = (run_dir / "artifacts") if run_dir is not None else (out_dir / "artifacts")
+    artifact_base = run_dir if run_dir is not None else out_dir
+    for name, payload in envelope.pending_artifacts.items():
+        artifact_path = artifacts_dir / f"{envelope.pipeline}-{envelope.model_type}-{stamp}.{name}.json"
+        envelope.artifacts[name] = write_json_artifact(
+            artifact_path,
+            payload,
+            relative_to=artifact_base,
+        )
 
     # 可视化旁路（duck-type 钩子，仅个别流水线提供）：出图便于评估时肉眼快速发现错分。
     # 隔离于信封主流程之外——出图失败（如缺 matplotlib）只跳过并告警，绝不拖垮评估。
@@ -58,8 +76,25 @@ def main(argv=None) -> list[str]:
             viz_paths = pipeline.visualize(cfg, args.ckpt, device, viz_dir)
             if viz_paths:
                 print(f"[eval] viz: {len(viz_paths)} page(s) -> {Path(viz_paths[0]).parent}")
+                envelope.artifacts["visualization"] = [
+                    {
+                        "path": str(Path(viz_path).resolve().relative_to(artifact_base.resolve()))
+                        if Path(viz_path).resolve().is_relative_to(artifact_base.resolve())
+                        else str(Path(viz_path).resolve()),
+                        "sha256": sha256_file(viz_path),
+                    }
+                    for viz_path in viz_paths
+                ]
         except Exception as exc:  # 呈现层不影响评估事实的产出
             print(f"[eval] viz skipped: {exc}")
+
+    envelope.integrity = check_envelope_complete(envelope)
+    path = out_dir / f"{envelope.pipeline}-{envelope.model_type}-{stamp}.envelope.json"
+    envelope.write(path)
+    print(f"[eval] {envelope.pipeline}: {path}")
+    checkpoint_report, version_report = write_checkpoint_reports(envelope, path)
+    print(f"[eval] checkpoint_report: {checkpoint_report}")
+    print(f"[eval] version_report: {version_report}")
 
     return [str(path)]
 

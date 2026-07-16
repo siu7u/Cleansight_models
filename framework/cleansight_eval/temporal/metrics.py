@@ -11,17 +11,35 @@ benchmark 对齐验收。
 
 from __future__ import annotations
 
+import sys
 import time
+from pathlib import Path
+from typing import Mapping, Sequence
 
 import numpy as np
 import torch
 
 from ..core.envelope import MetricValue
 
+# 过渡接入：benchmark 仍位于仓库根目录。兼容从仓库根目录运行
+# ``python -m framework...`` 和进入 framework 后运行 ``python -m cleansight_eval...``。
+try:
+    from benchmark.core.metrics import temporal_metrics as _benchmark_temporal_metrics
+except ModuleNotFoundError:  # pragma: no cover - 仅 framework 作为 cwd 时触发
+    _REPO_ROOT = Path(__file__).resolve().parents[3]
+    if str(_REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(_REPO_ROOT))
+    from benchmark.core.metrics import temporal_metrics as _benchmark_temporal_metrics
+
 # 口径版本：任何影响数值的口径变化都应递增版本号。
-SPEC_ACC = "acc/frame-wise/v1"
-SPEC_EDIT = "edit/levenstein-norm/v1"
-SPEC_F1 = "segmental_f1/iou/v1"
+SPEC_ACC = "accuracy/frame-wise/percent/v2; source=benchmark.core.metrics"
+SPEC_EDIT = "edit/levenshtein-item-mean/percent/v2; source=benchmark.core.metrics"
+SPEC_F1 = "segmental_f1/label-aware-one-to-one-iou/percent/v2; source=benchmark.core.metrics"
+SPEC_PRECISION = "segmental_precision/label-aware-one-to-one-iou/percent/v2; source=benchmark.core.metrics"
+SPEC_RECALL = "segmental_recall/label-aware-one-to-one-iou/percent/v2; source=benchmark.core.metrics"
+SPEC_COUNTS = "segmental_counts/label-aware-one-to-one-iou/v2; source=benchmark.core.metrics"
+SPEC_TEMPORAL_IOU = "temporal_iou/matched-segment-mean/percent/v2; source=benchmark.core.metrics"
+SPEC_FRAME_CLASS = "classification/per-class/percent/v2; source=benchmark.core.metrics"
 SPEC_LATENCY = "latency/single_tick_ms/v1"
 
 BG_CLASS = ["background"]
@@ -125,33 +143,88 @@ def causal_decision(last, pending, stable, count, num_classes: int | None = None
     return pending, stable, count
 
 
-def compute_temporal_metrics(pred_labels: list[str], gt_labels: list[str]) -> dict[str, MetricValue]:
-    """计算逐帧 accuracy、edit、segmental F1@{0.1,0.25,0.5}，返回三态信封。"""
+def _percent_metric(value, spec: str, reason: str = "指标没有可计算样本") -> MetricValue:
+    """把 benchmark 的 0..1 比率转成 framework 历史兼容的 0..100 三态指标。"""
 
-    n = len(pred_labels)
-    if n == 0 or len(gt_labels) != n:
-        reason = "预测与真值无法对齐或为空"
-        return {
+    if value is None:
+        return MetricValue.missing(reason, spec=spec)
+    return MetricValue.computed(round(float(value) * 100.0, 2), spec=spec)
+
+
+def compute_temporal_metrics_by_item(
+    pred_by_item: Mapping[str, Sequence[str]],
+    truth_by_item: Mapping[str, Sequence[str]],
+    labels: Sequence[str],
+    *,
+    start_frame: int = 0,
+    return_details: bool = False,
+):
+    """调用 benchmark 公共实现，按视频边界汇总时序和逐帧指标。
+
+    benchmark 原始比率为 0..1；framework 对外继续用 0..100，避免已有 history、报告和
+    best checkpoint 口径静默变化。新增片段 TP/FP/FN、P/R、matched temporal IoU，及逐类
+    帧级 P/R/F1/IoU。输入 item 必须分别对应一段独立视频，禁止预先拼接。
+    """
+
+    try:
+        raw = _benchmark_temporal_metrics(
+            pred_by_item,
+            truth_by_item,
+            labels=list(labels),
+            start_frame=start_frame,
+            thresholds=(0.1, 0.25, 0.5),
+            ignore_index=-1,
+        )
+    except ValueError as exc:
+        reason = f"benchmark metrics 输入无效: {exc}"
+        missing = {
             "acc": MetricValue.missing(reason, spec=SPEC_ACC),
             "edit": MetricValue.missing(reason, spec=SPEC_EDIT),
-            **{f"f1@{o}": MetricValue.missing(reason, spec=SPEC_F1) for o in (0.1, 0.25, 0.5)},
+            **{f"f1@{threshold}": MetricValue.missing(reason, spec=SPEC_F1) for threshold in (0.1, 0.25, 0.5)},
         }
+        return (missing, {"error": reason}) if return_details else missing
 
-    correct = sum(p == g for p, g in zip(pred_labels, gt_labels))
-    acc = round(100.0 * correct / n, 2)
-    edit = round(edit_score(pred_labels, gt_labels), 2)
-
-    out = {
-        "acc": MetricValue.computed(acc, spec=SPEC_ACC),
-        "edit": MetricValue.computed(edit, spec=SPEC_EDIT),
+    frame = raw["frame"]
+    segment = raw["segment"]
+    out: dict[str, MetricValue] = {
+        "acc": _percent_metric(frame.get("accuracy"), SPEC_ACC),
+        "edit": _percent_metric(segment.get("edit"), SPEC_EDIT),
+        "frame.macro_f1": _percent_metric(frame.get("macro_f1"), SPEC_FRAME_CLASS),
+        "frame.macro_iou": _percent_metric(frame.get("macro_iou"), SPEC_FRAME_CLASS),
+        "frame.micro_f1": _percent_metric(frame.get("micro_f1"), SPEC_FRAME_CLASS),
     }
-    for overlap in (0.1, 0.25, 0.5):
-        tp, fp, fn = f_score(pred_labels, gt_labels, overlap)
-        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        f1 = round(2.0 * precision * recall / (precision + recall + 1e-8) * 100, 2)
-        out[f"f1@{overlap}"] = MetricValue.computed(f1, spec=SPEC_F1)
-    return out
+
+    for threshold in (0.1, 0.25, 0.5):
+        key = f"{threshold:.2f}"
+        detail = segment["details_at_iou"][key]
+        suffix = str(threshold)
+        out[f"f1@{suffix}"] = _percent_metric(detail.get("f1"), SPEC_F1)
+
+        # summary 仅保留主阈值 0.5 的诊断量；其他阈值的 counts/P/R/IoU 和逐类
+        # 指标完整保存在 metrics.details.temporal，避免报告与矩阵无限横向膨胀。
+        if threshold == 0.5:
+            out[f"tp@{suffix}"] = MetricValue.computed(int(detail["tp"]), spec=SPEC_COUNTS)
+            out[f"fp@{suffix}"] = MetricValue.computed(int(detail["fp"]), spec=SPEC_COUNTS)
+            out[f"fn@{suffix}"] = MetricValue.computed(int(detail["fn"]), spec=SPEC_COUNTS)
+            out[f"precision@{suffix}"] = _percent_metric(detail.get("precision"), SPEC_PRECISION)
+            out[f"recall@{suffix}"] = _percent_metric(detail.get("recall"), SPEC_RECALL)
+            out[f"temporal_iou@{suffix}"] = _percent_metric(
+                detail.get("mean_matched_iou"),
+                SPEC_TEMPORAL_IOU,
+                reason="该 IoU 阈值下没有匹配片段",
+            )
+    return (out, raw) if return_details else out
+
+
+def compute_temporal_metrics(pred_labels: list[str], gt_labels: list[str]) -> dict[str, MetricValue]:
+    """单序列兼容入口；流水线评估应优先使用 ``compute_temporal_metrics_by_item``。"""
+
+    labels = sorted(set(pred_labels) | set(gt_labels))
+    return compute_temporal_metrics_by_item(
+        {"item-0": pred_labels},
+        {"item-0": gt_labels},
+        labels,
+    )
 
 
 def measure_single_tick(

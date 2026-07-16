@@ -40,14 +40,15 @@
 | 切窗 / 组 dataset / 评估循环 / 平滑 | **流水线决定** | 同上两个流水线文件 |
 | 是否测延迟 | **流水线决定** | 滑窗测、全序列 N/A |
 | 训练主循环 / 优化器 / 梯度裁剪 | **共享**（各流水线内） | 两个流水线的 `train` |
-| 指标（acc/edit/F1@k）/ 延迟测量 | **共享** | `temporal/metrics.py` |
+| 指标适配 / 延迟测量 | **共享** | `temporal/metrics.py`；时序数值真源为 `benchmark/core/metrics.py` |
 | checkpoint 读写 / envelope / 完整性 | **共享** | `core/*` |
 
-参照三个现成实现：
+参照四个现成实现：
 - **GRU**（因果）：无归一化；可用于**两条**时序流水线。
 - **MS-TCN**（非因果）：`fit_normalization` 用训练集拟合 z-score 写入 buffer；只能用于**全序列**。
 - **MS-TCN++**（`mstcn2`，非因果）：在 MS-TCN 基础上另实现 `compute_loss`（多 stage 深监督 +
   T-MSE），把训练配方随架构走；`forward` 仍守 `[B,T,F]->[B,T,C]`，只能用于**全序列**。
+- **Transformer**（非因果）：标准 Encoder + 位置编码，输入输出同为逐帧序列，只能用于**全序列**。
 
 ## 1.2 新接入一个时序模型：要实现什么
 
@@ -99,8 +100,9 @@ model:
   num_classes: 6
   hidden: 128                       # 你的自定义超参
 train: { epochs: 20, lr: 1.0e-3, batch_size: 32, window: 64 }   # 全序列不需要 batch_size/window
-data: { root: /path, split_train: train, split_eval: val }
+data: { root: /path, split_train: train, split_val: val, split_eval: test }
 feature_schema: { dim: 40, version: actionmixed-bbox-8cls-v1 }
+evaluation: { testset_id: temporal.actionmixed-v1.test }
 ```
 
 **不用改**：两个流水线文件、`data.py`、`metrics.py`、CLI、`core/*`。
@@ -126,6 +128,9 @@ data:
   data_yaml: /path/data.yaml # cleansight-yolo-pipeline 产出的标准数据集
   name: mydataset            # 产物/run 命名
   eval_split: val
+evaluation:
+  testset_id: yolo.group1_large.val
+  save_predictions: true
 ```
 
 - `weights` 传 `.pt` 走微调；传结构 `.yaml` 走从头训。二者都由 ultralytics `YOLO(weights)` 直接消费。
@@ -145,7 +150,7 @@ data:
 | 监督口径 | 逐帧 CE | 末帧 CE + 因果平滑 | ultralytics 自持 |
 | data loader | `data.py` 统一（40 维特征序列） | 同左 | adapter 自持（读 data.yaml） |
 | 性能延迟 | N/A | 单 tick 实测 | N/A |
-| 共享出口 | envelope / metrics / integrity / matrix | 同左 | 同左 |
+| 共享出口 | schema v2 envelope / prediction artifact / checkpoint report / matrix | 同左 | 同左 |
 
 > 设计意图：模型只管网络结构，监督与推理由流水线拥有；时序与检测两域数据格式不同、故意不
 > 强行统一。接时序新模型走 `models/` 注册，接 YOLO 只调配置。

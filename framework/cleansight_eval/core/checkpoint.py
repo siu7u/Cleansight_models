@@ -37,6 +37,31 @@ def save_checkpoint(path: str | Path, state_dict: dict, meta: dict) -> Path:
     return path
 
 
+def save_training_checkpoint(
+    path: str | Path,
+    *,
+    model,
+    optimizer,
+    epoch: int,
+    meta: dict,
+    best_metric: dict | None = None,
+    scheduler=None,
+) -> Path:
+    """保存可恢复训练的完整状态；同时复用原有 meta sidecar。"""
+
+    payload = {
+        "schema_version": 1,
+        "checkpoint_kind": "training_state",
+        "epoch": int(epoch),
+        "model_state": model.state_dict(),
+        "optimizer_state": optimizer.state_dict(),
+        "best_metric": best_metric or {},
+    }
+    if scheduler is not None:
+        payload["scheduler_state"] = scheduler.state_dict()
+    return save_checkpoint(path, payload, meta)
+
+
 def load_meta(path: str | Path) -> dict:
     """读取 checkpoint 的重建元信息；缺失则报错（避免盲加载）。"""
 
@@ -57,5 +82,19 @@ def load_checkpoint(path: str | Path, expected: dict | None = None, map_location
 
     meta = load_meta(path)
     assert_checkpoint_config(meta, expected)
-    state_dict = torch.load(path, map_location=map_location)
+    payload = torch.load(path, map_location=map_location)
+    state_dict = payload["model_state"] if isinstance(payload, dict) and "model_state" in payload else payload
     return state_dict, meta
+
+
+def load_training_checkpoint(path: str | Path, expected: dict | None = None, map_location="cpu"):
+    """加载完整训练状态；缺少 optimizer/epoch 时拒绝作为 resume 来源。"""
+
+    meta = load_meta(path)
+    assert_checkpoint_config(meta, expected)
+    payload = torch.load(path, map_location=map_location)
+    if not isinstance(payload, dict) or "model_state" not in payload or "optimizer_state" not in payload:
+        raise ValueError(f"{path} 不是完整训练 checkpoint，无法 resume")
+    if "epoch" not in payload:
+        raise ValueError(f"{path} 缺少 epoch，无法 resume")
+    return payload, meta

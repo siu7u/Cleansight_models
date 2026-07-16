@@ -16,6 +16,8 @@ T-MSE），流水线仍把类别加权 CE 作为监督口径传入。缺钩子�
 
 from __future__ import annotations
 
+import time
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -27,13 +29,15 @@ except ImportError:  # tqdm 可选，缺失时退化为原样迭代
     def tqdm(iterable, **_kwargs):
         return iterable
 
-from ..core.checkpoint import load_checkpoint, save_checkpoint
+from ..core.checkpoint import load_checkpoint, load_training_checkpoint, save_training_checkpoint
 from ..core.environment import now_stamp, set_seed
 from ..core.envelope import EvalEnvelope, format_params
+from ..core.history import HistoryWriter
 from ..core.integrity import check_envelope_complete, check_feature_schema
 from ..core.run import RunContext
+from .artifacts import build_prediction_artifact
 from .data import build_temporal_meta, load_split, split_video_names
-from .metrics import compute_temporal_metrics, not_applicable_perf
+from .metrics import compute_temporal_metrics_by_item, not_applicable_perf
 from .models import build_model
 from .util import compute_class_weights
 
@@ -58,6 +62,59 @@ def _infer_split(model, features, device) -> list:
             logits = model(x)  # [1, T, C]
             preds.append(torch.argmax(logits[0], dim=-1).cpu().numpy().astype(np.int64))
     return preds
+
+
+def _loss_is_finite(loss: torch.Tensor) -> bool:
+    """训练可靠性护栏：NaN/Inf loss 立即中断并写入 run status。"""
+
+    return bool(torch.isfinite(loss.detach()).cpu().item())
+
+
+def _metric_value(metrics: dict, name: str):
+    value = metrics.get(name)
+    return None if value is None or value.value is None else float(value.value)
+
+
+def _validation_split_name(cfg: dict) -> str:
+    """训练期 validation 优先用 split_val；旧配置没有时回退 split_eval。"""
+
+    data = cfg["data"]
+    return data.get("split_val") or data["split_eval"]
+
+
+def _evaluate_full_sequence(model, features, truths, id2name, criterion, device) -> dict:
+    """按视频整段 validation，返回 loss 与指标，保持视频边界不用于训练更新。"""
+
+    model.eval()
+    losses: list[float] = []
+    preds = []
+    with torch.no_grad():
+        for feats, truth in zip(features, truths):
+            x = torch.from_numpy(feats).float().unsqueeze(0).to(device)
+            y = torch.tensor(truth, dtype=torch.long).unsqueeze(0).to(device)
+            if hasattr(model, "compute_loss"):
+                loss = model.compute_loss(x, y, criterion)
+                logits = model(x)
+            else:
+                logits = model(x)
+                loss = criterion(logits.reshape(-1, logits.shape[-1]), y.reshape(-1))
+            losses.append(float(loss.detach().cpu().item()))
+            preds.append(torch.argmax(logits[0], dim=-1).cpu().numpy().astype(np.int64))
+    pred_by_item = {
+        f"video-{index:04d}": [id2name[int(value)] for value in video]
+        for index, video in enumerate(preds)
+    }
+    truth_by_item = {
+        f"video-{index:04d}": [id2name[int(value)] for value in video]
+        for index, video in enumerate(truths)
+    }
+    metrics = compute_temporal_metrics_by_item(pred_by_item, truth_by_item, list(id2name.values()))
+    return {
+        "val_loss": float(np.mean(losses)) if losses else None,
+        "val_acc": _metric_value(metrics, "acc"),
+        "val_edit": _metric_value(metrics, "edit"),
+        "val_f1_0.5": _metric_value(metrics, "f1@0.5"),
+    }
 
 
 FULL_SEQUENCE_SEMANTICS = {
@@ -107,87 +164,157 @@ class FullSequenceTemporalPipeline:
         train_cfg = cfg["train"]
         model_cfg = cfg["model"]
 
-        set_seed(seed)
-        model = build_model(model_cfg).to(device)
-
         run = RunContext(runs_dir, label=model_cfg["type"])
         run.save_config(cfg)
         run.save_env(device, seed=seed)
+        run.write_status("running", stage="initializing")
 
-        # data（features 契约：读 ActionMixed + bbox→40维）+ 训练前 schema 兼容检查。
-        features, truths, _ = load_split(cfg["data"], cfg["data"]["split_train"])
-        problems = check_feature_schema(features[0].shape[1], cfg.get("feature_schema"))
-        if problems:
-            raise ValueError("特征 schema 与配置不兼容:\n  - " + "\n  - ".join(problems))
+        current_epoch = None
+        try:
+            set_seed(seed)
+            model = build_model(model_cfg).to(device)
 
-        # 可选归一化钩子（duck-type）：模型若自带 fit_normalization（如 MS-TCN）则按训练集统计写入。
-        # buffer 随 state_dict 存取，评估时自动应用同一归一化。
-        if hasattr(model, "fit_normalization"):
-            model.fit_normalization(features)
+            # data（features 契约：读 ActionMixed + bbox→40维）+ 训练前 schema 兼容检查。
+            features, truths, _ = load_split(cfg["data"], cfg["data"]["split_train"])
+            problems = check_feature_schema(features[0].shape[1], cfg.get("feature_schema"))
+            if problems:
+                raise ValueError("特征 schema 与配置不兼容:\n  - " + "\n  - ".join(problems))
+            val_split = _validation_split_name(cfg)
+            val_features, val_truths, val_id2name = load_split(cfg["data"], val_split)
 
-        # 整段 + 逐帧：变长全序列逐条喂入（batch_size=1，不做批内对齐）。
-        train_ds = ConcatDataset(
-            [FullSequenceDataset(features[i], truths[i]) for i in range(len(features))]
-        )
-        train_loader = DataLoader(train_ds, batch_size=1, shuffle=True)
+            resume_path = train_cfg.get("resume")
+            # 可选归一化钩子：resume 时状态会从 checkpoint 恢复，避免重新 fit 改变统计。
+            if hasattr(model, "fit_normalization") and not resume_path:
+                model.fit_normalization(features)
 
-        weights = compute_class_weights(train_loader)
-        criterion = nn.CrossEntropyLoss(
-            weight=torch.tensor([weights[i] for i in sorted(weights)], dtype=torch.float32).to(device)
-        )
-        optimizer = torch.optim.Adam(
-            model.parameters(),
-            lr=train_cfg.get("lr", 1e-3),
-            weight_decay=train_cfg.get("weight_decay", 0.0),
-        )
-        grad_clip = train_cfg.get("grad_clip")  # 值驱动：缺省则不裁剪
+            # 整段 + 逐帧：变长全序列逐条喂入（batch_size=1，不做批内对齐）。
+            train_ds = ConcatDataset(
+                [FullSequenceDataset(features[i], truths[i]) for i in range(len(features))]
+            )
+            train_loader = DataLoader(train_ds, batch_size=1, shuffle=True)
 
-        model.train()
-        epochs = train_cfg.get("epochs", 20)
-        for _epoch in tqdm(range(1, epochs + 1), desc="train"):
-            for x, y in train_loader:
-                x, y = x.to(device), y.to(device)
-                # 逐帧监督：整段序列每帧都算 CE（与滑窗末帧监督相对）。模型若自带训练配方
-                # （duck-type ``compute_loss``，如 MS-TCN++ 的多 stage 深监督 + T-MSE），则监督
-                # 随架构走，只把类别加权 CE 作为口径传入；否则退化为单前向逐帧 CE。
-                if hasattr(model, "compute_loss"):
-                    loss = model.compute_loss(x, y, criterion)
-                else:
-                    logits = model(x)  # [B, T, C]
-                    loss = criterion(logits.reshape(-1, logits.shape[-1]), y.reshape(-1))
-                optimizer.zero_grad()
-                loss.backward()
-                if grad_clip:
-                    nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-                optimizer.step()
+            weights = compute_class_weights(train_loader)
+            criterion = nn.CrossEntropyLoss(
+                weight=torch.tensor([weights[i] for i in sorted(weights)], dtype=torch.float32).to(device)
+            )
+            optimizer = torch.optim.Adam(
+                model.parameters(),
+                lr=train_cfg.get("lr", 1e-3),
+                weight_decay=train_cfg.get("weight_decay", 0.0),
+            )
+            grad_clip = train_cfg.get("grad_clip")  # 值驱动：缺省则不裁剪
+            start_epoch = 1
+            best_metric = {"name": "val_acc", "mode": "max", "value": None, "epoch": None}
 
-        ckpt_path = run.checkpoints_dir / f"{model_cfg['type']}-final-{now_stamp()}.pt"
-        extra = {"normalizer": "zscore/train-set/buffers/v1"} if hasattr(model, "fit_normalization") else None
-        meta = build_temporal_meta(
-            model_cfg,
-            cfg.get("feature_schema", {}),
-            pipeline=self.pipeline_name,
-            window=None,  # 全序列不加窗
-            num_params=sum(p.numel() for p in model.parameters()),
-            train_cfg=train_cfg,
-            trained_at=now_stamp(),
-            extra=extra,
-        )
-        save_checkpoint(ckpt_path, model.state_dict(), meta)
-        print(f"[train] run_dir={run.dir}")
-        print(f"[train] checkpoint={ckpt_path}")
-        return str(ckpt_path)
+            if resume_path:
+                expected = {"type": model_cfg["type"], "input_dim": model_cfg["input_dim"], "num_classes": model_cfg["num_classes"]}
+                payload, _meta = load_training_checkpoint(resume_path, expected=expected, map_location=device)
+                model.load_state_dict(payload["model_state"])
+                optimizer.load_state_dict(payload["optimizer_state"])
+                start_epoch = int(payload["epoch"]) + 1
+                best_metric.update(payload.get("best_metric") or {})
+                run.write_status("running", stage="resumed", resume=str(resume_path), start_epoch=start_epoch)
+
+            extra = {"normalizer": "zscore/train-set/buffers/v1"} if hasattr(model, "fit_normalization") else None
+            meta = build_temporal_meta(
+                model_cfg,
+                cfg.get("feature_schema", {}),
+                pipeline=self.pipeline_name,
+                window=None,  # 全序列不加窗
+                num_params=sum(p.numel() for p in model.parameters()),
+                train_cfg=train_cfg,
+                trained_at=now_stamp(),
+                extra=extra,
+            )
+            history = HistoryWriter(
+                run.history_path,
+                ["epoch", "train_loss", "val_loss", "val_acc", "val_edit", "val_f1_0.5", "lr", "epoch_sec", "checkpoint_best", "checkpoint_last", "status"],
+            )
+            best_path = run.checkpoints_dir / "best.pt"
+            last_path = run.checkpoints_dir / "last.pt"
+
+            epochs = train_cfg.get("epochs", 20)
+            if start_epoch > epochs:
+                run.write_status(
+                    "succeeded",
+                    stage="already_complete",
+                    best_metric=best_metric,
+                    best_checkpoint=str(best_path),
+                    last_checkpoint=str(last_path),
+                )
+                return str(best_path if best_path.exists() else last_path)
+
+            for epoch in tqdm(range(start_epoch, epochs + 1), desc="train"):
+                current_epoch = epoch
+                epoch_start = time.perf_counter()
+                model.train()
+                losses: list[float] = []
+                for x, y in train_loader:
+                    x, y = x.to(device), y.to(device)
+                    if hasattr(model, "compute_loss"):
+                        loss = model.compute_loss(x, y, criterion)
+                    else:
+                        logits = model(x)  # [B, T, C]
+                        loss = criterion(logits.reshape(-1, logits.shape[-1]), y.reshape(-1))
+                    if not _loss_is_finite(loss):
+                        raise FloatingPointError(f"epoch={epoch}: loss is NaN/Inf")
+                    optimizer.zero_grad()
+                    loss.backward()
+                    if grad_clip:
+                        nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+                    optimizer.step()
+                    losses.append(float(loss.detach().cpu().item()))
+
+                validation = _evaluate_full_sequence(model, val_features, val_truths, val_id2name, criterion, device)
+                train_loss = float(np.mean(losses)) if losses else None
+                val_acc = validation["val_acc"]
+                improved = val_acc is not None and (
+                    best_metric["value"] is None or val_acc > float(best_metric["value"])
+                )
+                if improved:
+                    best_metric.update({"value": val_acc, "epoch": epoch})
+                    save_training_checkpoint(best_path, model=model, optimizer=optimizer, epoch=epoch, meta=meta, best_metric=best_metric)
+                save_training_checkpoint(last_path, model=model, optimizer=optimizer, epoch=epoch, meta=meta, best_metric=best_metric)
+                row = {
+                    "epoch": epoch,
+                    "train_loss": train_loss,
+                    **validation,
+                    "lr": optimizer.param_groups[0]["lr"],
+                    "epoch_sec": round(time.perf_counter() - epoch_start, 4),
+                    "checkpoint_best": str(best_path) if best_path.exists() else "",
+                    "checkpoint_last": str(last_path),
+                    "status": "ok",
+                }
+                history.append(row)
+                run.write_status("running", stage="epoch_complete", epoch=epoch, best_metric=best_metric, last_checkpoint=str(last_path))
+
+            run.write_status("succeeded", best_metric=best_metric, best_checkpoint=str(best_path), last_checkpoint=str(last_path), history=str(run.history_path))
+            print(f"[train] run_dir={run.dir}")
+            print(f"[train] best_checkpoint={best_path}")
+            print(f"[train] last_checkpoint={last_path}")
+            return str(best_path if best_path.exists() else last_path)
+        except Exception as exc:
+            run.write_exception_status(exc, epoch=current_epoch)
+            raise
 
     def evaluate(self, cfg: dict, ckpt: str, device) -> EvalEnvelope:
         model, meta = _load_eval_model(cfg, ckpt, device)
         features, truths, id2name = load_split(cfg["data"], cfg["data"]["split_eval"])
 
         video_preds = _infer_split(model, features, device)
-        all_preds = np.concatenate(video_preds)
-        all_gts = np.concatenate(truths)
-        pred_labels = [id2name[p] for p in all_preds]
-        gt_labels = [id2name[g] for g in all_gts]
-        metrics = compute_temporal_metrics(pred_labels, gt_labels)
+        names = split_video_names(cfg["data"], cfg["data"]["split_eval"])
+        pred_by_item = {
+            name: [id2name[int(value)] for value in video]
+            for name, video in zip(names, video_preds)
+        }
+        truth_by_item = {
+            name: [id2name[int(value)] for value in video]
+            for name, video in zip(names, truths)
+        }
+        labels = list(id2name.values())
+        metrics, metric_details = compute_temporal_metrics_by_item(
+            pred_by_item, truth_by_item, labels, return_details=True
+        )
 
         envelope = EvalEnvelope(
             model_type=meta["type"],
@@ -197,10 +324,19 @@ class FullSequenceTemporalPipeline:
             dataset=cfg["data"].get("name", cfg["data"].get("root")),
             feature_schema=meta.get("feature_schema", cfg.get("feature_schema", {})),
             metrics=metrics,
+            metric_details={"temporal": metric_details},
             performance=not_applicable_perf("离线全序列不测实时延迟"),
             inference_semantics=FULL_SEQUENCE_SEMANTICS,
             num_params=meta.get("num_params"),
             timestamp=now_stamp(),
+        )
+        envelope.pending_artifacts["predictions"] = build_prediction_artifact(
+            pred_by_item,
+            truth_by_item,
+            labels,
+            window=None,
+            inference_mode=FULL_SEQUENCE_SEMANTICS["mode"],
+            prediction_start_frame=0,
         )
         envelope.integrity = check_envelope_complete(envelope)
         return envelope

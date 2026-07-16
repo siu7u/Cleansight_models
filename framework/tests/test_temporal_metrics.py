@@ -4,6 +4,7 @@ from cleansight_eval.core.envelope import MetricState
 from cleansight_eval.temporal.metrics import (
     SPEC_ACC,
     compute_temporal_metrics,
+    compute_temporal_metrics_by_item,
     edit_score,
     f_score,
 )
@@ -40,3 +41,17 @@ def test_length_mismatch_is_missing():
 def test_edit_score_symmetric_labels():
     seq = ["A", "B", "A"]
     assert edit_score(seq, seq) == 100.0
+
+
+def test_benchmark_metrics_preserve_video_boundaries_and_counts():
+    metrics = compute_temporal_metrics_by_item(
+        {"a": ["Long", "Long"], "b": ["Long", "Long"]},
+        {"a": ["Long", "Long"], "b": ["Long", "Long"]},
+        ["Idle", "Long"],
+    )
+    assert metrics["tp@0.5"].value == 2
+    assert metrics["fp@0.5"].value == 0
+    assert metrics["fn@0.5"].value == 0
+    assert metrics["precision@0.5"].value == 100.0
+    assert metrics["recall@0.5"].value == 100.0
+    assert metrics["temporal_iou@0.5"].value == 100.0

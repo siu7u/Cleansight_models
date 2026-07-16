@@ -22,12 +22,12 @@
 | 层 | 目录 | 职责 |
 |---|---|---|
 | **公共层** | `cleansight_eval/core/` | run 组织、配置（格式中立）、环境、checkpoint 重建元信息 + 守卫、结果三态信封、异构矩阵、完整性检查（含特征维度契约校验） |
-| **时序域** | `cleansight_eval/temporal/` | 两条时序流水线（`full_sequence_pipeline` / `sliding_window_pipeline`）+ 共享的 `data`（loader + meta）/ `metrics`（指标 + 延迟）/ `util`；模型在 `models/`（`gru`/`mstcn`/`mstcn2` + 注册表） |
+| **时序域** | `cleansight_eval/temporal/` | 两条时序流水线（`full_sequence_pipeline` / `sliding_window_pipeline`）+ 共享的 `data`（loader + meta）/ `metrics`（指标 + 延迟）/ `util`；模型在 `models/`（`gru`/`mstcn`/`mstcn2`/`transformer` + 注册表） |
 | **检测域** | `cleansight_eval/detection/` | 单帧检测流水线（`pipeline`）+ 薄 ultralytics 适配器（`yolo`）+ 指标 |
 | CLI | `cleansight_eval/cli/` | `train`/`eval` 按 `pipeline` 分派（`_registry.py`）；`matrix` 汇总三类信封成单一矩阵 |
 | 实验配置层 | `experiments/` | 流水线 + 模型类型/规模 + 数据 + 特征 + 训练参数 |
 
-> 时序共享的 `data`/`metrics`/`util` **只在两条时序流水线间复用**，绝不跨到 detection——
+> 时序共享的 `data`/`metrics`/`artifacts`/`util` **只在两条时序流水线间复用**，绝不跨到 detection——
 > 检测输入是图像、由 ultralytics 从 `data.yaml` 自持读入，与时序的 40 维特征序列是两套不相交
 > 的数据格式。`feature_schema` 是上游检测/特征提取与下游时序之间唯一的显式接口。
 
@@ -69,8 +69,9 @@ cd framework
   `checkpoint` 路径。`-S/--set 点路径=值`（可多次）临时覆盖配置、不改文件；核心 CLI **不预设
   任何纵的调参名**，各纵按自己超参词汇寻址，如 `-S train.epochs=5`（两纵通用）、`-S train.batch=8`
   （检测/ultralytics）、`-S train.window=32`（时序滑窗）。
-- **评估**加载 checkpoint 时校验重建元信息，错配即抛 `CompatibilityError`；产出一份三态信封
-  写入同 run 的 `evals/`。训练与评估同属一条流水线，输入构造与输出语义一致。
+- **评估**加载 checkpoint 时校验重建元信息，错配即抛 `CompatibilityError`；产出 schema v2
+  三态信封写入同 run 的 `evals/`，逐视频/逐图预测写入 `artifacts/`。信封同时记录 testset
+  fingerprint、checkpoint SHA-256、device、配置/环境引用和 artifact SHA-256。
 - **矩阵**把 `runs/` 下所有信封汇成一张异构矩阵（`matrix.json` 机读 + `matrix.md` 人读）；
   `--pipeline <名>` 只汇总某一类流水线做同类对比（输出带 `.<名>` 后缀，不覆盖全量矩阵）。
 
@@ -92,23 +93,24 @@ python -m cleansight_eval.cli.eval --config experiments/yolo-group1.yaml \
 ### 2. 历史滑窗时序（`pipeline: sliding_window_temporal`，GRU 参照）
 
 有界因果窗逐帧推理，训练造"窗口+末帧"样本、评估逐窗前推；测单 tick 实时延迟。模型必须**因果**
-（`gru`），非因果模型（`mstcn`）会被拒绝。checkpoint 形如 `gru-final-<stamp>.pt`。
+（`gru`），非因果模型（`mstcn` / `transformer`）会被拒绝。可靠训练统一保存 `best.pt` 和
+`last.pt`。
 
 ```bash
 python -m cleansight_eval.cli.train --config experiments/gru-actionmixed.yaml
 python -m cleansight_eval.cli.eval --config experiments/gru-actionmixed.yaml \
-  --ckpt runs/<run>/checkpoints/gru-final-<stamp>.pt
+  --ckpt runs/<run>/checkpoints/best.pt
 ```
 
 ### 3. 全序列时序（`pipeline: full_sequence_temporal`，MS-TCN 参照）
 
 一次看到完整序列、逐帧监督、逐帧 argmax；以 `batch_size=1` 逐条喂入；**延迟标 N/A**。
-checkpoint 形如 `mstcn-final-<stamp>.pt`。
+可选模型包括 MS-TCN、MS-TCN++ 和 Transformer；可靠训练统一保存 `best.pt` 和 `last.pt`。
 
 ```bash
 python -m cleansight_eval.cli.train --config experiments/mstcn-actionmixed.yaml
 python -m cleansight_eval.cli.eval --config experiments/mstcn-actionmixed.yaml \
-  --ckpt runs/<run>/checkpoints/mstcn-final-<stamp>.pt
+  --ckpt runs/<run>/checkpoints/best.pt
 ```
 
 ### 汇总评估矩阵（三类信封汇入同一张表）
@@ -132,12 +134,13 @@ python -m cleansight_eval.cli.matrix --runs runs
 | `data` | ✅ | 映射 | 见下 |
 | `train` | 时序✅ / 检测可选 | 映射 | 训练超参 |
 | `feature_schema` | **时序✅ / 检测无** | 映射 | 上游特征格式契约，训练前校验维度 |
+| `evaluation` | 正式评估建议✅ | 映射 | 固定 testset、artifact 和 smoke 限制 |
 
 ### 时序（两条时序流水线）
 
 ```yaml
 model:
-  type: gru            # ✅ 模型注册表键：gru（因果，两条都可）/ mstcn·mstcn2（非因果，仅全序列）
+  type: gru            # ✅ gru（因果，两条都可）/ mstcn·mstcn2·transformer（非因果，仅全序列）
   input_dim: 40        # ✅ 特征维；须等于 loader 产出（8 检测类 × 5）
   num_classes: 6       # ✅ 动作类数；须等于 labels/data.yaml 的 names 数
   hidden: 128          # 模型超参（gru/mstcn 均用 hidden）
@@ -153,6 +156,10 @@ data:
 feature_schema:
   dim: 40              # ✅ 须与 input_dim / loader 一致，否则训练前报错
   version: actionmixed-bbox-8cls-v1
+evaluation:
+  testset_id: temporal.actionmixed-v1.test  # benchmark/testsets.yaml 中的稳定 ID
+  limits:
+    is_smoke: false
 train:
   epochs: 20           # 可选，默认 20
   lr: 0.001            # 可选，默认 1e-3
@@ -173,10 +180,20 @@ data:
   data_yaml: ../.../datasets/group1_large/data.yaml  # ✅ 标准 YOLO 数据集清单
   eval_split: val      # 可选，默认 val
   name: group1_large   # 可选，展示名 + 权重子目录名
+evaluation:
+  testset_id: yolo.group1_large.val
+  save_predictions: true
 train:                 # 整段可选，透传给 ultralytics
   epochs: 100
   batch: 16            # 注意是 batch，不是 batch_size
   patience: 20
+```
+
+历史 envelope 不原地覆盖，使用转换命令生成旁路 v2 文件：
+
+```bash
+python -m cleansight_eval.cli.upgrade_envelope \
+  --input runs/<run>/evals/<old>.envelope.json
 ```
 
 ## 测试
@@ -197,7 +214,7 @@ cd framework && python -m pytest tests -q   # 需已激活项目 venv
 ## 扩展点
 
 - **新增同架构变体**：只改 `experiments/*.yaml` 的 `model` 段（hidden/num_layers…）。
-- **新增时序模型**（Transformer / causal-TCN…）：在 `temporal/models/` 加一个纯 `nn.Module`
+- **新增时序模型**（causal-TCN / LSTM…）：在 `temporal/models/` 加一个纯 `nn.Module`
   文件（输入 `[B,T,F]`→输出 `[B,T,C]`），并在 `temporal/models/__init__.py` 的注册表登记一行
   `{"build": ..., "causal": <bool>}`。`causal=True` 才允许进滑窗流水线。**两条时序流水线零改动**
   即可复用——监督口径与推理由流水线拥有，模型只管网络结构。**可选 duck-type 钩子**（有则调、

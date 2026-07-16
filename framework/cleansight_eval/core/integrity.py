@@ -57,7 +57,7 @@ def check_feature_schema(actual_dim: int, expected: dict | None) -> list[str]:
 def check_envelope_complete(envelope: Any) -> dict:
     """检查信封是否具备最小可解释字段，返回完整性报告（不做达标判断）。"""
 
-    report: dict[str, Any] = {"ok": True, "issues": []}
+    report: dict[str, Any] = {"ok": True, "checks": {}, "issues": []}
     required = ("model_type", "pipeline", "checkpoint", "dataset")
     for key in required:
         if not getattr(envelope, key, None):
@@ -73,5 +73,43 @@ def check_envelope_complete(envelope: Any) -> dict:
 
     for name, mv in envelope.metrics.items():
         if mv.state is MetricState.COMPUTED and not mv.spec:
+            report["ok"] = False
             report["issues"].append(f"指标 {name} 已计算但未声明口径(spec)")
+
+    # CLI 完成 schema v2 溯源信息注入后才执行这些增强检查；pipeline 单测直接调用时
+    # run 为空，仍只检查上面的模型事实字段。
+    if envelope.run:
+        checks = report["checks"]
+        device = envelope.run.get("device")
+        checks["run_context_present"] = bool(
+            envelope.run.get("id") and device not in (None, "", "unknown")
+        )
+        checks["checkpoint_hash_present"] = bool(envelope.checkpoint_info.get("sha256"))
+        checks["testset_registered"] = bool(envelope.testset.get("registered"))
+        checks["testset_fingerprint_present"] = bool(envelope.testset.get("fingerprint_sha256"))
+        validation_errors = envelope.testset.get("validation_errors") or []
+        checks["testset_validation_passed"] = not validation_errors
+        prediction_ref = envelope.artifacts.get("predictions") or {}
+        checks["prediction_artifact_present"] = bool(prediction_ref.get("path"))
+        checks["prediction_artifact_hashed"] = bool(prediction_ref.get("sha256"))
+        if envelope.pipeline in {"sliding_window_temporal", "full_sequence_temporal"}:
+            checks["metric_details_present"] = bool(envelope.metric_details.get("temporal"))
+            checks["prediction_artifact_recomputable"] = prediction_ref.get("recomputable") is True
+
+        messages = {
+            "run_context_present": "缺少 run id 或 device",
+            "checkpoint_hash_present": "缺少 checkpoint SHA-256",
+            "testset_registered": "评估未使用 benchmark 已登记 testset",
+            "testset_fingerprint_present": "缺少 testset fingerprint",
+            "testset_validation_passed": "testset 校验未通过",
+            "prediction_artifact_present": "缺少逐视频/逐图 prediction artifact",
+            "prediction_artifact_hashed": "prediction artifact 缺少 SHA-256",
+            "metric_details_present": "缺少可复算的时序详细指标",
+            "prediction_artifact_recomputable": "时序 prediction artifact 无法复算指标",
+        }
+        for name, passed in checks.items():
+            if not passed:
+                report["issues"].append(messages[name])
+        report["issues"].extend(str(item) for item in validation_errors)
+        report["ok"] = report["ok"] and all(checks.values())
     return report

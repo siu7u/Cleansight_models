@@ -12,6 +12,7 @@ import yaml
 from cleansight_eval.cli import eval as eval_cli
 from cleansight_eval.cli import matrix as matrix_cli
 from cleansight_eval.cli import train as train_cli
+from cleansight_eval.core.checkpoint import load_training_checkpoint
 from cleansight_eval.core.envelope import MetricState
 
 _ACTIONS = ["idle", "air_injection", "flush", "long_brush_insert", "long_brush_withdraw", "short_brush_cleaning"]
@@ -75,20 +76,57 @@ def test_end_to_end(tmp_path):
     ckpt = train_cli.main(["--config", str(cfg_path), "--runs-dir", str(runs_dir)])
     assert (tmp_path / "runs").exists()
     assert ckpt.endswith(".pt")
+    run_dir = next(runs_dir.iterdir())
+    assert (run_dir / "history.csv").exists()
+    assert (run_dir / "status.json").exists()
+    assert (run_dir / "checkpoints" / "best.pt").exists()
+    assert (run_dir / "checkpoints" / "last.pt").exists()
+    status = json.loads((run_dir / "status.json").read_text())
+    assert status["state"] == "succeeded"
+    assert status["best_metric"]["name"] == "val_acc"
+    payload, _meta = load_training_checkpoint(run_dir / "checkpoints" / "last.pt")
+    assert payload["epoch"] == 1
+    assert "optimizer_state" in payload
 
     # eval → 一份信封（训练与评估同属一条流水线，输入构造与输出语义一致）
     envelopes = eval_cli.main(["--config", str(cfg_path), "--ckpt", ckpt])
     assert len(envelopes) == 1
     data = json.loads(open(envelopes[0]).read())
+    assert data["schema_version"] == 2
     assert data["pipeline"] == "sliding_window_temporal"
-    assert data["metrics"]["acc"]["state"] in (
+    summary = data["metrics"]["summary"]
+    assert summary["acc"]["state"] in (
         MetricState.COMPUTED.value,
         MetricState.MISSING.value,
     )
+    # framework 已复用 benchmark 的逐视频一对一片段匹配口径。
+    assert summary["tp@0.5"]["state"] == MetricState.COMPUTED.value
+    assert summary["precision@0.5"]["state"] == MetricState.COMPUTED.value
+    assert summary["recall@0.5"]["state"] == MetricState.COMPUTED.value
+    assert "temporal_iou@0.5" in summary
+    assert "tp@0.1" not in summary
+    assert not any(key.startswith("frame.f1:") for key in summary)
+    assert data["artifacts"]["predictions"]["recomputable"] is True
+    temporal_details = data["metrics"]["details"]["temporal"]
+    assert temporal_details["metric_spec"]["video_boundaries_preserved"] is True
+    assert "0.10" in temporal_details["segment"]["details_at_iou"]
+    assert temporal_details["frame"]["per_class"]
     # 滑窗流水线：测实时延迟、记录窗口与冷启动语义
     assert data["performance"]["latency_mean_ms"]["state"] == MetricState.COMPUTED.value
-    assert data["inference_semantics"]["window"] == 8
-    assert "cold_start" in data["inference_semantics"]
+    assert data["inference"]["window"] == 8
+    assert "cold_start" in data["inference"]
+    ckpt_path = run_dir / "checkpoints" / "best.pt"
+    checkpoint_report = run_dir / "checkpoints" / "best.eval.md"
+    version_report = run_dir / "checkpoints" / "EVALUATION_REPORT.md"
+    assert ckpt == str(ckpt_path)
+    assert checkpoint_report.exists()
+    assert version_report.exists()
+    report_text = checkpoint_report.read_text(encoding="utf-8")
+    assert "Checkpoint 评估报告：best.pt" in report_text
+    assert "人工维护区" in report_text
+    version_text = version_report.read_text(encoding="utf-8")
+    assert "版本化评估报告" in version_text
+    assert "checkpoint 专属报告：`best.eval.md`" in version_text
 
     # matrix
     matrix_json = matrix_cli.main(["--runs", str(runs_dir)])
@@ -97,3 +135,29 @@ def test_end_to_end(tmp_path):
     assert "perf.latency_mean_ms" in matrix["metric_columns"]
     md = open(matrix_json.replace(".json", ".md")).read()
     assert "N/A" in md  # 图例中说明 N/A 语义
+
+
+def test_resume_from_last_checkpoint(tmp_path):
+    data_root = tmp_path / "cleansight-ActionMixed"
+    _make_actionmixed(data_root)
+    cfg_path = tmp_path / "gru.yaml"
+    _write_config(cfg_path, data_root)
+    runs_dir = tmp_path / "runs"
+
+    first_ckpt = train_cli.main(["--config", str(cfg_path), "--runs-dir", str(runs_dir)])
+    first_run = next(runs_dir.iterdir())
+    resume_path = first_run / "checkpoints" / "last.pt"
+    assert first_ckpt.endswith("best.pt")
+
+    second_ckpt = train_cli.main([
+        "--config", str(cfg_path),
+        "--runs-dir", str(runs_dir),
+        "--resume", str(resume_path),
+        "-S", "train.epochs=2",
+    ])
+    second_run = sorted(runs_dir.iterdir())[-1]
+    payload, _meta = load_training_checkpoint(second_run / "checkpoints" / "last.pt")
+    assert second_ckpt.endswith("best.pt")
+    assert payload["epoch"] == 2
+    status = json.loads((second_run / "status.json").read_text())
+    assert status["state"] == "succeeded"

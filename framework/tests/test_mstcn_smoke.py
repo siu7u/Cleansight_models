@@ -78,7 +78,7 @@ def test_mstcn_end_to_end(tmp_path):
 
     # 归一化统计已由 fit_normalization 写入 buffer 并随 checkpoint 持久化（非直通初值）。
     blob = torch.load(ckpt, map_location="cpu", weights_only=False)
-    state = blob["state_dict"] if "state_dict" in blob else blob
+    state = blob.get("model_state", blob.get("state_dict", blob))
     assert "norm_mean" in state and "norm_std" in state
     assert not torch.allclose(state["norm_std"], torch.ones_like(state["norm_std"]))
 
@@ -87,13 +87,13 @@ def test_mstcn_end_to_end(tmp_path):
     assert len(envelopes) == 1
     data = json.loads(open(envelopes[0]).read())
     assert data["pipeline"] == "full_sequence_temporal"
-    assert data["metrics"]["acc"]["state"] in (
+    assert data["metrics"]["summary"]["acc"]["state"] in (
         MetricState.COMPUTED.value,
         MetricState.MISSING.value,
     )
     # 离线不测实时延迟：三态为 N/A（不是 0、不是缺失）
     assert data["performance"]["latency_mean_ms"]["state"] == MetricState.NOT_APPLICABLE.value
-    assert data["inference_semantics"]["mode"] == "full_sequence"
+    assert data["inference"]["mode"] == "full_sequence"
 
     # matrix：mstcn 信封正常汇入
     matrix_json = matrix_cli.main(["--runs", str(runs_dir)])
@@ -123,7 +123,7 @@ def test_mstcn2_end_to_end(tmp_path):
     # train：走 compute_loss（多 stage + T-MSE），归一化 buffer 随 checkpoint 持久化。
     ckpt = train_cli.main(["--config", str(cfg_path), "--runs-dir", str(runs_dir)])
     blob = torch.load(ckpt, map_location="cpu", weights_only=False)
-    state = blob["state_dict"] if "state_dict" in blob else blob
+    state = blob.get("model_state", blob.get("state_dict", blob))
     assert "norm_mean" in state and "norm_std" in state
     assert not torch.allclose(state["norm_std"], torch.ones_like(state["norm_std"]))
     # 多 stage：至少有 1 个精化 stage 的参数（refines.0.*）随权重存在。
@@ -132,9 +132,9 @@ def test_mstcn2_end_to_end(tmp_path):
     # eval → 一份信封：离线全序列，延迟标 N/A，推理只取最后 stage。
     envelopes = eval_cli.main(["--config", str(cfg_path), "--ckpt", ckpt])
     data = json.loads(open(envelopes[0]).read())
-    assert data["model_type"] == "mstcn2"
+    assert data["model"]["type"] == "mstcn2"
     assert data["performance"]["latency_mean_ms"]["state"] == MetricState.NOT_APPLICABLE.value
-    assert data["inference_semantics"]["mode"] == "full_sequence"
+    assert data["inference"]["mode"] == "full_sequence"
 
     # 评估旁路自动出图：run 的 viz/ 下应有该 split 的分段条带图（按页切分，至少第一页）。
     run_dir = Path(ckpt).parents[1]  # <run>/checkpoints/<ckpt> → <run>

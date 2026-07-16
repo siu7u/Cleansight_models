@@ -21,8 +21,9 @@ def build_temporal_prediction_artifact(
     pred_by_item: Mapping[str, Sequence[int]],
     truth_by_item: Mapping[str, Sequence[int]],
     index_to_action: Mapping[int, str],
-    window: int,
+    window: int | None,
     inference_mode: str,
+    prediction_start_frame: int | None = None,
 ) -> dict:
     """构造可复算指标的逐视频预测 artifact，显式保留视频边界。"""
 
@@ -35,7 +36,11 @@ def build_temporal_prediction_artifact(
         if len(predictions) != len(truths):
             raise ValueError(f"{name}: 预测/真值长度不同")
         items[name] = {
-            "prediction_start_frame": window - 1,
+            "prediction_start_frame": (
+                prediction_start_frame
+                if prediction_start_frame is not None
+                else (window - 1 if window is not None else 0)
+            ),
             "num_predictions": len(predictions),
             "predicted_label_ids": predictions,
             "truth_label_ids": truths,
@@ -50,7 +55,7 @@ def build_temporal_prediction_artifact(
         "inference": {
             "mode": inference_mode,
             "window": window,
-            "alignment": "prediction[t] corresponds to source frame t + window - 1",
+            "alignment": "predicted_label_ids 与 truth_label_ids 在每个 item 内逐项对齐",
         },
         "labels": [
             {"id": int(index), "name": index_to_action[index]}

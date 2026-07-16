@@ -13,6 +13,10 @@ data:
   data_yaml: ../../yolo-detection/pipeline/datasets/group1_large/data.yaml
   eval_split: val
 
+evaluation:
+  testset_id: yolo.group1_large.val
+  save_predictions: true
+
 train:
   epochs: 100
   batch: 16

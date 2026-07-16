@@ -2,6 +2,42 @@ schema_version: 1
 root: ..
 
 testsets:
+  temporal.actionmixed-v1.train:
+    family: temporal
+    format: actionmixed_bbox
+    dataset_version: cleansight-actionmixed-v1
+    split: train
+    manifest: benchmark/manifests/actionmixed/train.txt
+    data_root: yolo-detection/pipeline/raw/modelscope/cleansight-ActionMixed
+    feature_mapping: actionmixed-bbox-8cls-v1
+    input_dim: 40
+    labels: [idle, air_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    purpose: training_only
+
+  temporal.actionmixed-v1.val:
+    family: temporal
+    format: actionmixed_bbox
+    dataset_version: cleansight-actionmixed-v1
+    split: val
+    manifest: benchmark/manifests/actionmixed/val.txt
+    data_root: yolo-detection/pipeline/raw/modelscope/cleansight-ActionMixed
+    feature_mapping: actionmixed-bbox-8cls-v1
+    input_dim: 40
+    labels: [idle, air_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    purpose: validation_only
+
+  temporal.actionmixed-v1.test:
+    family: temporal
+    format: actionmixed_bbox
+    dataset_version: cleansight-actionmixed-v1
+    split: test
+    manifest: benchmark/manifests/actionmixed/test.txt
+    data_root: yolo-detection/pipeline/raw/modelscope/cleansight-ActionMixed
+    feature_mapping: actionmixed-bbox-8cls-v1
+    input_dim: 40
+    labels: [idle, air_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    purpose: locked_holdout_benchmark
+
   temporal.endo-project-v1.train:
     family: temporal
     dataset_version: endo-project-v1
@@ -56,6 +92,16 @@ testsets:
     labels: [hand, scope_control_body, scope_mid_section]
     purpose: locked_holdout_benchmark
 
+  yolo.group1_large.val:
+    family: yolo
+    dataset_version: cleansight-actionmixed-detection-v1
+    split: val
+    manifest: yolo-detection/pipeline/datasets/group1_large/data.yaml
+    feature_mapping: yolo-bbox-group1-v1
+    input_dim: 3
+    labels: [hand, scope_control_body, scope_mid_section]
+    purpose: validation_only
+
   yolo.group2_small.test:
     family: yolo
     dataset_version: cleansight-actionmixed-detection-v1
@@ -65,6 +111,16 @@ testsets:
     input_dim: 3
     labels: [syringe, air_gun, scope_distal_end]
     purpose: locked_holdout_benchmark
+
+  yolo.group2_small.val:
+    family: yolo
+    dataset_version: cleansight-actionmixed-detection-v1
+    split: val
+    manifest: yolo-detection/pipeline/datasets/group2_small/data.yaml
+    feature_mapping: yolo-bbox-group2-v1
+    input_dim: 3
+    labels: [syringe, air_gun, scope_distal_end]
+    purpose: validation_only
 
   e2e.clean-example.smoke:
     family: e2e

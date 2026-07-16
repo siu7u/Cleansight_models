@@ -138,5 +138,19 @@ class DetectionPipeline:
             num_params=meta.get("num_params"),
             timestamp=now_stamp(),
         )
+        if hasattr(adapter, "prediction_artifact") and cfg.get("evaluation", {}).get("save_predictions", True):
+            try:
+                envelope.pending_artifacts["predictions"] = adapter.prediction_artifact(
+                    weights=ckpt,
+                    data_yaml=cfg["data"]["data_yaml"],
+                    split=cfg["data"].get("eval_split", "val"),
+                    imgsz=model_cfg.get("imgsz", 640),
+                    device=device,
+                )
+            except Exception as exc:  # 指标已完成时保留结果，并把 artifact 故障写进信封
+                envelope.artifacts["predictions"] = {
+                    "state": "missing",
+                    "reason": f"逐图预测 artifact 生成失败: {type(exc).__name__}: {exc}",
+                }
         envelope.integrity = check_envelope_complete(envelope)
         return envelope

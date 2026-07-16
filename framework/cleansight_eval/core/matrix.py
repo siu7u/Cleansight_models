@@ -54,13 +54,15 @@ def build_matrix(envelopes: list[EvalEnvelope]) -> dict:
                 "pipeline": env.pipeline,
                 "checkpoint": env.checkpoint,
                 "dataset": env.dataset,
+                "testset_id": env.testset.get("id"),
+                "testset_fingerprint": env.testset.get("fingerprint_sha256"),
                 "feature_schema": env.feature_schema,
                 "num_params": env.num_params,
                 "integrity_ok": env.integrity.get("ok"),
                 "cells": cells,
             }
         )
-    return {"metric_columns": columns, "rows": rows}
+    return {"schema_version": 2, "result_type": "evaluation_matrix", "metric_columns": columns, "rows": rows}
 
 
 def _cell_display(cell: dict | None) -> str:

@@ -256,6 +256,22 @@ def _validate_temporal(spec: TestsetSpec) -> list[str]:
     if spec.expected_items and tuple(items) != spec.expected_items:
         errors.append(f"split 样本与 expected_items 不一致: actual={items!r}")
 
+    if spec.raw.get("format") == "actionmixed_bbox":
+        mapping_path = data_root / "labels" / "data.yaml"
+        if not mapping_path.is_file():
+            errors.append(f"缺少动作标签映射: {mapping_path}")
+        else:
+            payload = _load_yaml(mapping_path)
+            names = payload.get("names") or {}
+            mapped = tuple(str(names[key]) for key in sorted(names, key=lambda value: int(value)))
+            if mapped != spec.labels:
+                errors.append(f"ActionMixed labels 与 manifest 不一致: {mapped!r}")
+        for name in items:
+            label_path = data_root / "labels" / spec.split / f"{name}.txt"
+            if not label_path.is_file():
+                errors.append(f"缺少动作标签文件: {label_path}")
+        return errors
+
     mapping_path = data_root / "mapping.txt"
     if not mapping_path.is_file():
         errors.append(f"缺少标签映射: {mapping_path}")
@@ -412,15 +428,22 @@ def validate_catalog(catalog: Mapping[str, TestsetSpec]) -> dict[str, list[str]]
             for spec in specs:
                 results[spec.id].append(message)
             continue
-        for train in trains:
-            for test in tests:
+        split_order = {"train": 0, "val": 1, "test": 2}
+        ordered = sorted(specs, key=lambda item: (split_order.get(item.split, 99), item.id))
+        for left_index, left in enumerate(ordered):
+            for right in ordered[left_index + 1 :]:
+                if left.split == right.split:
+                    continue
                 try:
-                    overlap = sorted(set(read_split_items(train)) & set(read_split_items(test)))
+                    overlap = sorted(set(read_split_items(left)) & set(read_split_items(right)))
                 except (OSError, ValueError):
                     continue
                 if overlap:
-                    message = f"temporal train/test 泄漏 dataset_version={dataset_version}: {overlap}"
-                    results[train.id].append(message)
-                    results[test.id].append(message)
+                    message = (
+                        f"temporal {left.split}/{right.split} 泄漏 "
+                        f"dataset_version={dataset_version}: {overlap}"
+                    )
+                    results[left.id].append(message)
+                    results[right.id].append(message)
 
     return {testset_id: list(dict.fromkeys(errors)) for testset_id, errors in results.items()}

@@ -13,11 +13,12 @@ model:
 
 data:
   name: cleansight-ActionMixed
-  root: /abs/path/to/cleansight-ActionMixed   # 改成本机数据集根的绝对路径
+  root: ../../yolo-detection/pipeline/raw/modelscope/cleansight-ActionMixed
   action_mapping: labels/data.yaml   # YAML: action_id -> 名称
   labels_dir: labels                 # labels/<split>/<video>.mp4.txt : "frame_id action_id"
   frames_dir: frames                 # frames/<split>/<video>-<frame:06d>.txt : bbox → 40维特征
   split_train: train                 # 直接用内建目录，不用 idx
+  split_val: val                     # 训练期选择 best.pt，不占用 test
   split_eval: test                   # 评估用哪个目录（train/val/test）
 
 feature_schema:
@@ -25,6 +26,9 @@ feature_schema:
   version: actionmixed-bbox-8cls-v1
   # 布局：每 5 维一类，顺序同 frames/data.yaml（hand, scope_control_body, scope_mid_section,
   # scope_distal_end, syringe, air_gun, short_brush, brush_tip_out），每类 [presence, cx, cy, w, h]。
+
+evaluation:
+  testset_id: temporal.actionmixed-v1.test
 
 train:
   epochs: 20

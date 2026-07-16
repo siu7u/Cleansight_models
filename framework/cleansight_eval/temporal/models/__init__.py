@@ -14,6 +14,7 @@ import torch.nn as nn
 from .gru import GRUClassifier
 from .mstcn import MSTCN
 from .mstcn2 import MSTCN2
+from .transformer import TransformerClassifier
 
 
 def _build_gru(cfg: dict) -> nn.Module:
@@ -46,11 +47,25 @@ def _build_mstcn2(cfg: dict) -> nn.Module:
     )
 
 
+def _build_transformer(cfg: dict) -> nn.Module:
+    return TransformerClassifier(
+        input_dim=cfg["input_dim"],
+        num_classes=cfg["num_classes"],
+        d_model=cfg.get("d_model", 64),
+        nhead=cfg.get("nhead", 4),
+        num_layers=cfg.get("num_layers", 2),
+        dim_feedforward=cfg.get("dim_feedforward", 128),
+        dropout=cfg.get("dropout", 0.1),
+        max_len=cfg.get("max_len", 2048),
+    )
+
+
 # type -> {build: cfg->nn.Module, causal: bool}
 _MODELS = {
     "gru": {"build": _build_gru, "causal": True},
     "mstcn": {"build": _build_mstcn, "causal": False},
     "mstcn2": {"build": _build_mstcn2, "causal": False},
+    "transformer": {"build": _build_transformer, "causal": False},
 }
 
 

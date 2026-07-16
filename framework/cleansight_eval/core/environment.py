@@ -18,6 +18,12 @@ def now_stamp() -> str:
     return datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
+def now_iso() -> str:
+    """返回带本地时区偏移的 ISO 8601 时间，供 schema v2 结果记录。"""
+
+    return datetime.now().astimezone().isoformat()
+
+
 def set_seed(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
