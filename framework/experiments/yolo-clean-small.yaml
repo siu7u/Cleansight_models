@@ -1,5 +1,6 @@
 # YOLO small-tool detector evaluation config.
 
+schema_version: 1
 pipeline: detection
 
 model:
@@ -14,6 +15,7 @@ data:
   eval_split: val
 
 evaluation:
+  mode: exploratory
   testset_id: yolo.group2_small.val
   save_predictions: true
 

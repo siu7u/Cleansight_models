@@ -15,6 +15,21 @@ class CompatibilityError(Exception):
     """checkpoint / 特征 / 配置出现硬性不兼容时抛出。"""
 
 
+def assert_evaluation_profile(cfg: dict, testset: dict) -> None:
+    """正式评估必须使用已登记且校验通过的 testset；探索模式允许降级留痕。"""
+
+    mode = (cfg.get("evaluation") or {}).get("mode", "formal")
+    if mode not in {"formal", "exploratory"}:
+        raise ValueError(f"evaluation.mode 必须是 formal 或 exploratory，当前为 {mode!r}")
+    if mode == "exploratory":
+        return
+    if not testset.get("registered"):
+        raise CompatibilityError("formal 评估必须声明 benchmark 已登记 testset")
+    errors = testset.get("validation_errors") or []
+    if errors:
+        raise CompatibilityError("formal testset 校验失败:\n  - " + "\n  - ".join(map(str, errors)))
+
+
 def check_checkpoint_config(meta: dict, expected: dict | None) -> list[str]:
     """比对 checkpoint 元信息与期望配置，返回不兼容项列表。
 
@@ -57,7 +72,7 @@ def check_feature_schema(actual_dim: int, expected: dict | None) -> list[str]:
 def check_result_complete(result: Any) -> dict:
     """检查评估结果是否具备最小可解释字段，返回完整性报告（不做达标判断）。"""
 
-    report: dict[str, Any] = {"ok": True, "checks": {}, "issues": []}
+    report: dict[str, Any] = {"ok": True, "issues": []}
     required = ("model_type", "pipeline", "checkpoint", "dataset")
     for key in required:
         if not getattr(result, key, None):
@@ -79,12 +94,14 @@ def check_result_complete(result: Any) -> dict:
     # CLI 完成 schema v2 溯源信息注入后才执行这些增强检查；pipeline 单测直接调用时
     # run 为空，仍只检查上面的模型事实字段。
     if result.run:
-        checks = report["checks"]
-        device = result.run.get("device")
-        checks["run_context_present"] = bool(
-            result.run.get("id") and device not in (None, "", "unknown")
-        )
+        checks: dict[str, bool] = {}
+        checks["run_context_present"] = bool(result.run.get("id"))
         checks["checkpoint_hash_present"] = bool(result.checkpoint_info.get("sha256"))
+        if result.run.get("evaluation_mode") == "formal":
+            meta = result.checkpoint_info.get("meta") or {}
+            checks["checkpoint_metadata_bound"] = bool(
+                meta.get("schema_version") and meta.get("checkpoint_bound")
+            )
         checks["testset_registered"] = bool(result.testset.get("registered"))
         checks["testset_fingerprint_present"] = bool(result.testset.get("fingerprint_sha256"))
         validation_errors = result.testset.get("validation_errors") or []
@@ -97,8 +114,9 @@ def check_result_complete(result: Any) -> dict:
             checks["prediction_artifact_recomputable"] = prediction_ref.get("recomputable") is True
 
         messages = {
-            "run_context_present": "缺少 run id 或 device",
+            "run_context_present": "缺少 run id",
             "checkpoint_hash_present": "缺少 checkpoint SHA-256",
+            "checkpoint_metadata_bound": "formal 评估的 checkpoint metadata 未绑定权重内容",
             "testset_registered": "评估未使用 benchmark 已登记 testset",
             "testset_fingerprint_present": "缺少 testset fingerprint",
             "testset_validation_passed": "testset 校验未通过",
@@ -107,11 +125,13 @@ def check_result_complete(result: Any) -> dict:
             "metric_details_present": "缺少可复算的时序详细指标",
             "prediction_artifact_recomputable": "时序 prediction artifact 无法复算指标",
         }
-        for name, passed in checks.items():
-            if not passed:
-                report["issues"].append(messages[name])
-        report["issues"].extend(str(item) for item in validation_errors)
+        failed_checks = [name for name, passed in checks.items() if not passed]
+        if failed_checks:
+            report["failed_checks"] = failed_checks
+            report["issues"].extend(messages[name] for name in failed_checks)
         report["ok"] = report["ok"] and all(checks.values())
+    if not report["issues"]:
+        report.pop("issues")
     return report
 
 

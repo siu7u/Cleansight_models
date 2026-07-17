@@ -7,8 +7,12 @@ from __future__ import annotations
 
 import platform
 import random
+import shlex
+import subprocess
 import sys
 from datetime import datetime
+from importlib import metadata
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -42,8 +46,36 @@ def pick_device() -> torch.device:
     return torch.device("cpu")
 
 
+def _git_snapshot(repo_root: Path) -> dict:
+    """记录代码版本和 dirty 状态，仅作为事实，不执行门禁。"""
+
+    try:
+        commit = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo_root, check=True,
+            capture_output=True, text=True,
+        ).stdout.strip()
+        status = subprocess.run(
+            ["git", "status", "--porcelain"], cwd=repo_root, check=True,
+            capture_output=True, text=True,
+        ).stdout.splitlines()
+        return {"commit": commit, "dirty": bool(status), "changed_paths": status}
+    except (OSError, subprocess.CalledProcessError) as exc:
+        return {"commit": None, "dirty": None, "error": str(exc)}
+
+
+def _dependency_snapshot() -> dict[str, str]:
+    """以包名到版本的稳定映射记录当前 Python 环境。"""
+
+    packages = {}
+    for dist in metadata.distributions():
+        name = dist.metadata.get("Name")
+        if name:
+            packages[str(name).lower()] = dist.version
+    return dict(sorted(packages.items()))
+
+
 def capture_env(device: torch.device, seed: int | None = None) -> dict:
-    """捕获可复现所需的环境快照。"""
+    """捕获运行命令、代码、依赖、CUDA/cuDNN 与精度模式。"""
 
     info = {
         "timestamp": now_stamp(),
@@ -53,8 +85,15 @@ def capture_env(device: torch.device, seed: int | None = None) -> dict:
         "numpy": np.__version__,
         "device": str(device),
         "seed": seed,
+        "command": shlex.join(sys.argv),
+        "precision_mode": "fp32",
+        "default_dtype": str(torch.get_default_dtype()),
+        "git": _git_snapshot(Path(__file__).resolve().parents[3]),
+        "dependencies": _dependency_snapshot(),
     }
     if device.type == "cuda":
         idx = device.index if device.index is not None else torch.cuda.current_device()
         info["cuda_device"] = torch.cuda.get_device_name(idx)
+        info["cuda_runtime"] = torch.version.cuda
+        info["cudnn"] = torch.backends.cudnn.version()
     return info

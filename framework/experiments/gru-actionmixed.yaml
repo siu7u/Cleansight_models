@@ -2,6 +2,7 @@
 # 历史滑窗流水线：训练与评估都逐窗喂入、末帧监督、因果平滑推理，并测单 tick 延迟。
 # 数据按 features 契约（bbox→40维）读入，用数据集内建的 train/val/test 目录切分。
 
+schema_version: 1
 pipeline: sliding_window_temporal
 
 model:

@@ -5,6 +5,7 @@
 """
 
 import json
+from pathlib import Path
 
 import numpy as np
 import yaml
@@ -48,6 +49,7 @@ def _make_actionmixed(root, seed=0):
 
 def _write_config(path, data_root):
     cfg = {
+        "schema_version": 1,
         "pipeline": "sliding_window_temporal",
         "model": {"type": "gru", "input_dim": 40, "num_classes": 6, "hidden": 16, "num_layers": 1},
         "data": {
@@ -60,6 +62,7 @@ def _write_config(path, data_root):
             "split_eval": "test",
         },
         "feature_schema": {"dim": 40, "version": "actionmixed-bbox-8cls-v1"},
+        "evaluation": {"mode": "exploratory", "limits": {"is_smoke": True}},
         "train": {"epochs": 1, "lr": 0.01, "batch_size": 8, "window": 8},
     }
     path.write_text(yaml.safe_dump(cfg, allow_unicode=True))
@@ -78,22 +81,27 @@ def test_end_to_end(tmp_path):
     assert ckpt.endswith(".pt")
     run_dir = next(runs_dir.iterdir())
     assert (run_dir / "history.csv").exists()
+    assert (run_dir / "training_curves.png").exists()
     assert (run_dir / "status.json").exists()
     assert (run_dir / "checkpoints" / "best.pt").exists()
     assert (run_dir / "checkpoints" / "last.pt").exists()
     status = json.loads((run_dir / "status.json").read_text())
     assert status["state"] == "succeeded"
     assert status["best_metric"]["name"] == "val_acc"
+    assert status["training_curves"] == str(run_dir / "training_curves.png")
     payload, _meta = load_training_checkpoint(run_dir / "checkpoints" / "last.pt")
     assert payload["epoch"] == 1
     assert "optimizer_state" in payload
 
     # eval → 一份信封（训练与评估同属一条流水线，输入构造与输出语义一致）
-    envelopes = eval_cli.main(["--config", str(cfg_path), "--ckpt", ckpt])
-    assert len(envelopes) == 1
-    data = json.loads(open(envelopes[0]).read())
+    outputs = eval_cli.main(["--config", str(cfg_path), "--ckpt", ckpt])
+    assert len(outputs) == 2
+    data = json.loads(open(outputs[0]).read())
     assert data["schema_version"] == 2
     assert data["pipeline"] == "sliding_window_temporal"
+    assert set(data["run"]) == {"id", "created_at", "config", "evaluation_mode"}
+    assert "evaluation_environment" not in data["run"]
+    assert "environment" not in data["run"]
     summary = data["metrics"]["summary"]
     assert summary["acc"]["state"] in (
         MetricState.COMPUTED.value,
@@ -112,7 +120,7 @@ def test_end_to_end(tmp_path):
     assert "0.10" in temporal_details["segment"]["details_at_iou"]
     assert temporal_details["frame"]["per_class"]
     # 滑窗流水线：测实时延迟、记录窗口与冷启动语义
-    assert data["performance"]["latency_mean_ms"]["state"] == MetricState.COMPUTED.value
+    assert data["performance"]["model_forward_mean_ms"]["state"] == MetricState.COMPUTED.value
     assert data["inference"]["window"] == 8
     assert "cold_start" in data["inference"]
     ckpt_path = run_dir / "checkpoints" / "best.pt"
@@ -121,18 +129,33 @@ def test_end_to_end(tmp_path):
     assert ckpt == str(ckpt_path)
     assert checkpoint_report.exists()
     assert version_report.exists()
+    assert outputs[1].endswith(".delivery.manifest.json")
+    assert Path(outputs[1]).exists()
+    delivery = json.loads(Path(outputs[1]).read_text(encoding="utf-8"))
+    delivery_roles = {item["role"] for item in delivery["files"]}
+    assert {
+        "checkpoint",
+        "checkpoint_metadata",
+        "evaluation",
+        "artifact:predictions",
+        "resolved_config",
+        "training_environment",
+        "training_history",
+        "training_curves",
+        "run_status",
+    } <= delivery_roles
     report_text = checkpoint_report.read_text(encoding="utf-8")
     assert "Checkpoint 评估报告：best.pt" in report_text
     assert "人工维护区" in report_text
     version_text = version_report.read_text(encoding="utf-8")
     assert "版本化评估报告" in version_text
-    assert "checkpoint 专属报告：`best.eval.md`" in version_text
+    assert "checkpoint 专属报告：[best.eval.md](<best.eval.md>)" in version_text
 
     # matrix
     matrix_json = matrix_cli.main(["--runs", str(runs_dir)])
     matrix = json.loads(open(matrix_json).read())
     assert len(matrix["rows"]) == 1
-    assert "perf.latency_mean_ms" in matrix["metric_columns"]
+    assert "perf.model_forward_mean_ms" in matrix["metric_columns"]
     md = open(matrix_json.replace(".json", ".md")).read()
     assert "N/A" in md  # 图例中说明 N/A 语义
 

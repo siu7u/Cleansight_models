@@ -4,7 +4,7 @@ import json
 
 from cleansight_eval.cli import upgrade_envelope
 from cleansight_eval.core.artifacts import write_json_artifact
-from cleansight_eval.core.provenance import build_checkpoint_info, resolve_testset_info
+from cleansight_eval.core.provenance import build_checkpoint_info, build_run_info, resolve_testset_info
 from cleansight_eval.temporal.artifacts import build_prediction_artifact
 
 
@@ -27,8 +27,25 @@ def test_checkpoint_info_contains_content_hash(tmp_path):
     checkpoint.write_bytes(b"checkpoint")
     info = build_checkpoint_info(checkpoint, tmp_path)
     assert info["path"] == "best.pt"
-    assert info["size_bytes"] == len(b"checkpoint")
     assert len(info["sha256"]) == 64
+    assert "size_bytes" not in info
+
+
+def test_evaluation_run_info_excludes_environment_and_git(tmp_path):
+    run_dir = tmp_path / "runs" / "gru-v1"
+    checkpoint = run_dir / "checkpoints" / "best.pt"
+    checkpoint.parent.mkdir(parents=True)
+    checkpoint.write_bytes(b"checkpoint")
+    config = tmp_path / "gru.yaml"
+    config.write_text("pipeline: sliding_window_temporal\n", encoding="utf-8")
+
+    info, found = build_run_info(checkpoint, config)
+
+    assert found == run_dir
+    assert set(info) == {"id", "created_at", "config"}
+    assert "evaluation_environment" not in info
+    assert "environment" not in info
+    assert "git" not in info
 
 
 def test_actionmixed_testset_is_registered_and_leak_is_explicit():

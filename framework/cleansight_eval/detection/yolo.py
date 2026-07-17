@@ -56,7 +56,10 @@ class YoloAdapter:
         names = {int(k): v for k, v in dict(model.names).items()}
         return best, num_params, names, len(names)
 
-    def val(self, weights, data_yaml, split: str, imgsz: int, device) -> dict:
+    def val(
+        self, weights, data_yaml, split: str, imgsz: int, device, *,
+        conf: float, iou: float, max_det: int, agnostic_nms: bool,
+    ) -> dict:
         """在指定 split 上验证，返回与 ultralytics 解耦的普通 dict。
 
         ``per_class`` 只含验证集里有样本、被评估到的类别（``ap_class_index``）；
@@ -66,11 +69,18 @@ class YoloAdapter:
         from ultralytics import YOLO
 
         model = YOLO(str(weights))
+        # Ultralytics validation 可能 fuse Conv/BN 并替换 model.model；必须在此之前统计，
+        # 才能记录 checkpoint 原始结构的参数量，而不是优化后的推理结构。
+        num_params = sum(parameter.numel() for parameter in model.model.parameters())
         m = model.val(
             data=str(data_yaml),
             split=split,
             imgsz=imgsz,
             device=_ul_device(device),
+            conf=conf,
+            iou=iou,
+            max_det=max_det,
+            agnostic_nms=agnostic_nms,
             verbose=False,
         )
         box = m.box
@@ -87,11 +97,15 @@ class YoloAdapter:
             "map50_95": float(box.map),
             "precision": float(box.mp),
             "recall": float(box.mr),
+            "num_params": num_params,
             "names": names,
             "per_class": per_class,
         }
 
-    def predict(self, weights, data_yaml, split: str, imgsz: int, device) -> dict:
+    def predict(
+        self, weights, data_yaml, split: str, imgsz: int, device, *,
+        conf: float, iou: float, max_det: int, agnostic_nms: bool,
+    ) -> dict:
         """逐图推理并返回原始检测事实，框使用归一化 ``xywh``。
 
         真值仍由钉定的 YOLO testset manifest/data.yaml 提供。该旁路与 ``val`` 分开，避免
@@ -121,6 +135,10 @@ class YoloAdapter:
             source=source_arg,
             imgsz=imgsz,
             device=_ul_device(device),
+            conf=conf,
+            iou=iou,
+            max_det=max_det,
+            agnostic_nms=agnostic_nms,
             stream=True,
             verbose=False,
         ):

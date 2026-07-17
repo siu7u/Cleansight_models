@@ -59,12 +59,16 @@ class MetricValue:
         return str(self.value)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "state": self.state.value,
-            "value": self.value,
-            "spec": self.spec,
-            "reason": self.reason,
-        }
+        """输出紧凑三态值，不写没有语义的 ``null`` 字段。"""
+
+        payload: dict[str, Any] = {"state": self.state.value}
+        if self.state is MetricState.COMPUTED:
+            payload["value"] = self.value
+        if self.spec is not None:
+            payload["spec"] = self.spec
+        if self.reason is not None:
+            payload["reason"] = self.reason
+        return payload
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "MetricValue":
@@ -111,16 +115,19 @@ class EvaluationResult:
         """输出正式 schema v2；空的门禁字段不写，避免把模型事实伪装成 PENDING。"""
 
         checkpoint = {"path": self.checkpoint, **self.checkpoint_info}
+        model: dict[str, Any] = {
+            "type": self.model_type,
+            "id": self.model_id,
+            "checkpoint": checkpoint,
+        }
+        if self.num_params is not None:
+            model["num_params"] = self.num_params
+
         payload: dict[str, Any] = {
             "schema_version": SCHEMA_VERSION,
             "result_type": "model_evaluation",
             "run": self.run or {"created_at": self.timestamp},
-            "model": {
-                "type": self.model_type,
-                "id": self.model_id,
-                "num_params": self.num_params,
-                "checkpoint": checkpoint,
-            },
+            "model": model,
             "pipeline": self.pipeline,
             "testset": self.testset or {"dataset_version": self.dataset},
             "feature_schema": self.feature_schema,

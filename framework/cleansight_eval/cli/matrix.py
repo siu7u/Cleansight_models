@@ -1,4 +1,4 @@
-"""评估矩阵入口：python -m cleansight_eval.cli.matrix --runs <dir>。
+"""评估矩阵入口：python -m framework.cleansight_eval.cli.matrix --runs <dir>。
 
 汇总 run 目录下所有新旧评估结果，产出 matrix.json（机读）+ matrix.md（人读），异构
 指标列并保留 N/A / MISSING / 已计算三态（需求 §9）。

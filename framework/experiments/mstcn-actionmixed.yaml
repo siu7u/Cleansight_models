@@ -2,6 +2,7 @@
 # 全序列流水线：一次看到完整序列、逐帧监督、逐帧 argmax 推理；离线不测延迟（标 N/A）。
 # 与 GRU/YOLO 共用同一 train/eval 入口，只出事实信封、不判达标。
 
+schema_version: 1
 pipeline: full_sequence_temporal
 
 model:

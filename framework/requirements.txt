@@ -1,4 +1,4 @@
-# cleansight_eval 框架依赖（Python 3.12）
+# cleansight_eval 框架依赖（当前测试环境 Python 3.10）
 # 版本为本机已验证的已知可用值（下界即可，不强锁）。
 #
 # 分组说明：
@@ -17,6 +17,7 @@ ultralytics>=8.3
 
 # ---- 可选 ----
 tqdm>=4.66
+matplotlib>=3.8
 
 # ---- 开发/测试 ----
 pytest>=8.0

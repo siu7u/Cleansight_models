@@ -27,14 +27,12 @@ except ImportError:  # tqdm 可选，缺失时退化为原样迭代
 
 from ..core.checkpoint import load_checkpoint, load_training_checkpoint, save_training_checkpoint
 from ..core.environment import now_stamp, set_seed
-from ..core.envelope import EvaluationResult
 from ..core.execution import PredictionOutput, format_params, sample_callable_latency
-from ..core.history import HistoryWriter
-from ..core.integrity import check_feature_schema, check_result_complete
+from ..core.history import HistoryWriter, try_plot_training_history
+from ..core.integrity import check_feature_schema
 from ..core.run import RunContext
-from .artifacts import build_prediction_artifact
 from .data import build_temporal_meta, load_split, split_video_names
-from .metrics import compute_temporal_metrics_by_item, summarize_single_tick_timing
+from .metrics import compute_temporal_metrics_by_item
 from .models import build_model, is_causal
 from .util import causal_decision, compute_class_weights
 
@@ -262,10 +260,26 @@ class SlidingWindowTemporalPipeline:
                 history.append(row)
                 run.write_status("running", stage="epoch_complete", epoch=epoch, best_metric=best_metric, last_checkpoint=str(last_path))
 
-            run.write_status("succeeded", best_metric=best_metric, best_checkpoint=str(best_path), last_checkpoint=str(last_path), history=str(run.history_path))
+            curves_path, curves_error = try_plot_training_history(
+                run.history_path,
+                run.dir / "training_curves.png",
+            )
+            run.write_status(
+                "succeeded",
+                best_metric=best_metric,
+                best_checkpoint=str(best_path),
+                last_checkpoint=str(last_path),
+                history=str(run.history_path),
+                training_curves=str(curves_path) if curves_path else None,
+                training_curves_error=curves_error,
+            )
             print(f"[train] run_dir={run.dir}")
             print(f"[train] best_checkpoint={best_path}")
             print(f"[train] last_checkpoint={last_path}")
+            if curves_path:
+                print(f"[train] training_curves={curves_path}")
+            elif curves_error:
+                print(f"[train] training_curves skipped: {curves_error}")
             return str(best_path if best_path.exists() else last_path)
         except Exception as exc:
             run.write_exception_status(exc, epoch=current_epoch)
@@ -276,7 +290,13 @@ class SlidingWindowTemporalPipeline:
 
         model_cfg = cfg["model"]
         expected = {"type": model_cfg["type"], "input_dim": model_cfg["input_dim"], "num_classes": model_cfg["num_classes"]}
-        state_dict, meta = load_checkpoint(ckpt, expected=expected, map_location=device)
+        mode = (cfg.get("evaluation") or {}).get("mode", "formal")
+        state_dict, meta = load_checkpoint(
+            ckpt,
+            expected=expected,
+            map_location=device,
+            require_meta_schema=mode == "formal",
+        )
 
         model = build_model(meta["model"]).to(device)
         model.load_state_dict(state_dict)
@@ -365,36 +385,3 @@ class SlidingWindowTemporalPipeline:
                 "input_shape": [1, window, model_cfg["input_dim"]],
             },
         )
-
-    def evaluate(self, cfg: dict, ckpt: str, device) -> EvaluationResult:
-        """兼容评估入口：消费 ``predict`` 的事实输出并组装正式 EvaluationResult。"""
-
-        output = self.predict(cfg, ckpt, device)
-        metrics, metric_details = compute_temporal_metrics_by_item(
-            output.predictions, output.targets, output.labels, return_details=True
-        )
-
-        result = EvaluationResult(
-            model_type=output.model_type,
-            model_id=output.model_id,
-            pipeline=self.pipeline_name,
-            checkpoint=output.checkpoint,
-            dataset=output.dataset,
-            feature_schema=output.feature_schema,
-            metrics=metrics,
-            metric_details={"temporal": metric_details},
-            performance=summarize_single_tick_timing(output.timing),
-            inference_semantics=output.inference_semantics,
-            num_params=output.num_params,
-            timestamp=now_stamp(),
-        )
-        result.pending_artifacts["predictions"] = build_prediction_artifact(
-            output.predictions,
-            output.targets,
-            output.labels,
-            window=output.metadata["window"],
-            inference_mode=output.inference_semantics["mode"],
-            prediction_start_frame=0,
-        )
-        result.integrity = check_result_complete(result)
-        return result

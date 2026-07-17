@@ -1,6 +1,7 @@
 # Transformer 全序列时序实验配置（模型注册后使用）。
 # Transformer Encoder 默认使用完整序列上下文，属于非因果模型；评估时使用 full_sequence_temporal。
 
+schema_version: 1
 pipeline: full_sequence_temporal
 
 model:

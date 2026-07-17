@@ -48,6 +48,7 @@ def _make_actionmixed(root, seed=0):
 
 def _write_config(path, data_root, model=None):
     cfg = {
+        "schema_version": 1,
         "pipeline": "full_sequence_temporal",
         "model": model or {"type": "mstcn", "input_dim": 40, "num_classes": 6, "hidden": 16},
         "data": {
@@ -60,6 +61,7 @@ def _write_config(path, data_root, model=None):
             "split_eval": "test",
         },
         "feature_schema": {"dim": 40, "version": "actionmixed-bbox-8cls-v1"},
+        "evaluation": {"mode": "exploratory", "limits": {"is_smoke": True}},
         "train": {"epochs": 1, "lr": 0.01, "grad_clip": 5.0},
     }
     path.write_text(yaml.safe_dump(cfg, allow_unicode=True))
@@ -83,16 +85,16 @@ def test_mstcn_end_to_end(tmp_path):
     assert not torch.allclose(state["norm_std"], torch.ones_like(state["norm_std"]))
 
     # eval → 一份信封：离线全序列，延迟标 N/A
-    envelopes = eval_cli.main(["--config", str(cfg_path), "--ckpt", ckpt])
-    assert len(envelopes) == 1
-    data = json.loads(open(envelopes[0]).read())
+    outputs = eval_cli.main(["--config", str(cfg_path), "--ckpt", ckpt])
+    assert len(outputs) == 2
+    data = json.loads(open(outputs[0]).read())
     assert data["pipeline"] == "full_sequence_temporal"
     assert data["metrics"]["summary"]["acc"]["state"] in (
         MetricState.COMPUTED.value,
         MetricState.MISSING.value,
     )
     # 离线不测实时延迟：三态为 N/A（不是 0、不是缺失）
-    assert data["performance"]["latency_mean_ms"]["state"] == MetricState.NOT_APPLICABLE.value
+    assert data["performance"]["model_forward_mean_ms"]["state"] == MetricState.NOT_APPLICABLE.value
     assert data["inference"]["mode"] == "full_sequence"
 
     # matrix：mstcn 信封正常汇入
@@ -130,10 +132,10 @@ def test_mstcn2_end_to_end(tmp_path):
     assert any(k.startswith("refines.0.") for k in state)
 
     # eval → 一份信封：离线全序列，延迟标 N/A，推理只取最后 stage。
-    envelopes = eval_cli.main(["--config", str(cfg_path), "--ckpt", ckpt])
-    data = json.loads(open(envelopes[0]).read())
+    outputs = eval_cli.main(["--config", str(cfg_path), "--ckpt", ckpt])
+    data = json.loads(open(outputs[0]).read())
     assert data["model"]["type"] == "mstcn2"
-    assert data["performance"]["latency_mean_ms"]["state"] == MetricState.NOT_APPLICABLE.value
+    assert data["performance"]["model_forward_mean_ms"]["state"] == MetricState.NOT_APPLICABLE.value
     assert data["inference"]["mode"] == "full_sequence"
 
     # 评估旁路自动出图：run 的 viz/ 下应有该 split 的分段条带图（按页切分，至少第一页）。

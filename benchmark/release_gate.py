@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""把 benchmark 汇总和上线元数据合并成一个 PASS/FAIL 门禁。"""
+"""遗留的人工发布审阅清单生成器。
+
+该脚本不再由 model_manager 暴露，也不产生是否上线的 PASS/FAIL 决策；保留文件名仅兼容历史命令。
+"""
 
 from __future__ import annotations
 
@@ -31,15 +34,30 @@ def build_run_id(version: str | None) -> str:
     return f"{slug or 'version'}-{timestamp}"
 
 
-def load_json(path: Path) -> dict[str, Any]:
+def load_json(path: Path) -> Any:
     """读取一份 benchmark JSON 汇总。"""
 
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def status_of_summary(data: dict[str, Any]) -> str:
-    """从 benchmark 汇总中解析 PASS/FAIL/UNKNOWN 状态。"""
+def display_path(path: Path) -> str:
+    """仓库内用相对路径，外部人工证据保留绝对路径。"""
 
+    try:
+        return str(path.resolve().relative_to(ROOT))
+    except ValueError:
+        return str(path.resolve())
+
+
+def status_of_summary(data: Any) -> str:
+    """从历史异构 summary 中提取已有状态，只作为人工审阅事实。"""
+
+    if isinstance(data, list):
+        statuses = [status_of_summary(item) for item in data]
+        known = [status for status in statuses if status != "UNKNOWN"]
+        return "MIXED" if len(set(known)) > 1 else (known[0] if known else "UNKNOWN")
+    if not isinstance(data, dict):
+        return "UNKNOWN"
     status = data.get("status")
     if status:
         return str(status)
@@ -75,8 +93,8 @@ def collect_card_evidence(card: Path | None) -> dict[str, bool]:
 def parse_args() -> argparse.Namespace:
     """解析 release gate 命令行输入。"""
 
-    parser = argparse.ArgumentParser(description="CleanSight release gate")
-    parser.add_argument("--version", help="本次 release gate 的版本名")
+    parser = argparse.ArgumentParser(description="CleanSight 人工发布审阅清单（历史 release_gate 兼容入口）")
+    parser.add_argument("--version", help="本次人工审阅的版本名")
     parser.add_argument(
         "--summary",
         action="append",
@@ -94,7 +112,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def build_result(args: argparse.Namespace) -> dict[str, Any]:
-    """根据 benchmark 汇总和必填元数据生成门禁结果。"""
+    """汇总可供人工审阅的事实和缺失项，不生成业务判决。"""
 
     summary_paths = [Path(item) for item in args.summary] if args.summary else [p for p in DEFAULT_SUMMARIES if p.exists()]
     summaries = []
@@ -107,16 +125,18 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
             continue
         data = load_json(path)
         status = status_of_summary(data)
+        summary_meta = data if isinstance(data, dict) else {}
+        shown_path = display_path(path)
         summaries.append(
             {
-                "path": str(path.relative_to(ROOT)),
-                "benchmark": data.get("benchmark"),
-                "version": data.get("version"),
-                "status": status,
+                "path": shown_path,
+                "benchmark": summary_meta.get("benchmark") or path.stem,
+                "version": summary_meta.get("version"),
+                "observed_status": status,
             }
         )
         if status != "PASS":
-            reasons.append(f"{path.relative_to(ROOT)} status={status}")
+            reasons.append(f"{shown_path} observed_status={status}")
 
     if not summaries:
         reasons.append("缺少可读取的 benchmark summary")
@@ -137,12 +157,9 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
     if not required["num_params"]:
         reasons.append("缺少模型参数量")
 
-    if args.causality in {"non-causal", "offline-only"}:
-        reasons.append(f"在线 release 不允许 causality={args.causality}")
-
     return {
         "schema_version": 1,
-        "benchmark": "release_gate",
+        "benchmark": "release_review",
         "version": args.version,
         "run_id": build_run_id(args.version),
         "summaries": summaries,
@@ -150,16 +167,16 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
             "latency_ms": args.latency_ms,
             "causality": args.causality,
             "num_params": args.num_params,
-            "card": str(card_path.relative_to(ROOT)) if card_path and card_path.exists() else None,
+            "card": display_path(card_path) if card_path and card_path.exists() else None,
             "present": required,
         },
-        "status": "PASS" if not reasons else "FAIL",
-        "reasons": reasons,
+        "review_state": "MANUAL_REVIEW_REQUIRED",
+        "observations": reasons,
     }
 
 
 def write_outputs(result: dict[str, Any]) -> tuple[Path, Path]:
-    """写入 latest 和归档版 release gate JSON/Markdown 报告。"""
+    """写入 latest 和归档版人工审阅 JSON/Markdown 报告。"""
 
     LATEST_DIR.mkdir(parents=True, exist_ok=True)
     archive_dir = OUT_DIR / "reports"
@@ -173,19 +190,22 @@ def write_outputs(result: dict[str, Any]) -> tuple[Path, Path]:
     archive_json.write_text(json_text, encoding="utf-8")
 
     lines = [
-        "# Release Gate",
+        "# Release Review（人工审阅）",
         "",
         f"- 版本: `{result.get('version') or run_id}`",
         f"- 归档编号: `{run_id}`",
-        f"- 结论: **{result['status']}**",
+        "- 结论: **需人工审阅（脚本不做上线判决）**",
         "",
         "## Benchmark Summaries",
         "",
-        "| Benchmark | Version | Status | Path |",
+        "| Benchmark | Version | Observed status | Path |",
         "| --- | --- | --- | --- |",
     ]
     for item in result["summaries"]:
-        lines.append(f"| {item.get('benchmark')} | {item.get('version')} | {item['status']} | `{item['path']}` |")
+        lines.append(
+            f"| {item.get('benchmark')} | {item.get('version')} | "
+            f"{item['observed_status']} | `{item['path']}` |"
+        )
 
     fields = result["required_release_fields"]
     present = fields["present"]
@@ -199,11 +219,11 @@ def write_outputs(result: dict[str, Any]) -> tuple[Path, Path]:
         f"| 感受域/因果性 | {present['causality']} | `{fields.get('causality')}` |",
         f"| 模型参数量 | {present['num_params']} | `{fields.get('num_params')}` |",
     ]
-    if result["reasons"]:
-        lines += ["", "## Fail Reasons", ""]
-        lines += [f"- {reason}" for reason in result["reasons"]]
+    if result["observations"]:
+        lines += ["", "## Observations", ""]
+        lines += [f"- {reason}" for reason in result["observations"]]
     else:
-        lines += ["", "全部门禁通过。"]
+        lines += ["", "未发现缺失项；是否发布仍由人工决定。"]
 
     md_text = "\n".join(lines) + "\n"
     latest_md = LATEST_DIR / "release_gate.md"
@@ -214,14 +234,14 @@ def write_outputs(result: dict[str, Any]) -> tuple[Path, Path]:
 
 
 def main() -> int:
-    """运行 release gate。"""
+    """生成审阅事实清单；退出码只表示脚本执行成功，不表示允许发布。"""
 
     args = parse_args()
     result = build_result(args)
     latest_md, archive_md = write_outputs(result)
     print(f"已写入 {latest_md}")
     print(f"已归档 {archive_md}")
-    return 0 if result["status"] == "PASS" else 2
+    return 0
 
 
 if __name__ == "__main__":

@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import os
+from collections.abc import Mapping
 from pathlib import Path
 
 from .envelope import EvaluationResult, MetricValue
@@ -13,6 +15,37 @@ from .environment import now_stamp
 
 
 VERSION_REPORT_NAME = "EVALUATION_REPORT.md"
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _markdown_file_link(
+    path: str | Path,
+    *,
+    report_dir: Path,
+    base_dir: Path | None = None,
+) -> str:
+    """把文件引用渲染为相对当前报告的 Markdown 链接。
+
+    ``base_dir`` 用于解释 artifact 等以 run 为根的相对路径；其他仓库相对路径默认
+    从当前工作目录解释。链接目标始终使用相对路径，保证整个 run 目录移动后仍可用。
+    """
+
+    display = str(path)
+    target = Path(path)
+    if not target.is_absolute():
+        target = (base_dir or Path.cwd()) / target
+    relative = os.path.relpath(target.resolve(), start=report_dir.resolve())
+    return f"[`{display}`](<{Path(relative).as_posix()}>)"
+
+
+def _run_dir_for_report(report_path: Path, result_path: Path) -> Path:
+    """根据 checkpoint/evals 的标准布局定位 artifact 相对路径所使用的 run 根。"""
+
+    if report_path.parent.name == "checkpoints":
+        return report_path.parent.parent
+    if result_path.parent.name == "evals":
+        return result_path.parent.parent
+    return result_path.parent
 
 
 def _report_category(result: EvaluationResult) -> str:
@@ -36,8 +69,112 @@ def _display_metric(value: MetricValue) -> str:
     return rendered
 
 
-def render_checkpoint_report(result: EvaluationResult, result_path: str | Path) -> str:
+def _display_detail(value) -> str:
+    """渲染逐类详情中的紧凑数值或 missing/not_applicable 状态。"""
+
+    if not isinstance(value, Mapping):
+        return str(value)
+    state = value.get("state")
+    if state == "missing":
+        rendered = "MISSING"
+    elif state == "not_applicable":
+        rendered = "N/A"
+    else:
+        rendered = str(value.get("value", state or "—"))
+    if value.get("reason"):
+        rendered += f" — {value['reason']}"
+    return rendered
+
+
+def _append_per_class_metrics(lines: list[str], result: EvaluationResult) -> None:
+    """把检测逐类 P/R 详情渲染成独立表格，避免污染主指标列表。"""
+
+    details = result.metric_details or {}
+    per_class = details.get("per_class")
+    if not isinstance(per_class, Mapping) or not per_class:
+        return
+    lines += [
+        "",
+        "## 逐类指标",
+        "",
+        "| 类别 | Precision | Recall |",
+        "| --- | --- | --- |",
+    ]
+    for class_name, values in per_class.items():
+        values = values if isinstance(values, Mapping) else {}
+        lines.append(
+            f"| {class_name} | {_display_detail(values.get('precision', '—'))} | "
+            f"{_display_detail(values.get('recall', '—'))} |"
+        )
+    specs = details.get("per_class_specs") or {}
+    if specs:
+        lines += ["", f"- 口径：precision `{specs.get('precision', '未声明')}`；recall `{specs.get('recall', '未声明')}`"]
+
+
+def _append_artifacts(
+    lines: list[str],
+    result: EvaluationResult,
+    *,
+    report_dir: Path,
+    run_dir: Path,
+) -> None:
+    """用表格展示 artifact 引用，避免直接打印 Python dict。"""
+
+    lines += [
+        "",
+        "## Artifacts",
+        "",
+        "| 产物 | 路径 | Schema | SHA-256 | 状态 |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    if not result.artifacts:
+        lines.append("| 无 | MISSING | — | — | missing |")
+        return
+    for name, raw_reference in result.artifacts.items():
+        references = raw_reference if isinstance(raw_reference, list) else [raw_reference]
+        for index, reference in enumerate(references, start=1):
+            label = name if len(references) == 1 else f"{name}[{index}]"
+            if not isinstance(reference, Mapping):
+                link = _markdown_file_link(reference, report_dir=report_dir, base_dir=run_dir)
+                lines.append(f"| {label} | {link} | — | — | — |")
+                continue
+            if reference.get("recomputable") is True:
+                state = "可复算"
+            elif reference.get("recomputable") is False:
+                state = "不可复算"
+            elif result.pipeline == "detection" and name == "predictions":
+                state = "需结合 testset 真值"
+            else:
+                state = str(reference.get("state") or "—")
+            artifact_path = reference.get("path")
+            rendered_path = (
+                _markdown_file_link(artifact_path, report_dir=report_dir, base_dir=run_dir)
+                if artifact_path
+                else "—"
+            )
+            lines.append(
+                f"| {label} | {rendered_path} | "
+                f"{reference.get('schema_version', '—')} | `{reference.get('sha256', '—')}` | {state} |"
+            )
+
+
+def render_checkpoint_report(
+    result: EvaluationResult,
+    result_path: str | Path,
+    report_path: str | Path | None = None,
+) -> str:
     """把单次正式评估结果渲染成 checkpoint 专属 Markdown。"""
+
+    result_path = Path(result_path)
+    report_path = (
+        Path(report_path)
+        if report_path is not None
+        else Path(result.checkpoint).with_suffix(".eval.md")
+    )
+    report_dir = report_path.parent
+    run_dir = _run_dir_for_report(report_path, result_path)
+    checkpoint_link = _markdown_file_link(result.checkpoint, report_dir=report_dir)
+    result_link = _markdown_file_link(result_path, report_dir=report_dir)
 
     lines = [
         f"# Checkpoint 评估报告：{Path(result.checkpoint).name}",
@@ -48,19 +185,21 @@ def render_checkpoint_report(result: EvaluationResult, result_path: str | Path) 
         f"- 模型类型：`{result.model_type}`",
         f"- 模型 ID：`{result.model_id}`",
         f"- 流水线：`{result.pipeline}`",
-        f"- checkpoint：`{result.checkpoint}`",
-        f"- evaluation result：`{result_path}`",
+        f"- checkpoint：{checkpoint_link}",
+        f"- evaluation result：{result_link}",
         f"- dataset：`{result.dataset}`",
         f"- testset：`{result.testset.get('id', '未登记')}`",
         f"- split：`{result.testset.get('split', '未知')}`",
         f"- testset fingerprint：`{result.testset.get('fingerprint_sha256', 'MISSING')}`",
-        f"- device：`{result.run.get('device', '未知')}`",
         f"- checkpoint SHA-256：`{result.checkpoint_info.get('sha256', 'MISSING')}`",
         f"- 参数量：`{result.num_params if result.num_params is not None else '未知'}`",
-        "",
-        "## Feature Schema",
-        "",
     ]
+    config_path = result.run.get("config")
+    if config_path:
+        lines.append(
+            f"- config：{_markdown_file_link(config_path, report_dir=report_dir, base_dir=_REPO_ROOT)}"
+        )
+    lines += ["", "## Feature Schema", ""]
     if result.feature_schema:
         for key, value in result.feature_schema.items():
             lines.append(f"- {key}: `{value}`")
@@ -79,6 +218,8 @@ def render_checkpoint_report(result: EvaluationResult, result_path: str | Path) 
             lines.append(f"| {name} | {_display_metric(metric)} |")
     else:
         lines.append("| 无 | MISSING |")
+
+    _append_per_class_metrics(lines, result)
 
     lines += [
         "",
@@ -111,17 +252,12 @@ def render_checkpoint_report(result: EvaluationResult, result_path: str | Path) 
         "",
         f"- ok：`{integrity.get('ok')}`",
     ]
-    for name, passed in (integrity.get("checks") or {}).items():
-        lines.append(f"- check `{name}`：`{passed}`")
+    for name in integrity.get("failed_checks", []) or []:
+        lines.append(f"- failed check：`{name}`")
     for issue in integrity.get("issues", []) or []:
         lines.append(f"- issue：{issue}")
 
-    lines += ["", "## Artifacts", ""]
-    if result.artifacts:
-        for name, value in result.artifacts.items():
-            lines.append(f"- {name}：`{value}`")
-    else:
-        lines.append("- MISSING")
+    _append_artifacts(lines, result, report_dir=report_dir, run_dir=run_dir)
 
     lines += [
         "",
@@ -147,7 +283,7 @@ def write_checkpoint_reports(result: EvaluationResult, result_path: str | Path) 
     ckpt = Path(result.checkpoint)
     report_path = ckpt.with_suffix(".eval.md")
     version_report = ckpt.parent / VERSION_REPORT_NAME
-    report_text = render_checkpoint_report(result, result_path)
+    report_text = render_checkpoint_report(result, result_path, report_path)
     report_path.write_text(report_text + "\n", encoding="utf-8")
 
     category = _report_category(result)
@@ -157,7 +293,7 @@ def write_checkpoint_reports(result: EvaluationResult, result_path: str | Path) 
         "",
         f"### {result.timestamp or now_stamp()} · {ckpt.name}",
         "",
-        f"- checkpoint 专属报告：`{report_path.name}`",
+        f"- checkpoint 专属报告：[{report_path.name}](<{report_path.name}>)",
         "",
         report_text,
     ]

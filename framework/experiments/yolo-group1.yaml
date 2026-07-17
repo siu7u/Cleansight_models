@@ -2,6 +2,7 @@
 # 单帧无状态检测：消费 cleansight-yolo-pipeline 产出的标准 YOLO 数据集。
 # 与时序实验共用同一 train/eval 入口，只出事实信封、不判达标。
 
+schema_version: 1
 pipeline: detection
 
 model:
@@ -17,6 +18,7 @@ data:
   eval_split: val        # 评估用的 split（train/val/test）
 
 evaluation:
+  mode: exploratory       # 外部权重缺少绑定 metadata，仅用于探索性评估
   testset_id: yolo.group1_large.val
   save_predictions: true
 

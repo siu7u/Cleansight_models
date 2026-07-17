@@ -31,11 +31,33 @@ def test_model_evaluation_v2_roundtrip_and_optional_decision(tmp_path):
     validate_result(payload)
     assert payload["schema_version"] == 2
     assert "decision" not in payload
+    assert payload["metrics"]["summary"]["f1@0.5"] == {
+        "state": "computed",
+        "value": 75.0,
+        "spec": "f1/v2",
+    }
 
     path = result.write(tmp_path / "result.evaluation.json")
     restored = EvaluationResult.read(path)
     assert restored.metrics["f1@0.5"].state is MetricState.COMPUTED
     assert restored.feature_schema["dim"] == 40
+
+
+def test_metric_value_omits_meaningless_null_fields():
+    missing = MetricValue.missing("没有样本", spec="recall/v1").to_dict()
+    assert missing == {"state": "missing", "spec": "recall/v1", "reason": "没有样本"}
+    assert "value" not in missing
+
+
+def test_model_omits_unknown_parameter_count():
+    result = EvaluationResult(
+        model_type="yolo",
+        model_id="yolo-?",
+        pipeline="detection",
+        checkpoint="external.pt",
+        dataset="fixture-v1",
+    )
+    assert "num_params" not in result.to_dict()["model"]
 
 
 def test_benchmark_builder_uses_v2_decision_not_legacy_gates():

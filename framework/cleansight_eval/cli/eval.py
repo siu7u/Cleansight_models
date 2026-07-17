@@ -1,28 +1,43 @@
-"""评估入口：python -m cleansight_eval.cli.eval --config <yaml> --ckpt <path>。
+"""评估入口：python -m framework.cleansight_eval.cli.eval --config <yaml> --ckpt <path>。
 
-只做**分派**：按 ``cfg["pipeline"]`` 调用 ``get_pipeline(...).evaluate(...)``，得到一份 benchmark
-定义的 ``EvaluationResult v2`` 并落盘。重建模型、指标口径、推理语义等由所属流水线实现。训练与评估同属一条流水线，
-输入构造与输出语义一致，不做多模式扫描。
+作为组合根按 ``predict → benchmark evaluator → persist/report`` 编排。framework pipeline
+只运行模型并返回 PredictionOutput；指标、artifact 和 EvaluationResult 由 benchmark 定义。
 """
 
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from ..core.artifacts import write_json_artifact
+from ..core.checkpoint import meta_path_for
 from ..core.config import load_config
 from ..core.environment import now_stamp, pick_device
-from ..core.integrity import check_result_complete
+from ..core.integrity import assert_evaluation_profile, check_result_complete
 from ..core.provenance import build_checkpoint_info, build_run_info, resolve_testset_info, sha256_file
 from ..core.report import write_checkpoint_reports
 from ._registry import get_pipeline
+
+try:
+    from benchmark.core.delivery import build_delivery_manifest, write_delivery_manifest
+    from benchmark.evaluators import evaluate_prediction
+except ModuleNotFoundError:  # pragma: no cover - 从 framework 目录运行时触发
+    repo_root = Path(__file__).resolve().parents[3]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+    from benchmark.core.delivery import build_delivery_manifest, write_delivery_manifest
+    from benchmark.evaluators import evaluate_prediction
 
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(description="cleansight_eval 评估入口")
     p.add_argument("--config", required=True, help="实验配置 YAML")
-    p.add_argument("--ckpt", required=True, help="checkpoint 路径（需存在同名 .meta.json）")
+    p.add_argument(
+        "--ckpt",
+        required=True,
+        help="checkpoint 路径（formal 需同名 .meta.json；exploratory 外部 YOLO 可按配置放宽）",
+    )
     p.add_argument("--out-dir", default=None, help="评估结果输出目录，默认写到 ckpt 所在 run 的 evals/")
     return p.parse_args(argv)
 
@@ -39,22 +54,72 @@ def _resolve_out_dir(ckpt: str, override: str | None) -> Path:
     return ckpt_path.parent / "evals"
 
 
+def _delivery_files(result, evaluation_path: Path, checkpoint_report: Path, version_report: Path, base: Path):
+    """把评估事实展开为交付 manifest 输入，不复制或上传文件。"""
+
+    checkpoint = Path(result.checkpoint).resolve()
+    formal = result.run.get("evaluation_mode") == "formal"
+    files = [
+        ("checkpoint", checkpoint, True),
+        ("checkpoint_metadata", meta_path_for(checkpoint), formal),
+        ("evaluation", evaluation_path, True),
+        ("checkpoint_report", checkpoint_report, False),
+        ("version_report", version_report, False),
+    ]
+    for name, role in (
+        ("config.resolved.json", "resolved_config"),
+        ("env.json", "training_environment"),
+        ("history.csv", "training_history"),
+        ("training_curves.png", "training_curves"),
+        ("status.json", "run_status"),
+    ):
+        files.append((role, base / name, False))
+    for curve in sorted((base / "checkpoints").glob("*/results.png")):
+        files.append(("training_curves", curve, False))
+    for role, reference in result.artifacts.items():
+        references = reference if isinstance(reference, list) else [reference]
+        for item in references:
+            if not isinstance(item, dict) or not item.get("path"):
+                continue
+            path = Path(item["path"])
+            files.append(
+                (
+                    f"artifact:{role}",
+                    path if path.is_absolute() else base / path,
+                    formal and role == "predictions",
+                )
+            )
+    for parent in (checkpoint.parent, *checkpoint.parents):
+        for name, role in (("CARD.md", "card"), ("pin.yaml", "pin")):
+            candidate = parent / name
+            if candidate.is_file() and not any(item[0] == role for item in files):
+                files.append((role, candidate, False))
+        if parent.name == "runs":
+            break
+    return files
+
+
 def main(argv=None) -> list[str]:
     args = parse_args(argv)
     cfg = load_config(args.config)
     device = pick_device()
     pipeline = get_pipeline(cfg["pipeline"])
     pipeline.validate_config(cfg)  # 流水线专属校验（core 不再代劳）
+    testset_info = resolve_testset_info(cfg)
+    assert_evaluation_profile(cfg, testset_info)
 
     out_dir = _resolve_out_dir(args.ckpt, args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    result = pipeline.evaluate(cfg, args.ckpt, device)
-    stamp = result.timestamp or now_stamp()
-    run_info, run_dir = build_run_info(args.ckpt, args.config, device)
+    prediction = pipeline.predict(cfg, args.ckpt, device)
+    result = evaluate_prediction(prediction, cfg.get("evaluation"))
+    stamp = now_stamp()
+    result.timestamp = stamp
+    run_info, run_dir = build_run_info(args.ckpt, args.config)
     checkpoint_info = build_checkpoint_info(args.ckpt, run_dir)
+    run_info["evaluation_mode"] = cfg.get("evaluation", {}).get("mode", "formal")
     result.run = run_info
-    result.testset = resolve_testset_info(cfg)
+    result.testset = testset_info
     result.checkpoint_info = checkpoint_info
     result.limits = cfg.get("evaluation", {}).get("limits", {"is_smoke": False})
 
@@ -96,7 +161,18 @@ def main(argv=None) -> list[str]:
     print(f"[eval] checkpoint_report: {checkpoint_report}")
     print(f"[eval] version_report: {version_report}")
 
-    return [str(path)]
+    delivery_base = run_dir if run_dir is not None else out_dir
+    manifest = build_delivery_manifest(
+        run_id=str(result.run.get("id") or stamp),
+        model_id=result.model_id,
+        base_dir=delivery_base,
+        files=_delivery_files(result, path, checkpoint_report, version_report, artifact_base),
+    )
+    manifest_path = out_dir / f"{result.pipeline}-{result.model_type}-{stamp}.delivery.manifest.json"
+    write_delivery_manifest(manifest_path, manifest)
+    print(f"[eval] delivery_manifest: {manifest_path}")
+
+    return [str(path), str(manifest_path)]
 
 
 if __name__ == "__main__":

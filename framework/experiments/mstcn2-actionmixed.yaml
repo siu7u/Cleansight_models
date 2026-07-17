@@ -2,6 +2,7 @@
 # 相对简化版 mstcn 的"++"：多 stage 精化（深监督）+ 双膨胀预测生成层 + T-MSE 平滑损失。
 # 全序列流水线：一次看到完整序列、逐帧监督、逐帧 argmax 推理；离线不测延迟（标 N/A）。
 
+schema_version: 1
 pipeline: full_sequence_temporal
 
 model:

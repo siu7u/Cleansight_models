@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cleansight.local/schemas/delivery-manifest-v1.schema.json",
+  "title": "CleanSight Model Delivery Manifest v1",
+  "type": "object",
+  "required": ["schema_version", "manifest_type", "created_at", "run_id", "model_id", "base_dir", "files"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "manifest_type": {"const": "cleansight_model_delivery"},
+    "created_at": {"type": "string"},
+    "run_id": {"type": "string"},
+    "model_id": {"type": "string"},
+    "base_dir": {"type": "string"},
+    "files": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["role", "path", "portable", "required", "size_bytes", "sha256"],
+        "properties": {
+          "role": {"type": "string"},
+          "path": {"type": "string"},
+          "portable": {"type": "boolean"},
+          "required": {"type": "boolean"},
+          "size_bytes": {"type": "integer", "minimum": 0},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "content_schema_version": {"type": ["integer", "null"]}
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

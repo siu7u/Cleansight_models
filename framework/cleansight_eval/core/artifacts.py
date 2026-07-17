@@ -40,9 +40,12 @@ def write_json_artifact(
             display = display.relative_to(Path(relative_to).resolve())
         except ValueError:
             pass
-    return {
+    reference = {
         "path": display.as_posix(),
         "sha256": sha256_file(path),
         "schema_version": payload.get("schema_version"),
-        "recomputable": _verify_recomputable(payload),
     }
+    recomputable = _verify_recomputable(payload)
+    if recomputable is not None:
+        reference["recomputable"] = recomputable
+    return reference

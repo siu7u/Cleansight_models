@@ -1,4 +1,4 @@
-"""时序指标与延迟测量（两条时序流水线共用）。
+"""时序训练兼容工具；正式评估指标由 benchmark.evaluators.temporal 提供。
 
 从 ``temporal-*/util.py`` 迁移的口径一致实现：edit 距离、segmental F1、逐帧
 accuracy，以及因果平滑决策 ``causal_decision``。每个指标声明口径版本 ``spec``
@@ -11,37 +11,54 @@ benchmark 对齐验收。
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-from typing import Mapping, Sequence
-
 import numpy as np
 import torch
 
-from ..core.envelope import MetricValue
 from ..core.execution import sample_callable_latency
 from .util import causal_decision  # 历史兼容导出；实现属于推理后处理，不属于指标
 
-# 过渡接入：benchmark 仍位于仓库根目录。兼容从仓库根目录运行
-# ``python -m framework...`` 和进入 framework 后运行 ``python -m cleansight_eval...``。
 try:
-    from benchmark.core.metrics import temporal_metrics as _benchmark_temporal_metrics
+    from benchmark.core.result import MetricValue
+    from benchmark.evaluators.temporal import (
+        SPEC_ACC,
+        SPEC_COUNTS,
+        SPEC_EDIT,
+        SPEC_F1,
+        SPEC_FRAME_CLASS,
+        SPEC_MODEL_FORWARD,
+        SPEC_PRECISION,
+        SPEC_RECALL,
+        SPEC_TEMPORAL_IOU,
+        compute_temporal_metrics,
+        compute_temporal_metrics_by_item,
+        not_applicable_model_forward as not_applicable_perf,
+        summarize_model_forward_timing as summarize_single_tick_timing,
+    )
 except ModuleNotFoundError:  # pragma: no cover - 仅 framework 作为 cwd 时触发
+    import sys
+    from pathlib import Path
+
     _REPO_ROOT = Path(__file__).resolve().parents[3]
     if str(_REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(_REPO_ROOT))
-    from benchmark.core.metrics import temporal_metrics as _benchmark_temporal_metrics
+    from benchmark.core.result import MetricValue
+    from benchmark.evaluators.temporal import (
+        SPEC_ACC,
+        SPEC_COUNTS,
+        SPEC_EDIT,
+        SPEC_F1,
+        SPEC_FRAME_CLASS,
+        SPEC_MODEL_FORWARD,
+        SPEC_PRECISION,
+        SPEC_RECALL,
+        SPEC_TEMPORAL_IOU,
+        compute_temporal_metrics,
+        compute_temporal_metrics_by_item,
+        not_applicable_model_forward as not_applicable_perf,
+        summarize_model_forward_timing as summarize_single_tick_timing,
+    )
 
-# 口径版本：任何影响数值的口径变化都应递增版本号。
-SPEC_ACC = "accuracy/frame-wise/percent/v2; source=benchmark.core.metrics"
-SPEC_EDIT = "edit/levenshtein-item-mean/percent/v2; source=benchmark.core.metrics"
-SPEC_F1 = "segmental_f1/label-aware-one-to-one-iou/percent/v2; source=benchmark.core.metrics"
-SPEC_PRECISION = "segmental_precision/label-aware-one-to-one-iou/percent/v2; source=benchmark.core.metrics"
-SPEC_RECALL = "segmental_recall/label-aware-one-to-one-iou/percent/v2; source=benchmark.core.metrics"
-SPEC_COUNTS = "segmental_counts/label-aware-one-to-one-iou/v2; source=benchmark.core.metrics"
-SPEC_TEMPORAL_IOU = "temporal_iou/matched-segment-mean/percent/v2; source=benchmark.core.metrics"
-SPEC_FRAME_CLASS = "classification/per-class/percent/v2; source=benchmark.core.metrics"
-SPEC_LATENCY = "latency/single_tick_ms/v1"
+SPEC_LATENCY = SPEC_MODEL_FORWARD  # 历史兼容名称
 
 BG_CLASS = ["background"]
 
@@ -109,90 +126,6 @@ def f_score(recognized, ground_truth, overlap, bg_class=BG_CLASS):
     return float(tp), float(fp), float(fn)
 
 
-def _percent_metric(value, spec: str, reason: str = "指标没有可计算样本") -> MetricValue:
-    """把 benchmark 的 0..1 比率转成 framework 历史兼容的 0..100 三态指标。"""
-
-    if value is None:
-        return MetricValue.missing(reason, spec=spec)
-    return MetricValue.computed(round(float(value) * 100.0, 2), spec=spec)
-
-
-def compute_temporal_metrics_by_item(
-    pred_by_item: Mapping[str, Sequence[str]],
-    truth_by_item: Mapping[str, Sequence[str]],
-    labels: Sequence[str],
-    *,
-    start_frame: int = 0,
-    return_details: bool = False,
-):
-    """调用 benchmark 公共实现，按视频边界汇总时序和逐帧指标。
-
-    benchmark 原始比率为 0..1；framework 对外继续用 0..100，避免已有 history、报告和
-    best checkpoint 口径静默变化。新增片段 TP/FP/FN、P/R、matched temporal IoU，及逐类
-    帧级 P/R/F1/IoU。输入 item 必须分别对应一段独立视频，禁止预先拼接。
-    """
-
-    try:
-        raw = _benchmark_temporal_metrics(
-            pred_by_item,
-            truth_by_item,
-            labels=list(labels),
-            start_frame=start_frame,
-            thresholds=(0.1, 0.25, 0.5),
-            ignore_index=-1,
-        )
-    except ValueError as exc:
-        reason = f"benchmark metrics 输入无效: {exc}"
-        missing = {
-            "acc": MetricValue.missing(reason, spec=SPEC_ACC),
-            "edit": MetricValue.missing(reason, spec=SPEC_EDIT),
-            **{f"f1@{threshold}": MetricValue.missing(reason, spec=SPEC_F1) for threshold in (0.1, 0.25, 0.5)},
-        }
-        return (missing, {"error": reason}) if return_details else missing
-
-    frame = raw["frame"]
-    segment = raw["segment"]
-    out: dict[str, MetricValue] = {
-        "acc": _percent_metric(frame.get("accuracy"), SPEC_ACC),
-        "edit": _percent_metric(segment.get("edit"), SPEC_EDIT),
-        "frame.macro_f1": _percent_metric(frame.get("macro_f1"), SPEC_FRAME_CLASS),
-        "frame.macro_iou": _percent_metric(frame.get("macro_iou"), SPEC_FRAME_CLASS),
-        "frame.micro_f1": _percent_metric(frame.get("micro_f1"), SPEC_FRAME_CLASS),
-    }
-
-    for threshold in (0.1, 0.25, 0.5):
-        key = f"{threshold:.2f}"
-        detail = segment["details_at_iou"][key]
-        suffix = str(threshold)
-        out[f"f1@{suffix}"] = _percent_metric(detail.get("f1"), SPEC_F1)
-
-        # summary 仅保留主阈值 0.5 的诊断量；其他阈值的 counts/P/R/IoU 和逐类
-        # 指标完整保存在 metrics.details.temporal，避免报告与矩阵无限横向膨胀。
-        if threshold == 0.5:
-            out[f"tp@{suffix}"] = MetricValue.computed(int(detail["tp"]), spec=SPEC_COUNTS)
-            out[f"fp@{suffix}"] = MetricValue.computed(int(detail["fp"]), spec=SPEC_COUNTS)
-            out[f"fn@{suffix}"] = MetricValue.computed(int(detail["fn"]), spec=SPEC_COUNTS)
-            out[f"precision@{suffix}"] = _percent_metric(detail.get("precision"), SPEC_PRECISION)
-            out[f"recall@{suffix}"] = _percent_metric(detail.get("recall"), SPEC_RECALL)
-            out[f"temporal_iou@{suffix}"] = _percent_metric(
-                detail.get("mean_matched_iou"),
-                SPEC_TEMPORAL_IOU,
-                reason="该 IoU 阈值下没有匹配片段",
-            )
-    return (out, raw) if return_details else out
-
-
-def compute_temporal_metrics(pred_labels: list[str], gt_labels: list[str]) -> dict[str, MetricValue]:
-    """单序列兼容入口；流水线评估应优先使用 ``compute_temporal_metrics_by_item``。"""
-
-    labels = sorted(set(pred_labels) | set(gt_labels))
-    return compute_temporal_metrics_by_item(
-        {"item-0": pred_labels},
-        {"item-0": gt_labels},
-        labels,
-    )
-
-
 def measure_single_tick(
     model, window: int, input_dim: int, device, warmup: int = 20, runs: int = 200
 ) -> dict[str, MetricValue]:
@@ -213,37 +146,3 @@ def measure_single_tick(
         context={"window": window, "input_dim": input_dim, "input_shape": [1, window, input_dim]},
     )
     return summarize_single_tick_timing(timing)
-
-
-def summarize_single_tick_timing(timing: dict) -> dict[str, MetricValue]:
-    """把 framework 采集的原始样本转换为 EvaluationResult 的 mean/median/p95 指标。"""
-
-    samples = sorted(float(value) for value in timing.get("samples_ms", []))
-    if not samples:
-        reason = "未采集到单 tick 延迟样本"
-        return {
-            "latency_mean_ms": MetricValue.missing(reason, spec=SPEC_LATENCY),
-            "latency_median_ms": MetricValue.missing(reason, spec=SPEC_LATENCY),
-            "latency_p95_ms": MetricValue.missing(reason, spec=SPEC_LATENCY),
-        }
-    mean_ms = sum(samples) / len(samples)
-    median_ms = samples[len(samples) // 2]
-    p95_ms = samples[min(len(samples) - 1, int(0.95 * len(samples)))]
-    context = timing.get("context") or {}
-    spec = (
-        f"{SPEC_LATENCY}; device={timing.get('device')}; window={context.get('window')}; "
-        f"warmup={timing.get('warmup')}; runs={timing.get('runs')}"
-    )
-    return {
-        "latency_mean_ms": MetricValue.computed(round(mean_ms, 4), spec=spec),
-        "latency_median_ms": MetricValue.computed(round(median_ms, 4), spec=spec),
-        "latency_p95_ms": MetricValue.computed(round(p95_ms, 4), spec=spec),
-    }
-
-
-def not_applicable_perf(reason: str = "该流水线不测量实时延迟") -> dict[str, MetricValue]:
-    return {
-        "latency_mean_ms": MetricValue.not_applicable(reason, spec=SPEC_LATENCY),
-        "latency_median_ms": MetricValue.not_applicable(reason, spec=SPEC_LATENCY),
-        "latency_p95_ms": MetricValue.not_applicable(reason, spec=SPEC_LATENCY),
-    }

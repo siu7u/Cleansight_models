@@ -31,14 +31,12 @@ except ImportError:  # tqdm 可选，缺失时退化为原样迭代
 
 from ..core.checkpoint import load_checkpoint, load_training_checkpoint, save_training_checkpoint
 from ..core.environment import now_stamp, set_seed
-from ..core.envelope import EvaluationResult
 from ..core.execution import PredictionOutput, format_params
-from ..core.history import HistoryWriter
-from ..core.integrity import check_feature_schema, check_result_complete
+from ..core.history import HistoryWriter, try_plot_training_history
+from ..core.integrity import check_feature_schema
 from ..core.run import RunContext
-from .artifacts import build_prediction_artifact
 from .data import build_temporal_meta, load_split, split_video_names
-from .metrics import compute_temporal_metrics_by_item, not_applicable_perf
+from .metrics import compute_temporal_metrics_by_item
 from .models import build_model
 from .util import compute_class_weights
 
@@ -47,7 +45,13 @@ def _load_eval_model(cfg: dict, ckpt: str, device):
     """按 checkpoint 自描述 meta 重建评估用模型（评估/可视化共用同一路径）。"""
     model_cfg = cfg["model"]
     expected = {"type": model_cfg["type"], "input_dim": model_cfg["input_dim"], "num_classes": model_cfg["num_classes"]}
-    state_dict, meta = load_checkpoint(ckpt, expected=expected, map_location=device)
+    mode = (cfg.get("evaluation") or {}).get("mode", "formal")
+    state_dict, meta = load_checkpoint(
+        ckpt,
+        expected=expected,
+        map_location=device,
+        require_meta_schema=mode == "formal",
+    )
     model = build_model(meta["model"]).to(device)
     model.load_state_dict(state_dict)
     model.eval()
@@ -289,10 +293,26 @@ class FullSequenceTemporalPipeline:
                 history.append(row)
                 run.write_status("running", stage="epoch_complete", epoch=epoch, best_metric=best_metric, last_checkpoint=str(last_path))
 
-            run.write_status("succeeded", best_metric=best_metric, best_checkpoint=str(best_path), last_checkpoint=str(last_path), history=str(run.history_path))
+            curves_path, curves_error = try_plot_training_history(
+                run.history_path,
+                run.dir / "training_curves.png",
+            )
+            run.write_status(
+                "succeeded",
+                best_metric=best_metric,
+                best_checkpoint=str(best_path),
+                last_checkpoint=str(last_path),
+                history=str(run.history_path),
+                training_curves=str(curves_path) if curves_path else None,
+                training_curves_error=curves_error,
+            )
             print(f"[train] run_dir={run.dir}")
             print(f"[train] best_checkpoint={best_path}")
             print(f"[train] last_checkpoint={last_path}")
+            if curves_path:
+                print(f"[train] training_curves={curves_path}")
+            elif curves_error:
+                print(f"[train] training_curves skipped: {curves_error}")
             return str(best_path if best_path.exists() else last_path)
         except Exception as exc:
             run.write_exception_status(exc, epoch=current_epoch)
@@ -335,48 +355,15 @@ class FullSequenceTemporalPipeline:
             },
         )
 
-    def evaluate(self, cfg: dict, ckpt: str, device) -> EvaluationResult:
-        """兼容评估入口：消费 ``predict`` 的事实输出并组装正式 EvaluationResult。"""
-
-        output = self.predict(cfg, ckpt, device)
-        metrics, metric_details = compute_temporal_metrics_by_item(
-            output.predictions, output.targets, output.labels, return_details=True
-        )
-
-        result = EvaluationResult(
-            model_type=output.model_type,
-            model_id=output.model_id,
-            pipeline=self.pipeline_name,
-            checkpoint=output.checkpoint,
-            dataset=output.dataset,
-            feature_schema=output.feature_schema,
-            metrics=metrics,
-            metric_details={"temporal": metric_details},
-            performance=not_applicable_perf("离线全序列不测实时延迟"),
-            inference_semantics=output.inference_semantics,
-            num_params=output.num_params,
-            timestamp=now_stamp(),
-        )
-        result.pending_artifacts["predictions"] = build_prediction_artifact(
-            output.predictions,
-            output.targets,
-            output.labels,
-            window=None,
-            inference_mode=output.inference_semantics["mode"],
-            prediction_start_frame=0,
-        )
-        result.integrity = check_result_complete(result)
-        return result
-
     def visualize(self, cfg: dict, ckpt: str, device, out_dir) -> list[str]:
         """评估旁路的可视化钩子：出逐视频 GT vs 预测 分段条带图，肉眼快速定位错分。
 
-        与 ``evaluate`` 同一套模型重建 + 逐帧推理（数据小，重跑一次前向可忽略），因此图上
-        预测严格等于评估所用预测。视频多时**按页切分**（每页 ``eval.viz_per_page`` 个，默认
+        与 ``predict`` 同一套模型重建 + 逐帧推理（数据小，重跑一次前向可忽略），因此图上
+        预测严格等于评估所用预测。视频多时**按页切分**（每页 ``evaluation.viz_per_page`` 个，默认
         6），返回各页 PNG 路径。matplotlib 经 lazy import 只在此触达——训练/评估不出图就不
-        引入该依赖。可用 ``eval.visualize: false`` 关闭；缺 matplotlib 时由调用方降级跳过。
+        引入该依赖。可用 ``evaluation.visualize: false`` 关闭；缺 matplotlib 时由调用方降级跳过。
         """
-        eval_cfg = cfg.get("eval", {})
+        eval_cfg = cfg.get("evaluation", {})
         if not eval_cfg.get("visualize", True):
             return []
         from . import viz  # lazy：把 matplotlib 依赖限制在出图路径

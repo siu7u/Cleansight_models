@@ -11,40 +11,18 @@
 
 from __future__ import annotations
 
-import json
-
-from ..core.checkpoint import load_meta, meta_path_for
+from ..core.checkpoint import load_meta, write_meta
 from ..core.environment import now_stamp, set_seed
-from ..core.envelope import EvaluationResult, MetricValue
 from ..core.execution import PredictionOutput, format_params
-from ..core.integrity import assert_checkpoint_config, check_result_complete
+from ..core.integrity import assert_checkpoint_config
 from ..core.run import RunContext
-from .artifacts import build_prediction_artifact
-from .metrics import build_detection_metrics
 from .yolo import get_adapter
 
-# 单帧无状态推理语义（写入 EvaluationResult.inference）。
+# 单帧无状态推理语义（由 benchmark evaluator 写入 EvaluationResult.inference）。
 SINGLE_FRAME_SEMANTICS = {
     "mode": "single_frame",
-    "sees": "one_image",
     "stateless": True,
-    "windowing": "none",
-    "cold_start": "n/a",
-    "reset": "per_image",
-    "note": "单帧无状态检测，逐图独立推理",
 }
-
-_SPEC_LATENCY = "latency/single_tick_ms/v1"
-
-
-def _na_performance(reason: str) -> dict[str, MetricValue]:
-    """检测离线评估不测实时延迟：三个延迟指标统一标 N/A（不是 0、不是缺失）。"""
-    return {
-        "latency_mean_ms": MetricValue.not_applicable(reason, spec=_SPEC_LATENCY),
-        "latency_median_ms": MetricValue.not_applicable(reason, spec=_SPEC_LATENCY),
-        "latency_p95_ms": MetricValue.not_applicable(reason, spec=_SPEC_LATENCY),
-    }
-
 
 class DetectionPipeline:
     pipeline_name = "detection"
@@ -65,48 +43,67 @@ class DetectionPipeline:
         run = RunContext(runs_dir, label=model_cfg["type"])
         run.save_config(cfg)
         run.save_env(device, seed=seed)
+        run.write_status("running", stage="initializing")
 
-        data_yaml = cfg["data"]["data_yaml"]
-        name = cfg["data"].get("name", "detect")
-        best_pt, num_params, names, nc = adapter.train(
-            weights=model_cfg.get("weights", "yolo11n.pt"),
-            data_yaml=data_yaml,
-            train_cfg=train_cfg,
-            imgsz=model_cfg.get("imgsz", 640),
-            device=device,
-            project=str(run.checkpoints_dir),
-            name=name,
-        )
+        try:
+            data_yaml = cfg["data"]["data_yaml"]
+            name = cfg["data"].get("name", "detect")
+            best_pt, num_params, names, nc = adapter.train(
+                weights=model_cfg.get("weights", "yolo11n.pt"),
+                data_yaml=data_yaml,
+                train_cfg=train_cfg,
+                imgsz=model_cfg.get("imgsz", 640),
+                device=device,
+                project=str(run.checkpoints_dir),
+                name=name,
+            )
 
-        # sidecar 重建/溯源元信息：让 YOLO 权重也能进异构矩阵、被 load_meta 校验。
-        meta = {
-            "type": model_cfg["type"],
-            "pipeline": self.pipeline_name,
-            "nc": nc,
-            "names": names,
-            "num_params": num_params,
-            "dataset": name,
-            "data_yaml": str(data_yaml),
-            "model": model_cfg,
-            "train": train_cfg,
-            "trained_at": now_stamp(),
-        }
-        meta_path_for(best_pt).write_text(
-            json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
-        print(f"[train] run_dir={run.dir}")
-        print(f"[train] checkpoint={best_pt}")
-        return str(best_pt)
+            # sidecar 重建/溯源元信息：让 YOLO 权重也能进异构矩阵、被 load_meta 校验。
+            meta = {
+                "type": model_cfg["type"],
+                "pipeline": self.pipeline_name,
+                "nc": nc,
+                "names": names,
+                "num_params": num_params,
+                "dataset": name,
+                "data_yaml": str(data_yaml),
+                "model": model_cfg,
+                "train": train_cfg,
+                "trained_at": now_stamp(),
+            }
+            write_meta(best_pt, meta)
+            last_pt = best_pt.with_name("last.pt")
+            if last_pt.is_file():
+                write_meta(last_pt, meta)
+            results_csv = best_pt.parent.parent / "results.csv"
+            training_curves = best_pt.parent.parent / "results.png"
+            run.write_status(
+                "succeeded",
+                best_checkpoint=str(best_pt),
+                last_checkpoint=str(last_pt) if last_pt.is_file() else None,
+                history=str(results_csv) if results_csv.is_file() else None,
+                training_curves=str(training_curves) if training_curves.is_file() else None,
+            )
+            print(f"[train] run_dir={run.dir}")
+            print(f"[train] checkpoint={best_pt}")
+            if training_curves.is_file():
+                print(f"[train] training_curves={training_curves}")
+            return str(best_pt)
+        except Exception as exc:
+            run.write_exception_status(exc)
+            raise
 
     def predict(self, cfg: dict, ckpt: str, device) -> PredictionOutput:
         """运行检测验证和逐图推理，返回不含 framework 指标判分的事实。"""
 
         model_cfg = cfg["model"]
+        evaluation_cfg = cfg.get("evaluation", {})
+        mode = evaluation_cfg.get("mode", "formal")
         try:
-            meta = load_meta(ckpt)
+            meta = load_meta(ckpt, require_schema=mode == "formal")
             assert_checkpoint_config(meta, {"type": model_cfg["type"]})
         except FileNotFoundError:
-            if not model_cfg.get("allow_missing_meta", False):
+            if mode != "exploratory" or not model_cfg.get("allow_missing_meta", False):
                 raise
             meta = {
                 "type": model_cfg["type"],
@@ -120,13 +117,29 @@ class DetectionPipeline:
 
         adapter = get_adapter(model_cfg["type"])
         split = cfg["data"].get("eval_split", "val")
+        effective_parameters = {
+            "conf": float(evaluation_cfg.get("conf", 0.001)),
+            "iou": float(evaluation_cfg.get("iou", 0.7)),
+            "imgsz": int(model_cfg.get("imgsz", 640)),
+            "split": split,
+            "max_det": int(evaluation_cfg.get("max_det", 300)),
+            "agnostic_nms": bool(evaluation_cfg.get("agnostic_nms", False)),
+        }
         val = adapter.val(
             weights=ckpt,
             data_yaml=cfg["data"]["data_yaml"],
             split=split,
             imgsz=model_cfg.get("imgsz", 640),
             device=device,
+            conf=effective_parameters["conf"],
+            iou=effective_parameters["iou"],
+            max_det=effective_parameters["max_det"],
+            agnostic_nms=effective_parameters["agnostic_nms"],
         )
+        num_params = meta.get("num_params")
+        if num_params is None:
+            num_params = val.get("num_params")
+        model_id = meta.get("model_id") or f"{model_cfg['type']}-{format_params(num_params)}"
 
         raw_predictions: dict = {}
         labels = val.get("names", {})
@@ -139,6 +152,10 @@ class DetectionPipeline:
                     split=split,
                     imgsz=model_cfg.get("imgsz", 640),
                     device=device,
+                    conf=effective_parameters["conf"],
+                    iou=effective_parameters["iou"],
+                    max_det=effective_parameters["max_det"],
+                    agnostic_nms=effective_parameters["agnostic_nms"],
                 )
                 raw_predictions = raw.get("items", {})
                 labels = raw.get("labels", labels)
@@ -147,7 +164,7 @@ class DetectionPipeline:
 
         return PredictionOutput(
             model_type=model_cfg["type"],
-            model_id=f"{model_cfg['type']}-{format_params(meta.get('num_params'))}",
+            model_id=model_id,
             pipeline=self.pipeline_name,
             checkpoint=str(ckpt),
             dataset=cfg["data"].get("name", cfg["data"]["data_yaml"]),
@@ -155,48 +172,15 @@ class DetectionPipeline:
             labels=labels,
             feature_schema={"modality": "image", "imgsz": model_cfg.get("imgsz", 640)},
             inference_semantics=dict(SINGLE_FRAME_SEMANTICS),
-            num_params=meta.get("num_params"),
+            num_params=num_params,
             native_metrics=val,
             metadata={
                 "split": split,
                 "prediction_format": "class_confidence_xywhn",
                 "data_yaml": str(cfg["data"]["data_yaml"]),
                 "input_shape": ["B", 3, model_cfg.get("imgsz", 640), model_cfg.get("imgsz", 640)],
+                "effective_parameters": effective_parameters,
+                "metadata_source": meta.get("source", "bound_sidecar"),
             },
             errors=errors,
         )
-
-    def evaluate(self, cfg: dict, ckpt: str, device) -> EvaluationResult:
-        """兼容评估入口：消费 ``predict`` 的事实输出并组装正式 EvaluationResult。"""
-
-        output = self.predict(cfg, ckpt, device)
-        metrics = build_detection_metrics(output.native_metrics)
-        performance = _na_performance(reason="单帧检测评估不测实时延迟")
-
-        result = EvaluationResult(
-            model_type=output.model_type,
-            model_id=output.model_id,
-            pipeline=self.pipeline_name,
-            checkpoint=output.checkpoint,
-            dataset=output.dataset,
-            feature_schema=output.feature_schema,
-            metrics=metrics,
-            performance=performance,
-            inference_semantics=output.inference_semantics,
-            num_params=output.num_params,
-            timestamp=now_stamp(),
-        )
-        if output.predictions and cfg.get("evaluation", {}).get("save_predictions", True):
-            result.pending_artifacts["predictions"] = build_prediction_artifact(
-                output.predictions,
-                output.labels,
-                split=output.metadata["split"],
-                prediction_format=output.metadata["prediction_format"],
-            )
-        elif output.errors:
-            result.artifacts["predictions"] = {
-                "state": "missing",
-                "reason": output.errors[0],
-            }
-        result.integrity = check_result_complete(result)
-        return result

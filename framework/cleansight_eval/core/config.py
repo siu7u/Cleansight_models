@@ -18,7 +18,64 @@ import yaml
 # 无特征向量的流水线连配置都过不了。
 # pipeline：本实验属于哪条流水线（detection / full_sequence_temporal /
 # sliding_window_temporal）；训练与评估同属一条，输入构造与输出语义一致。
-REQUIRED_TOP_KEYS = ("pipeline", "model", "data")
+CONFIG_SCHEMA_VERSION = 1
+REQUIRED_TOP_KEYS = ("schema_version", "pipeline", "model", "data")
+ALLOWED_TOP_KEYS = {
+    "schema_version", "pipeline", "model", "data", "feature_schema", "evaluation", "train",
+    "_config_provenance",
+}
+
+# 已注册模型和流水线共同支持的配置词汇。新增模型参数时需在这里显式登记，拼写错误因而
+# 不会被静默忽略。更具体的必填/互斥规则仍由 Pipeline.validate_config 负责。
+KNOWN_SECTION_KEYS = {
+    "model": {
+        "type", "weights", "imgsz", "allow_missing_meta", "input_dim", "num_classes",
+        "hidden", "num_layers", "num_stages", "dropout", "tmse_weight", "tmse_clip",
+        "d_model", "nhead", "dim_feedforward", "max_len",
+    },
+    "data": {
+        "name", "data_yaml", "eval_split", "root", "action_mapping", "labels_dir",
+        "frames_dir", "split_train", "split_val", "split_eval", "names",
+    },
+    "feature_schema": {"dim", "version", "class_order", "layout", "normalization"},
+    "evaluation": {
+        "mode", "testset_id", "save_predictions", "measure_latency", "latency_warmup",
+        "latency_runs", "limits", "conf", "iou", "max_det", "agnostic_nms",
+        "visualize", "viz_per_page",
+    },
+    "train": {
+        "epochs", "lr", "batch", "batch_size", "patience", "window", "grad_clip",
+        "weight_decay", "resume",
+    },
+}
+
+PIPELINE_DEFAULTS = {
+    "detection": {
+        "model.weights": "yolo11n.pt",
+        "model.imgsz": 640,
+        "model.allow_missing_meta": False,
+        "data.eval_split": "val",
+        "evaluation.mode": "formal",
+        "evaluation.save_predictions": True,
+        "evaluation.visualize": True,
+        "evaluation.conf": 0.001,
+        "evaluation.iou": 0.7,
+        "evaluation.max_det": 300,
+        "evaluation.agnostic_nms": False,
+    },
+    "full_sequence_temporal": {
+        "evaluation.mode": "formal",
+        "evaluation.save_predictions": True,
+        "evaluation.visualize": True,
+    },
+    "sliding_window_temporal": {
+        "evaluation.mode": "formal",
+        "evaluation.save_predictions": True,
+        "evaluation.measure_latency": True,
+        "evaluation.latency_warmup": 20,
+        "evaluation.latency_runs": 200,
+    },
+}
 
 
 def load_config(path: str | Path) -> dict:
@@ -33,8 +90,18 @@ def load_config(path: str | Path) -> dict:
     data = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError(f"配置文件顶层必须是映射: {path}")
-    resolve_relative_paths(data, cfg_path.parent)
     validate_config(data)
+    raw_fields = sorted(_leaf_paths(data))
+    default_fields = materialize_defaults(data)
+    validate_config(data)
+    resolve_relative_paths(data, cfg_path.parent)
+    data["_config_provenance"] = {
+        "schema_version": CONFIG_SCHEMA_VERSION,
+        "source_path": str(cfg_path),
+        "raw_fields": raw_fields,
+        "default_fields": default_fields,
+        "override_fields": [],
+    }
     return data
 
 
@@ -59,10 +126,74 @@ def validate_config(cfg: dict) -> None:
     missing = [k for k in REQUIRED_TOP_KEYS if k not in cfg]
     if missing:
         raise ValueError(f"配置缺少必要字段: {missing}")
+    if cfg.get("schema_version") != CONFIG_SCHEMA_VERSION:
+        raise ValueError(
+            f"不支持配置 schema_version={cfg.get('schema_version')!r}，当前为 {CONFIG_SCHEMA_VERSION}"
+        )
+    unknown_top = sorted(set(cfg) - ALLOWED_TOP_KEYS)
+    if unknown_top:
+        raise ValueError(f"配置包含未知顶层字段: {unknown_top}")
     if not isinstance(cfg["pipeline"], str) or not cfg["pipeline"]:
         raise ValueError(
             "pipeline 必须是非空字符串，如 sliding_window_temporal / full_sequence_temporal / detection"
         )
+    for section, allowed in KNOWN_SECTION_KEYS.items():
+        value = cfg.get(section)
+        if value is None:
+            continue
+        if not isinstance(value, dict):
+            raise ValueError(f"配置 {section} 必须是映射")
+        reject_unknown_keys(value, allowed, section)
+    evaluation = cfg.get("evaluation") or {}
+    mode = evaluation.get("mode")
+    if mode is not None and mode not in {"formal", "exploratory"}:
+        raise ValueError("evaluation.mode 必须是 formal 或 exploratory")
+    if mode == "formal" and (cfg.get("model") or {}).get("allow_missing_meta"):
+        raise ValueError("formal 评估不能启用 model.allow_missing_meta")
+    if mode == "formal" and evaluation.get("save_predictions") is False:
+        raise ValueError("formal 评估必须启用 evaluation.save_predictions 以保留可追溯预测")
+    for key in ("conf", "iou"):
+        if key in evaluation and not 0.0 <= float(evaluation[key]) <= 1.0:
+            raise ValueError(f"evaluation.{key} 必须在 0..1")
+    if "max_det" in evaluation and int(evaluation["max_det"]) <= 0:
+        raise ValueError("evaluation.max_det 必须大于 0")
+
+
+def reject_unknown_keys(value: dict, allowed: set[str], path: str) -> None:
+    """拒绝未登记字段，错误信息保留完整点路径便于定位拼写。"""
+
+    unknown = sorted(set(value) - allowed)
+    if unknown:
+        raise ValueError(f"配置 {path} 包含未知字段: {unknown}")
+
+
+def _leaf_paths(value: dict, prefix: str = "") -> list[str]:
+    """列出配置叶子点路径，供 raw/default/override 来源追踪。"""
+
+    paths: list[str] = []
+    for key, item in value.items():
+        path = f"{prefix}.{key}" if prefix else str(key)
+        if isinstance(item, dict):
+            paths.extend(_leaf_paths(item, path))
+        else:
+            paths.append(path)
+    return paths
+
+
+def materialize_defaults(cfg: dict) -> list[str]:
+    """把流水线稳定默认值写入最终配置，并返回实际补入的点路径。"""
+
+    defaults = PIPELINE_DEFAULTS.get(cfg.get("pipeline"), {})
+    applied: list[str] = []
+    for dotted, value in defaults.items():
+        keys = dotted.split(".")
+        cur = cfg
+        for key in keys[:-1]:
+            cur = cur.setdefault(key, {})
+        if keys[-1] not in cur:
+            cur[keys[-1]] = copy.deepcopy(value)
+            applied.append(dotted)
+    return sorted(applied)
 
 
 def apply_overrides(cfg: dict, overrides: list[tuple[str, Any]]) -> dict:
@@ -75,8 +206,24 @@ def apply_overrides(cfg: dict, overrides: list[tuple[str, Any]]) -> dict:
 
     out = copy.deepcopy(cfg)
     for dotted, value in overrides:
+        if not _known_override_path(dotted):
+            raise ValueError(f"未知配置覆盖路径: {dotted}")
         _set_dotted(out, dotted, value)
+    provenance = out.setdefault("_config_provenance", {})
+    provenance["override_fields"] = sorted(
+        set(provenance.get("override_fields", [])) | {path for path, _value in overrides}
+    )
+    validate_config(out)
     return out
+
+
+def _known_override_path(dotted: str) -> bool:
+    """判断 override 是否属于显式配置 schema。"""
+
+    parts = dotted.split(".")
+    if len(parts) == 1:
+        return parts[0] in ALLOWED_TOP_KEYS
+    return len(parts) == 2 and parts[0] in KNOWN_SECTION_KEYS and parts[1] in KNOWN_SECTION_KEYS[parts[0]]
 
 
 def _set_dotted(d: dict, dotted: str, value: Any) -> None:

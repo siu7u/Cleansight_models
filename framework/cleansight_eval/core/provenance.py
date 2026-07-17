@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 from typing import Any
 
@@ -49,19 +50,21 @@ def _portable_path(path: Path, base: Path | None = None) -> str:
 
 
 def build_checkpoint_info(checkpoint: str | Path, run_dir: Path | None = None) -> dict[str, Any]:
-    """记录 checkpoint 路径、大小与内容哈希，供版本发布核验。"""
+    """记录 checkpoint 路径与内容哈希，文件大小由 delivery manifest 统一保存。"""
 
     path = Path(checkpoint).resolve()
     info: dict[str, Any] = {
         "path": _portable_path(path, run_dir),
         "sha256": sha256_file(path),
-        "size_bytes": path.stat().st_size,
     }
     meta_path = path.with_name(path.name + ".meta.json")
     if meta_path.is_file():
+        meta_payload = json.loads(meta_path.read_text(encoding="utf-8"))
         info["meta"] = {
             "path": _portable_path(meta_path, run_dir),
             "sha256": sha256_file(meta_path),
+            "schema_version": meta_payload.get("schema_version", 0),
+            "checkpoint_bound": bool((meta_payload.get("checkpoint_binding") or {}).get("sha256")),
         }
     return info
 
@@ -69,24 +72,15 @@ def build_checkpoint_info(checkpoint: str | Path, run_dir: Path | None = None) -
 def build_run_info(
     checkpoint: str | Path,
     config_path: str | Path,
-    device,
 ) -> tuple[dict[str, Any], Path | None]:
-    """构造评估运行引用，关联训练 run 中的解析配置和环境快照。"""
+    """构造评估运行身份；环境与 Git 信息不写入评估结果。"""
 
     run_dir = find_run_dir(checkpoint)
     info: dict[str, Any] = {
         "id": run_dir.name if run_dir is not None else f"external-{Path(checkpoint).stem}",
         "created_at": now_iso(),
-        "device": str(device),
         "config": _portable_path(Path(config_path), run_dir),
     }
-    if run_dir is not None:
-        resolved = run_dir / "config.resolved.json"
-        environment = run_dir / "env.json"
-        if resolved.is_file():
-            info["resolved_config"] = _portable_path(resolved, run_dir)
-        if environment.is_file():
-            info["environment"] = _portable_path(environment, run_dir)
     return info, run_dir
 
 
@@ -103,8 +97,6 @@ def resolve_testset_info(cfg: dict) -> dict[str, Any]:
             "registered": False,
             "dataset_version": data.get("name") or str(data.get("root") or data.get("data_yaml")),
             "split": split,
-            "purpose": "ad_hoc_evaluation",
-            "manifest_sha256": None,
             "fingerprint_sha256": None,
             "validation_errors": ["配置未声明 evaluation.testset_id，无法钉定 benchmark testset"],
         }
@@ -115,7 +107,6 @@ def resolve_testset_info(cfg: dict) -> dict[str, Any]:
             load_testsets,
             manifest_fingerprint,
             read_split_items,
-            resolve_path,
             validate_catalog,
         )
     except ModuleNotFoundError:  # pragma: no cover - 与 temporal.metrics 相同的 cwd 兼容路径
@@ -127,7 +118,6 @@ def resolve_testset_info(cfg: dict) -> dict[str, Any]:
             load_testsets,
             manifest_fingerprint,
             read_split_items,
-            resolve_path,
             validate_catalog,
         )
 
@@ -135,7 +125,6 @@ def resolve_testset_info(cfg: dict) -> dict[str, Any]:
     if testset_id not in catalog:
         raise KeyError(f"evaluation.testset_id={testset_id!r} 未登记到 benchmark/testsets.yaml")
     spec = catalog[testset_id]
-    manifest = resolve_path(spec.manifest, spec.root)
     errors = list(validate_catalog(catalog).get(testset_id, []))
     if str(split) != spec.split:
         errors.append(f"配置评估 split={split!r} 与 testset split={spec.split!r} 不一致")
@@ -147,15 +136,9 @@ def resolve_testset_info(cfg: dict) -> dict[str, Any]:
     return {
         "id": spec.id,
         "registered": True,
-        "family": spec.family,
         "dataset_version": spec.dataset_version,
         "split": spec.split,
-        "purpose": spec.purpose,
-        "manifest": _portable_path(manifest),
-        "manifest_sha256": sha256_file(manifest),
         "fingerprint_sha256": manifest_fingerprint(spec),
-        "feature_mapping": spec.feature_mapping,
-        "input_dim": spec.input_dim,
         "labels": list(spec.labels),
         "num_items": len(read_split_items(spec)),
         "validation_errors": errors,

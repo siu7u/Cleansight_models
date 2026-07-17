@@ -294,6 +294,12 @@ def temporal_metrics(
             "matching": "label-aware one-to-one maximum IoU",
             "video_boundaries_preserved": True,
             "start_frame": start_frame,
+            "aggregation": {
+                "frame": "micro over frames pooled across items",
+                "edit": "macro mean over items",
+                "segment_counts_precision_recall_f1": "micro from TP/FP/FN summed across items",
+                "matched_temporal_iou": "mean over all matched segments pooled across items",
+            },
         },
         "frame": classification_metrics(all_predictions, all_truths, labels),
         "segment": {

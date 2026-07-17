@@ -1,5 +1,6 @@
 # YOLO large-object detector evaluation config.
 
+schema_version: 1
 pipeline: detection
 
 model:
@@ -14,6 +15,7 @@ data:
   eval_split: val
 
 evaluation:
+  mode: exploratory
   testset_id: yolo.group1_large.val
   save_predictions: true
 

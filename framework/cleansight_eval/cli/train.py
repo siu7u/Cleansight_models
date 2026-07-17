@@ -1,4 +1,4 @@
-"""训练入口：python -m cleansight_eval.cli.train --config <yaml>。
+"""训练入口：python -m framework.cleansight_eval.cli.train --config <yaml>。
 
 配置驱动同架构变体。本入口只做**分派**：加载配置、选设备、应用 CLI 覆盖项，然后交给
 ``get_pipeline(cfg["pipeline"]).train(...)``。训练主体（时序的 forward/loss 循环、检测的
@@ -64,9 +64,10 @@ def _parse_overrides(items: list[str]) -> list[tuple[str, Any]]:
 
 def main(argv=None) -> str:
     args = parse_args(argv)
-    cfg = apply_overrides(load_config(args.config), _parse_overrides(args.overrides))
+    overrides = _parse_overrides(args.overrides)
     if args.resume:
-        cfg.setdefault("train", {})["resume"] = args.resume
+        overrides.append(("train.resume", args.resume))
+    cfg = apply_overrides(load_config(args.config), overrides)
     device = pick_device()
     pipeline = get_pipeline(cfg["pipeline"])
     pipeline.validate_config(cfg)  # 流水线专属校验（core 不再代劳）

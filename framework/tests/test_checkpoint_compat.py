@@ -3,7 +3,13 @@
 import pytest
 import torch
 
-from cleansight_eval.core.checkpoint import load_checkpoint, load_training_checkpoint, save_checkpoint, save_training_checkpoint
+from cleansight_eval.core.checkpoint import (
+    META_SCHEMA_VERSION,
+    load_checkpoint,
+    load_training_checkpoint,
+    save_checkpoint,
+    save_training_checkpoint,
+)
 from cleansight_eval.core.integrity import CompatibilityError
 from cleansight_eval.temporal.data import build_temporal_meta
 from cleansight_eval.temporal.models import build_model
@@ -31,6 +37,9 @@ def test_roundtrip_and_meta(tmp_path):
     state, meta = load_checkpoint(path, expected={"type": "gru", "input_dim": 20, "num_classes": 3})
     assert meta["type"] == "gru"
     assert meta["model"] == cfg
+    assert meta["schema_version"] == META_SCHEMA_VERSION
+    assert meta["checkpoint_binding"]["sha256"]
+    assert meta["_metadata_integrity"]["bound"] is True
     assert "rnn.weight_ih_l0" in state
 
 
@@ -50,6 +59,13 @@ def test_missing_meta_rejected(tmp_path):
     path, _ = _make_ckpt(tmp_path)
     (tmp_path / "gru.pt.meta.json").unlink()
     with pytest.raises(FileNotFoundError):
+        load_checkpoint(path, expected=None)
+
+
+def test_checkpoint_content_replacement_is_rejected(tmp_path):
+    path, _ = _make_ckpt(tmp_path)
+    path.write_bytes(path.read_bytes() + b"tampered")
+    with pytest.raises(ValueError, match="绑定摘要不一致"):
         load_checkpoint(path, expected=None)
 
 
