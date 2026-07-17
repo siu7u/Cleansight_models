@@ -17,12 +17,14 @@
 | `model.type` | 具体模型 | 时序：`temporal/models/__init__.py` `_MODELS`；检测：`detection/yolo.py` `_ADAPTERS` |
 
 入口 `cli/train.py:main` / `cli/eval.py:main` → `get_pipeline(cfg["pipeline"])` → 交给对应流水线。
-三条流水线统一提供 `predict()` 产出不含指标口径的 `PredictionOutput`；`evaluate()` 消费该输出并
-生成 benchmark 定义的 `EvaluationResult`、artifact 和报告。接入新流水线时这两个方法都必须提供。
+三条流水线统一提供 `predict()` 产出不含指标口径的 `PredictionOutput`；CLI 再调用
+`benchmark/evaluators/` 生成 `EvaluationResult` 与 artifact，并由 framework 落盘报告。接入新流水线
+时需要实现训练（若支持）和 `predict()`，同时在 benchmark 侧注册对应 evaluator；pipeline 不实现正式
+`evaluate()`。
 
 **关键认知**：监督/loss 语义属于**流水线**，不属于模型。全序列一律逐帧 CE、滑窗一律末帧 CE +
-因果平滑。所以模型只需提供网络结构；同一个 `nn.Module`（如 GRU）在两条时序流水线里都能用，
-差别由流水线决定。
+因果平滑。所以模型只需提供网络结构；同一种 `nn.Module`（如 GRU）可以在两条时序流水线中分别
+训练，但一个 checkpoint 的训练与评估仍必须属于同一条流水线。
 
 ---
 
@@ -42,7 +44,7 @@
 | 切窗 / 组 dataset / 评估循环 / 平滑 | **流水线决定** | 同上两个流水线文件 |
 | 是否测延迟 | **流水线决定** | 滑窗测、全序列 N/A |
 | 训练主循环 / 优化器 / 梯度裁剪 | **共享**（各流水线内） | 两个流水线的 `train` |
-| 指标适配 / 延迟测量 | **共享** | `temporal/metrics.py`；时序数值真源为 `benchmark/core/metrics.py` |
+| 指标评估 / 延迟汇总 | **共享** | `benchmark/evaluators/temporal.py`；数值真源为 `benchmark/core/metrics.py` |
 | checkpoint 读写 / EvaluationResult / 完整性 | **共享** | framework `core/*` + benchmark `core/result.py` |
 
 参照四个现成实现：
@@ -95,6 +97,7 @@ _MODELS = {
 ### C. 写配置 YAML
 
 ```yaml
+schema_version: 1
 pipeline: sliding_window_temporal   # 或 full_sequence_temporal
 model:
   type: mynet
@@ -104,7 +107,7 @@ model:
 train: { epochs: 20, lr: 1.0e-3, batch_size: 32, window: 64 }   # 全序列不需要 batch_size/window
 data: { root: /path, split_train: train, split_val: val, split_eval: test }
 feature_schema: { dim: 40, version: actionmixed-bbox-8cls-v1 }
-evaluation: { testset_id: temporal.actionmixed-v1.test }
+evaluation: { mode: formal, testset_id: temporal.actionmixed-v1.test }
 ```
 
 **不用改**：两个流水线文件、`data.py`、`metrics.py`、CLI、`core/*`。
@@ -120,6 +123,7 @@ evaluation: { testset_id: temporal.actionmixed-v1.test }
 `model.type` 始终是 `yolo`，同一个 adapter 复用。
 
 ```yaml
+schema_version: 1
 pipeline: detection
 model:
   type: yolo                 # 固定 yolo
@@ -131,12 +135,15 @@ data:
   name: mydataset            # 产物/run 命名
   eval_split: val
 evaluation:
+  mode: exploratory          # 外部权重；正式归档改为 formal 并提供绑定 metadata
   testset_id: yolo.group1_large.val
   save_predictions: true
 ```
 
 - `weights` 传 `.pt` 走微调；传结构 `.yaml` 走从头训。二者都由 ultralytics `YOLO(weights)` 直接消费。
-- 入口与时序完全一致：`cli/train.py --config xxx.yaml`、`cli/eval.py`。
+- 入口与时序完全一致（从仓库根目录执行）：
+  `python -m framework.cleansight_eval.cli.train --config framework/experiments/xxx.yaml`，以及对应
+  `cli.eval --ckpt ...`。
 
 **要改代码的情况**（暂不做）：接 YOLO 之外的检测器（Faster R-CNN 等）才需要新写一个 adapter 类
 并在 `detection/yolo.py` 的 `_ADAPTERS` 注册——需要时再说。
@@ -151,7 +158,7 @@ evaluation:
 | 新增模型改动 | 加 `nn.Module` + 注册一行 | 同左（须 `causal: True`） | 只写配置 |
 | 监督口径 | 逐帧 CE | 末帧 CE + 因果平滑 | ultralytics 自持 |
 | data loader | `data.py` 统一（40 维特征序列） | 同左 | adapter 自持（读 data.yaml） |
-| 性能延迟 | N/A | 单 tick 实测 | N/A |
+| 模型前向基准 | N/A | 单窗 forward 实测 | N/A |
 | 共享出口 | EvaluationResult v2 / prediction artifact / checkpoint report / matrix | 同左 | 同左 |
 
 > 设计意图：模型只管网络结构，监督与推理由流水线拥有；时序与检测两域数据格式不同、故意不

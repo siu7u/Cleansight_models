@@ -1,5 +1,9 @@
 # CleanSight Models 项目流程图
 
+> 本文下半部分保留旧 `yolo-detection/pipeline`、`temporal-*` 和 registry 流程，主要用于追溯历史
+> 资产。当前新实验使用 `framework pipeline.predict → benchmark evaluator → report/delivery`；发布、
+> ModelScope 上传和上线决定由人工或外部模型管理系统负责，不由评估代码自动 PASS/FAIL。
+
 本文档描述 `Cleansight_models` 当前的端到端模型资产流程。仓库边界是:本仓库负责训练、评估、版本登记和模型卡;`../CleanSightBackend` 负责在线加载、视频流推理、可视化和告警。
 
 ## 总览

@@ -12,12 +12,11 @@
 
 - **framework 脊柱**（`framework/cleansight_eval/core/`）：与模型语义无关的运行能力，包括 run
   组织、配置解析、环境记录、checkpoint 自描述、`PredictionOutput`、异构矩阵和完整性检查。
-- **benchmark 真源**（`benchmark/core/`）：统一拥有指标口径、固定 testset、`EvaluationResult v2`
-  和 prediction artifact schema；framework 的 `core/envelope.py` 只保留历史 import 别名。
-- **两纵**（`temporal/`、`detection/`）：各自完整的流水线实现，彼此互不依赖，只在统一评估结果与
-  矩阵处汇合。
-- **组合根**（`cli/_registry.py`）：唯一同时依赖两纵的位置，按配置中的 `pipeline` 字段把请求分派
-  到对应流水线。
+- **benchmark 真源**（`benchmark/core/` + `benchmark/evaluators/`）：统一拥有指标口径、固定
+  testset、`EvaluationResult v2`、prediction artifact schema，以及 PredictionOutput 到正式结果的评估器。
+- **两纵**（`temporal/`、`detection/`）：各自实现训练和 `predict()`，只产模型执行事实，不组装正式指标。
+- **组合根**（`cli/eval.py` + `cli/_registry.py`）：按配置选择 pipeline，执行
+  `predict → benchmark evaluator → persist/report/delivery`。
 
 依赖方向始终单向指向脊柱。这是下面所有准则的物理基础。
 
@@ -86,8 +85,8 @@
 ## 2. 不变量（重构不得破坏）
 
 - **结果三态**：`NOT_APPLICABLE`、`MISSING`、`COMPUTED` 三者严格区分，禁止用 0 冒充不适用。
-- **checkpoint 不静默加载**：配置错配时立即抛出 `CompatibilityError`。
-- **推理语义显式**：离线模型不产生虚假的实时延迟，一律标记为不适用。
+- **checkpoint 不静默加载**：配置错配或 schema v1 sidecar 与权重摘要不一致时立即拒绝加载。
+- **推理语义显式**：离线模型不伪造单窗模型前向基准，真实 pipeline/端到端延迟由后端测量。
 - **异构矩阵不做综合评分**：允许不同模型拥有不同的指标列，不对跨类指标生成统一分数。
 - **代码只产出事实**：完整性检查只说明评估结果是否可解释，是否达到业务标准由人判断。
 

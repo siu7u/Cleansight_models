@@ -1,16 +1,18 @@
-# 模型统一管理接口
+# 旧模型资产统一管理接口
 
-`model_manager/` 提供一个轻量统一入口，用于管理 YOLO 与时序模型的训练、评测和 benchmark。
+`model_manager/` 提供一个轻量入口，用于登记并调度历史 YOLO/时序仓库已有脚本。它保留旧模型资产
+和命令的可发现性，但不替代 [`framework/`](../framework/) 的统一训练评估 CLI，也不拥有新的指标
+schema、testset 校验或交付报告。
 
 该接口不重写各模型已有训练逻辑，而是用 `models.yaml` 登记所有模型，再由 `manager.py` 调用现有脚本。
 
 ## 设计目标
 
 - 用一个清单登记所有模型。
-- 用统一 CLI 管理 YOLO 和时序模型。
+- 用统一 CLI 预览或调用历史 YOLO 和时序脚本。
 - 保留现有 `03_train.py`、`04_validate.py`、`temporal-*/main.py`。
 - 默认只打印命令，避免误触发长时间训练。
-- 后续可继续扩展 ModelScope、pin 校验和 Backend 接入检查。
+- 保持配置精简，避免与 framework 再建一套训练评估抽象。
 
 ## 模型清单
 
@@ -113,6 +115,8 @@ temporal.transformer
 
 ## 注意事项
 
+- 新训练、单 checkpoint 评估和矩阵汇总应使用
+  `python -m framework.cleansight_eval.cli.{train,eval,matrix}`；manager 只用于旧脚本兼容。
 - 不传 `--run` 时只打印命令，不会实际训练或评测。
 - `pipeline` 目前只登记给 YOLO 模型，顺序为 `00_status.py`、`01_pull_data.py`、`00_status.py --assign`、`02_build_dataset.py`、`03_train.py`、`04_validate.py`。
 - `pipeline --run` 会在任一步失败时停止；`04_validate.py` 验收 FAIL 时也会返回非零退出码，但报告仍会写到 `runs/<组>/acceptance_report.md`。
@@ -120,3 +124,4 @@ temporal.transformer
 - 当前时序 v1 checkpoint 输入维度为 20，仍使用 `legacy-20d-v1`。
 - 新版 YOLO 到 64 维 feature mapping 的训练闭环完成后，需要更新 `models.yaml` 中的 `input_dim`、`feature_mapping` 和 checkpoint。
 - 如果改变数据集、类别、特征映射或 checkpoint，应同步更新 `CARD.md`、`pin.yaml` 和 benchmark 报告。
+- `models.yaml` 不是新的模型注册中心；ModelScope 地址、发布状态和上线决定仍由外部模型管理流程维护。

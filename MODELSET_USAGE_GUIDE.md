@@ -1,315 +1,283 @@
 # CleanSight 模型集使用指南
 
-## 1. 项目定位
+本文给出当前统一训练评估链路的实际操作。命令均从 `Cleansight_models/` 仓库根目录执行。
 
-`Cleansight_models` 是 CleanSight 项目的模型资产与评测仓库，用于集中管理：
+## 1. 选择正确入口
 
-- YOLO 目标检测模型
-- GRU / Causal TCN / Transformer 等时序模型
-- 模型 checkpoint 与 registry
-- 单模型 benchmark
-- 端到端 3 分钟流程 benchmark
-- 数据版本、YOLO 版本、特征映射版本、时序模型版本的对齐信息
+| 需求 | 推荐入口 |
+|---|---|
+| 训练一个 YOLO/GRU/MS-TCN/Transformer | `python -m framework.cleansight_eval.cli.train` |
+| 评估单个 checkpoint | `python -m framework.cleansight_eval.cli.eval` |
+| 汇总多个模型 | `python -m framework.cleansight_eval.cli.matrix` |
+| 校验固定测试集 | `python tools/validate_testsets.py` |
+| 全序列与流式一致性 | `benchmark/temporal_feed_mode/` |
+| 3 分钟业务场景 | `benchmark/e2e_3min/` |
 
-后端 `CleanSightBackend` 负责在线推理、接口服务和端到端运行；模型集仓库负责训练、模型登记、离线评测和交付物管理。
+`model_manager/` 和各 `temporal-*` 独立脚本用于历史资产兼容，不是新实验的默认入口。
 
-## 2. 仓库结构
-
-```text
-Cleansight_models/
-├── yolo-detection/                 # YOLO 检测模型训练与评估
-├── temporal-gru/                   # GRU 时序模型
-├── temporal-causal-tcn/            # Causal TCN 时序模型
-├── temporal-transformer/           # Transformer 时序模型
-├── benchmark/
-│   ├── single_model/               # 单模型效果验证
-│   ├── e2e_3min/                   # 3 分钟端到端流程验证
-│   └── temporal_feed_mode/         # 整段喂 vs 流式喂评测
-├── tools/                          # 通用评测/导出工具
-├── registry/                       # 汇总后的模型权重交付目录
-├── references/                     # 数据源、标注导出、引用材料
-└── README.md
-```
-
-## 3. 环境准备
-
-建议使用后端项目中的虚拟环境运行模型集脚本：
+## 2. 环境准备
 
 ```bash
 source ../CleanSightBackend/.venv/bin/activate
-
-../CleanSightBackend/.venv/bin/python --version
+pip install -r framework/requirements.txt
+python -c "import torch, yaml; print(torch.__version__)"
 ```
 
-检查 YOLO 依赖：
+运行 YOLO 前再确认：
 
 ```bash
-../CleanSightBackend/.venv/bin/python -c "import ultralytics; print('ultralytics ok')"
+python -c "import ultralytics; print(ultralytics.__version__)"
 ```
 
-检查 TCN 依赖：
+服务器无显示环境时：
 
 ```bash
-../CleanSightBackend/.venv/bin/python -c "import pytorch_tcn; print('pytorch_tcn ok')"
+export MPLBACKEND=Agg
+export MPLCONFIGDIR=/tmp/matplotlib
 ```
 
-如果服务器没有图形界面，运行训练或可视化脚本时建议加：
+## 3. 数据与配置
+
+实验配置位于 `framework/experiments/*.yaml`。配置中的相对路径以 YAML 所在目录为基准解析，不以
+当前 shell 目录为基准。例如：
+
+```yaml
+data:
+  root: ../../yolo-detection/pipeline/raw/modelscope/cleansight-ActionMixed
+```
+
+会相对 `framework/experiments/` 解析。不要继续保留 `/abs/path/to/...` 示例路径。
+
+评估前执行：
 
 ```bash
-MPLBACKEND=Agg MPLCONFIGDIR=/tmp/matplotlib
+python tools/validate_testsets.py --catalog benchmark/testsets.yaml --json
 ```
 
-## 4. YOLO 检测模型使用
+`ok: false` 表示数据完整性或 split 泄漏校验未通过。数据组修复前可以进行 exploratory 调试，但不能
+把该结果作为 locked holdout benchmark。
 
-YOLO 模型位于：
+## 4. 配置选择
+
+| 模型 | 配置 | 流水线 |
+|---|---|---|
+| YOLO large | `framework/experiments/yolo-clean-large.yaml` | `detection` |
+| YOLO small | `framework/experiments/yolo-clean-small.yaml` | `detection` |
+| GRU | `framework/experiments/gru-actionmixed.yaml` | `sliding_window_temporal` |
+| MS-TCN | `framework/experiments/mstcn-actionmixed.yaml` | `full_sequence_temporal` |
+| MS-TCN++ | `framework/experiments/mstcn2-actionmixed.yaml` | `full_sequence_temporal` |
+| Transformer | `framework/experiments/transformer-actionmixed.yaml` | `full_sequence_temporal` |
+
+复制最接近的配置建立新实验。`schema_version: 1` 必填；未知顶层字段、未知 section 字段和未知
+`-S` 路径会直接报错，避免拼写错误被静默忽略。
+
+## 5. 训练
+
+### 5.1 YOLO
+
+```bash
+python -m framework.cleansight_eval.cli.train \
+  --config framework/experiments/yolo-clean-large.yaml
+```
+
+YOLO 使用 `train.batch`：
+
+```bash
+python -m framework.cleansight_eval.cli.train \
+  --config framework/experiments/yolo-clean-large.yaml \
+  -S train.epochs=50 -S train.batch=8
+```
+
+### 5.2 GRU 因果滑窗
+
+```bash
+python -m framework.cleansight_eval.cli.train \
+  --config framework/experiments/gru-actionmixed.yaml
+```
+
+滑窗输入为 `[B, window, F]`，末帧监督；ActionMixed 当前 `F=40`，配置中的 `window` 必须不大于
+最短视频可用帧数。
+
+### 5.3 MS-TCN / MS-TCN++ / Transformer 全序列
+
+```bash
+python -m framework.cleansight_eval.cli.train \
+  --config framework/experiments/mstcn-actionmixed.yaml
+
+python -m framework.cleansight_eval.cli.train \
+  --config framework/experiments/mstcn2-actionmixed.yaml
+
+python -m framework.cleansight_eval.cli.train \
+  --config framework/experiments/transformer-actionmixed.yaml
+```
+
+全序列输入为 `[1, T, F]`，逐帧监督。当前 MS-TCN 和 Transformer 是非因果模型，只能用于
+`full_sequence_temporal`，不能直接作为在线滑窗模型。
+
+### 5.4 Resume
+
+时序训练支持完整恢复 optimizer、epoch 和 best metric：
+
+```bash
+python -m framework.cleansight_eval.cli.train \
+  --config framework/experiments/gru-actionmixed.yaml \
+  --resume runs/<run>/checkpoints/last.pt \
+  -S train.epochs=50
+```
+
+`train.epochs` 表示最终目标 epoch，不是“额外再训练多少轮”。当前 framework 的 `--resume` 主要
+用于时序训练；YOLO 是否恢复应使用 Ultralytics 对应训练语义，不要假设两者完全相同。
+
+## 6. 训练产物
 
 ```text
-yolo-detection/
+runs/<model>-<timestamp>/
+├── config.resolved.json
+├── env.json
+├── status.json
+├── history.csv                 # 时序；逐 epoch
+├── training_curves.png         # 时序；自动生成
+└── checkpoints/
+    ├── best.pt
+    ├── best.pt.meta.json
+    ├── last.pt
+    └── last.pt.meta.json
 ```
 
-典型流程：
+YOLO 的 best/last 位于 `checkpoints/<data.name>/weights/`，训练曲线使用 Ultralytics 生成的
+`results.png`。`env.json` 仅用于训练排障，不写入精简评估 JSON。
+
+## 7. 评估
+
+### 7.1 YOLO
 
 ```bash
-cd Cleansight_models/yolo-detection
-
-python 00_status.py
-python 02_build_dataset.py
-python 03_train.py
-python 04_validate.py
+python -m framework.cleansight_eval.cli.eval \
+  --config framework/experiments/yolo-clean-large.yaml \
+  --ckpt runs/<run>/checkpoints/group1_large/weights/best.pt
 ```
 
-训练完成后，权重通常位于：
+评估参数来自 YAML：`conf`、`iou`、`imgsz`、`eval_split`、`max_det` 和 `agnostic_nms`，实际生效值
+会写入 `metrics.details.effective_parameters`。
 
-```text
-runs/detect/.../weights/best.pt
-runs/detect/.../weights/last.pt
-```
-
-可交付版本需要复制到统一的 registry 或 ModelScope 上传目录，并用子目录区分模型来源、训练组别和版本。
-
-## 5. 时序模型训练
-
-当前已有三个时序模型仓库：
-
-```text
-temporal-gru/
-temporal-causal-tcn/
-temporal-transformer/
-```
-
-### GRU
+### 7.2 时序模型
 
 ```bash
-cd ../Cleansight_models/temporal-gru
+python -m framework.cleansight_eval.cli.eval \
+  --config framework/experiments/gru-actionmixed.yaml \
+  --ckpt runs/<run>/checkpoints/best.pt
 
-PYTHONDONTWRITEBYTECODE=1 ../../CleanSightBackend/.venv/bin/python main.py \
-  --mode full \
-  --model gru \
-  --epochs 10 \
-  --window 64 \
-  --verbose \
-  --auto_save \
-  --save_dir checkpoints/gru \
-  --export_dir registry/gru-v1 \
-  --visualize \
-  --output_dir experiments/gru
+python -m framework.cleansight_eval.cli.eval \
+  --config framework/experiments/transformer-actionmixed.yaml \
+  --ckpt runs/<run>/checkpoints/best.pt
 ```
 
-### Causal TCN
+评估始终保持逐视频边界：Accuracy 按帧 micro，Edit 按视频 macro mean，分段 F1/P/R 使用各视频
+独立匹配后的跨视频 TP/FP/FN micro 聚合。
+
+## 8. Formal 与外部 checkpoint
+
+### Formal
+
+适用于正式归档，要求：
+
+- `evaluation.testset_id` 已登记且校验通过；
+- checkpoint sidecar 使用当前 metadata schema，并与权重 SHA-256 绑定；
+- 配置与 checkpoint 的模型类型、维度、类别数兼容；
+- 保存 prediction artifact。
+
+### Exploratory
+
+适用于组员提供的外部 YOLO `.pt` 或临时数据。将权重放在目标 run 的 `checkpoints/` 下，并使用：
+
+```yaml
+model:
+  type: yolo
+  allow_missing_meta: true
+evaluation:
+  mode: exploratory
+```
+
+这不会伪造 metadata；报告会保留外部导入/降级事实。正式发布前仍需补齐可信 sidecar 和固定 testset。
+
+## 9. 评估输出与报告
+
+一次 eval 会生成：
+
+| 产物 | 作用 |
+|---|---|
+| `evals/*.evaluation.json` | 机器可读 EvaluationResult v2 |
+| `artifacts/*.predictions.json` | YOLO 逐图或时序逐视频预测 |
+| `checkpoints/<ckpt>.eval.md` | 当前 checkpoint 的人读报告 |
+| `checkpoints/EVALUATION_REPORT.md` | 按时序/YOLO 分类追加的版本报告 |
+| `evals/*.delivery.manifest.json` | 交付文件路径、大小、SHA-256、Schema |
+| `viz/*.png` | 支持的时序流水线可视化 |
+
+报告不包含完整环境和 Git 信息，也不自动填写发布结论。人工维护区用于评估后记录主要问题、是否进入
+版本以及下一步动作。
+
+## 10. 汇总矩阵
 
 ```bash
-cd ../Cleansight_models/temporal-causal-tcn
-
-PYTHONDONTWRITEBYTECODE=1 ../../CleanSightBackend/.venv/bin/python main.py \
-  --mode full \
-  --model tcn \
-  --epochs 10 \
-  --window 64 \
-  --verbose \
-  --auto_save \
-  --save_dir checkpoints/tcn \
-  --export_dir registry/tcn-v1 \
-  --visualize \
-  --output_dir experiments/tcn
+python -m framework.cleansight_eval.cli.matrix --runs runs
+python -m framework.cleansight_eval.cli.matrix --runs runs --pipeline full_sequence_temporal
 ```
 
-### Transformer
+输出 `matrix.json` 和 `matrix.md`。不同任务指标取并集，`N/A`、`MISSING` 和未产出保持不同语义。
+
+## 11. 专项 Benchmark
+
+### 11.1 全序列与流式一致性
 
 ```bash
-cd ../Cleansight_models/temporal-transformer
-
-PYTHONDONTWRITEBYTECODE=1 ../../CleanSightBackend/.venv/bin/python main.py \
-  --mode full \
-  --model transformer \
-  --epochs 10 \
-  --window 64 \
-  --verbose \
-  --auto_save \
-  --save_dir checkpoints/transformer \
-  --export_dir registry/transformer-v1 \
-  --visualize \
-  --output_dir experiments/transformer
+python benchmark/temporal_feed_mode/run_feed_mode_benchmark.py \
+  --device cpu --max-videos 1 --max-frames 256
 ```
 
-## 6. 单模型评测
+带 `--max-videos/--max-frames` 的结果只是 smoke test。正式运行时移除限制，并记录 checkpoint、
+feature mapping、device 和推理模式。
 
-时序模型详细评测示例：
+### 11.2 3 分钟端到端
 
 ```bash
-cd ../Cleansight_models
-
-MPLCONFIGDIR=/tmp/matplotlib PYTHONDONTWRITEBYTECODE=1 \
-../CleanSightBackend/.venv/bin/python tools/eval_temporal_detailed.py \
-  --repo temporal-gru \
-  --model gru \
-  --checkpoint registry/gru-v1/gru-final-**-**.pt
-```
-
-TCN 和 Transformer 只需要替换对应仓库、模型名和 checkpoint：
-
-```text
-temporal-causal-tcn / tcn / registry/tcn-v1/...
-temporal-transformer / transformer / registry/transformer-v1/...
-```
-
-## 7. 整段喂 vs 流式喂 Benchmark
-
-该 benchmark 用于确认同一时序模型在两种输入方式下的差异：
-
-- 整段喂：一次输入完整序列 `[1, T, F]`
-- 流式喂：每 tick 输入最近 `window` 帧 `[1, window, F]`，只取最后一帧预测
-
-快速验收脚本链路：
-
-```bash
-cd ../Cleansight_models
-
-../CleanSightBackend/.venv/bin/python benchmark/temporal_feed_mode/run_feed_mode_benchmark.py \
-  --device cpu \
-  --max-videos 1 \
-  --max-frames 256
-```
-
-正式全量评测：
-
-```bash
-../CleanSightBackend/.venv/bin/python benchmark/temporal_feed_mode/run_feed_mode_benchmark.py --device auto
-```
-
-只跑单个模型：
-
-```bash
-../CleanSightBackend/.venv/bin/python benchmark/temporal_feed_mode/run_feed_mode_benchmark.py --model gru --device auto
-../CleanSightBackend/.venv/bin/python benchmark/temporal_feed_mode/run_feed_mode_benchmark.py --model tcn --device auto
-../CleanSightBackend/.venv/bin/python benchmark/temporal_feed_mode/run_feed_mode_benchmark.py --model transformer --device auto
-```
-
-输出：
-
-```text
-benchmark/temporal_feed_mode/feed_mode_summary.md
-benchmark/temporal_feed_mode/feed_mode_summary.json
-```
-
-`--max-videos` 和 `--max-frames` 只用于 smoke test。正式汇报或打榜时不要传这两个参数。
-
-## 8. 端到端 3 分钟流程 Benchmark
-
-端到端 benchmark 用于验证完整洗消流程，不只验证单个模型效果。
-
-仅生成 case 报告：
-
-```bash
-cd ../Cleansight_models
-
-../CleanSightBackend/.venv/bin/python benchmark/e2e_3min/run_e2e_benchmark.py \
-  --case benchmark/e2e_3min/cases/clean_001.yaml
-```
-
-如果已有后端推理输出：
-
-```bash
-../CleanSightBackend/.venv/bin/python benchmark/e2e_3min/run_e2e_benchmark.py \
+python benchmark/e2e_3min/run_e2e_benchmark.py \
   --case benchmark/e2e_3min/cases/clean_001.yaml \
   --prediction benchmark/e2e_3min/outputs/clean_001.prediction.json
 ```
 
-端到端在线推理结果需要由 `CleanSightBackend` 生成，模型集仓库本身只负责评测和报告。
+prediction 应由 `CleanSightBackend` 导出。本仓库只评分，不负责在线推理和生产动作。
 
-## 9. 模型版本管理规范
+## 12. Schema 与交付
 
-每个可交付模型版本应至少包含：
+- `schemas/evaluation-result-v2.schema.json`：评估结果结构；
+- `schemas/prediction-artifact-v1.schema.json`：预测 artifact 结构；
+- `schemas/delivery-manifest-v1.schema.json`：稳定交付文件清单。
 
-```text
-checkpoint.pt
-CARD.md
-pin.yaml
-eval_report.md
-```
+Schema 是外部契约，不是指标实现。指标真源在 `benchmark/core/metrics.py` 和
+`benchmark/evaluators/`，运行时校验在对应 Python `validate_*` 函数。
 
-字段含义：
+## 13. 常见问题
 
-- `checkpoint.pt`：模型权重
-- `CARD.md`：模型说明、输入输出、门禁结果
-- `pin.yaml`：钉定 dataset / yolo / feature_mapping / temporal model 版本
-- `eval_report.md`：评测指标报告
+### `FileNotFoundError: /abs/path/to/.../data.yaml`
 
-推荐命名：
+配置仍使用占位路径。把 `data.data_yaml` 改成相对当前 YAML 的路径或真实绝对路径。
 
-```text
-gru-v1
-tcn-v1
-transformer-v1
-yolo-v1
-```
+### `git add framework` 找不到目录
 
-不得在同一个版本号背后静默替换数据集、特征映射或 checkpoint。
+如果当前目录已经是 `Cleansight_models/framework`，使用 `git add .`；若位于仓库根目录，使用
+`git add framework/`。提交前先运行 `git status --short`，避免把 `runs/` 和权重加入 Git。
 
-## 10. 接入 Backend 的边界
+### formal 评估因 testset validation 失败
 
-模型集仓库负责：
+先运行 `tools/validate_testsets.py` 查看具体泄漏或缺失项。不要关闭校验伪装正式结果；需要临时调试时，
+复制一份实验 YAML 并显式设为 `evaluation.mode: exploratory`。
 
-- 训练模型
-- 管理 checkpoint
-- 输出评估报告
-- 维护模型版本说明
-- 生成 benchmark 结果
+### Transformer 的 nested tensor warning
 
-`CleanSightBackend` 负责：
+`norm_first=True` 会让 PyTorch 不采用 nested-tensor 快速路径。这是性能提示，不影响当前普通 padded/
+定长张量前向的数值正确性；是否调整结构应通过同一 checkpoint 契约下的基准验证，而不是只为消除 warning。
 
-- 加载 YOLO detector
-- 加载 temporal analyzer
-- 在线视频流处理
-- MediaMTX / RTSP 接入
-- WebSocket / HTTP 推理接口
-- 端到端 CLEAN 阶段验证
+## 14. Git 与发布边界
 
-接入时需要确认：
-
-```text
-YOLO checkpoint 路径
-时序 checkpoint 路径
-feature_mapping 版本
-input_dim
-window size
-类别 mapping
-```
-
-## 11. 当前状态与后续工作
-
-当前模型集已经具备：
-
-- YOLO 检测模型训练链路
-- GRU / Causal TCN / Transformer 三类时序模型模板
-- 单模型评测脚本
-- 端到端 3 分钟流程 benchmark
-- 整段喂与流式喂一致性 benchmark
-- registry / CARD / pin 的版本管理雏形
-
-后续重点：
-
-- 使用新 YOLO 模型生成 `clean-v1` 的64维特征
-- 统一离线训练特征与在线推理特征的 `step()` 实现
-- 用新特征重训三个时序模型
-- 在 Backend 中完成端到端在线推理验证
-- 将最终 checkpoint、报告和 pin 信息上传到 ModelScope 并打 tag
+不要提交权重、`runs/`、视频、原始数据或本地密钥。ModelScope 上传、模型注册和上线判断由外部模型
+管理流程或人工负责；本仓库提供 checkpoint、CARD、pin、评估事实和交付 manifest。
