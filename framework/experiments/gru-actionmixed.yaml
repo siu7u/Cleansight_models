@@ -13,23 +13,30 @@ model:
   num_layers: 3
 
 data:
-  name: cleansight-ActionMixed
-  root: ../../yolo-detection/pipeline/raw/modelscope/cleansight-ActionMixed
-  action_mapping: labels/data.yaml   # YAML: action_id -> 名称
-  labels_dir: labels                 # labels/<split>/<video>.mp4.txt : "frame_id action_id"
-  frames_dir: frames                 # frames/<split>/<video>-<frame:06d>.txt : bbox → 40维特征
-  split_train: train                 # 直接用内建目录，不用 idx
-  split_val: val                     # 训练期选择 best.pt，不占用 test
-  split_eval: test                   # 评估用哪个目录（train/val/test）
+  dataset_ref: temporal.actionmixed-v2  # 根目录、类别、mapping 和 manifest 由 benchmark catalog 解析
+  split_train: train                    # manifest 决定实际训练序列
+  split_val: val                        # 训练期选择 best.pt，不占用 test
+  split_eval: test                      # 正式评估 split
 
 feature_schema:
   dim: 40
   version: actionmixed-bbox-8cls-v1
+  # mask_targets: [syringe]  # 可选：按 frames/data.yaml 名称或类别 ID 遮罩对应 5 维
   # 布局：每 5 维一类，顺序同 frames/data.yaml（hand, scope_control_body, scope_mid_section,
   # scope_distal_end, syringe, air_gun, short_brush, brush_tip_out），每类 [presence, cx, cy, w, h]。
 
+# 训练期随机目标遮罩；默认关闭，不影响当前参照实验结果。启用后 probability 表示每个指定
+# 目标在每个采样帧独立清零 5 维特征的概率，val/test 始终保持干净输入。
+augmentation:
+  target_mask:
+    enabled: false
+    strategy: frame_dropout
+    targets: [scope_distal_end, syringe, air_gun]
+    probability: 0.2
+
 evaluation:
-  testset_id: temporal.actionmixed-v1.test
+  mode: formal
+  visualize: true
 
 train:
   epochs: 20

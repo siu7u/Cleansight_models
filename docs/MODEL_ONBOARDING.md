@@ -105,9 +105,9 @@ model:
   num_classes: 6
   hidden: 128                       # 你的自定义超参
 train: { epochs: 20, lr: 1.0e-3, batch_size: 32, window: 64 }   # 全序列不需要 batch_size/window
-data: { root: /path, split_train: train, split_val: val, split_eval: test }
+data: { dataset_ref: temporal.actionmixed-v2, split_train: train, split_val: val, split_eval: test }
 feature_schema: { dim: 40, version: actionmixed-bbox-8cls-v1 }
-evaluation: { mode: formal, testset_id: temporal.actionmixed-v1.test }
+evaluation: { mode: formal }
 ```
 
 **不用改**：两个流水线文件、`data.py`、`metrics.py`、CLI、`core/*`。

@@ -36,6 +36,18 @@ class IntervalMetricTests(unittest.TestCase):
         )
         self.assertEqual((matched.tp, matched.fp, matched.fn), (0, 1, 1))
 
+    def test_global_greedy_matching_does_not_lose_a_valid_pair_by_prediction_order(self) -> None:
+        truths = [Interval("brush", 0, 10), Interval("brush", 8, 18)]
+        predictions = [Interval("brush", 0, 18), Interval("brush", 0, 7)]
+
+        matched = match_intervals(predictions, truths, 0.5)
+
+        self.assertEqual((matched.tp, matched.fp, matched.fn), (2, 0, 0))
+        self.assertEqual(
+            {(item.prediction_index, item.truth_index) for item in matched.matches},
+            {(0, 1), (1, 0)},
+        )
+
     def test_empty_timeline_is_explicit_perfect_absence(self) -> None:
         matched = match_intervals([], [], 0.5).as_metrics()
         self.assertEqual(matched["f1"], 1.0)
@@ -109,6 +121,11 @@ class TemporalMetricTests(unittest.TestCase):
         details = result["details_at_iou"]["0.50"]
         self.assertEqual((details["tp"], details["fp"], details["fn"]), (1, 1, 0))
         self.assertAlmostEqual(result["f1_at_iou"]["0.50"], 2 / 3)
+        self.assertEqual(
+            result["metric_spec"]["matching"],
+            "label-aware one-to-one global-greedy maximum IoU",
+        )
+        self.assertEqual(result["metric_spec"]["version"], "interval-matching-v2")
 
 
 if __name__ == "__main__":

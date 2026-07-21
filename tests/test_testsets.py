@@ -12,6 +12,8 @@ from pathlib import Path
 import yaml
 
 from benchmark.core.testsets import (
+    get_dataset_specs,
+    get_dataset_split,
     get_testset,
     load_testsets,
     manifest_fingerprint,
@@ -127,6 +129,52 @@ class TestsetManifestTest(unittest.TestCase):
             self.assertEqual(read_split_items(test_spec), ["test-a"])
             self.assertEqual(manifest_fingerprint(test_spec), manifest_fingerprint(test_spec))
 
+    def test_v2_dataset_definition_is_merged_without_split_duplication(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self._write_yolo_data(root, leak=False)
+            path = root / "testsets.yaml"
+            path.write_text(
+                yaml.safe_dump(
+                    {
+                        "schema_version": 2,
+                        "root": ".",
+                        "datasets": {
+                            "yolo.shared": {
+                                "family": "yolo",
+                                "dataset_version": "detection-v1",
+                                "manifest": "yolo/data.yaml",
+                                "feature_mapping": "yolo-bbox-v1",
+                                "input_dim": 3,
+                                "labels": ["hand"],
+                            }
+                        },
+                        "testsets": {
+                            "yolo.test": {
+                                "dataset": "yolo.shared",
+                                "split": "test",
+                                "purpose": "locked_holdout_benchmark",
+                            }
+                        },
+                    },
+                    sort_keys=False,
+                ),
+                encoding="utf-8",
+            )
+
+            spec = load_testsets(path)["yolo.test"]
+            self.assertEqual(spec.dataset, "yolo.shared")
+            self.assertEqual(spec.labels, ("hand",))
+            self.assertEqual(validate_spec(spec), [])
+            self.assertEqual(get_dataset_split("yolo.shared", "test", load_testsets(path)).id, "yolo.test")
+            self.assertEqual(len(get_dataset_specs("yolo.shared", load_testsets(path))), 1)
+
+            payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+            payload["testsets"]["yolo.test"]["family"] = "yolo"
+            path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "重复声明 dataset 公共字段"):
+                load_testsets(path)
+
     def test_temporal_train_test_overlap_is_error(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -136,6 +184,91 @@ class TestsetManifestTest(unittest.TestCase):
             self.assertTrue(any("train/test 泄漏" in error for error in validation["temporal.train"]))
             self.assertTrue(any("shared" in error for error in validation["temporal.test"]))
 
+    def test_temporal_overlap_can_be_allowed_explicitly(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            entries = self._write_temporal_data(root, ["shared"], ["shared"])
+            for entry in entries.values():
+                entry["split_overlap_policy"] = "allow"
+            validation = validate_catalog(load_testsets(self._write_catalog(root, entries)))
+
+            self.assertEqual(validation, {"temporal.train": [], "temporal.test": []})
+
+    def test_actionmixed_temporal_frame_policy_allows_video_but_not_frame_overlap(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            data_root = root / "actionmixed"
+            for split, rows in (("train", "1 0\n5 0\n"), ("test", "9 0\n13 0\n")):
+                label_dir = data_root / "labels" / split
+                label_dir.mkdir(parents=True)
+                (label_dir / "shared.mp4.txt").write_text(rows, encoding="utf-8")
+                frame_dir = data_root / "frames" / split
+                frame_dir.mkdir(parents=True)
+                for frame_id in (int(line.split()[0]) for line in rows.splitlines()):
+                    (frame_dir / f"shared.mp4-{frame_id:06d}.txt").write_text(
+                        "0 0.5 0.5 0.2 0.2\n", encoding="utf-8"
+                    )
+            (data_root / "labels" / "data.yaml").write_text(
+                "nc: 1\nnames:\n  0: idle\n", encoding="utf-8"
+            )
+            (data_root / "frames" / "data.yaml").write_text(
+                "nc: 1\nnames:\n  0: hand\n", encoding="utf-8"
+            )
+            manifests = root / "manifests"
+            manifests.mkdir()
+            for split in ("train", "test"):
+                (manifests / f"{split}.txt").write_text("shared.mp4\n", encoding="utf-8")
+            common = {
+                "family": "temporal",
+                "format": "actionmixed_bbox",
+                "dataset_version": "actionmixed-v1",
+                "data_root": "actionmixed",
+                "feature_mapping": "bbox-v1",
+                "input_dim": 5,
+                "labels": ["idle"],
+                "split_overlap_policy": "frame",
+            }
+            entries = {
+                f"temporal.{split}": {
+                    **common,
+                    "split": split,
+                    "manifest": f"manifests/{split}.txt",
+                    "purpose": f"{split}_only",
+                }
+                for split in ("train", "test")
+            }
+            catalog_path = self._write_catalog(root, entries)
+            catalog = load_testsets(catalog_path)
+            validation = validate_catalog(catalog)
+            self.assertEqual(validation, {"temporal.train": [], "temporal.test": []})
+            fingerprint_before = manifest_fingerprint(catalog["temporal.test"])
+
+            extra = data_root / "labels" / "test" / "unregistered.mp4.txt"
+            extra.write_text("21 0\n", encoding="utf-8")
+            validation = validate_catalog(load_testsets(catalog_path))
+            self.assertTrue(
+                any("未登记样本" in error for error in validation["temporal.test"])
+            )
+            extra.unlink()
+
+            bbox = data_root / "frames" / "test" / "shared.mp4-000009.txt"
+            bbox.write_text("0 0.4 0.5 0.2 0.2\n", encoding="utf-8")
+            changed_bbox_catalog = load_testsets(catalog_path)
+            self.assertNotEqual(
+                fingerprint_before,
+                manifest_fingerprint(changed_bbox_catalog["temporal.test"]),
+            )
+
+            (data_root / "labels" / "test" / "shared.mp4.txt").write_text(
+                "5 0\n13 0\n", encoding="utf-8"
+            )
+            catalog = load_testsets(catalog_path)
+            validation = validate_catalog(catalog)
+            self.assertTrue(any("帧泄漏" in error for error in validation["temporal.test"]))
+            self.assertNotEqual(
+                fingerprint_before, manifest_fingerprint(catalog["temporal.test"])
+            )
+
     def test_yolo_clean_split_passes_and_video_leak_fails(self) -> None:
         with tempfile.TemporaryDirectory() as clean_dir:
             clean_root = Path(clean_dir)
@@ -143,12 +276,32 @@ class TestsetManifestTest(unittest.TestCase):
             clean = load_testsets(self._write_catalog(clean_root, {"yolo.test": self._yolo_spec()}))
             self.assertEqual(validate_spec(clean["yolo.test"]), [])
 
+            frame_spec = self._yolo_spec()
+            frame_spec["split_overlap_policy"] = "frame"
+            frame_clean = load_testsets(
+                self._write_catalog(clean_root, {"yolo.test": frame_spec})
+            )
+            self.assertEqual(validate_spec(frame_clean["yolo.test"]), [])
+
         with tempfile.TemporaryDirectory() as leak_dir:
             leak_root = Path(leak_dir)
             self._write_yolo_data(leak_root, leak=True)
             leaking = load_testsets(self._write_catalog(leak_root, {"yolo.test": self._yolo_spec()}))
             errors = validate_spec(leaking["yolo.test"])
             self.assertTrue(any("train/test" in error and "video-train" in error for error in errors))
+
+            allowed_spec = self._yolo_spec()
+            allowed_spec["split_overlap_policy"] = "allow"
+            allowed = load_testsets(self._write_catalog(leak_root, {"yolo.test": allowed_spec}))
+            self.assertEqual(validate_spec(allowed["yolo.test"]), [])
+
+            frame_spec = self._yolo_spec()
+            frame_spec["split_overlap_policy"] = "frame"
+            frame_checked = load_testsets(
+                self._write_catalog(leak_root, {"yolo.test": frame_spec})
+            )
+            frame_errors = validate_spec(frame_checked["yolo.test"])
+            self.assertTrue(any("具体帧跨 split" in error for error in frame_errors))
 
     def test_e2e_example_case_passes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

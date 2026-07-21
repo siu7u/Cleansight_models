@@ -48,18 +48,22 @@ def test_evaluation_run_info_excludes_environment_and_git(tmp_path):
     assert "git" not in info
 
 
-def test_actionmixed_testset_is_registered_and_leak_is_explicit():
+def test_actionmixed_testset_records_frame_split_overlap_policy():
     cfg = {
         "pipeline": "full_sequence_temporal",
-        "data": {"name": "cleansight-ActionMixed", "split_eval": "test"},
-        "feature_schema": {"dim": 40},
-        "evaluation": {"testset_id": "temporal.actionmixed-v1.test"},
+        "data": {"dataset_ref": "temporal.actionmixed-v2", "split_eval": "test"},
+        "feature_schema": {"dim": 40, "version": "actionmixed-bbox-8cls-v1"},
+        "model": {"input_dim": 40, "num_classes": 6},
+        "evaluation": {},
     }
     info = resolve_testset_info(cfg)
     assert info["registered"] is True
+    assert info["dataset"] == "temporal.actionmixed-v2"
+    assert info["dataset_revision"] == "b3cf7487f6f6fd6e5be404f8e72b24f82ebb73b4"
     assert info["split"] == "test"
+    assert info["split_overlap_policy"] == "frame"
     assert len(info["fingerprint_sha256"]) == 64
-    assert any("train/test 泄漏" in error for error in info["validation_errors"])
+    assert info["validation_errors"] == []
 
 
 def test_upgrade_v1_writes_new_v2_file_without_overwrite(tmp_path):

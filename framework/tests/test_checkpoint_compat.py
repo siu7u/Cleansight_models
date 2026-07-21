@@ -11,7 +11,10 @@ from cleansight_eval.core.checkpoint import (
     save_training_checkpoint,
 )
 from cleansight_eval.core.integrity import CompatibilityError
-from cleansight_eval.temporal.data import build_temporal_meta
+from cleansight_eval.temporal.data import (
+    assert_resume_dataset_compatible,
+    build_temporal_meta,
+)
 from cleansight_eval.temporal.models import build_model
 
 
@@ -105,3 +108,38 @@ def test_training_checkpoint_keeps_eval_loader_compatible(tmp_path):
     assert "rnn.weight_ih_l0" in state
     assert "optimizer_state" not in state
     assert eval_meta["pipeline"] == "sliding_window_temporal"
+
+
+def test_checkpoint_keeps_training_dataset_provenance(tmp_path):
+    cfg = {"type": "gru", "input_dim": 40, "num_classes": 6, "hidden": 8, "num_layers": 1}
+    model = build_model(cfg)
+    dataset = {
+        "registered": True,
+        "id": "temporal.actionmixed-v2",
+        "version": "cleansight-actionmixed-v2",
+        "revision": "b3cf7487",
+        "feature_mapping": "actionmixed-bbox-8cls-v1",
+        "labels": ["idle", "air_injection", "flush", "long_brush_insert", "long_brush_withdraw", "short_brush_cleaning"],
+        "roles": {"train": "train"},
+        "splits": {"train": {"fingerprint_sha256": "abc123"}},
+    }
+    meta = build_temporal_meta(
+        cfg,
+        {"dim": 40, "version": "actionmixed-bbox-8cls-v1"},
+        pipeline="sliding_window_temporal",
+        window=16,
+        num_params=sum(p.numel() for p in model.parameters()),
+        train_cfg={"epochs": 1},
+        trained_at="t0",
+        dataset=dataset,
+    )
+    path = tmp_path / "bound.pt"
+    save_checkpoint(path, model.state_dict(), meta)
+
+    _state, loaded = load_checkpoint(path)
+
+    assert loaded["dataset"] == dataset
+    assert_resume_dataset_compatible(loaded, dataset)
+    changed = {**dataset, "splits": {"train": {"fingerprint_sha256": "changed"}}}
+    with pytest.raises(ValueError, match="train split fingerprint"):
+        assert_resume_dataset_compatible(loaded, changed)

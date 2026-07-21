@@ -43,6 +43,7 @@ class E2EBenchmarkMetricTests(unittest.TestCase):
         self.assertEqual(details["recall"], 1.0)
         self.assertEqual(details["f1"], 1.0)
         self.assertEqual(details["mean_matched_iou"], 1.0)
+        self.assertEqual(score["phase_errors"][0]["temporal_iou"], 1.0)
 
     def test_score_case_counts_false_positive_and_false_negative(self) -> None:
         prediction = {
@@ -61,6 +62,27 @@ class E2EBenchmarkMetricTests(unittest.TestCase):
         self.assertAlmostEqual(details["precision"], 0.5)
         self.assertAlmostEqual(details["recall"], 0.5)
         self.assertAlmostEqual(details["f1"], 0.5)
+
+    def test_phase_gate_cannot_reuse_one_prediction_for_two_truth_segments(self) -> None:
+        case = _case()
+        case["expected"]["required_actions"] = ["Long_Brushing"]
+        case["expected"]["phases"] = [
+            {"name": "Long_Brushing", "start_sec": 10, "end_sec": 20},
+            {"name": "Long_Brushing", "start_sec": 12, "end_sec": 22},
+        ]
+        prediction = {
+            "result": "pass",
+            "actions": [
+                {"name": "Long_Brushing", "start_sec": 11, "end_sec": 21},
+            ],
+        }
+
+        score = score_case(case, prediction)
+
+        self.assertEqual(score["status"], "FAIL")
+        self.assertEqual(sum(bool(item["matched"]) for item in score["phase_errors"]), 1)
+        details = score["timeline_metrics"]["details_at_iou"]["0.50"]
+        self.assertEqual((details["tp"], details["fp"], details["fn"]), (1, 0, 1))
 
     def test_write_report_includes_timeline_metric_table(self) -> None:
         prediction = {

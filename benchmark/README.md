@@ -49,6 +49,17 @@ python tools/validate_testsets.py --catalog benchmark/testsets.yaml --json
 `formal` 评估要求所选 testset 已登记且校验通过；`exploratory` 可以保留降级事实，但不能作为锁定
 测试集结果发布。
 
+每个 testset 可设置 `split_overlap_policy: error | frame | allow`，默认 `error`：`error` 要求源视频
+跨 split 隔离；`frame` 允许同源视频分段，但阻断相同帧ID进入多个 split；`allow` 不做跨 split
+重叠门禁。缺失文件、单个清单内重复样本、类别和特征维度等检查始终执行。策略会进入 testset
+fingerprint 和评测元数据；时序 `frame` 模式还会把实际帧ID分配纳入 fingerprint。`frame` / `allow`
+的结果只能标为开发期 benchmark。
+
+`testsets.yaml` schema v2 将重复信息分成两层：`datasets` 保存数据集级公共契约（family、版本、
+类别、特征映射、维度、数据根目录和重叠策略），`testsets` 通过 `dataset` 引用公共定义，只声明
+`split`、样本 `manifest`、`purpose` 和必要的 `expected_items`。加载器仍兼容旧版 schema v1；v2
+若在 split 中重复声明公共字段会直接报错，防止两份配置逐渐不一致。
+
 ## 单模型评估（推荐入口）
 
 ### YOLO
@@ -74,6 +85,11 @@ python -m framework.cleansight_eval.cli.eval \
 时序 evaluator 从逐视频预测与真值重算 Accuracy、Edit、F1@0.1/0.25/0.5、TP/FP/FN、P/R、
 Temporal IoU 和帧级分类指标。不同视频保持独立边界：Accuracy 是帧 micro，Edit 是逐视频 macro
 mean，分段计数在各视频独立匹配后做跨视频 micro 聚合。
+
+时序片段与 3 分钟端到端动作时间线共用 `benchmark/core/metrics.py` 的区间比较算法：同类别候选
+按 Temporal IoU 从高到低做全局贪心一对一匹配，默认阈值为 0.1/0.25/0.5，再统一由 TP/FP/FN
+计算 Precision、Recall 和 F1。时序模型的区间单位是帧，端到端时间线的区间单位是秒；IoU、
+P/R/F1 口径相同，边界 MAE 的单位随输入时间轴变化。
 
 ### 历史批量脚本
 
@@ -126,6 +142,14 @@ python benchmark/e2e_3min/run_e2e_benchmark.py \
 视频 → YOLO → feature mapping → 时序模型/analyzer
      → 流程结论、动作时间线、阶段时间和告警
 ```
+
+端到端报告保留两层结论：
+
+- 通用时间线指标：与时序模型评估共用一对一匹配、TP/FP/FN、Precision、Recall、F1 和 Temporal IoU；
+- 业务 PASS/FAIL：在共享匹配结果上继续检查流程结果、必需动作是否出现，以及阶段起止误差是否位于
+  `allowed_time_error_sec` 内。
+
+“关键动作召回”表只是必需动作存在性门禁，不等同于基于 TP/FP/FN 的统计 Recall。
 
 ## 人工发布审阅（遗留兼容）
 

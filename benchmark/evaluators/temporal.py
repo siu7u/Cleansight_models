@@ -5,18 +5,18 @@ from __future__ import annotations
 from typing import Any, Mapping, Sequence
 
 from benchmark.core.artifacts import build_temporal_prediction_artifact
-from benchmark.core.metrics import temporal_metrics
+from benchmark.core.metrics import DEFAULT_INTERVAL_IOU_THRESHOLDS, temporal_metrics
 from benchmark.core.result import EvaluationResult, MetricValue
 
 
-# 数值口径未改变；v3 把跨视频聚合方法写进稳定 spec，避免 micro/macro 歧义。
+# v4 将段级匹配统一为全局 IoU 贪心一对一；帧级和 Edit 未变，继续沿用 v3。
 SPEC_ACC = "accuracy/frame-wise-micro-across-items/percent/v3; source=benchmark.core.metrics"
 SPEC_EDIT = "edit/levenshtein-item-macro-mean/percent/v3; source=benchmark.core.metrics"
-SPEC_F1 = "segmental_f1/counts-micro-across-items-label-aware-one-to-one-iou/percent/v3; source=benchmark.core.metrics"
-SPEC_PRECISION = "segmental_precision/counts-micro-across-items-label-aware-one-to-one-iou/percent/v3; source=benchmark.core.metrics"
-SPEC_RECALL = "segmental_recall/counts-micro-across-items-label-aware-one-to-one-iou/percent/v3; source=benchmark.core.metrics"
-SPEC_COUNTS = "segmental_counts/micro-across-items-label-aware-one-to-one-iou/v3; source=benchmark.core.metrics"
-SPEC_TEMPORAL_IOU = "temporal_iou/matched-segment-micro-pool-mean/percent/v3; source=benchmark.core.metrics"
+SPEC_F1 = "segmental_f1/counts-micro-across-items-label-aware-one-to-one-global-greedy-iou/percent/v4; source=benchmark.core.metrics"
+SPEC_PRECISION = "segmental_precision/counts-micro-across-items-label-aware-one-to-one-global-greedy-iou/percent/v4; source=benchmark.core.metrics"
+SPEC_RECALL = "segmental_recall/counts-micro-across-items-label-aware-one-to-one-global-greedy-iou/percent/v4; source=benchmark.core.metrics"
+SPEC_COUNTS = "segmental_counts/micro-across-items-label-aware-one-to-one-global-greedy-iou/v4; source=benchmark.core.metrics"
+SPEC_TEMPORAL_IOU = "temporal_iou/matched-segment-global-greedy-micro-pool-mean/percent/v4; source=benchmark.core.metrics"
 SPEC_FRAME_CLASS = "classification/frame-micro-pool-per-class/percent/v3; source=benchmark.core.metrics"
 SPEC_MODEL_FORWARD = "latency/model-forward-single-window/ms/v2; excludes=data,postprocess,io,production"
 
@@ -53,7 +53,7 @@ def compute_temporal_metrics_by_item(
             truth_by_item,
             labels=list(labels),
             start_frame=start_frame,
-            thresholds=(0.1, 0.25, 0.5),
+            thresholds=DEFAULT_INTERVAL_IOU_THRESHOLDS,
             ignore_index=-1,
         )
     except ValueError as exc:
@@ -63,7 +63,7 @@ def compute_temporal_metrics_by_item(
             "edit": MetricValue.missing(reason, spec=SPEC_EDIT),
             **{
                 f"f1@{threshold}": MetricValue.missing(reason, spec=SPEC_F1)
-                for threshold in (0.1, 0.25, 0.5)
+                for threshold in DEFAULT_INTERVAL_IOU_THRESHOLDS
             },
         }
         return (missing, {"error": reason}) if return_details else missing
@@ -77,7 +77,7 @@ def compute_temporal_metrics_by_item(
         "frame.macro_iou": _percent_metric(frame.get("macro_iou"), SPEC_FRAME_CLASS),
         "frame.micro_f1": _percent_metric(frame.get("micro_f1"), SPEC_FRAME_CLASS),
     }
-    for threshold in (0.1, 0.25, 0.5):
+    for threshold in DEFAULT_INTERVAL_IOU_THRESHOLDS:
         key = f"{threshold:.2f}"
         detail = segment["details_at_iou"][key]
         suffix = str(threshold)

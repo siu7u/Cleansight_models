@@ -15,6 +15,7 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CATALOG = REPO_ROOT / "benchmark" / "testsets.yaml"
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+SPLIT_OVERLAP_POLICIES = {"error", "frame", "allow"}
 
 
 @dataclass(frozen=True)
@@ -22,14 +23,17 @@ class TestsetSpec:
     """描述一个可复现的数据 split 及其评估输入契约。"""
 
     id: str
+    dataset: str | None
     family: str
     dataset_version: str
+    dataset_revision: str | None
     split: str
     manifest: str
     feature_mapping: str | None
     input_dim: int | None
     labels: tuple[str, ...]
     purpose: str
+    split_overlap_policy: str
     root: Path = field(repr=False)
     data_root: str | None = None
     expected_items: tuple[str, ...] = ()
@@ -56,32 +60,66 @@ def load_testsets(
     payload = yaml.safe_load(catalog_path.read_text(encoding="utf-8")) or {}
     if not isinstance(payload, dict):
         raise ValueError(f"testset catalog 必须是 YAML mapping: {catalog_path}")
-    if payload.get("schema_version") != 1:
-        raise ValueError(f"不支持的 testset schema_version: {payload.get('schema_version')!r}")
+    schema_version = payload.get("schema_version")
+    if schema_version not in {1, 2}:
+        raise ValueError(f"不支持的 testset schema_version: {schema_version!r}")
+    datasets = payload.get("datasets", {})
+    if schema_version == 2 and not isinstance(datasets, dict):
+        raise ValueError("testset catalog v2 缺少 `datasets` mapping")
     entries = payload.get("testsets")
     if not isinstance(entries, dict):
         raise ValueError("testset catalog 缺少 `testsets` mapping")
 
-    catalog_root = Path(root).resolve() if root is not None else resolve_path(payload.get("root", "."), catalog_path.parent)
+    catalog_root = (
+        Path(root).resolve()
+        if root is not None
+        else resolve_path(payload.get("root", "."), catalog_path.parent)
+    )
     specs: dict[str, TestsetSpec] = {}
     for testset_id, item in entries.items():
         if not isinstance(item, dict):
             raise ValueError(f"testset {testset_id!r} 必须是 mapping")
-        input_dim = item.get("input_dim")
+        dataset_id = None
+        resolved = dict(item)
+        if schema_version == 2:
+            dataset_id = item.get("dataset")
+            if not isinstance(dataset_id, str) or not dataset_id:
+                raise ValueError(f"testset {testset_id!r} 缺少 `dataset` 引用")
+            dataset = datasets.get(dataset_id)
+            if not isinstance(dataset, dict):
+                raise ValueError(f"testset {testset_id!r} 引用了未知 dataset: {dataset_id!r}")
+            duplicate_fields = sorted(set(dataset) & (set(item) - {"dataset"}))
+            if duplicate_fields:
+                raise ValueError(
+                    f"testset {testset_id!r} 重复声明 dataset 公共字段: {duplicate_fields}"
+                )
+            resolved = {**dataset, **{key: value for key, value in item.items() if key != "dataset"}}
+        input_dim = resolved.get("input_dim")
         specs[str(testset_id)] = TestsetSpec(
             id=str(testset_id),
-            family=str(item.get("family", "")),
-            dataset_version=str(item.get("dataset_version", "")),
-            split=str(item.get("split", "")),
-            manifest=str(item.get("manifest", "")),
-            feature_mapping=None if item.get("feature_mapping") is None else str(item["feature_mapping"]),
+            dataset=dataset_id,
+            family=str(resolved.get("family", "")),
+            dataset_version=str(resolved.get("dataset_version", "")),
+            dataset_revision=(
+                None
+                if resolved.get("revision") is None
+                else str(resolved["revision"])
+            ),
+            split=str(resolved.get("split", "")),
+            manifest=str(resolved.get("manifest", "")),
+            feature_mapping=(
+                None
+                if resolved.get("feature_mapping") is None
+                else str(resolved["feature_mapping"])
+            ),
             input_dim=input_dim if isinstance(input_dim, int) and not isinstance(input_dim, bool) else None,
-            labels=tuple(str(label) for label in item.get("labels", []) if str(label)),
-            purpose=str(item.get("purpose", "")),
+            labels=tuple(str(label) for label in resolved.get("labels", []) if str(label)),
+            purpose=str(resolved.get("purpose", "")),
+            split_overlap_policy=str(resolved.get("split_overlap_policy", "error")),
             root=catalog_root,
-            data_root=None if item.get("data_root") is None else str(item["data_root"]),
-            expected_items=tuple(str(name) for name in item.get("expected_items", []) if str(name)),
-            raw=dict(item),
+            data_root=None if resolved.get("data_root") is None else str(resolved["data_root"]),
+            expected_items=tuple(str(name) for name in resolved.get("expected_items", []) if str(name)),
+            raw=resolved,
         )
     return specs
 
@@ -101,6 +139,60 @@ def get_testset(
     except KeyError as exc:
         choices = ", ".join(sorted(specs)) or "<empty>"
         raise KeyError(f"未知 testset: {testset_id}; 可选: {choices}") from exc
+
+
+def get_dataset_split(
+    dataset_ref: str,
+    split: str,
+    catalog: Mapping[str, TestsetSpec] | None = None,
+) -> TestsetSpec:
+    """按数据集引用和 split 返回唯一登记规格，避免训练端自行猜测 manifest。"""
+
+    specs = dict(catalog) if catalog is not None else load_testsets()
+    matches = [
+        spec
+        for spec in specs.values()
+        if spec.dataset == dataset_ref and spec.split == split
+    ]
+    if len(matches) != 1:
+        choices = sorted(spec.id for spec in matches)
+        raise KeyError(
+            f"dataset_ref={dataset_ref!r} split={split!r} 必须唯一登记，"
+            f"当前匹配 {choices or '<empty>'}"
+        )
+    return matches[0]
+
+
+def get_dataset_specs(
+    dataset_ref: str,
+    catalog: Mapping[str, TestsetSpec] | None = None,
+) -> list[TestsetSpec]:
+    """返回一个数据集引用下的全部 split 规格，并校验公共契约没有漂移。"""
+
+    specs = dict(catalog) if catalog is not None else load_testsets()
+    matches = sorted(
+        (spec for spec in specs.values() if spec.dataset == dataset_ref),
+        key=lambda spec: (spec.split, spec.id),
+    )
+    if not matches:
+        raise KeyError(f"未知 dataset_ref: {dataset_ref!r}")
+    baseline = matches[0]
+    for spec in matches[1:]:
+        for field_name in (
+            "family",
+            "dataset_version",
+            "dataset_revision",
+            "data_root",
+            "feature_mapping",
+            "input_dim",
+            "labels",
+            "split_overlap_policy",
+        ):
+            if getattr(spec, field_name) != getattr(baseline, field_name):
+                raise ValueError(
+                    f"dataset_ref={dataset_ref!r} 的公共字段 {field_name} 在 split 间不一致"
+                )
+    return matches
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -180,6 +272,47 @@ def read_split_items(spec: TestsetSpec) -> list[str]:
     raise ValueError(f"{spec.id}: 不支持 family={spec.family!r}")
 
 
+def _actionmixed_content_fingerprint(spec: TestsetSpec) -> str:
+    """计算该 split 训练实际消费的动作标签、检测映射和逐帧 bbox 内容摘要。"""
+
+    if not spec.data_root:
+        raise ValueError(f"{spec.id}: ActionMixed 缺少 data_root")
+    data_root = resolve_path(spec.data_root, spec.root)
+    digest = hashlib.sha256()
+
+    def update_file(path: Path) -> None:
+        try:
+            relative = path.relative_to(data_root).as_posix()
+        except ValueError:
+            relative = str(path)
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\0")
+        if not path.is_file():
+            digest.update(b"<missing>\0")
+            return
+        digest.update(hashlib.sha256(path.read_bytes()).digest())
+
+    update_file(data_root / "labels" / "data.yaml")
+    update_file(data_root / "frames" / "data.yaml")
+    for name in read_split_items(spec):
+        label_path = data_root / "labels" / spec.split / f"{name}.txt"
+        update_file(label_path)
+        if not label_path.is_file():
+            continue
+        for line in label_path.read_text(encoding="utf-8").splitlines():
+            parts = line.split()
+            if len(parts) != 2:
+                continue
+            try:
+                frame_id = int(parts[0])
+            except ValueError:
+                continue
+            update_file(
+                data_root / "frames" / spec.split / f"{name}-{frame_id:06d}.txt"
+            )
+    return digest.hexdigest()
+
+
 def manifest_fingerprint(spec: TestsetSpec) -> str:
     """计算包含规格、manifest 内容和样本清单的 SHA-256 指纹。"""
 
@@ -187,6 +320,7 @@ def manifest_fingerprint(spec: TestsetSpec) -> str:
     manifest_sha256 = hashlib.sha256(manifest.read_bytes()).hexdigest()
     payload = {
         "id": spec.id,
+        "dataset": spec.dataset,
         "family": spec.family,
         "dataset_version": spec.dataset_version,
         "split": spec.split,
@@ -194,9 +328,16 @@ def manifest_fingerprint(spec: TestsetSpec) -> str:
         "input_dim": spec.input_dim,
         "labels": list(spec.labels),
         "purpose": spec.purpose,
+        "split_overlap_policy": spec.split_overlap_policy,
         "manifest_sha256": manifest_sha256,
         "items": read_split_items(spec),
     }
+    if spec.dataset_revision is not None:
+        payload["dataset_revision"] = spec.dataset_revision
+    if spec.family == "temporal" and spec.raw.get("format") == "actionmixed_bbox":
+        payload["content_sha256"] = _actionmixed_content_fingerprint(spec)
+        if spec.split_overlap_policy == "frame":
+            payload["frame_keys"] = sorted(_read_actionmixed_frame_keys(spec))
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
@@ -211,6 +352,46 @@ def _source_video_id(image: Path) -> str:
     if video_match:
         return video_match.group(1)
     return re.sub(r"(?:-|_)(?:frame[-_]?)?\d{4,}$", "", stem, flags=re.IGNORECASE)
+
+
+def _source_frame_key(image: Path) -> tuple[str, int] | None:
+    """从抽帧文件名恢复 ``(源视频ID, 帧ID)``，无法识别帧号时返回 ``None``。"""
+
+    stem = image.stem
+    if stem.startswith("ms_"):
+        stem = stem[3:]
+    video_match = re.match(
+        r"^(.*)\.(?:mp4|avi|mov|mkv|m4v)-(\d+)$", stem, flags=re.IGNORECASE
+    )
+    if video_match:
+        return video_match.group(1), int(video_match.group(2))
+    frame_match = re.match(
+        r"^(.*?)(?:-|_)(?:frame[-_]?)?(\d{4,})$", stem, flags=re.IGNORECASE
+    )
+    if frame_match:
+        return frame_match.group(1), int(frame_match.group(2))
+    return None
+
+
+def _read_actionmixed_frame_keys(spec: TestsetSpec) -> set[tuple[str, int]]:
+    """读取 ActionMixed split 的 ``(视频名, 帧ID)``，供帧级跨集合门禁比较。"""
+
+    if spec.raw.get("format") != "actionmixed_bbox" or not spec.data_root:
+        raise ValueError(f"{spec.id}: frame 策略仅支持带 data_root 的 actionmixed_bbox")
+    data_root = resolve_path(spec.data_root, spec.root)
+    keys: set[tuple[str, int]] = set()
+    for name in read_split_items(spec):
+        label_path = data_root / "labels" / spec.split / f"{name}.txt"
+        for line in label_path.read_text(encoding="utf-8").splitlines():
+            parts = line.split()
+            if len(parts) != 2:
+                continue
+            try:
+                frame_id = int(parts[0])
+            except ValueError:
+                continue
+            keys.add((name, frame_id))
+    return keys
 
 
 def _validate_required_fields(spec: TestsetSpec) -> list[str]:
@@ -235,6 +416,11 @@ def _validate_required_fields(spec: TestsetSpec) -> list[str]:
         errors.append("labels 不能为空")
     if len(spec.labels) != len(set(spec.labels)):
         errors.append("labels 含重复项")
+    if spec.split_overlap_policy not in SPLIT_OVERLAP_POLICIES:
+        errors.append(
+            "split_overlap_policy 必须是 error、frame 或 allow，"
+            f"当前为 {spec.split_overlap_policy!r}"
+        )
     return errors
 
 
@@ -257,6 +443,21 @@ def _validate_temporal(spec: TestsetSpec) -> list[str]:
         errors.append(f"split 样本与 expected_items 不一致: actual={items!r}")
 
     if spec.raw.get("format") == "actionmixed_bbox":
+        split_dir = data_root / "labels" / spec.split
+        actual_items = (
+            sorted(path.name[:-4] for path in split_dir.glob("*.txt"))
+            if split_dir.is_dir()
+            else []
+        )
+        registered = set(items)
+        actual = set(actual_items)
+        missing_from_manifest = sorted(actual - registered)
+        missing_from_split = sorted(registered - actual)
+        if missing_from_manifest:
+            errors.append(f"split 目录存在未登记样本: {missing_from_manifest}")
+        if missing_from_split:
+            errors.append(f"manifest 样本不在 split 目录: {missing_from_split}")
+
         mapping_path = data_root / "labels" / "data.yaml"
         if not mapping_path.is_file():
             errors.append(f"缺少动作标签映射: {mapping_path}")
@@ -266,10 +467,47 @@ def _validate_temporal(spec: TestsetSpec) -> list[str]:
             mapped = tuple(str(names[key]) for key in sorted(names, key=lambda value: int(value)))
             if mapped != spec.labels:
                 errors.append(f"ActionMixed labels 与 manifest 不一致: {mapped!r}")
+
+        detection_mapping_path = data_root / "frames" / "data.yaml"
+        if not detection_mapping_path.is_file():
+            errors.append(f"缺少检测目标映射: {detection_mapping_path}")
+        else:
+            payload = _load_yaml(detection_mapping_path)
+            detection_names = payload.get("names") or {}
+            if isinstance(detection_names, dict):
+                detection_count = len(detection_names)
+            elif isinstance(detection_names, list):
+                detection_count = len(detection_names)
+            else:
+                detection_count = 0
+            if detection_count * 5 != spec.input_dim:
+                errors.append(
+                    f"ActionMixed 检测类别数×5={detection_count * 5} "
+                    f"与 input_dim={spec.input_dim} 不一致"
+                )
+
+        missing_bbox: list[str] = []
         for name in items:
             label_path = data_root / "labels" / spec.split / f"{name}.txt"
             if not label_path.is_file():
                 errors.append(f"缺少动作标签文件: {label_path}")
+                continue
+            for line in label_path.read_text(encoding="utf-8").splitlines():
+                parts = line.split()
+                if len(parts) != 2:
+                    continue
+                try:
+                    frame_id = int(parts[0])
+                except ValueError:
+                    continue
+                frame_path = data_root / "frames" / spec.split / f"{name}-{frame_id:06d}.txt"
+                if not frame_path.is_file():
+                    missing_bbox.append(frame_path.relative_to(data_root).as_posix())
+        if missing_bbox:
+            preview = missing_bbox[:5]
+            errors.append(
+                f"缺少 {len(missing_bbox)} 个逐帧 bbox 文件，示例: {preview}"
+            )
         return errors
 
     mapping_path = data_root / "mapping.txt"
@@ -321,6 +559,7 @@ def _validate_yolo(spec: TestsetSpec) -> list[str]:
         errors.append(f"data.yaml labels 与 manifest 不一致: {parsed_labels!r}")
 
     videos: dict[str, set[str]] = {}
+    frames: dict[str, set[tuple[str, int]]] = {}
     for split in ("train", "val", "test"):
         try:
             images = _read_yolo_image_paths(manifest, split)
@@ -331,11 +570,21 @@ def _validate_yolo(spec: TestsetSpec) -> list[str]:
         if not images:
             errors.append(f"YOLO split={split} 没有图片")
         videos[split] = {_source_video_id(image) for image in images}
+        frame_keys = [_source_frame_key(image) for image in images]
+        frames[split] = {key for key in frame_keys if key is not None}
+        if spec.split_overlap_policy == "frame" and len(frames[split]) != len(images):
+            errors.append(f"YOLO split={split} 存在无法恢复源视频/帧ID的图片")
 
-    for left, right in (("train", "val"), ("train", "test"), ("val", "test")):
-        overlap = sorted(videos[left] & videos[right])
-        if overlap:
-            errors.append(f"YOLO 源视频跨 split 泄漏 {left}/{right}: {overlap}")
+    if spec.split_overlap_policy == "error":
+        for left, right in (("train", "val"), ("train", "test"), ("val", "test")):
+            overlap = sorted(videos[left] & videos[right])
+            if overlap:
+                errors.append(f"YOLO 源视频跨 split 泄漏 {left}/{right}: {overlap}")
+    elif spec.split_overlap_policy == "frame":
+        for left, right in (("train", "val"), ("train", "test"), ("val", "test")):
+            overlap = sorted(frames[left] & frames[right])
+            if overlap:
+                errors.append(f"YOLO 具体帧跨 split 泄漏 {left}/{right}: {overlap}")
     return errors
 
 
@@ -421,6 +670,16 @@ def validate_catalog(catalog: Mapping[str, TestsetSpec]) -> dict[str, list[str]]
             temporal_groups.setdefault(spec.dataset_version, []).append(spec)
 
     for dataset_version, specs in temporal_groups.items():
+        policies = {spec.split_overlap_policy for spec in specs}
+        if len(policies) != 1:
+            message = (
+                f"temporal dataset_version={dataset_version} 的 split_overlap_policy 不一致: "
+                f"{sorted(policies)}"
+            )
+            for spec in specs:
+                results[spec.id].append(message)
+            continue
+        overlap_policy = next(iter(policies))
         trains = [spec for spec in specs if spec.split == "train"]
         tests = [spec for spec in specs if spec.split == "test"]
         if not trains or not tests:
@@ -435,12 +694,25 @@ def validate_catalog(catalog: Mapping[str, TestsetSpec]) -> dict[str, list[str]]
                 if left.split == right.split:
                     continue
                 try:
-                    overlap = sorted(set(read_split_items(left)) & set(read_split_items(right)))
-                except (OSError, ValueError):
+                    if overlap_policy == "frame":
+                        overlap = sorted(
+                            _read_actionmixed_frame_keys(left)
+                            & _read_actionmixed_frame_keys(right)
+                        )
+                    else:
+                        overlap = sorted(set(read_split_items(left)) & set(read_split_items(right)))
+                except (OSError, ValueError) as exc:
+                    if overlap_policy == "frame":
+                        message = (
+                            f"temporal dataset_version={dataset_version} 无法执行帧级泄漏检查: {exc}"
+                        )
+                        results[left.id].append(message)
+                        results[right.id].append(message)
                     continue
-                if overlap:
+                if overlap and overlap_policy != "allow":
+                    overlap_name = "帧泄漏" if overlap_policy == "frame" else "泄漏"
                     message = (
-                        f"temporal {left.split}/{right.split} 泄漏 "
+                        f"temporal {left.split}/{right.split} {overlap_name} "
                         f"dataset_version={dataset_version}: {overlap}"
                     )
                     results[left.id].append(message)

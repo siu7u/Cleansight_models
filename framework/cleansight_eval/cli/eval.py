@@ -17,7 +17,7 @@ from ..core.environment import now_stamp, pick_device
 from ..core.integrity import assert_evaluation_profile, check_result_complete
 from ..core.provenance import build_checkpoint_info, build_run_info, resolve_testset_info, sha256_file
 from ..core.report import write_checkpoint_reports
-from ._registry import get_pipeline
+from ._registry import get_pipeline, get_visualizer
 
 try:
     from benchmark.core.delivery import build_delivery_manifest, write_delivery_manifest
@@ -133,12 +133,17 @@ def main(argv=None) -> list[str]:
             relative_to=artifact_base,
         )
 
-    # 可视化旁路（duck-type 钩子，仅个别流水线提供）：出图便于评估时肉眼快速发现错分。
-    # 隔离于正式结果主流程之外——出图失败（如缺 matplotlib）只跳过并告警，绝不拖垮评估。
-    if hasattr(pipeline, "visualize"):
+    # 可视化旁路直接消费本次 PredictionOutput，不重新加载 checkpoint 或重复推理。
+    # 呈现失败（如缺 matplotlib）只跳过并告警，绝不拖垮正式评估事实。
+    visualizer = get_visualizer(prediction.pipeline)
+    if visualizer is not None and cfg.get("evaluation", {}).get("visualize", True):
         viz_dir = out_dir.parent / "viz" if out_dir.name == "evals" else out_dir / "viz"
         try:
-            viz_paths = pipeline.visualize(cfg, args.ckpt, device, viz_dir)
+            viz_paths = visualizer(
+                prediction,
+                out_dir=viz_dir,
+                per_page=int(cfg.get("evaluation", {}).get("viz_per_page", 6)),
+            )
             if viz_paths:
                 print(f"[eval] viz: {len(viz_paths)} page(s) -> {Path(viz_paths[0]).parent}")
                 result.artifacts["visualization"] = [

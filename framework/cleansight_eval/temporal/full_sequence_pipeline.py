@@ -34,8 +34,18 @@ from ..core.environment import now_stamp, set_seed
 from ..core.execution import PredictionOutput, format_params
 from ..core.history import HistoryWriter, try_plot_training_history
 from ..core.integrity import check_feature_schema
+from ..core.pipeline import Pipeline
 from ..core.run import RunContext
-from .data import build_temporal_meta, load_split, split_video_names
+from .data import (
+    apply_target_mask_augmentation,
+    assert_resume_dataset_compatible,
+    build_dataset_provenance,
+    build_temporal_meta,
+    load_split,
+    resolve_mask_target_ids,
+    resolve_target_mask_augmentation,
+    split_video_names,
+)
 from .metrics import compute_temporal_metrics_by_item
 from .models import build_model
 from .util import compute_class_weights
@@ -148,7 +158,7 @@ class FullSequenceDataset(Dataset):
         return self.x, self.y
 
 
-class FullSequenceTemporalPipeline:
+class FullSequenceTemporalPipeline(Pipeline):
     pipeline_name = "full_sequence_temporal"
 
     def validate_config(self, cfg: dict) -> None:
@@ -164,6 +174,8 @@ class FullSequenceTemporalPipeline:
         for k in ("root", "split_train", "split_eval"):
             if k not in data:
                 raise ValueError(f"时序流水线 data 段缺少必要字段: {k}（用数据集内建目录切分）")
+        resolve_mask_target_ids(data, cfg.get("feature_schema"))
+        resolve_target_mask_augmentation(data, cfg.get("augmentation"))
 
     def train(self, cfg: dict, runs_dir: str, seed: int, device) -> str:
         train_cfg = cfg["train"]
@@ -178,14 +190,29 @@ class FullSequenceTemporalPipeline:
         try:
             set_seed(seed)
             model = build_model(model_cfg).to(device)
+            dataset_provenance = build_dataset_provenance(
+                cfg["data"], cfg.get("feature_schema")
+            )
 
             # data（features 契约：读 ActionMixed + bbox→40维）+ 训练前 schema 兼容检查。
-            features, truths, _ = load_split(cfg["data"], cfg["data"]["split_train"])
+            features, truths, _ = load_split(
+                cfg["data"],
+                cfg["data"]["split_train"],
+                feature_schema=cfg.get("feature_schema"),
+            )
+            features = apply_target_mask_augmentation(
+                features,
+                cfg["data"],
+                cfg.get("augmentation"),
+                seed=seed,
+            )
             problems = check_feature_schema(features[0].shape[1], cfg.get("feature_schema"))
             if problems:
                 raise ValueError("特征 schema 与配置不兼容:\n  - " + "\n  - ".join(problems))
             val_split = _validation_split_name(cfg)
-            val_features, val_truths, val_id2name = load_split(cfg["data"], val_split)
+            val_features, val_truths, val_id2name = load_split(
+                cfg["data"], val_split, feature_schema=cfg.get("feature_schema")
+            )
 
             resume_path = train_cfg.get("resume")
             # 可选归一化钩子：resume 时状态会从 checkpoint 恢复，避免重新 fit 改变统计。
@@ -214,6 +241,7 @@ class FullSequenceTemporalPipeline:
             if resume_path:
                 expected = {"type": model_cfg["type"], "input_dim": model_cfg["input_dim"], "num_classes": model_cfg["num_classes"]}
                 payload, _meta = load_training_checkpoint(resume_path, expected=expected, map_location=device)
+                assert_resume_dataset_compatible(_meta, dataset_provenance)
                 model.load_state_dict(payload["model_state"])
                 optimizer.load_state_dict(payload["optimizer_state"])
                 start_epoch = int(payload["epoch"]) + 1
@@ -229,6 +257,8 @@ class FullSequenceTemporalPipeline:
                 num_params=sum(p.numel() for p in model.parameters()),
                 train_cfg=train_cfg,
                 trained_at=now_stamp(),
+                augmentation=cfg.get("augmentation"),
+                dataset=dataset_provenance,
                 extra=extra,
             )
             history = HistoryWriter(
@@ -322,7 +352,11 @@ class FullSequenceTemporalPipeline:
         """运行全序列模型，返回不含指标判分的逐视频预测事实。"""
 
         model, meta = _load_eval_model(cfg, ckpt, device)
-        features, truths, id2name = load_split(cfg["data"], cfg["data"]["split_eval"])
+        features, truths, id2name = load_split(
+            cfg["data"],
+            cfg["data"]["split_eval"],
+            feature_schema=cfg.get("feature_schema"),
+        )
 
         video_preds = _infer_split(model, features, device)
         names = split_video_names(cfg["data"], cfg["data"]["split_eval"])
@@ -345,7 +379,8 @@ class FullSequenceTemporalPipeline:
             predictions=pred_by_item,
             targets=truth_by_item,
             labels=labels,
-            feature_schema=meta.get("feature_schema", cfg.get("feature_schema", {})),
+            # 实际输入变换来自本次评估配置；mask_targets 可能用于已有 checkpoint 的遮罩实验。
+            feature_schema=cfg.get("feature_schema", meta.get("feature_schema", {})),
             inference_semantics=dict(FULL_SEQUENCE_SEMANTICS),
             num_params=meta.get("num_params"),
             metadata={
@@ -354,30 +389,3 @@ class FullSequenceTemporalPipeline:
                 "input_shape": [1, "T", cfg["model"]["input_dim"]],
             },
         )
-
-    def visualize(self, cfg: dict, ckpt: str, device, out_dir) -> list[str]:
-        """评估旁路的可视化钩子：出逐视频 GT vs 预测 分段条带图，肉眼快速定位错分。
-
-        与 ``predict`` 同一套模型重建 + 逐帧推理（数据小，重跑一次前向可忽略），因此图上
-        预测严格等于评估所用预测。视频多时**按页切分**（每页 ``evaluation.viz_per_page`` 个，默认
-        6），返回各页 PNG 路径。matplotlib 经 lazy import 只在此触达——训练/评估不出图就不
-        引入该依赖。可用 ``evaluation.visualize: false`` 关闭；缺 matplotlib 时由调用方降级跳过。
-        """
-        eval_cfg = cfg.get("evaluation", {})
-        if not eval_cfg.get("visualize", True):
-            return []
-        from . import viz  # lazy：把 matplotlib 依赖限制在出图路径
-
-        split = cfg["data"]["split_eval"]
-        model, meta = _load_eval_model(cfg, ckpt, device)
-        features, truths, id2name = load_split(cfg["data"], split)
-        names = split_video_names(cfg["data"], split)
-        preds = _infer_split(model, features, device)
-        paths = viz.render_segmentation(
-            preds, truths, id2name, names,
-            title_prefix=f"{meta['type']} | {split}",
-            out_dir=out_dir,
-            base_name=f"segmentation-{split}",
-            per_page=eval_cfg.get("viz_per_page", 6),
-        )
-        return [str(p) for p in paths]

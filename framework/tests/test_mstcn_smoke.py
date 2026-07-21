@@ -141,3 +141,5 @@ def test_mstcn2_end_to_end(tmp_path):
     # 评估旁路自动出图：run 的 viz/ 下应有该 split 的分段条带图（按页切分，至少第一页）。
     run_dir = Path(ckpt).parents[1]  # <run>/checkpoints/<ckpt> → <run>
     assert (run_dir / "viz" / "segmentation-test-p01.png").exists()
+    assert data["artifacts"]["visualization"][0]["path"] == "viz/segmentation-test-p01.png"
+    assert data["artifacts"]["visualization"][0]["sha256"]

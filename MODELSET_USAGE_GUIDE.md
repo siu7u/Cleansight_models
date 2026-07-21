@@ -38,15 +38,18 @@ export MPLCONFIGDIR=/tmp/matplotlib
 
 ## 3. 数据与配置
 
-实验配置位于 `framework/experiments/*.yaml`。配置中的相对路径以 YAML 所在目录为基准解析，不以
-当前 shell 目录为基准。例如：
+实验配置位于 `framework/experiments/*.yaml`。已登记数据集通过稳定引用接入：
 
 ```yaml
 data:
-  root: ../../yolo-detection/pipeline/raw/modelscope/cleansight-ActionMixed
+  dataset_ref: temporal.actionmixed-v2
+  split_train: train
+  split_val: val
+  split_eval: test
 ```
 
-会相对 `framework/experiments/` 解析。不要继续保留 `/abs/path/to/...` 示例路径。
+根目录、版本、类别、feature mapping 和 manifest 由 `benchmark/testsets.yaml` 解析。只有未登记的
+临时/合成数据才直接使用 `data.root`；相对路径仍以 YAML 所在目录为基准。
 
 评估前执行：
 
@@ -126,7 +129,9 @@ python -m framework.cleansight_eval.cli.train \
 ```
 
 `train.epochs` 表示最终目标 epoch，不是“额外再训练多少轮”。当前 framework 的 `--resume` 主要
-用于时序训练；YOLO 是否恢复应使用 Ultralytics 对应训练语义，不要假设两者完全相同。
+用于时序训练；已登记数据集会校验 checkpoint 中的 dataset version/revision、feature mapping、
+labels 和 train split fingerprint，任一关键身份漂移都会拒绝继续训练。YOLO 是否恢复应使用
+Ultralytics 对应训练语义，不要假设两者完全相同。
 
 ## 6. 训练产物
 
@@ -181,7 +186,7 @@ python -m framework.cleansight_eval.cli.eval \
 
 适用于正式归档，要求：
 
-- `evaluation.testset_id` 已登记且校验通过；
+- `data.dataset_ref + split_eval` 能唯一推导已登记 testset，且数据门禁通过；
 - checkpoint sidecar 使用当前 metadata schema，并与权重 SHA-256 绑定；
 - 配置与 checkpoint 的模型类型、维度、类别数兼容；
 - 保存 prediction artifact。
@@ -211,7 +216,7 @@ evaluation:
 | `checkpoints/<ckpt>.eval.md` | 当前 checkpoint 的人读报告 |
 | `checkpoints/EVALUATION_REPORT.md` | 按时序/YOLO 分类追加的版本报告 |
 | `evals/*.delivery.manifest.json` | 交付文件路径、大小、SHA-256、Schema |
-| `viz/*.png` | 支持的时序流水线可视化 |
+| `viz/segmentation-<split>-pNN.png` | 滑窗与全序列时序的测试 GT/Prediction timeline；路径和 SHA-256 写入评估 artifact |
 
 报告不包含完整环境和 Git 信息，也不自动填写发布结论。人工维护区用于评估后记录主要问题、是否进入
 版本以及下一步动作。
@@ -246,6 +251,10 @@ python benchmark/e2e_3min/run_e2e_benchmark.py \
 ```
 
 prediction 应由 `CleanSightBackend` 导出。本仓库只评分，不负责在线推理和生产动作。
+
+端到端时间线与单时序模型评估共用 `benchmark/core/metrics.py`：按动作名和 Temporal IoU 做全局
+贪心一对一匹配，在 0.1/0.25/0.5 阈值下输出 TP/FP/FN、Precision、Recall、F1、匹配段平均 IoU
+和边界 MAE。端到端仍额外使用 `allowed_time_error_sec`、流程结果和必需动作存在性生成业务 PASS/FAIL。
 
 ## 12. Schema 与交付
 

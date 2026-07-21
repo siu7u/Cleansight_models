@@ -69,6 +69,7 @@ Cleansight_models/
 │   ├── temporal_feed_mode/            # 全序列 vs 流式喂入专项评估
 │   └── e2e_3min/                      # 3 分钟业务场景评估
 ├── schemas/                           # 对外 JSON Schema，不含指标实现
+├── usage/                             # YAML 配置索引和测试命令行教程
 ├── tools/                             # testset/CARD 校验和历史专项工具
 ├── model_manager/                     # 旧模型脚本的目录与命令兼容层
 ├── yolo-detection/                    # 历史 YOLO 数据、流水线、registry 和 CARD
@@ -194,8 +195,8 @@ sequenceDiagram
 | 契约 | 关键内容 | 校验位置 |
 |---|---|---|
 | Experiment config v1 | pipeline、model、data、train、evaluation；默认值及字段来源 | `framework/core/config.py` |
-| Testset catalog v1 | dataset version、split、manifest、labels、feature mapping、purpose | `benchmark/testsets.yaml`、`benchmark/core/testsets.py` |
-| Checkpoint metadata v1 | 模型重建配置、输入维度、类别数、feature schema、权重 SHA-256/大小绑定 | `framework/core/checkpoint.py` |
+| Testset catalog v2 | dataset/revision 公共契约、split manifest、labels、feature mapping、重叠策略和内容 fingerprint | `benchmark/testsets.yaml`、`benchmark/core/testsets.py` |
+| Checkpoint metadata v1 | 模型重建配置、feature schema、训练数据版本及 split fingerprint、权重 SHA-256/大小绑定 | `framework/core/checkpoint.py`、`framework/temporal/data.py` |
 | PredictionOutput | 模型身份、预测/真值、标签、推理语义、原生指标或 timing | `framework/core/execution.py` |
 | EvaluationResult v2 | 三态指标、spec、testset、inference、artifact、integrity | `benchmark/core/result.py` |
 | Prediction artifact v1 | detection 逐图预测；temporal 逐视频预测与真值 | `benchmark/core/artifacts.py` |
@@ -204,6 +205,14 @@ sequenceDiagram
 ActionMixed 时序输入当前使用 `actionmixed-bbox-8cls-v1`：8 个检测类，每类
 `[presence,cx,cy,w,h]`，合计 40 维。类别顺序、阈值、归一化或维度变化都会形成新的 feature
 mapping 版本，并通常要求重训时序模型。
+
+如需对特定检测目标做固定输入消融，可在实验配置的 `feature_schema` 中增加
+`mask_targets: [syringe, air_gun]`（也接受类别 ID）。统一数据入口会将这些目标各自对应的 5 维
+清零，GRU、Transformer、MS-TCN 等模型结构和 `input_dim: 40` 均无需变化；未设置时保持原行为。
+
+训练期概率遮罩使用独立的 `augmentation.target_mask`。当前 `frame_dropout` 在加载 train split
+时按 seed 生成一次可复现遮罩，`probability` 表示每个指定目标在每个采样帧被清零的概率；
+val/test 不应用该训练增强。完整示例见 `framework/experiments/gru-actionmixed.yaml`。
 
 ### 8. 产物与交付架构
 
@@ -286,9 +295,10 @@ export MPLCONFIGDIR=/tmp/matplotlib
 python tools/validate_testsets.py --catalog benchmark/testsets.yaml --json
 ```
 
-`formal` 评估要求 testset 已登记且校验通过。若输出存在跨 split 源视频泄漏，应由数据维护方重切
-数据；在问题解决前只能把对应实验明确标为 `evaluation.mode: exploratory`，不能把结果称为正式
-benchmark。
+`formal` 评估要求 testset 已登记且校验通过。默认以 `split_overlap_policy: error` 阻断同源视频
+跨 split；小数据开发阶段可设置 `frame`，允许同源视频分段但禁止具体帧重复。`allow` 会完全放宽
+跨 split 重叠门禁，只应用于特殊排查。策略会进入 fingerprint 和评测元数据，非 `error` 结果不能
+描述为独立同源隔离测试。
 
 ### 3. 训练
 
@@ -402,6 +412,8 @@ checkpoint + checkpoint metadata + CARD.md + pin.yaml
 
 ## 文档索引
 
+- [YAML 配置文档](usage/YAML_CONFIG.md)：所有受跟踪 YAML 的内容、读取方、功能和快速定位链接。
+- [测试命令行教程](usage/TEST_COMMANDS.md)：模型评测、timeline、矩阵和 pytest 的常用写法。
 - [模型集使用指南](MODELSET_USAGE_GUIDE.md)：从数据、训练、评估到交付的完整操作步骤。
 - [framework README](framework/README.md)：CLI、配置字段、resume 与扩展点。
 - [评估能力说明](docs/EVAL.md)：指标定义、聚合口径和完整性检查。

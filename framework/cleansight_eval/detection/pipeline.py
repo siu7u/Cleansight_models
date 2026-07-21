@@ -15,6 +15,7 @@ from ..core.checkpoint import load_meta, write_meta
 from ..core.environment import now_stamp, set_seed
 from ..core.execution import PredictionOutput, format_params
 from ..core.integrity import assert_checkpoint_config
+from ..core.pipeline import Pipeline
 from ..core.run import RunContext
 from .yolo import get_adapter
 
@@ -24,12 +25,14 @@ SINGLE_FRAME_SEMANTICS = {
     "stateless": True,
 }
 
-class DetectionPipeline:
+class DetectionPipeline(Pipeline):
     pipeline_name = "detection"
 
     def validate_config(self, cfg: dict) -> None:
         if "type" not in cfg.get("model", {}):
             raise ValueError("检测流水线 model 段需包含 type（如 yolo）")
+        if cfg.get("augmentation"):
+            raise ValueError("augmentation.target_mask 仅支持 ActionMixed 时序流水线")
         data = cfg.get("data", {})
         if "data_yaml" not in data:
             raise ValueError("检测流水线 data 段需包含 data_yaml（指向 YOLO 数据集的 data.yaml）")

@@ -21,8 +21,8 @@ import yaml
 CONFIG_SCHEMA_VERSION = 1
 REQUIRED_TOP_KEYS = ("schema_version", "pipeline", "model", "data")
 ALLOWED_TOP_KEYS = {
-    "schema_version", "pipeline", "model", "data", "feature_schema", "evaluation", "train",
-    "_config_provenance",
+    "schema_version", "pipeline", "model", "data", "feature_schema", "augmentation",
+    "evaluation", "train", "_config_provenance",
 }
 
 # 已注册模型和流水线共同支持的配置词汇。新增模型参数时需在这里显式登记，拼写错误因而
@@ -34,10 +34,13 @@ KNOWN_SECTION_KEYS = {
         "d_model", "nhead", "dim_feedforward", "max_len",
     },
     "data": {
-        "name", "data_yaml", "eval_split", "root", "action_mapping", "labels_dir",
+        "name", "dataset_ref", "data_yaml", "eval_split", "root", "action_mapping", "labels_dir",
         "frames_dir", "split_train", "split_val", "split_eval", "names",
     },
-    "feature_schema": {"dim", "version", "class_order", "layout", "normalization"},
+    "feature_schema": {
+        "dim", "version", "class_order", "layout", "normalization", "mask_targets",
+    },
+    "augmentation": {"target_mask"},
     "evaluation": {
         "mode", "testset_id", "save_predictions", "measure_latency", "latency_warmup",
         "latency_runs", "limits", "conf", "iou", "max_det", "agnostic_nms",
@@ -71,6 +74,7 @@ PIPELINE_DEFAULTS = {
     "sliding_window_temporal": {
         "evaluation.mode": "formal",
         "evaluation.save_predictions": True,
+        "evaluation.visualize": True,
         "evaluation.measure_latency": True,
         "evaluation.latency_warmup": 20,
         "evaluation.latency_runs": 200,
@@ -94,6 +98,7 @@ def load_config(path: str | Path) -> dict:
     raw_fields = sorted(_leaf_paths(data))
     default_fields = materialize_defaults(data)
     validate_config(data)
+    resolve_dataset_reference(data, cfg_path.parent, explicit_root="data.root" in raw_fields)
     resolve_relative_paths(data, cfg_path.parent)
     data["_config_provenance"] = {
         "schema_version": CONFIG_SCHEMA_VERSION,
@@ -118,6 +123,100 @@ def resolve_relative_paths(cfg: dict, base_dir: Path) -> None:
         p = Path(value).expanduser()
         if not p.is_absolute():
             data[key] = str((base_dir / p).resolve())
+
+
+def resolve_dataset_reference(cfg: dict, base_dir: Path, *, explicit_root: bool) -> None:
+    """把 ``data.dataset_ref`` 解析成唯一 catalog 数据根并校验模型/特征/split 契约。"""
+
+    data = cfg.get("data") or {}
+    dataset_ref = data.get("dataset_ref")
+    if not dataset_ref:
+        return
+
+    try:
+        from benchmark.core.testsets import (
+            get_dataset_specs,
+            get_dataset_split,
+            resolve_path,
+            validate_catalog,
+        )
+    except ModuleNotFoundError:  # pragma: no cover - 从 framework 目录运行时触发
+        import sys
+
+        repo_root = Path(__file__).resolve().parents[3]
+        if str(repo_root) not in sys.path:
+            sys.path.insert(0, str(repo_root))
+        from benchmark.core.testsets import (
+            get_dataset_specs,
+            get_dataset_split,
+            resolve_path,
+            validate_catalog,
+        )
+
+    specs = get_dataset_specs(str(dataset_ref))
+    validation = validate_catalog({spec.id: spec for spec in specs})
+    errors = [f"{testset_id}: {error}" for testset_id, items in validation.items() for error in items]
+    if errors:
+        raise ValueError(
+            f"dataset_ref={dataset_ref!r} 未通过数据门禁:\n  - " + "\n  - ".join(errors)
+        )
+    baseline = specs[0]
+    if not baseline.data_root:
+        raise ValueError(f"dataset_ref={dataset_ref!r} 没有登记 data_root")
+    catalog_root = resolve_path(baseline.data_root, baseline.root)
+
+    configured_root = data.get("root")
+    if explicit_root and isinstance(configured_root, str):
+        path = Path(configured_root).expanduser()
+        configured = path.resolve() if path.is_absolute() else (base_dir / path).resolve()
+        if configured != catalog_root:
+            raise ValueError(
+                f"data.root={configured} 与 dataset_ref={dataset_ref!r} "
+                f"登记根目录 {catalog_root} 不一致"
+            )
+    data["root"] = str(catalog_root)
+    data["name"] = str(dataset_ref)
+
+    feature_schema = cfg.get("feature_schema") or {}
+    configured_version = feature_schema.get("version")
+    if configured_version is not None and configured_version != baseline.feature_mapping:
+        raise ValueError(
+            f"feature_schema.version={configured_version!r} 与 dataset_ref "
+            f"feature_mapping={baseline.feature_mapping!r} 不一致"
+        )
+    configured_dim = feature_schema.get("dim")
+    if configured_dim is not None and configured_dim != baseline.input_dim:
+        raise ValueError(
+            f"feature_schema.dim={configured_dim!r} 与 dataset_ref input_dim="
+            f"{baseline.input_dim!r} 不一致"
+        )
+
+    model = cfg.get("model") or {}
+    if baseline.input_dim is not None and model.get("input_dim") != baseline.input_dim:
+        raise ValueError(
+            f"model.input_dim={model.get('input_dim')!r} 与 dataset_ref "
+            f"input_dim={baseline.input_dim!r} 不一致"
+        )
+    if baseline.labels and model.get("num_classes") != len(baseline.labels):
+        raise ValueError(
+            f"model.num_classes={model.get('num_classes')!r} 与 dataset_ref "
+            f"labels 数量={len(baseline.labels)} 不一致"
+        )
+
+    for key in ("split_train", "split_val", "split_eval"):
+        split = data.get(key)
+        if split:
+            get_dataset_split(str(dataset_ref), str(split))
+
+    evaluation_id = (cfg.get("evaluation") or {}).get("testset_id")
+    eval_split = data.get("split_eval") or data.get("eval_split")
+    if evaluation_id and eval_split:
+        expected = get_dataset_split(str(dataset_ref), str(eval_split))
+        if evaluation_id != expected.id:
+            raise ValueError(
+                f"evaluation.testset_id={evaluation_id!r} 与 dataset_ref/split_eval "
+                f"推导结果 {expected.id!r} 不一致"
+            )
 
 
 def validate_config(cfg: dict) -> None:
@@ -214,6 +313,15 @@ def apply_overrides(cfg: dict, overrides: list[tuple[str, Any]]) -> dict:
         set(provenance.get("override_fields", [])) | {path for path, _value in overrides}
     )
     validate_config(out)
+    source_path = provenance.get("source_path")
+    if source_path:
+        raw_fields = set(provenance.get("raw_fields", []))
+        override_fields = set(provenance.get("override_fields", []))
+        resolve_dataset_reference(
+            out,
+            Path(source_path).parent,
+            explicit_root="data.root" in raw_fields or "data.root" in override_fields,
+        )
     return out
 
 

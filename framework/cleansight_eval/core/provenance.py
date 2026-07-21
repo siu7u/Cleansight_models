@@ -66,6 +66,8 @@ def build_checkpoint_info(checkpoint: str | Path, run_dir: Path | None = None) -
             "schema_version": meta_payload.get("schema_version", 0),
             "checkpoint_bound": bool((meta_payload.get("checkpoint_binding") or {}).get("sha256")),
         }
+        if isinstance(meta_payload.get("dataset"), dict):
+            info["training_dataset"] = meta_payload["dataset"]
     return info
 
 
@@ -91,7 +93,8 @@ def resolve_testset_info(cfg: dict) -> dict[str, Any]:
     testset_id = evaluation.get("testset_id")
     data = cfg.get("data") or {}
     split = data.get("split_eval") or data.get("eval_split") or "unknown"
-    if not testset_id:
+    dataset_ref = data.get("dataset_ref")
+    if not testset_id and not dataset_ref:
         return {
             "id": f"ad-hoc:{data.get('name', 'dataset')}:{split}",
             "registered": False,
@@ -104,9 +107,11 @@ def resolve_testset_info(cfg: dict) -> dict[str, Any]:
     # benchmark 尚未安装成独立包，兼容从仓库根目录或 framework 目录执行。
     try:
         from benchmark.core.testsets import (
+            get_dataset_split,
             load_testsets,
             manifest_fingerprint,
             read_split_items,
+            resolve_path,
             validate_catalog,
         )
     except ModuleNotFoundError:  # pragma: no cover - 与 temporal.metrics 相同的 cwd 兼容路径
@@ -115,29 +120,80 @@ def resolve_testset_info(cfg: dict) -> dict[str, Any]:
         if str(_REPO_ROOT) not in sys.path:
             sys.path.insert(0, str(_REPO_ROOT))
         from benchmark.core.testsets import (
+            get_dataset_split,
             load_testsets,
             manifest_fingerprint,
             read_split_items,
+            resolve_path,
             validate_catalog,
         )
 
     catalog = load_testsets()
+    if dataset_ref:
+        derived = get_dataset_split(str(dataset_ref), str(split), catalog)
+        if testset_id and testset_id != derived.id:
+            raise ValueError(
+                f"evaluation.testset_id={testset_id!r} 与 dataset_ref/split="
+                f"{dataset_ref!r}/{split!r} 推导结果 {derived.id!r} 不一致"
+            )
+        testset_id = derived.id
     if testset_id not in catalog:
         raise KeyError(f"evaluation.testset_id={testset_id!r} 未登记到 benchmark/testsets.yaml")
     spec = catalog[testset_id]
     errors = list(validate_catalog(catalog).get(testset_id, []))
     if str(split) != spec.split:
         errors.append(f"配置评估 split={split!r} 与 testset split={spec.split!r} 不一致")
+    if dataset_ref and dataset_ref != spec.dataset:
+        errors.append(
+            f"配置 dataset_ref={dataset_ref!r} 与 testset dataset={spec.dataset!r} 不一致"
+        )
+    configured_root = data.get("root")
+    if configured_root and spec.data_root:
+        actual_root = Path(str(configured_root)).expanduser().resolve()
+        registered_root = resolve_path(spec.data_root, spec.root)
+        if actual_root != registered_root:
+            errors.append(
+                f"配置 data.root={actual_root} 与 testset data_root={registered_root} 不一致"
+            )
+    configured_manifest = data.get("data_yaml")
+    if configured_manifest and spec.family == "yolo":
+        actual_manifest = Path(str(configured_manifest)).expanduser().resolve()
+        registered_manifest = resolve_path(spec.manifest, spec.root)
+        if actual_manifest != registered_manifest:
+            errors.append(
+                f"配置 data_yaml={actual_manifest} 与 testset manifest={registered_manifest} 不一致"
+            )
     configured_dim = (cfg.get("feature_schema") or {}).get("dim")
     if configured_dim is not None and spec.input_dim is not None and configured_dim != spec.input_dim:
         errors.append(
             f"配置 feature dim={configured_dim} 与 testset input_dim={spec.input_dim} 不一致"
         )
+    configured_mapping = (cfg.get("feature_schema") or {}).get("version")
+    if configured_mapping is not None and configured_mapping != spec.feature_mapping:
+        errors.append(
+            f"配置 feature mapping={configured_mapping!r} 与 testset "
+            f"feature_mapping={spec.feature_mapping!r} 不一致"
+        )
+    model = cfg.get("model") or {}
+    if spec.input_dim is not None and model.get("input_dim") is not None:
+        if model["input_dim"] != spec.input_dim:
+            errors.append(
+                f"配置 model.input_dim={model['input_dim']} 与 testset input_dim={spec.input_dim} 不一致"
+            )
+    if spec.labels and model.get("num_classes") is not None:
+        if model["num_classes"] != len(spec.labels):
+            errors.append(
+                f"配置 model.num_classes={model['num_classes']} 与 testset labels="
+                f"{len(spec.labels)} 不一致"
+            )
     return {
         "id": spec.id,
         "registered": True,
+        "dataset": spec.dataset,
         "dataset_version": spec.dataset_version,
+        "dataset_revision": spec.dataset_revision,
         "split": spec.split,
+        "split_overlap_policy": spec.split_overlap_policy,
         "fingerprint_sha256": manifest_fingerprint(spec),
         "labels": list(spec.labels),
         "num_items": len(read_split_items(spec)),

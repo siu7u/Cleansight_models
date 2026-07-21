@@ -9,6 +9,9 @@ from typing import Hashable, Iterable, Mapping, Sequence
 
 
 Label = Hashable
+DEFAULT_INTERVAL_IOU_THRESHOLDS = (0.1, 0.25, 0.5)
+INTERVAL_MATCHING_METHOD = "label-aware one-to-one global-greedy maximum IoU"
+INTERVAL_METRIC_VERSION = "interval-matching-v2"
 
 
 @dataclass(frozen=True)
@@ -27,6 +30,17 @@ class Interval:
 
 
 @dataclass(frozen=True)
+class IntervalMatch:
+    """一对已匹配区间及其索引；误差为 prediction - truth，保留方向。"""
+
+    prediction_index: int
+    truth_index: int
+    iou: float
+    start_error: float
+    end_error: float
+
+
+@dataclass(frozen=True)
 class MatchCounts:
     """一次 label-aware 一对一匹配的计数和误差样本。"""
 
@@ -36,6 +50,7 @@ class MatchCounts:
     matched_ious: tuple[float, ...] = ()
     start_errors: tuple[float, ...] = ()
     end_errors: tuple[float, ...] = ()
+    matches: tuple[IntervalMatch, ...] = ()
 
     def as_metrics(self) -> dict:
         """以 0..1 比率返回 precision/recall/F1 与匹配质量。"""
@@ -106,31 +121,46 @@ def segments_from_labels(
 def match_intervals(
     predictions: Sequence[Interval], truths: Sequence[Interval], iou_threshold: float
 ) -> MatchCounts:
-    """按类别和最大 IoU 做一对一匹配；重复预测只能产生一个 TP。"""
+    """按类别做全局贪心最大 IoU 一对一匹配；重复预测只能产生一个 TP。"""
 
     if not 0.0 <= iou_threshold <= 1.0:
         raise ValueError("iou_threshold 必须位于 0..1")
+    candidates = []
+    for prediction_index, prediction in enumerate(predictions):
+        for truth_index, truth in enumerate(truths):
+            if prediction.label != truth.label:
+                continue
+            iou = interval_iou(prediction, truth)
+            if iou >= iou_threshold:
+                candidates.append((iou, prediction_index, truth_index, prediction, truth))
+    # 先选择全体候选中的最大 IoU，降低预测遍历顺序影响；索引用于同 IoU 时稳定排序。
+    candidates.sort(key=lambda item: (-item[0], item[1], item[2]))
+    used_predictions: set[int] = set()
     used_truths: set[int] = set()
     matched_ious: list[float] = []
     start_errors: list[float] = []
     end_errors: list[float] = []
-    tp = 0
-    for prediction in predictions:
-        candidates = [
-            (interval_iou(prediction, truth), index, truth)
-            for index, truth in enumerate(truths)
-            if index not in used_truths and prediction.label == truth.label
-        ]
-        if not candidates:
+    matches: list[IntervalMatch] = []
+    for iou, prediction_index, truth_index, prediction, truth in candidates:
+        if prediction_index in used_predictions or truth_index in used_truths:
             continue
-        best_iou, best_index, best_truth = max(candidates, key=lambda item: item[0])
-        if best_iou < iou_threshold:
-            continue
-        used_truths.add(best_index)
-        tp += 1
-        matched_ious.append(best_iou)
-        start_errors.append(abs(prediction.start - best_truth.start))
-        end_errors.append(abs(prediction.end - best_truth.end))
+        used_predictions.add(prediction_index)
+        used_truths.add(truth_index)
+        start_error = prediction.start - truth.start
+        end_error = prediction.end - truth.end
+        matches.append(
+            IntervalMatch(
+                prediction_index=prediction_index,
+                truth_index=truth_index,
+                iou=iou,
+                start_error=start_error,
+                end_error=end_error,
+            )
+        )
+        matched_ious.append(iou)
+        start_errors.append(abs(start_error))
+        end_errors.append(abs(end_error))
+    tp = len(matches)
     return MatchCounts(
         tp=tp,
         fp=len(predictions) - tp,
@@ -138,6 +168,7 @@ def match_intervals(
         matched_ious=tuple(matched_ious),
         start_errors=tuple(start_errors),
         end_errors=tuple(end_errors),
+        matches=tuple(matches),
     )
 
 
@@ -244,7 +275,7 @@ def temporal_metrics(
     truth_by_item: Mapping[str, Sequence[Label]],
     labels: Sequence[Label],
     start_frame: int = 0,
-    thresholds: Sequence[float] = (0.1, 0.25, 0.5),
+    thresholds: Sequence[float] = DEFAULT_INTERVAL_IOU_THRESHOLDS,
     ignore_index: Label = -1,
 ) -> dict:
     """在同一裁剪范围按视频分别分段，再汇总帧级与片段级指标。"""
@@ -289,9 +320,10 @@ def temporal_metrics(
     }
     return {
         "metric_spec": {
+            "version": INTERVAL_METRIC_VERSION,
             "ratio_range": [0.0, 1.0],
             "interval": "[start, end)",
-            "matching": "label-aware one-to-one maximum IoU",
+            "matching": INTERVAL_MATCHING_METHOD,
             "video_boundaries_preserved": True,
             "start_frame": start_frame,
             "aggregation": {
@@ -323,18 +355,32 @@ def _actions_to_intervals(actions: Sequence[Mapping]) -> list[Interval]:
     return intervals
 
 
+def match_timeline(
+    predictions: Sequence[Mapping],
+    truths: Sequence[Mapping],
+    iou_threshold: float,
+) -> MatchCounts:
+    """把秒级动作时间线转换为区间，并复用统一的一对一匹配算法。"""
+
+    return match_intervals(
+        _actions_to_intervals(predictions),
+        _actions_to_intervals(truths),
+        iou_threshold,
+    )
+
+
 def timeline_metrics(
     predictions: Sequence[Mapping],
     truths: Sequence[Mapping],
-    thresholds: Sequence[float] = (0.1, 0.25, 0.5),
+    thresholds: Sequence[float] = DEFAULT_INTERVAL_IOU_THRESHOLDS,
 ) -> dict:
     """用与时序片段相同的一对一 IoU 匹配评估端到端动作时间线。"""
 
     pred_intervals = _actions_to_intervals(predictions)
     truth_intervals = _actions_to_intervals(truths)
     details = {
-        _threshold_key(threshold): match_intervals(
-            pred_intervals, truth_intervals, float(threshold)
+        _threshold_key(threshold): match_timeline(
+            predictions, truths, float(threshold)
         ).as_metrics()
         for threshold in thresholds
     }
@@ -349,9 +395,10 @@ def timeline_metrics(
         }
     return {
         "metric_spec": {
+            "version": INTERVAL_METRIC_VERSION,
             "ratio_range": [0.0, 1.0],
             "interval": "[start_sec, end_sec)",
-            "matching": "label-aware one-to-one maximum IoU",
+            "matching": INTERVAL_MATCHING_METHOD,
             "boundary_error_unit": "seconds",
         },
         "num_prediction_segments": len(pred_intervals),

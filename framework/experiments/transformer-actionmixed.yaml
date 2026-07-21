@@ -16,11 +16,7 @@ model:
   max_len: 2048          # 覆盖当前最长序列（约 1000 帧）
 
 data:
-  name: cleansight-ActionMixed
-  root: ../../yolo-detection/pipeline/raw/modelscope/cleansight-ActionMixed
-  action_mapping: labels/data.yaml
-  labels_dir: labels
-  frames_dir: frames
+  dataset_ref: temporal.actionmixed-v2
   split_train: train
   split_val: val
   split_eval: test
@@ -33,7 +29,8 @@ feature_schema:
   # syringe, air_gun, short_brush, brush_tip_out。
 
 evaluation:
-  testset_id: temporal.actionmixed-v1.test
+  mode: formal
+  visualize: true
 
 train:
   epochs: 30

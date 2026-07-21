@@ -103,10 +103,10 @@ framework 负责运行模型和 run 内落盘，benchmark 负责指标、结果 
 |---|---|---|---|
 | 帧准确率 `acc` | `accuracy/frame-wise-micro-across-items/percent/v3` | 帧级 | 合并所有视频帧做 micro accuracy |
 | 编辑分 `edit` | `edit/levenshtein-item-macro-mean/percent/v3` | 逐视频段级 | 各视频独立计算后做 macro mean |
-| 分段 F1 `f1@0.1/0.25/0.5` | `segmental_f1/counts-micro-across-items.../v3` | 段级 | 每视频独立匹配，再汇总 TP/FP/FN 做 micro F1 |
-| `tp/fp/fn@0.5` | `segmental_counts/micro-across-items.../v3` | 段级 | 主阈值 0.5 的跨视频 micro 计数 |
-| `precision/recall@0.5` | `segmental_precision/recall/counts-micro-across-items.../percent/v3` | 段级 | 由跨视频汇总的 TP/FP/FN 得出 |
-| `temporal_iou@0.5` | `temporal_iou/matched-segment-micro-pool-mean/percent/v3` | 段级 | 所有已匹配片段合并后的平均 IoU |
+| 分段 F1 `f1@0.1/0.25/0.5` | `segmental_f1/...one-to-one-global-greedy-iou/percent/v4` | 段级 | 每视频独立匹配，再汇总 TP/FP/FN 做 micro F1 |
+| `tp/fp/fn@0.5` | `segmental_counts/...one-to-one-global-greedy-iou/v4` | 段级 | 主阈值 0.5 的跨视频 micro 计数 |
+| `precision/recall@0.5` | `segmental_precision/recall/...global-greedy.../percent/v4` | 段级 | 由跨视频汇总的 TP/FP/FN 得出 |
+| `temporal_iou@0.5` | `temporal_iou/matched-segment-global-greedy.../percent/v4` | 段级 | 所有已匹配片段合并后的平均 IoU |
 | `frame.macro_f1/macro_iou/micro_f1` | `classification/frame-micro-pool-per-class/percent/v3` | 帧级 | 帧池化混淆矩阵派生的分类指标 |
 
 - 数值真源是 [`benchmark/core/metrics.py`](../benchmark/core/metrics.py)，framework 只做 0..1 到
@@ -114,6 +114,8 @@ framework 负责运行模型和 run 内落盘，benchmark 负责指标、结果 
 - `metrics.summary` 保留主指标；所有 IoU 阈值详情、逐类 P/R/F1/IoU 和混淆矩阵放在
   `metrics.details.temporal`，避免矩阵横向无限膨胀。
 - 所有视频保持独立边界，禁止把不同视频先拼成一条序列再算 Edit/F1。
+- 3 分钟端到端动作时间线复用同一个区间匹配核心和 0.1/0.25/0.5 阈值；区别仅在于时序模型以帧
+  为区间单位，端到端以秒为区间单位，并额外保留业务结果与边界误差 PASS/FAIL 门禁。
 
 ### 3.2 检测（真源：[benchmark/evaluators/detection.py](../benchmark/evaluators/detection.py)）
 
@@ -161,6 +163,9 @@ framework 负责运行模型和 run 内落盘，benchmark 负责指标、结果 
 - **时序特征契约** `actionmixed-bbox-8cls-v1`（[temporal/data.py](../framework/cleansight_eval/temporal/data.py)）：
   每帧 8 类检测框 × 5 维（`presence, cx, cy, w, h`，每类取最大面积框）= **40 维**。
   目录约定 `labels/<split>/*.txt`（逐帧动作 id）+ `frames/<split>/*.txt`（YOLO 框）。
+  可选的 `feature_schema.mask_targets` 用于固定消融，接受 `frames/data.yaml` 中的目标名或类别 ID，只把对应
+  类别的 5 维清零，不改变 40 维输入形状；训练时写入 resolved config 与 checkpoint metadata，
+  评估时写入结果的 feature schema，保证遮罩实验可追溯。
 - **滑窗因果推理**：冷启动前 `window−1` 帧填 idle；每视频重置状态；`causal_decision` 做因果平滑
   （`MIN_DURATION=25` 帧最小持续时长；仅在 3 类 Idle/Long/Short 时叠加类别转移先验，其他类别数退化为
   仅最小持续时长平滑）。
@@ -171,11 +176,17 @@ framework 负责运行模型和 run 内落盘，benchmark 负责指标、结果 
 `integrity: {ok, checks, issues}`：
 
 - **checkpoint 兼容**：metadata schema v1 绑定 checkpoint SHA-256/大小；同时检查改变张量形状的字段（`type / input_dim / num_classes`），`window` 等可在
-  eval 时覆盖不算冲突；不兼容立即报错。
+  eval 时覆盖不算冲突；时序 checkpoint 还记录 dataset version/revision、train/val/eval split
+  fingerprint 和动作/检测映射摘要，resume 时 train fingerprint 漂移会被拒绝。
 - **特征维度**：实际特征维度须与期望一致（时序为 40）。
 - **结果完备**：必填字段齐全，且每个 `computed` 指标都带非空 `spec`。
-- **testset 固定**：正式配置通过 `evaluation.testset_id` 关联 `benchmark/testsets.yaml`，记录
-  manifest hash 和复合 fingerprint，并执行 train/val/test 源视频泄漏检查。
+- **testset 固定**：时序正式配置通过 `data.dataset_ref + split_eval` 唯一推导 testset；检测配置
+  可继续显式使用 `evaluation.testset_id`。结果记录
+  manifest hash 和复合 fingerprint，并按 testset 的 `split_overlap_policy` 执行或显式放宽
+  train/val/test 泄漏检查；默认 `error` 按源视频隔离，`frame` 允许同源分段但禁止具体帧重复，
+  `allow` 完全放宽跨 split 门禁。清单 v2 的 `datasets` 保存公共数据契约，`testsets` 只保存 split
+  级样本清单和用途。ActionMixed loader 只读取 manifest 项，validator 同时要求 manifest 与
+  `labels/<split>` 严格一致，并将动作标签和逐帧 bbox 内容纳入 fingerprint。
 - **artifact 可追溯**：要求逐视频/逐图 prediction artifact 存在并带 SHA-256；时序 artifact
   还会实际调用 benchmark 复算，确认 `recomputable=true`。
 - **评估 profile**：`formal` 必须使用已登记且校验通过的 testset 和绑定 metadata；
@@ -188,7 +199,9 @@ framework 负责运行模型和 run 内落盘，benchmark 负责指标、结果 
   可按 pipeline 过滤；固定 ID 列 + 所有模型指标列的并集，逐格保留三态；渲染 Markdown 表并带 `N/A / MISSING /
   空白` 图例。
 - **时序分割可视化**（[temporal/viz.py](../framework/cleansight_eval/temporal/viz.py)）：GT / Pred 双色带状图，
-  逐视频对照、标注帧数与帧准确率，分页输出 PNG（默认每页 6 个视频）。
+  滑窗和全序列评估都直接消费本次 `PredictionOutput`，逐视频对照、标注帧数与帧准确率，分页输出
+  `viz/segmentation-<split>-pNN.png`（默认每页 6 个视频），不会为出图重复执行模型推理；图片路径和
+  SHA-256 进入 `artifacts.visualization`。可用 `evaluation.visualize: false` 关闭。
 - **checkpoint 报告**（[core/report.py](../framework/cleansight_eval/core/report.py)）：每个 `.pt` 旁写
   `<checkpoint>.eval.md`，并向同目录唯一的 `EVALUATION_REPORT.md` 追加版本记录。
 - **稳定交付清单**：每次评估写 `*.delivery.manifest.json`，列出 checkpoint、metadata、evaluation、

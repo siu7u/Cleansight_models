@@ -115,6 +115,10 @@ def test_end_to_end(tmp_path):
     assert "tp@0.1" not in summary
     assert not any(key.startswith("frame.f1:") for key in summary)
     assert data["artifacts"]["predictions"]["recomputable"] is True
+    timeline = run_dir / "viz" / "segmentation-test-p01.png"
+    assert timeline.exists()
+    assert data["artifacts"]["visualization"][0]["path"] == "viz/segmentation-test-p01.png"
+    assert data["artifacts"]["visualization"][0]["sha256"]
     temporal_details = data["metrics"]["details"]["temporal"]
     assert temporal_details["metric_spec"]["video_boundaries_preserved"] is True
     assert "0.10" in temporal_details["segment"]["details_at_iou"]
@@ -138,6 +142,7 @@ def test_end_to_end(tmp_path):
         "checkpoint_metadata",
         "evaluation",
         "artifact:predictions",
+        "artifact:visualization",
         "resolved_config",
         "training_environment",
         "training_history",

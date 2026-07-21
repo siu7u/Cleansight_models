@@ -30,8 +30,18 @@ from ..core.environment import now_stamp, set_seed
 from ..core.execution import PredictionOutput, format_params, sample_callable_latency
 from ..core.history import HistoryWriter, try_plot_training_history
 from ..core.integrity import check_feature_schema
+from ..core.pipeline import Pipeline
 from ..core.run import RunContext
-from .data import build_temporal_meta, load_split, split_video_names
+from .data import (
+    apply_target_mask_augmentation,
+    assert_resume_dataset_compatible,
+    build_dataset_provenance,
+    build_temporal_meta,
+    load_split,
+    resolve_mask_target_ids,
+    resolve_target_mask_augmentation,
+    split_video_names,
+)
 from .metrics import compute_temporal_metrics_by_item
 from .models import build_model, is_causal
 from .util import causal_decision, compute_class_weights
@@ -114,7 +124,7 @@ def _evaluate_sliding_window(model, datasets, id2name, criterion, device) -> dic
     }
 
 
-class SlidingWindowTemporalPipeline:
+class SlidingWindowTemporalPipeline(Pipeline):
     pipeline_name = "sliding_window_temporal"
 
     def validate_config(self, cfg: dict) -> None:
@@ -134,6 +144,8 @@ class SlidingWindowTemporalPipeline:
         for k in ("root", "split_train", "split_eval"):
             if k not in data:
                 raise ValueError(f"时序流水线 data 段缺少必要字段: {k}（用数据集内建目录切分）")
+        resolve_mask_target_ids(data, cfg.get("feature_schema"))
+        resolve_target_mask_augmentation(data, cfg.get("augmentation"))
 
     def train(self, cfg: dict, runs_dir: str, seed: int, device) -> str:
         train_cfg = cfg["train"]
@@ -149,13 +161,32 @@ class SlidingWindowTemporalPipeline:
         try:
             set_seed(seed)
             model = build_model(model_cfg).to(device)
+            dataset_provenance = build_dataset_provenance(
+                cfg["data"], cfg.get("feature_schema")
+            )
 
-            features, truths, _ = load_split(cfg["data"], cfg["data"]["split_train"], window=window)
+            features, truths, _ = load_split(
+                cfg["data"],
+                cfg["data"]["split_train"],
+                window=window,
+                feature_schema=cfg.get("feature_schema"),
+            )
+            features = apply_target_mask_augmentation(
+                features,
+                cfg["data"],
+                cfg.get("augmentation"),
+                seed=seed,
+            )
             problems = check_feature_schema(features[0].shape[1], cfg.get("feature_schema"))
             if problems:
                 raise ValueError("特征 schema 与配置不兼容:\n  - " + "\n  - ".join(problems))
             val_split = _validation_split_name(cfg)
-            val_features, val_truths, val_id2name = load_split(cfg["data"], val_split, window=window)
+            val_features, val_truths, val_id2name = load_split(
+                cfg["data"],
+                val_split,
+                window=window,
+                feature_schema=cfg.get("feature_schema"),
+            )
 
             resume_path = train_cfg.get("resume")
             if hasattr(model, "fit_normalization") and not resume_path:
@@ -184,6 +215,7 @@ class SlidingWindowTemporalPipeline:
             if resume_path:
                 expected = {"type": model_cfg["type"], "input_dim": model_cfg["input_dim"], "num_classes": model_cfg["num_classes"]}
                 payload, _meta = load_training_checkpoint(resume_path, expected=expected, map_location=device)
+                assert_resume_dataset_compatible(_meta, dataset_provenance)
                 model.load_state_dict(payload["model_state"])
                 optimizer.load_state_dict(payload["optimizer_state"])
                 start_epoch = int(payload["epoch"]) + 1
@@ -199,6 +231,8 @@ class SlidingWindowTemporalPipeline:
                 num_params=sum(p.numel() for p in model.parameters()),
                 train_cfg=train_cfg,
                 trained_at=now_stamp(),
+                augmentation=cfg.get("augmentation"),
+                dataset=dataset_provenance,
                 extra=extra,
             )
             history = HistoryWriter(
@@ -302,7 +336,12 @@ class SlidingWindowTemporalPipeline:
         model.load_state_dict(state_dict)
 
         window = meta.get("window") or cfg["train"].get("window", 64)
-        features, truths, id2name = load_split(cfg["data"], cfg["data"]["split_eval"], window=window)
+        features, truths, id2name = load_split(
+            cfg["data"],
+            cfg["data"]["split_eval"],
+            window=window,
+            feature_schema=cfg.get("feature_schema"),
+        )
         datasets = [SlidingWindowDataset(features[i], truths[i], window) for i in range(len(features))]
 
         model.eval()
@@ -374,7 +413,8 @@ class SlidingWindowTemporalPipeline:
             predictions=pred_by_item,
             targets=truth_by_item,
             labels=labels,
-            feature_schema=meta.get("feature_schema", cfg.get("feature_schema", {})),
+            # 实际输入变换来自本次评估配置；mask_targets 可能用于已有 checkpoint 的遮罩实验。
+            feature_schema=cfg.get("feature_schema", meta.get("feature_schema", {})),
             inference_semantics=semantics,
             num_params=meta.get("num_params"),
             timing=timing,

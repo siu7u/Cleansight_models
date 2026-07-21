@@ -12,11 +12,7 @@ model:
   hidden: 32             # MS-TCN 简化 baseline 默认
 
 data:
-  name: cleansight-ActionMixed
-  root: ../../yolo-detection/pipeline/raw/modelscope/cleansight-ActionMixed
-  action_mapping: labels/data.yaml   # YAML: action_id -> 名称
-  labels_dir: labels                 # labels/<split>/<video>.mp4.txt : "frame_id action_id"
-  frames_dir: frames                 # frames/<split>/<video>-<frame:06d>.txt : bbox → 40维特征
+  dataset_ref: temporal.actionmixed-v2
   split_train: train
   split_val: val
   split_eval: test
@@ -27,7 +23,8 @@ feature_schema:
   # 布局同 GRU 实验：每 5 维一类，顺序同 frames/data.yaml，每类 [presence, cx, cy, w, h]。
 
 evaluation:
-  testset_id: temporal.actionmixed-v1.test
+  mode: formal
+  visualize: true
 
 train:
   epochs: 20

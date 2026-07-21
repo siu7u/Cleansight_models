@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from benchmark.core.metrics import timeline_metrics
+from benchmark.core.metrics import match_timeline, timeline_metrics
 
 
 OUT_DIR = ROOT / "benchmark" / "e2e_3min" / "reports"
@@ -43,14 +43,6 @@ def load_prediction(path: Path | None) -> dict | None:
     if path is None:
         return None
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def overlap_seconds(a: dict, b: dict) -> float:
-    """返回两个动作时间段之间的重叠秒数。"""
-
-    start = max(float(a["start_sec"]), float(b["start_sec"]))
-    end = min(float(a["end_sec"]), float(b["end_sec"]))
-    return max(0.0, end - start)
 
 
 def score_case(case: dict, prediction: dict | None) -> dict:
@@ -86,21 +78,25 @@ def score_case(case: dict, prediction: dict | None) -> dict:
     for name in required:
         action_recall[name] = bool(by_name.get(name))
 
+    # 0.0 阈值允许同名但未重叠的区间进入边界误差检查；一对一约束保证预测不会重复复用。
+    phase_matching = match_timeline(actions, phases, iou_threshold=0.0)
+    match_by_truth = {item.truth_index: item for item in phase_matching.matches}
     phase_errors = []
-    for phase in phases:
-        candidates = by_name.get(phase["name"], [])
-        if not candidates:
+    for phase_index, phase in enumerate(phases):
+        match = match_by_truth.get(phase_index)
+        if match is None:
             phase_errors.append({"name": phase["name"], "matched": False, "reason": "未检出"})
             continue
-        best = max(candidates, key=lambda item: overlap_seconds(phase, item))
-        start_error = float(best["start_sec"]) - float(phase["start_sec"])
-        end_error = float(best["end_sec"]) - float(phase["end_sec"])
+        start_error = match.start_error
+        end_error = match.end_error
         phase_errors.append(
             {
                 "name": phase["name"],
                 "matched": abs(start_error) <= allowed and abs(end_error) <= allowed,
                 "start_error_sec": round(start_error, 3),
                 "end_error_sec": round(end_error, 3),
+                "temporal_iou": round(match.iou, 6),
+                "prediction_index": match.prediction_index,
             }
         )
 
@@ -146,14 +142,23 @@ def write_report(case: dict, score: dict, out: Path) -> None:
     else:
         lines.append("| 待接入 | 待接入 |")
 
-    lines += ["", "## 阶段时间误差", "", "| 阶段 | 是否匹配 | 起点误差秒 | 终点误差秒 |", "| --- | --- | ---: | ---: |"]
+    lines += [
+        "",
+        "## 阶段时间误差",
+        "",
+        "阶段与时序模型评估复用同一套按名称、全局最大 IoU 贪心的一对一匹配；最终是否通过仍按边界误差容限判断。",
+        "",
+        "| 阶段 | 是否匹配 | Temporal IoU | 起点误差秒 | 终点误差秒 |",
+        "| --- | --- | ---: | ---: | ---: |",
+    ]
     for item in score.get("phase_errors") or []:
         lines.append(
             f"| {item['name']} | {'是' if item.get('matched') else '否'} | "
+            f"{_fmt_optional(item.get('temporal_iou'))} | "
             f"{item.get('start_error_sec', 'NA')} | {item.get('end_error_sec', 'NA')} |"
         )
     if not score.get("phase_errors"):
-        lines.append("| 待接入 | 待接入 | NA | NA |")
+        lines.append("| 待接入 | 待接入 | NA | NA | NA |")
 
     timeline = score.get("timeline_metrics")
     if timeline:

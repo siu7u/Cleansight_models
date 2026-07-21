@@ -72,7 +72,8 @@ python3.12 -m venv .venv && source .venv/bin/activate && pip install -r framewor
 - **评估**加载 checkpoint 时校验绑定元信息，调用统一 `predict()` 后交给 benchmark evaluator；产出
   定义的 schema v2 `*.evaluation.json` 写入同 run 的 `evals/`，逐视频/逐图预测写入 `artifacts/`。结果只记录模型评估事实：testset
   fingerprint、checkpoint SHA-256、指标口径和 artifact SHA-256；环境、命令和 Git 信息不进入评估结果，训练期 `env.json` 仅供独立排障；同时写
-  `*.delivery.manifest.json` 供外部仓库按文件契约消费。
+  `*.delivery.manifest.json` 供外部仓库按文件契约消费。滑窗和全序列时序默认直接从本次
+  `PredictionOutput` 生成 `viz/segmentation-<split>-pNN.png`，不重复加载模型或执行推理。
 - **矩阵**把 `runs/` 下所有新旧评估结果汇成一张异构矩阵（`matrix.json` 机读 + `matrix.md` 人读）；
   `--pipeline <名>` 只汇总某一类流水线做同类对比（输出带 `.<名>` 后缀，不覆盖全量矩阵）。
 
@@ -148,20 +149,17 @@ model:
   hidden: 128          # 模型超参（gru/mstcn 均用 hidden）
   num_layers: 3        # gru 专属
 data:
-  # 相对路径按本 YAML 所在目录（framework/experiments/）解析
-  root: ../../yolo-detection/pipeline/raw/modelscope/cleansight-ActionMixed
+  dataset_ref: temporal.actionmixed-v2  # ✅ 从 benchmark catalog 解析根目录、类别和 manifest
   split_train: train   # ✅ 训练用子目录
+  split_val: val       # ✅ 训练期模型选择
   split_eval: test     # ✅ 评估用子目录
-  name: cleansight-ActionMixed                # 可选，展示名
-  action_mapping: labels/data.yaml            # 可选，默认 labels/data.yaml
-  labels_dir: labels   # 可选，默认 labels
-  frames_dir: frames   # 可选，默认 frames
 feature_schema:
   dim: 40              # ✅ 须与 input_dim / loader 一致，否则训练前报错
   version: actionmixed-bbox-8cls-v1
+  # 可选：按 frames/data.yaml 的目标名或类别 ID，将对应 [presence,cx,cy,w,h] 清零。
+  # mask_targets: [syringe, air_gun]
 evaluation:
-  mode: formal                              # formal / exploratory
-  testset_id: temporal.actionmixed-v1.test  # benchmark/testsets.yaml 中的稳定 ID
+  mode: formal  # testset 由 dataset_ref + split_eval 唯一推导
   limits:
     is_smoke: false
 train:
@@ -172,6 +170,20 @@ train:
   weight_decay: 0.0    # 可选
   grad_clip: 5.0       # 可选，缺省则不裁剪
 ```
+
+`feature_schema.mask_targets` 是 ActionMixed 特征层参数，滑窗与全序列时序流水线共用，
+因此不需要在 GRU、Transformer、MS-TCN 等模型内分别实现。未配置或配置为空列表时行为与原来一致；
+未知目标名、越界 ID、错误参数类型会在流水线启动前报错。单个目标也可在训练命令中临时覆盖：
+
+```bash
+python -m framework.cleansight_eval.cli.train \
+  --config framework/experiments/gru-actionmixed.yaml \
+  -S feature_schema.mask_targets=syringe
+```
+
+训练期随机目标遮罩使用独立的 `augmentation.target_mask`，不改变 feature schema。当前
+`frame_dropout` 的 `probability` 表示每个指定目标在每个采样帧独立清零 5 维特征的概率；
+它只作用于 train，val/test 保持干净输入。配置会随 resolved config 和 checkpoint metadata 保存。
 
 ### 检测（YOLO）
 
@@ -235,8 +247,10 @@ Python 校验器负责。Schema 不执行模型、指标、复制或上传。
 - `FileNotFoundError: /abs/path/to/...`：配置仍是占位路径；`data.root` 和 `data.data_yaml` 的相对路径
   以实验 YAML 所在目录解析。
 - `formal testset validation failed`：先运行
-  `python tools/validate_testsets.py --catalog benchmark/testsets.yaml --json`；数据泄漏应修复数据切分，
-  不应通过关闭校验伪装正式结果。
+  `python tools/validate_testsets.py --catalog benchmark/testsets.yaml --json`。数据充足时应修复切分；小数据
+  开发阶段可在对应 testset 设置 `split_overlap_policy: frame`，允许同源视频分段但禁止相同帧ID
+  重复；只有特殊排查才使用 `allow`。非严格策略必须保留开发期 purpose，不能把结果描述为独立同源
+  隔离 benchmark。
 - 外部 `.pt` 没有 `.meta.json`：仅在 `evaluation.mode: exploratory` 且
   `model.allow_missing_meta: true` 时允许 YOLO 探索性评估。
 - Transformer nested-tensor warning：是 `norm_first=True` 未使用 nested-tensor 快速路径的性能提示，

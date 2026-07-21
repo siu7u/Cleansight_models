@@ -36,6 +36,8 @@ def test_benchmark_evaluator_consumes_plain_mapping_without_framework_import():
     result = evaluate_prediction(output)
     assert result.metrics["acc"].state is MetricState.COMPUTED
     assert result.metrics["acc"].value == 100.0
+    assert result.metrics["f1@0.5"].spec.endswith("v4; source=benchmark.core.metrics")
+    assert result.metric_details["temporal"]["metric_spec"]["version"] == "interval-matching-v2"
     assert result.pending_artifacts["predictions"]["task_type"] == "temporal"
 
     evaluator_sources = Path("benchmark/evaluators").glob("*.py")

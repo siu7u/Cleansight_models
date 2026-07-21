@@ -13,11 +13,13 @@
 
 特征口径（features 契约，version=actionmixed-bbox-8cls-v1）：按 8 类顺序，每类取该帧内
 **面积最大的一个框** 编码 ``[presence, cx, cy, w, h]``，缺席则全零；拼成 8×5=40 维。
-空 bbox 文件（无检测）→ 全零 40 维。
+空 bbox 文件（无检测）→ 全零 40 维。可通过 ``feature_schema.mask_targets`` 指定检测目标
+名称或类别 ID，将对应类别的 5 维特征清零；遮罩不改变输入维度和类别顺序。
 """
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import numpy as np
@@ -27,8 +29,12 @@ N_DET_CLASSES = 8  # frames/data.yaml 的检测类数（每类 5 维）
 FEATURE_DIM = N_DET_CLASSES * 5  # = 40
 
 
-def featurize_frame_bbox(txt_path: Path, n_classes: int = N_DET_CLASSES) -> np.ndarray:
-    """一帧 bbox → 定长特征向量（每类取面积最大框的 [presence, cx, cy, w, h]）。"""
+def featurize_frame_bbox(
+    txt_path: Path,
+    n_classes: int = N_DET_CLASSES,
+    mask_target_ids: frozenset[int] = frozenset(),
+) -> np.ndarray:
+    """一帧 bbox → ``[n_classes*5]`` 特征；指定目标的整组特征保持为零。"""
     feat = np.zeros((n_classes, 5), dtype=np.float32)
     best_area = np.zeros(n_classes, dtype=np.float32)
     if txt_path.exists():
@@ -39,6 +45,8 @@ def featurize_frame_bbox(txt_path: Path, n_classes: int = N_DET_CLASSES) -> np.n
             c = int(float(parts[0]))
             cx, cy, w, h = (float(v) for v in parts[1:])
             if not (0 <= c < n_classes):
+                continue
+            if c in mask_target_ids:
                 continue
             area = w * h
             if area >= best_area[c]:  # 取面积最大框；同面积后者覆盖，确定性
@@ -54,19 +62,188 @@ def load_action_mapping(root: Path, rel: str) -> dict:
     return {int(k): v for k, v in names.items()}
 
 
-def _iter_split_sequences(data_cfg: dict, split: str, window: int | None = None):
-    """按 ``labels/<split>/`` 遍历可用视频，产出 ``(stem, frame_ids, action_ids)``。
+def load_detection_mapping(data_cfg: dict) -> dict[int, str]:
+    """读取 ``frames/data.yaml``，返回 ActionMixed 检测目标的 ``{id: name}`` 映射。"""
+    root = Path(data_cfg["root"])
+    frames_dir = data_cfg.get("frames_dir", "frames")
+    mapping_path = root / frames_dir / "data.yaml"
+    if not mapping_path.is_file():
+        raise FileNotFoundError(f"检测目标映射不存在: {mapping_path}")
+    data = yaml.safe_load(mapping_path.read_text(encoding="utf-8")) or {}
+    names = data.get("names", {})
+    if isinstance(names, list):
+        return {i: str(name) for i, name in enumerate(names)}
+    if isinstance(names, dict):
+        return {int(key): str(name) for key, name in names.items()}
+    raise ValueError(f"检测目标映射 names 必须是列表或映射: {mapping_path}")
 
-    单一的排序与跳过口径：``sorted`` 字典序、丢弃无有效 "frame_id action_id" 行的空文件、
-    （给了 ``window`` 时）跳过过短序列。``load_split`` 与 ``split_video_names`` 共用此生成器，
-    保证特征/标签/视频名三者索引严格对齐（可视化据此把预测贴回正确视频）。
+
+def resolve_mask_target_ids(data_cfg: dict, feature_schema: dict | None) -> frozenset[int]:
+    """把 ``mask_targets`` 的目标名/ID解析为类别 ID；未知或越界目标立即报错。"""
+    raw_targets = (feature_schema or {}).get("mask_targets")
+    if raw_targets is None or raw_targets == "" or raw_targets == []:
+        return frozenset()
+    if isinstance(raw_targets, (str, int)) and not isinstance(raw_targets, bool):
+        targets = [raw_targets]
+    elif isinstance(raw_targets, list):
+        targets = raw_targets
+    else:
+        raise ValueError("feature_schema.mask_targets 必须是目标名/类别 ID，或它们组成的列表")
+
+    id2name = load_detection_mapping(data_cfg)
+    name2id = {name: target_id for target_id, name in id2name.items()}
+    resolved: set[int] = set()
+    for target in targets:
+        if isinstance(target, bool):
+            raise ValueError(f"mask_targets 不支持布尔值: {target!r}")
+        if isinstance(target, int):
+            target_id = target
+        elif isinstance(target, str):
+            value = target.strip()
+            if value in name2id:
+                target_id = name2id[value]
+            else:
+                try:
+                    target_id = int(value)
+                except ValueError as exc:
+                    available = ", ".join(id2name.values())
+                    raise ValueError(
+                        f"未知遮罩目标 {target!r}；可用目标: {available}"
+                    ) from exc
+        else:
+            raise ValueError(f"mask_targets 元素必须是目标名或类别 ID: {target!r}")
+        if target_id not in id2name:
+            raise ValueError(
+                f"遮罩目标类别 ID 越界: {target_id}；可用 ID: {sorted(id2name)}"
+            )
+        resolved.add(target_id)
+    return frozenset(resolved)
+
+
+def resolve_target_mask_augmentation(data_cfg: dict, augmentation: dict | None) -> dict | None:
+    """校验并解析 train-only 目标随机遮罩配置。
+
+    当前只支持 ``frame_dropout``：对每个指定目标、每个采样帧独立按 ``probability``
+    将对应的 5 维 ``[presence, cx, cy, w, h]`` 清零。返回值仅供运行时使用，不写入配置。
+    """
+
+    if augmentation is None:
+        return None
+    if not isinstance(augmentation, dict):
+        raise ValueError("augmentation 必须是映射")
+    unknown_augmentation = sorted(set(augmentation) - {"target_mask"})
+    if unknown_augmentation:
+        raise ValueError(f"augmentation 包含未知字段: {unknown_augmentation}")
+    raw = augmentation.get("target_mask")
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError("augmentation.target_mask 必须是映射")
+    allowed = {"enabled", "strategy", "targets", "probability"}
+    unknown = sorted(set(raw) - allowed)
+    if unknown:
+        raise ValueError(f"augmentation.target_mask 包含未知字段: {unknown}")
+
+    enabled = raw.get("enabled", True)
+    if not isinstance(enabled, bool):
+        raise ValueError("augmentation.target_mask.enabled 必须是布尔值")
+    strategy = raw.get("strategy", "frame_dropout")
+    if strategy != "frame_dropout":
+        raise ValueError("augmentation.target_mask.strategy 当前只支持 frame_dropout")
+    probability = raw.get("probability", 0.0)
+    if isinstance(probability, bool) or not isinstance(probability, (int, float)):
+        raise ValueError("augmentation.target_mask.probability 必须是 0..1 数值")
+    probability = float(probability)
+    if not 0.0 <= probability <= 1.0:
+        raise ValueError("augmentation.target_mask.probability 必须在 0..1")
+
+    targets = raw.get("targets", [])
+    if not isinstance(targets, list):
+        raise ValueError("augmentation.target_mask.targets 必须是目标名/类别 ID 列表")
+    target_ids = resolve_mask_target_ids(data_cfg, {"mask_targets": targets}) if targets else frozenset()
+    if enabled and probability > 0.0 and not target_ids:
+        raise ValueError("启用随机目标遮罩且 probability > 0 时 targets 不能为空")
+    return {
+        "enabled": enabled,
+        "strategy": strategy,
+        "probability": probability,
+        "target_ids": target_ids,
+    }
+
+
+def apply_target_mask_augmentation(
+    features: list[np.ndarray],
+    data_cfg: dict,
+    augmentation: dict | None,
+    *,
+    seed: int,
+) -> list[np.ndarray]:
+    """对训练集 ``[T, 40]`` 特征应用可复现的逐帧目标随机遮罩。
+
+    同一 seed、相同视频顺序和相同配置产生相同遮罩；该函数不应由 val/test 数据路径调用。
+    未启用或概率为零时原样返回输入列表。
+    """
+
+    spec = resolve_target_mask_augmentation(data_cfg, augmentation)
+    if spec is None or not spec["enabled"] or spec["probability"] == 0.0:
+        return features
+
+    rng = np.random.default_rng(seed)
+    augmented: list[np.ndarray] = []
+    for sequence in features:
+        masked = sequence.copy()
+        for target_id in sorted(spec["target_ids"]):
+            if masked.ndim != 2 or masked.shape[1] < (target_id + 1) * 5:
+                raise ValueError(
+                    f"目标 ID={target_id} 的 5 维切片超出特征形状 {tuple(masked.shape)}"
+                )
+            dropped = rng.random(masked.shape[0]) < spec["probability"]
+            start = target_id * 5
+            masked[dropped, start : start + 5] = 0.0
+        augmented.append(masked)
+    return augmented
+
+
+def _registered_split_items(data_cfg: dict, split: str) -> list[str] | None:
+    """dataset_ref 存在时读取唯一登记 manifest；临时/合成数据保持目录遍历兼容。"""
+
+    dataset_ref = data_cfg.get("dataset_ref")
+    if not dataset_ref:
+        return None
+    try:
+        from benchmark.core.testsets import get_dataset_split, read_split_items
+    except ModuleNotFoundError:  # pragma: no cover - 从 framework 目录运行时触发
+        import sys
+
+        repo_root = Path(__file__).resolve().parents[3]
+        if str(repo_root) not in sys.path:
+            sys.path.insert(0, str(repo_root))
+        from benchmark.core.testsets import get_dataset_split, read_split_items
+
+    return read_split_items(get_dataset_split(str(dataset_ref), split))
+
+
+def _iter_split_sequences(data_cfg: dict, split: str, window: int | None = None):
+    """按登记 manifest 遍历 split，产出 ``(stem, frame_ids, action_ids)``。
+
+    ``data.dataset_ref`` 存在时，manifest 是唯一样本真源；临时/合成配置没有引用时才按目录
+    ``sorted`` 遍历。丢弃无有效 "frame_id action_id" 行的空文件；给了 ``window`` 时跳过
+    过短序列。``load_split`` 与 ``split_video_names`` 共用此生成器，保证三者严格对齐。
     """
     root = Path(data_cfg["root"])
     labels_dir = root / data_cfg.get("labels_dir", "labels") / split
     if not labels_dir.is_dir():
         raise FileNotFoundError(f"labels split 目录不存在: {labels_dir}")
 
-    for label_file in sorted(labels_dir.glob("*.txt")):
+    registered_items = _registered_split_items(data_cfg, split)
+    label_files = (
+        [labels_dir / f"{name}.txt" for name in registered_items]
+        if registered_items is not None
+        else sorted(labels_dir.glob("*.txt"))
+    )
+    for label_file in label_files:
+        if not label_file.is_file():
+            raise FileNotFoundError(f"manifest 登记的动作标签不存在: {label_file}")
         stem = label_file.name[:-4]  # 去掉 ".txt"，保留 "<video>.mp4"
         frame_ids, action_ids = [], []
         for line in label_file.read_text().splitlines():
@@ -83,21 +260,34 @@ def _iter_split_sequences(data_cfg: dict, split: str, window: int | None = None)
         yield stem, frame_ids, action_ids
 
 
-def load_split(data_cfg: dict, split: str, window: int | None = None):
+def load_split(
+    data_cfg: dict,
+    split: str,
+    window: int | None = None,
+    feature_schema: dict | None = None,
+):
     """读某个 split 目录的全部视频，返回 (features_list, truths_list, id2name)。
 
     features_list[i] 形如 ``[T_i, 40]``（float32），truths_list[i] 形如 ``[T_i]``（int64），
     索引与 ``labels/<split>/`` 下的视频对齐（同 ``split_video_names`` 的顺序）。若给了
     ``window``，跳过 ``T < window`` 的过短序列（窗口喂入 SlidingWindowDataset 无法开窗）并告警。
+    ``feature_schema.mask_targets`` 可按 ``frames/data.yaml`` 的目标名或 ID 遮罩整组 5 维特征。
     """
     root = Path(data_cfg["root"])
     frames_dir = root / data_cfg.get("frames_dir", "frames") / split
     id2name = load_action_mapping(root, data_cfg.get("action_mapping", "labels/data.yaml"))
+    mask_target_ids = resolve_mask_target_ids(data_cfg, feature_schema)
 
     features, truths = [], []
     for stem, frame_ids, action_ids in _iter_split_sequences(data_cfg, split, window):
         feats = np.stack(
-            [featurize_frame_bbox(frames_dir / f"{stem}-{fid:06d}.txt") for fid in frame_ids]
+            [
+                featurize_frame_bbox(
+                    frames_dir / f"{stem}-{fid:06d}.txt",
+                    mask_target_ids=mask_target_ids,
+                )
+                for fid in frame_ids
+            ]
         ).astype(np.float32)  # [T, 40]
         features.append(feats)
         truths.append(np.asarray(action_ids, dtype=np.int64))
@@ -112,6 +302,98 @@ def split_video_names(data_cfg: dict, split: str, window: int | None = None) -> 
     return [stem for stem, _fids, _acts in _iter_split_sequences(data_cfg, split, window)]
 
 
+def build_dataset_provenance(data_cfg: dict, feature_schema: dict | None) -> dict:
+    """构造 checkpoint 使用的数据集版本、revision、split fingerprint 和映射摘要。"""
+
+    dataset_ref = data_cfg.get("dataset_ref")
+    if not dataset_ref:
+        return {
+            "registered": False,
+            "id": data_cfg.get("name") or str(data_cfg.get("root")),
+        }
+    try:
+        from benchmark.core.testsets import (
+            get_dataset_specs,
+            get_dataset_split,
+            manifest_fingerprint,
+            read_split_items,
+        )
+    except ModuleNotFoundError:  # pragma: no cover - 从 framework 目录运行时触发
+        import sys
+
+        repo_root = Path(__file__).resolve().parents[3]
+        if str(repo_root) not in sys.path:
+            sys.path.insert(0, str(repo_root))
+        from benchmark.core.testsets import (
+            get_dataset_specs,
+            get_dataset_split,
+            manifest_fingerprint,
+            read_split_items,
+        )
+
+    specs = get_dataset_specs(str(dataset_ref))
+    baseline = specs[0]
+    roles = {
+        role: str(data_cfg[key])
+        for role, key in (("train", "split_train"), ("val", "split_val"), ("eval", "split_eval"))
+        if data_cfg.get(key)
+    }
+    splits: dict[str, dict] = {}
+    for split in sorted(set(roles.values())):
+        spec = get_dataset_split(str(dataset_ref), split)
+        splits[split] = {
+            "testset_id": spec.id,
+            "fingerprint_sha256": manifest_fingerprint(spec),
+            "num_items": len(read_split_items(spec)),
+        }
+
+    root = Path(data_cfg["root"])
+    action_mapping = root / data_cfg.get("action_mapping", "labels/data.yaml")
+    detection_mapping = root / data_cfg.get("frames_dir", "frames") / "data.yaml"
+
+    def mapping_info(path: Path) -> dict:
+        return {
+            "path": path.relative_to(root).as_posix(),
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        }
+
+    return {
+        "registered": True,
+        "id": str(dataset_ref),
+        "version": baseline.dataset_version,
+        "revision": baseline.dataset_revision,
+        "feature_mapping": baseline.feature_mapping,
+        "input_dim": baseline.input_dim,
+        "labels": list(baseline.labels),
+        "split_overlap_policy": baseline.split_overlap_policy,
+        "roles": roles,
+        "splits": splits,
+        "action_mapping": mapping_info(action_mapping),
+        "detection_mapping": mapping_info(detection_mapping),
+        "feature_schema": dict(feature_schema or {}),
+    }
+
+
+def assert_resume_dataset_compatible(checkpoint_meta: dict, current: dict) -> None:
+    """恢复训练时要求数据版本和 train fingerprint 完全一致，拒绝静默混训。"""
+
+    if not current.get("registered"):
+        return
+    previous = checkpoint_meta.get("dataset")
+    if not isinstance(previous, dict) or not previous.get("registered"):
+        raise ValueError("当前训练使用已登记数据集，但 resume checkpoint 缺少数据集溯源")
+    for key in ("id", "version", "revision", "feature_mapping", "labels"):
+        if previous.get(key) != current.get(key):
+            raise ValueError(
+                f"resume 数据集不兼容: {key} checkpoint={previous.get(key)!r} "
+                f"current={current.get(key)!r}"
+            )
+    previous_train = (previous.get("splits") or {}).get((previous.get("roles") or {}).get("train"), {})
+    current_train = (current.get("splits") or {}).get((current.get("roles") or {}).get("train"), {})
+    if previous_train.get("fingerprint_sha256") != current_train.get("fingerprint_sha256"):
+        raise ValueError("resume 数据集不兼容: train split fingerprint 已变化")
+
+
 def build_temporal_meta(
     model_cfg: dict,
     feature_schema: dict,
@@ -120,6 +402,8 @@ def build_temporal_meta(
     num_params: int,
     train_cfg: dict,
     trained_at: str,
+    augmentation: dict | None = None,
+    dataset: dict | None = None,
     extra: dict | None = None,
 ) -> dict:
     """构造 checkpoint 重建元信息（两条时序流水线共用口径）。
@@ -140,6 +424,10 @@ def build_temporal_meta(
         "trained_at": trained_at,
         "train": train_cfg,
     }
+    if augmentation:
+        meta["augmentation"] = augmentation
+    if dataset:
+        meta["dataset"] = dataset
     if extra:
         meta.update(extra)
     return meta

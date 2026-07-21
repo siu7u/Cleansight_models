@@ -122,6 +122,8 @@ benchmark/**/*.mov
 # ---------------------------------------------------------------------------
 CausalModel-master/
 cleansight-yolo-pipeline-main/
+cleansight-ActionMixed/
+cleansight-ActionSequence/
 references
 modelscope_upload
 .codex
