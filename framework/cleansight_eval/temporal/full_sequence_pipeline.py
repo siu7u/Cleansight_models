@@ -43,6 +43,7 @@ from .data import (
     build_temporal_meta,
     load_split,
     resolve_mask_target_ids,
+    resolve_external_temporal_meta,
     resolve_target_mask_augmentation,
     split_video_names,
 )
@@ -52,7 +53,7 @@ from .util import compute_class_weights
 
 
 def _load_eval_model(cfg: dict, ckpt: str, device):
-    """按 checkpoint 自描述 meta 重建评估用模型（评估/可视化共用同一路径）。"""
+    """优先按 sidecar 重建模型；探索模式可显式改用 YAML 重建外部裸权重。"""
     model_cfg = cfg["model"]
     expected = {"type": model_cfg["type"], "input_dim": model_cfg["input_dim"], "num_classes": model_cfg["num_classes"]}
     mode = (cfg.get("evaluation") or {}).get("mode", "formal")
@@ -61,9 +62,12 @@ def _load_eval_model(cfg: dict, ckpt: str, device):
         expected=expected,
         map_location=device,
         require_meta_schema=mode == "formal",
+        fallback_meta=resolve_external_temporal_meta(cfg, "full_sequence_temporal"),
     )
     model = build_model(meta["model"]).to(device)
-    model.load_state_dict(state_dict)
+    model.load_state_dict(state_dict, strict=True)
+    if meta.get("num_params") is None:
+        meta["num_params"] = sum(parameter.numel() for parameter in model.parameters())
     model.eval()
     return model, meta
 
@@ -387,5 +391,9 @@ class FullSequenceTemporalPipeline(Pipeline):
                 "split": cfg["data"]["split_eval"],
                 "input_dim": cfg["model"]["input_dim"],
                 "input_shape": [1, "T", cfg["model"]["input_dim"]],
+                "checkpoint_metadata_source": meta.get("source", "sidecar"),
+                "checkpoint_metadata_bound": bool(
+                    (meta.get("_metadata_integrity") or {}).get("bound")
+                ),
             },
         )

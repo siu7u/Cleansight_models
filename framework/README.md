@@ -148,6 +148,7 @@ model:
   num_classes: 6       # ✅ 动作类数；须等于 labels/data.yaml 的 names 数
   hidden: 128          # 模型超参（gru/mstcn 均用 hidden）
   num_layers: 3        # gru 专属
+  # allow_missing_meta: true  # 仅 exploratory 外部裸 .pt；按本段结构 strict 加载
 data:
   dataset_ref: temporal.actionmixed-v2  # ✅ 从 benchmark catalog 解析根目录、类别和 manifest
   split_train: train   # ✅ 训练用子目录
@@ -184,6 +185,11 @@ python -m framework.cleansight_eval.cli.train \
 训练期随机目标遮罩使用独立的 `augmentation.target_mask`，不改变 feature schema。当前
 `frame_dropout` 的 `probability` 表示每个指定目标在每个采样帧独立清零 5 维特征的概率；
 它只作用于 train，val/test 保持干净输入。配置会随 resolved config 和 checkpoint metadata 保存。
+
+组员提供的外部裸时序 `.pt` 可在 `evaluation.mode: exploratory` 下显式设置
+`model.allow_missing_meta: true`。此时模型由 YAML 重建，接受裸 state dict、`model_state` 或
+`state_dict` 包装，并以 `strict=True` 校验全部参数；结果保留 `missing_meta_fallback` 和未绑定事实。
+formal 模式仍要求与权重 SHA-256 绑定的同名 `.meta.json`。
 
 ### 检测（YOLO）
 

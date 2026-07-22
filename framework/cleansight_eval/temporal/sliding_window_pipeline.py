@@ -39,6 +39,7 @@ from .data import (
     build_temporal_meta,
     load_split,
     resolve_mask_target_ids,
+    resolve_external_temporal_meta,
     resolve_target_mask_augmentation,
     split_video_names,
 )
@@ -330,10 +331,13 @@ class SlidingWindowTemporalPipeline(Pipeline):
             expected=expected,
             map_location=device,
             require_meta_schema=mode == "formal",
+            fallback_meta=resolve_external_temporal_meta(cfg, self.pipeline_name),
         )
 
         model = build_model(meta["model"]).to(device)
-        model.load_state_dict(state_dict)
+        model.load_state_dict(state_dict, strict=True)
+        if meta.get("num_params") is None:
+            meta["num_params"] = sum(parameter.numel() for parameter in model.parameters())
 
         window = meta.get("window") or cfg["train"].get("window", 64)
         features, truths, id2name = load_split(
@@ -423,5 +427,9 @@ class SlidingWindowTemporalPipeline(Pipeline):
                 "window": window,
                 "input_dim": model_cfg["input_dim"],
                 "input_shape": [1, window, model_cfg["input_dim"]],
+                "checkpoint_metadata_source": meta.get("source", "sidecar"),
+                "checkpoint_metadata_bound": bool(
+                    (meta.get("_metadata_integrity") or {}).get("bound")
+                ),
             },
         )

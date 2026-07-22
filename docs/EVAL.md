@@ -29,7 +29,8 @@ python -m framework.cleansight_eval.cli.matrix --runs runs
 ```
 
 `formal` 结果必须使用校验通过的固定 testset；外部权重或临时数据使用 `exploratory`，并在报告中
-保留降级事实。
+保留降级事实。外部裸时序权重需同时设置 `model.allow_missing_meta: true`，由 YAML 声明模型结构；
+该 fallback 不写可信 sidecar，仍严格校验全部参数键和张量形状。
 
 ## 1. 评估产物：统一 EvaluationResult
 
@@ -190,7 +191,8 @@ framework 负责运行模型和 run 内落盘，benchmark 负责指标、结果 
 - **artifact 可追溯**：要求逐视频/逐图 prediction artifact 存在并带 SHA-256；时序 artifact
   还会实际调用 benchmark 复算，确认 `recomputable=true`。
 - **评估 profile**：`formal` 必须使用已登记且校验通过的 testset 和绑定 metadata；
-  `exploratory` 允许外部权重或 ad-hoc 数据，但完整性报告会保留降级事实。
+  `exploratory` 允许外部权重或 ad-hoc 数据；显式开启 `model.allow_missing_meta` 后，时序 Pipeline
+  可按 YAML 重建裸 state dict，但结果会记录 metadata 来源和未绑定状态。
 
 ## 7. 矩阵聚合与可视化
 

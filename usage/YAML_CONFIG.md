@@ -24,7 +24,7 @@ Pipeline 校验并执行。
 |---|---|
 | `schema_version` | 实验配置契约版本，当前为 `1`。 |
 | `pipeline` | 选择检测、滑窗时序或全序列时序流程，确定训练和推理语义。 |
-| `model` | 模型类型、输入/输出维度、网络规模、初始权重及 metadata 策略。 |
+| `model` | 模型类型、输入/输出维度、网络规模、初始权重及 metadata 策略。`allow_missing_meta: true` 只在 `exploratory` 生效：YOLO 由自身格式加载，时序模型按本段结构严格加载裸 state dict；`formal` 禁止该降级。 |
 | `data` | `dataset_ref` 引用 benchmark catalog；catalog 解析数据根、类别和 manifest，实验只声明 train/val/eval split。没有引用的临时/合成配置仍可直接使用 `root`。 |
 | `feature_schema` | 时序特征维度、mapping 版本、类别布局及可选固定目标遮罩。 |
 | `augmentation` | 训练期数据增强；`target_mask` 只作用于 train，不作用于 val/test。 |

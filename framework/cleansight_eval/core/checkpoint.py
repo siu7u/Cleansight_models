@@ -36,6 +36,17 @@ def _sha256_file(path: str | Path) -> str:
     return digest.hexdigest()
 
 
+def _extract_state_dict(payload):
+    """兼容本框架 ``model_state``、常见 ``state_dict`` 包装和裸 state dict。"""
+
+    if isinstance(payload, dict):
+        for key in ("model_state", "state_dict"):
+            state = payload.get(key)
+            if isinstance(state, dict):
+                return state
+    return payload
+
+
 def write_meta(checkpoint_path: str | Path, meta: dict) -> Path:
     """写 schema v1 sidecar，并与当前 checkpoint 内容和大小绑定。"""
 
@@ -131,18 +142,31 @@ def load_checkpoint(
     map_location="cpu",
     *,
     require_meta_schema: bool = False,
+    fallback_meta: dict | None = None,
 ):
     """加载权重并校验配置兼容性。
 
     返回 ``(state_dict, meta)``。若 ``expected`` 与元信息不兼容，立即抛
-    ``CompatibilityError``，实现"不因错误配置静默加载"。
+    ``CompatibilityError``，实现"不因错误配置静默加载"。``fallback_meta`` 只供调用方
+    在明确的 exploratory 外部权重流程中使用；formal 模式禁止用配置声明代替绑定 sidecar。
     """
 
-    meta = load_meta(path, require_schema=require_meta_schema)
+    if require_meta_schema and fallback_meta is not None:
+        raise ValueError("formal checkpoint 加载不能使用 fallback metadata")
+    try:
+        meta = load_meta(path, require_schema=require_meta_schema)
+    except FileNotFoundError:
+        if fallback_meta is None:
+            raise
+        meta = dict(fallback_meta)
+        meta["_metadata_integrity"] = {
+            "schema_version": 0,
+            "bound": False,
+            "source": "config_fallback",
+        }
     assert_checkpoint_config(meta, expected)
     payload = torch.load(path, map_location=map_location)
-    state_dict = payload["model_state"] if isinstance(payload, dict) and "model_state" in payload else payload
-    return state_dict, meta
+    return _extract_state_dict(payload), meta
 
 
 def load_training_checkpoint(

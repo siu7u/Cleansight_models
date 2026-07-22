@@ -431,3 +431,37 @@ def build_temporal_meta(
     if extra:
         meta.update(extra)
     return meta
+
+
+def build_external_temporal_meta(cfg: dict, pipeline: str) -> dict:
+    """由 exploratory YAML 构造未绑定外部时序权重的临时重建信息。
+
+    该信息只存在于本次评测内存和预测事实中，不写成可信 sidecar；权重仍须通过
+    ``model.load_state_dict(..., strict=True)`` 的完整形状与参数键校验。
+    """
+
+    model_cfg = dict(cfg["model"])
+    meta = {
+        "type": model_cfg["type"],
+        "pipeline": pipeline,
+        "input_dim": model_cfg["input_dim"],
+        "num_classes": model_cfg["num_classes"],
+        "model": model_cfg,
+        "feature_schema": dict(cfg.get("feature_schema") or {}),
+        "num_params": None,
+        "source": "missing_meta_fallback",
+    }
+    window = (cfg.get("train") or {}).get("window")
+    if window is not None:
+        meta["window"] = int(window)
+    return meta
+
+
+def resolve_external_temporal_meta(cfg: dict, pipeline: str) -> dict | None:
+    """仅在 exploratory 且显式打开 ``allow_missing_meta`` 时返回 YAML fallback。"""
+
+    mode = (cfg.get("evaluation") or {}).get("mode", "formal")
+    allow_missing = bool((cfg.get("model") or {}).get("allow_missing_meta", False))
+    if mode != "exploratory" or not allow_missing:
+        return None
+    return build_external_temporal_meta(cfg, pipeline)

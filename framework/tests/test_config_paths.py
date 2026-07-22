@@ -2,10 +2,23 @@ from pathlib import Path
 
 import pytest
 
-from cleansight_eval.core.config import apply_overrides, load_config
+from cleansight_eval.core.config import apply_overrides, load_config, validate_config
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_formal_config_rejects_missing_meta_switch():
+    cfg = {
+        "schema_version": 1,
+        "pipeline": "full_sequence_temporal",
+        "model": {"type": "mstcn", "allow_missing_meta": True},
+        "data": {"name": "fixture", "root": "/tmp/fixture"},
+        "evaluation": {"mode": "formal"},
+    }
+
+    with pytest.raises(ValueError, match="formal 评估不能启用"):
+        validate_config(cfg)
 
 
 def test_load_config_resolves_data_yaml_relative_to_config_file(tmp_path):

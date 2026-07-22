@@ -69,6 +69,16 @@ python -m framework.cleansight_eval.cli.eval \
 将配置替换为 `mstcn-actionmixed.yaml` 或 `transformer-actionmixed.yaml` 即可评测对应模型。
 输入语义为 `[1, T, 40]`，属于离线完整序列评测，不代表生产流式延迟。
 
+组员只提供裸时序 `.pt` 时，复制对应实验 YAML，将 `evaluation.mode` 改为 `exploratory`，并设置：
+
+```yaml
+model:
+  allow_missing_meta: true
+```
+
+YAML 中的模型类型、维度、层数、类别顺序和 feature mapping 必须与权重来源一致；加载器仍会
+严格检查参数键和张量形状，结果会标记 checkpoint metadata 未绑定。
+
 ### 3.3 YOLO 检测模型
 
 ```bash

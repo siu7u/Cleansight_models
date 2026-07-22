@@ -193,7 +193,7 @@ python -m framework.cleansight_eval.cli.eval \
 
 ### Exploratory
 
-适用于组员提供的外部 YOLO `.pt` 或临时数据。将权重放在目标 run 的 `checkpoints/` 下，并使用：
+适用于组员提供的外部 `.pt` 或临时数据。外部 YOLO 使用：
 
 ```yaml
 model:
@@ -204,6 +204,27 @@ evaluation:
 ```
 
 这不会伪造 metadata；报告会保留外部导入/降级事实。正式发布前仍需补齐可信 sidecar 和固定 testset。
+
+外部时序权重也使用同一个开关，但 YAML 必须完整声明模型重建结构和特征语义：
+
+```yaml
+model:
+  type: gru
+  input_dim: 40
+  num_classes: 6
+  hidden: 128
+  num_layers: 3
+  allow_missing_meta: true
+feature_schema:
+  dim: 40
+  version: actionmixed-bbox-8cls-v1
+evaluation:
+  mode: exploratory
+```
+
+当前接受裸 state dict、`model_state` 或 `state_dict` 包装。仅在 sidecar 缺失时使用 YAML fallback；
+如果 sidecar 已存在但摘要损坏，不会绕过校验。模型参数键和张量形状仍以 `strict=True` 完整匹配，
+结果标记 `checkpoint_metadata_bound=false`，不能作为 formal benchmark。
 
 ## 9. 评估输出与报告
 
