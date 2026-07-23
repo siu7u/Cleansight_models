@@ -1,7 +1,7 @@
 # CleanSight 模型集任务状态
 
 > 历史快照：本文保留 2026-07-05 的旧模型资产状态，不代表当前统一 train-eval framework 的实现
-> 进度。当前状态以 [`docs/TRAIN_EVAL_IMPLEMENTATION_STATUS.md`](docs/TRAIN_EVAL_IMPLEMENTATION_STATUS.md)
+> 进度。当前状态以 [`TRAIN_EVAL_IMPLEMENTATION_STATUS.md`](TRAIN_EVAL_IMPLEMENTATION_STATUS.md)
 > 为准，新使用方式见 [`MODELSET_USAGE_GUIDE.md`](MODELSET_USAGE_GUIDE.md)。
 
 更新时间：2026-07-05

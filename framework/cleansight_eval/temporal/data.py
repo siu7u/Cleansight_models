@@ -25,6 +25,8 @@ from pathlib import Path
 import numpy as np
 import yaml
 
+from .features import CLEAN_FEATURE_DIMS, build_clean_bbox_features
+
 N_DET_CLASSES = 8  # frames/data.yaml 的检测类数（每类 5 维）
 FEATURE_DIM = N_DET_CLASSES * 5  # = 40
 
@@ -268,29 +270,70 @@ def load_split(
 ):
     """读某个 split 目录的全部视频，返回 (features_list, truths_list, id2name)。
 
-    features_list[i] 形如 ``[T_i, 40]``（float32），truths_list[i] 形如 ``[T_i]``（int64），
+    features_list[i] 形如 ``[T_i, F]``（float32），truths_list[i] 形如 ``[T_i]``（int64），
     索引与 ``labels/<split>/`` 下的视频对齐（同 ``split_video_names`` 的顺序）。若给了
     ``window``，跳过 ``T < window`` 的过短序列（窗口喂入 SlidingWindowDataset 无法开窗）并告警。
     ``feature_schema.mask_targets`` 可按 ``frames/data.yaml`` 的目标名或 ID 遮罩整组 5 维特征。
     """
     root = Path(data_cfg["root"])
     frames_dir = root / data_cfg.get("frames_dir", "frames") / split
-    id2name = load_action_mapping(root, data_cfg.get("action_mapping", "labels/data.yaml"))
+    source_id2name = load_action_mapping(root, data_cfg.get("action_mapping", "labels/data.yaml"))
+    class_order = (feature_schema or {}).get("class_order")
+    if class_order is None:
+        id2name = source_id2name
+        action_id_remap = {source_id: source_id for source_id in source_id2name}
+    else:
+        if not isinstance(class_order, list) or not all(isinstance(name, str) for name in class_order):
+            raise ValueError("feature_schema.class_order 必须是类别名列表")
+        if len(class_order) != len(set(class_order)):
+            raise ValueError("feature_schema.class_order 不能包含重复类别")
+        source_names = set(source_id2name.values())
+        if set(class_order) != source_names:
+            raise ValueError(
+                "feature_schema.class_order 与数据集动作类别不一致: "
+                f"configured={class_order}, dataset={list(source_id2name.values())}"
+            )
+        name_to_target = {name: index for index, name in enumerate(class_order)}
+        action_id_remap = {
+            source_id: name_to_target[name] for source_id, name in source_id2name.items()
+        }
+        id2name = {index: name for index, name in enumerate(class_order)}
     mask_target_ids = resolve_mask_target_ids(data_cfg, feature_schema)
+    feature_version = (feature_schema or {}).get("version", "actionmixed-bbox-8cls-v1")
+    clean_recipe = feature_version in CLEAN_FEATURE_DIMS
+    detection_mapping = load_detection_mapping(data_cfg) if clean_recipe else None
+    fps = float(data_cfg.get("fps", 7.5))
+    confidence_default = float(
+        (feature_schema or {}).get("detection_confidence_default", 1.0)
+    )
 
     features, truths = [], []
     for stem, frame_ids, action_ids in _iter_split_sequences(data_cfg, split, window):
-        feats = np.stack(
-            [
-                featurize_frame_bbox(
-                    frames_dir / f"{stem}-{fid:06d}.txt",
-                    mask_target_ids=mask_target_ids,
+        frame_paths = [frames_dir / f"{stem}-{frame_id:06d}.txt" for frame_id in frame_ids]
+        if clean_recipe:
+            feats, _feature_names, actual_version = build_clean_bbox_features(
+                frame_paths,
+                detection_mapping=detection_mapping or {},
+                feature_version=feature_version,
+                fps=fps,
+                confidence_default=confidence_default,
+                mask_target_ids=mask_target_ids,
+            )
+            if actual_version != feature_version:
+                raise ValueError(
+                    f"CLEAN feature recipe 返回版本 {actual_version!r}，期望 {feature_version!r}"
                 )
-                for fid in frame_ids
-            ]
-        ).astype(np.float32)  # [T, 40]
+        else:
+            feats = np.stack(
+                [
+                    featurize_frame_bbox(path, mask_target_ids=mask_target_ids)
+                    for path in frame_paths
+                ]
+            ).astype(np.float32)
         features.append(feats)
-        truths.append(np.asarray(action_ids, dtype=np.int64))
+        truths.append(
+            np.asarray([action_id_remap[action_id] for action_id in action_ids], dtype=np.int64)
+        )
 
     if not features:
         raise ValueError(f"{root / data_cfg.get('labels_dir', 'labels') / split} 下没有可用序列（可能都短于 window={window}）")

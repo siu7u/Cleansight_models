@@ -47,6 +47,7 @@ from .data import (
     resolve_target_mask_augmentation,
     split_video_names,
 )
+from .external import configure_external_model
 from .metrics import compute_temporal_metrics_by_item
 from .models import build_model
 from .util import compute_class_weights
@@ -66,6 +67,7 @@ def _load_eval_model(cfg: dict, ckpt: str, device):
     )
     model = build_model(meta["model"]).to(device)
     model.load_state_dict(state_dict, strict=True)
+    configure_external_model(model, cfg, meta)
     if meta.get("num_params") is None:
         meta["num_params"] = sum(parameter.numel() for parameter in model.parameters())
     model.eval()
@@ -391,6 +393,7 @@ class FullSequenceTemporalPipeline(Pipeline):
                 "split": cfg["data"]["split_eval"],
                 "input_dim": cfg["model"]["input_dim"],
                 "input_shape": [1, "T", cfg["model"]["input_dim"]],
+                "checkpoint_format": meta.get("_checkpoint_format", "state_dict"),
                 "checkpoint_metadata_source": meta.get("source", "sidecar"),
                 "checkpoint_metadata_bound": bool(
                     (meta.get("_metadata_integrity") or {}).get("bound")

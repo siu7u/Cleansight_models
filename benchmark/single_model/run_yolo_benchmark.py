@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PIPELINE = ROOT / "yolo-detection" / "pipeline"
 OUT_DIR = ROOT / "benchmark" / "single_model"
 LATEST_DIR = OUT_DIR / "latest"
-MODEL_CATALOG = ROOT / "model_manager" / "models.yaml"
+PIPELINE_CONFIG = PIPELINE / "config.yaml"
 
 
 def build_run_id(version: str | None) -> str:
@@ -31,40 +31,38 @@ def build_run_id(version: str | None) -> str:
     return f"{slug or 'version'}-{timestamp}"
 
 
-def load_yolo_model_specs() -> dict[str, dict]:
-    """从 `model_manager/models.yaml` 读取 YOLO 模型登记信息。
+def load_pipeline_groups(path: Path = PIPELINE_CONFIG) -> dict[str, list[str]]:
+    """从 YOLO 数据/训练真源读取 ``group -> class_order``，不维护第二份模型 catalog。"""
 
-    benchmark 只使用清单里的稳定模型 id 和分组目标；实际验证仍交给
-    `04_validate.py` 执行。
-    """
-
-    if not MODEL_CATALOG.exists():
-        return {}
-    catalog = yaml.safe_load(MODEL_CATALOG.read_text(encoding="utf-8")) or {}
-    specs = {}
-    for item in catalog.get("models", []):
-        if item.get("family") != "yolo":
-            continue
-        specs[item["id"]] = item
-    return specs
-
-
-def model_id_for_group(specs: dict[str, dict], group: str) -> str | None:
-    """返回某个 YOLO 分组在模型清单中的登记 id。"""
-
-    for model_id, item in specs.items():
-        if item.get("target") == group:
-            return model_id
-    return None
+    payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    raw_groups = payload.get("groups")
+    if not isinstance(raw_groups, dict) or not raw_groups:
+        raise ValueError(f"{path} 缺少非空 groups mapping")
+    groups: dict[str, list[str]] = {}
+    for name, labels in raw_groups.items():
+        if not isinstance(name, str) or not name:
+            raise ValueError(f"{path} 包含非法 group 名: {name!r}")
+        if not isinstance(labels, list) or not all(isinstance(label, str) for label in labels):
+            raise ValueError(f"{path} group={name!r} 的类别必须是字符串列表")
+        groups[name] = list(labels)
+    return groups
 
 
-def group_for_model_id(specs: dict[str, dict], model_id: str) -> str:
-    """把 `yolo.group1_large` 这类模型 id 解析为 YOLO 分组名。"""
+def model_id_for_group(group: str) -> str:
+    """按稳定约定返回 YOLO 模型 ID；group 本身由 pipeline 配置验证。"""
 
-    item = specs.get(model_id)
-    if not item:
-        raise SystemExit(f"未知 YOLO model id: {model_id}")
-    return str(item["target"])
+    return f"yolo.{group}"
+
+
+def group_for_model_id(model_id: str, groups: dict[str, list[str]]) -> str:
+    """把 ``yolo.<group>`` 解析为配置中真实存在的 YOLO 分组。"""
+
+    prefix = "yolo."
+    group = model_id[len(prefix) :] if model_id.startswith(prefix) else ""
+    if group not in groups:
+        choices = ", ".join(model_id_for_group(name) for name in sorted(groups))
+        raise SystemExit(f"未知 YOLO model id: {model_id}；可用: {choices}")
+    return group
 
 
 def report_path_for(group: str, split: str) -> Path:
@@ -169,26 +167,16 @@ def run_validate(groups: list[str], split: str, weights: str | None) -> int:
     return proc.returncode
 
 
-def collect_groups(requested: list[str]) -> list[str]:
-    """解析命令行指定的 YOLO 分组，或从 pipeline 配置读取全部分组。"""
+def collect_groups(requested: list[str], groups: dict[str, list[str]]) -> list[str]:
+    """验证显式分组；未指定时返回 pipeline 配置中的全部分组。"""
 
-    if requested:
-        return requested
-    cfg = PIPELINE / "config.yaml"
-    groups = []
-    in_groups = False
-    for raw in cfg.read_text(encoding="utf-8").splitlines():
-        line = raw.rstrip()
-        if line.startswith("groups:"):
-            in_groups = True
-            continue
-        if in_groups and line and not line.startswith(" "):
-            break
-        if in_groups:
-            match = re.match(r"\s+([A-Za-z0-9_-]+):", line)
-            if match:
-                groups.append(match.group(1))
-    return groups
+    selected = requested or list(groups)
+    unknown = [name for name in selected if name not in groups]
+    if unknown:
+        raise SystemExit(
+            f"未知 YOLO group: {', '.join(unknown)}；可用: {', '.join(sorted(groups))}"
+        )
+    return selected
 
 
 def write_summary(
@@ -282,7 +270,7 @@ def main() -> int:
 
     parser = argparse.ArgumentParser()
     parser.add_argument("groups", nargs="*", help="只验证指定 YOLO 分组，例如 group1_large")
-    parser.add_argument("--model", help="指定模型清单 id,例如 yolo.group1_large")
+    parser.add_argument("--model", help="按 yolo.<pipeline-group> 指定稳定模型 ID")
     parser.add_argument("--skip-run", action="store_true", help="只汇总已有报告，不调用 04_validate.py")
     parser.add_argument("--version", help="为本次 benchmark summary 指定版本名，例如 yolo-large-v2")
     parser.add_argument(
@@ -297,11 +285,11 @@ def main() -> int:
     if not PIPELINE.exists():
         raise SystemExit(f"缺少 YOLO pipeline: {PIPELINE}")
 
-    specs = load_yolo_model_specs()
+    configured_groups = load_pipeline_groups()
     requested_groups = list(args.groups)
     if args.model:
-        requested_groups.append(group_for_model_id(specs, args.model))
-    groups = collect_groups(requested_groups)
+        requested_groups.append(group_for_model_id(args.model, configured_groups))
+    groups = collect_groups(requested_groups, configured_groups)
     groups = list(dict.fromkeys(groups))
     if args.weights and len(groups) != 1:
         raise SystemExit("--weights 只能和单个 YOLO 分组或 --model 一起使用")
@@ -313,7 +301,7 @@ def main() -> int:
     items = []
     missing = []
     for group in groups:
-        model_id = model_id_for_group(specs, group)
+        model_id = model_id_for_group(group)
         report = report_path_for(group, args.split)
         checkpoint = Path(args.weights) if args.weights else default_checkpoint_for(group)
         if report.exists():

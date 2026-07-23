@@ -43,6 +43,7 @@ from .data import (
     resolve_target_mask_augmentation,
     split_video_names,
 )
+from .external import configure_external_model
 from .metrics import compute_temporal_metrics_by_item
 from .models import build_model, is_causal
 from .util import causal_decision, compute_class_weights
@@ -336,6 +337,7 @@ class SlidingWindowTemporalPipeline(Pipeline):
 
         model = build_model(meta["model"]).to(device)
         model.load_state_dict(state_dict, strict=True)
+        configure_external_model(model, cfg, meta)
         if meta.get("num_params") is None:
             meta["num_params"] = sum(parameter.numel() for parameter in model.parameters())
 
@@ -427,6 +429,7 @@ class SlidingWindowTemporalPipeline(Pipeline):
                 "window": window,
                 "input_dim": model_cfg["input_dim"],
                 "input_shape": [1, window, model_cfg["input_dim"]],
+                "checkpoint_format": meta.get("_checkpoint_format", "state_dict"),
                 "checkpoint_metadata_source": meta.get("source", "sidecar"),
                 "checkpoint_metadata_bound": bool(
                     (meta.get("_metadata_integrity") or {}).get("bound")

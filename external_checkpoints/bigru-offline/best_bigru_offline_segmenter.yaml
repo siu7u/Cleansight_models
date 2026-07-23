@@ -1,0 +1,37 @@
+# 后端 CLEAN BiGRU best checkpoint 的探索性统一评测配置。
+schema_version: 1
+pipeline: full_sequence_temporal
+
+model:
+  type: clean_bigru
+  input_dim: 249
+  num_classes: 6
+  hidden: 64
+  num_layers: 3
+  dropout: 0.15
+  allow_missing_meta: true
+
+data:
+  name: actionmixed-clean-bigru-exploratory
+  root: ../../cleansight-ActionMixed
+  split_train: train
+  split_val: val
+  split_eval: test
+  fps: 7.5
+
+feature_schema:
+  dim: 249
+  version: clean_bbox_v2_top1_impute+center_window+business_priors
+  class_order: [idle, long_brush_insert, long_brush_withdraw, short_brush_cleaning, flush, air_injection]
+  layout: backend-clean-bbox-v2-centered-window
+  normalization: checkpoint-zscore
+  detection_confidence_default: 1.0
+
+evaluation:
+  mode: exploratory
+  visualize: true
+
+train:
+  epochs: 3
+  lr: 0.001
+  batch_size: 1

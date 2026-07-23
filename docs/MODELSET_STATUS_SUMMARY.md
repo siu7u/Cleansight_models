@@ -110,8 +110,8 @@ benchmark/e2e_3min/
 
 ```text
 MODELSET_USAGE_GUIDE.md
-cleansight-yolo-pipeline-main/YOLO_PIPELINE_SUMMARY.md
-.codex/skills/modelset-quality/SKILL.md
+../cleansight-yolo-pipeline-main/YOLO_PIPELINE_SUMMARY.md
+../.codex/skills/modelset-quality/SKILL.md
 ```
 
 其中 `modelset-quality` skill 用于约束后续开发：

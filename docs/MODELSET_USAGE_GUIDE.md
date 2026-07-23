@@ -1,6 +1,7 @@
 # CleanSight 模型集使用指南
 
-本文给出当前统一训练评估链路的实际操作。命令均从 `Cleansight_models/` 仓库根目录执行。
+本文位于 `docs/`，给出当前统一训练评估链路的实际操作；命令均从 `Cleansight_models/`
+仓库根目录执行。
 
 ## 1. 选择正确入口
 
@@ -13,7 +14,8 @@
 | 全序列与流式一致性 | `benchmark/temporal_feed_mode/` |
 | 3 分钟业务场景 | `benchmark/e2e_3min/` |
 
-`model_manager/` 和各 `temporal-*` 独立脚本用于历史资产兼容，不是新实验的默认入口。
+各 `temporal-*` 和 `yolo-detection/pipeline/` 独立脚本仅用于历史资产复现，不再经过集中 manager；
+它们不是新实验的默认入口。
 
 ## 2. 环境准备
 

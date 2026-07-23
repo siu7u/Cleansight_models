@@ -69,15 +69,55 @@ python -m framework.cleansight_eval.cli.eval \
 将配置替换为 `mstcn-actionmixed.yaml` 或 `transformer-actionmixed.yaml` 即可评测对应模型。
 输入语义为 `[1, T, 40]`，属于离线完整序列评测，不代表生产流式延迟。
 
-组员只提供裸时序 `.pt` 时，复制对应实验 YAML，将 `evaluation.mode` 改为 `exploratory`，并设置：
+组员只提供裸时序 `.pt` 时，先复制仓库提供的模板：
+
+```bash
+mkdir -p external_checkpoints/<model-id>
+cp external_checkpoints/external-temporal-template.yaml \
+  external_checkpoints/<model-id>/<model-id>.yaml
+```
+
+将 `.pt` 放进同一目录，逐项替换模板已启用字段中的 `REPLACE_WITH_*` 和 `0` 占位值。没有绑定 metadata 时保留
+`evaluation.mode: exploratory` 和：
 
 ```yaml
 model:
   allow_missing_meta: true
 ```
 
-YAML 中的模型类型、维度、层数、类别顺序和 feature mapping 必须与权重来源一致；加载器仍会
-严格检查参数键和张量形状，结果会标记 checkpoint metadata 未绑定。
+YAML 中的 Pipeline、模型类型、维度、层数、类别顺序、feature mapping、归一化和训练窗口必须
+与权重来源一致。加载器接受
+裸 state dict、常见包装或 TorchScript 归档；TorchScript 通过 JIT API 提取参数，之后仍严格检查
+参数键和张量形状，结果会标记 checkpoint metadata 未绑定及实际格式。
+
+配置完成后的统一命令：
+
+```bash
+python -m framework.cleansight_eval.cli.eval \
+  --config external_checkpoints/<model-id>/<model-id>.yaml \
+  --ckpt external_checkpoints/<model-id>/<model-id>.pt \
+  --out-dir runs/external-<model-id>
+```
+
+后端 CLEAN 三种离线 best checkpoint 已配套 exploratory YAML，可直接进入统一完整序列评测：
+
+```bash
+python -m framework.cleansight_eval.cli.eval \
+  --config external_checkpoints/asformer-offline/best_asformer_offline_segmenter.yaml \
+  --ckpt external_checkpoints/asformer-offline/best_asformer_offline_segmenter.pt
+
+python -m framework.cleansight_eval.cli.eval \
+  --config external_checkpoints/bigru-offline/best_bigru_offline_segmenter.yaml \
+  --ckpt external_checkpoints/bigru-offline/best_bigru_offline_segmenter.pt
+
+python -m framework.cleansight_eval.cli.eval \
+  --config external_checkpoints/mstcn-bilstm-offline/best_ms_tcn_offline_segmenter.yaml \
+  --ckpt external_checkpoints/mstcn-bilstm-offline/best_ms_tcn_offline_segmenter.pt
+```
+
+这些配置把 ActionMixed 五列 bbox 的缺失 confidence 显式设为 `1.0`，只用于模型接入和统一
+指标的 exploratory 对比；正式复现必须消费带真实检测 confidence/timestamp 的后端
+`FrameFeature` 或原 offline-model feature store。
 
 ### 3.3 YOLO 检测模型
 

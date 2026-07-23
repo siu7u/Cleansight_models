@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """遗留的人工发布审阅清单生成器。
 
-该脚本不再由 model_manager 暴露，也不产生是否上线的 PASS/FAIL 决策；保留文件名仅兼容历史命令。
+该脚本不产生是否上线的 PASS/FAIL 决策；保留文件名仅兼容历史命令。
 """
 
 from __future__ import annotations

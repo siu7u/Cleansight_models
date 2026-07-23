@@ -10,7 +10,8 @@
 - 字段、默认值、约束、读取方或运行影响变化时，即使文件路径不变，也要更新对应说明。
 - 被 `.gitignore` 排除的构建、训练和打包产物不纳入逐文件清单，统一在文末说明。
 
-当前共收录 22 个受 Git 跟踪的 YAML。
+当前共登记 26 个 YAML，其中包含 4 个与本地外部 checkpoint 配套的探索性配置和 1 个组员
+接入外部时序权重时使用的模板。
 
 ## 1. Framework 实验配置
 
@@ -24,9 +25,9 @@ Pipeline 校验并执行。
 |---|---|
 | `schema_version` | 实验配置契约版本，当前为 `1`。 |
 | `pipeline` | 选择检测、滑窗时序或全序列时序流程，确定训练和推理语义。 |
-| `model` | 模型类型、输入/输出维度、网络规模、初始权重及 metadata 策略。`allow_missing_meta: true` 只在 `exploratory` 生效：YOLO 由自身格式加载，时序模型按本段结构严格加载裸 state dict；`formal` 禁止该降级。 |
-| `data` | `dataset_ref` 引用 benchmark catalog；catalog 解析数据根、类别和 manifest，实验只声明 train/val/eval split。没有引用的临时/合成配置仍可直接使用 `root`。 |
-| `feature_schema` | 时序特征维度、mapping 版本、类别布局及可选固定目标遮罩。 |
+| `model` | 模型类型、输入/输出维度、网络规模、初始权重及 metadata 策略。`allow_missing_meta: true` 只在 `exploratory` 生效：YOLO 由自身格式加载，时序模型按本段结构严格加载裸 state dict、常见包装、受限 NumPy metadata 包装或由 JIT API 提取参数的 TorchScript；`formal` 禁止该降级。 |
+| `data` | `dataset_ref` 引用 benchmark catalog；catalog 解析数据根、类别和 manifest，实验只声明 train/val/eval split。没有引用的临时/合成配置仍可直接使用 `root`；CLEAN v2 recipe 用 `fps` 计算速度特征。 |
+| `feature_schema` | 时序特征维度、mapping 版本、类别布局及可选固定目标遮罩。`class_order` 可把数据动作 ID 重排到 checkpoint 输出顺序；五列 bbox 缺 confidence 时，`detection_confidence_default` 只允许作为 exploratory 的显式替代值。 |
 | `augmentation` | 训练期数据增强；`target_mask` 只作用于 train，不作用于 val/test。 |
 | `evaluation` | 正式/探索模式、预测保存、延迟及检测阈值；时序 testset 由 `dataset_ref + split_eval` 唯一推导，也可显式写 `testset_id` 做一致性断言。两条时序 Pipeline 默认启用测试 timeline。 |
 | `train` | epoch、学习率、batch/window、早停、梯度裁剪和 resume 等参数。 |
@@ -34,6 +35,11 @@ Pipeline 校验并执行。
 | YAML | 主要内容 | 功能 |
 |---|---|---|
 | [`framework/experiments/gru-actionmixed.yaml`](../framework/experiments/gru-actionmixed.yaml) | GRU、`temporal.actionmixed-v2`、40 维 bbox 特征、6 类、16 帧窗口；含默认关闭的随机目标遮罩 | 滑窗、末帧监督、因果推理的时序参照实验；测试默认输出 GT/Prediction timeline。 |
+| [`external_checkpoints/external-temporal-template.yaml`](../external_checkpoints/external-temporal-template.yaml) | 外部时序 checkpoint 的复制模板；逐项提示 Pipeline、注册模型、网络规模、数据来源、feature mapping、类别顺序、归一化和窗口契约 | 供组员为裸 `.pt` 建立配套 exploratory 配置；`REPLACE_WITH_*` 必须全部替换，模板不能直接运行，YAML 也不能代替未实现的模型或特征代码。 |
+| [`external_checkpoints/gru-v0.4.0/gru-v0.4.0.yaml`](../external_checkpoints/gru-v0.4.0/gru-v0.4.0.yaml) | 外部 TorchScript GRU v0.4.0、48 维输入、64 隐层、3 层和6类；启用无 metadata 的探索性加载 | 与同目录 `.pt` 配套保存已确认的网络结构；48维 feature mapping、类别顺序和训练窗口未确认前，不得作为正式评测配置。 |
+| [`external_checkpoints/asformer-offline/best_asformer_offline_segmenter.yaml`](../external_checkpoints/asformer-offline/best_asformer_offline_segmenter.yaml) | 后端 CLEAN ASFormer、121维 v2+业务先验、checkpoint z-score 和外部类别顺序 | 配套评测同目录 best checkpoint；五列 bbox 的 confidence=1.0 替代使其仅为 exploratory。 |
+| [`external_checkpoints/bigru-offline/best_bigru_offline_segmenter.yaml`](../external_checkpoints/bigru-offline/best_bigru_offline_segmenter.yaml) | 后端 CLEAN BiGRU、249维居中窗口统计+业务先验、完整序列离线推理 | 配套评测同目录 best checkpoint；模型与 centered feature 都是非因果。 |
+| [`external_checkpoints/mstcn-bilstm-offline/best_ms_tcn_offline_segmenter.yaml`](../external_checkpoints/mstcn-bilstm-offline/best_ms_tcn_offline_segmenter.yaml) | 后端 CLEAN BiLSTM+MS-TCN、113维基础 v2、两级 refine | 配套评测同目录 best checkpoint；与 framework 原有简化 `mstcn` 是不同模型类型。 |
 | [`framework/experiments/mstcn-actionmixed.yaml`](../framework/experiments/mstcn-actionmixed.yaml) | MS-TCN、40 维输入、6 类和单 stage baseline 参数 | 全序列、逐帧监督的离线时序参照实验。 |
 | [`framework/experiments/mstcn2-actionmixed.yaml`](../framework/experiments/mstcn2-actionmixed.yaml) | MS-TCN++ 的 stage、layer、dropout 和 T-MSE 参数 | 全序列多 stage 精化实验。 |
 | [`framework/experiments/transformer-actionmixed.yaml`](../framework/experiments/transformer-actionmixed.yaml) | Transformer 的表示维度、head、layer、FFN 和最大长度 | 使用完整上下文的非因果全序列实验。 |
@@ -79,17 +85,7 @@ revision、train/val/eval split fingerprint 以及动作/检测映射摘要，re
 | [`benchmark/e2e_3min/cases/4807dbbe-clip_1781659328328_1781659467929.yaml`](../benchmark/e2e_3min/cases/4807dbbe-clip_1781659328328_1781659467929.yaml) | 约 140 秒长刷插入/退出及注气阶段的期望时间线。 |
 | [`benchmark/e2e_3min/cases/65d70028-clip_1781661552468_1781661702909.yaml`](../benchmark/e2e_3min/cases/65d70028-clip_1781661552468_1781661702909.yaml) | 约 150 秒长刷及多段冲洗阶段的期望时间线。 |
 
-## 4. 旧模型统一目录
-
-[`model_manager/models.yaml`](../model_manager/models.yaml) 由 `model_manager/catalog.py` 读取：
-
-- `profiles` 抽取 YOLO 和 legacy 20D 时序模型的公共输入、输出及命令；
-- `models` 登记模型 ID、工作目录、checkpoint、标签和 testset；
-- `benchmarks` 保留旧专项 benchmark 命令。
-
-它是旧训练/评估入口的兼容目录，不替代 framework 实验配置。
-
-## 5. 时序模型版本 pin
+## 4. 时序模型版本 pin
 
 三个 pin 都记录模型版本、数据来源、上游 YOLO、feature mapping、在线因果属性、感受野和输出
 标签。各模型的 `scripts/validate_pin.py` 校验必需字段，模型管理及交付资料引用这些文件；它们
@@ -103,7 +99,7 @@ revision、train/val/eval split fingerprint 以及动作/检测映射摘要，re
 
 其中为 `TODO` 的 repo、revision、hash 或 fps 表示版本尚未完全钉定，正式交付前需要补齐。
 
-## 6. YOLO 数据构建流水线
+## 5. YOLO 数据构建流水线
 
 | YAML | 读取方 | 内容与功能 |
 |---|---|---|
@@ -113,7 +109,7 @@ revision、train/val/eval split fingerprint 以及动作/检测映射摘要，re
 `config.yaml` 决定新视频如何处理，`splits.yaml` 保存已经发生的分配；其中 `val_ratio` 和 `seed`
 需要保持一致。
 
-## 7. YOLO registry 元数据
+## 6. YOLO registry 元数据
 
 这些文件供评估报告、CARD/打包流程及人工发布检查使用，不是 YOLO 运行时训练配置。
 
@@ -124,9 +120,9 @@ revision、train/val/eval split fingerprint 以及动作/检测映射摘要，re
 | [`yolo-detection/registry/yolo-group2-small-v1/classes.yaml`](../yolo-detection/registry/yolo-group2-small-v1/classes.yaml) | 固定 group2 checkpoint 的 class ID：syringe、air gun、scope distal end。 |
 | [`yolo-detection/registry/yolo-group2-small-v1/train_config.yaml`](../yolo-detection/registry/yolo-group2-small-v1/train_config.yaml) | 记录 group2 的训练事实和验收门槛；小目标重点审查 recall。 |
 
-## 8. 生成或本地 YAML
+## 7. 生成或本地 YAML
 
-以下文件受 `.gitignore` 排除，不进入上面的 22 文件清单：
+以下文件受 `.gitignore` 排除，不进入上面的 26 文件清单：
 
 - `yolo-detection/pipeline/datasets/**/data.yaml`：数据构建产生的 Ultralytics 清单；真源是 pipeline
   配置、稳定 split 和已导入数据。

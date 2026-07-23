@@ -143,7 +143,7 @@ python -m framework.cleansight_eval.cli.matrix --runs runs
 
 ```yaml
 model:
-  type: gru            # ✅ gru（因果，两条都可）/ mstcn·mstcn2·transformer（非因果，仅全序列）
+  type: gru            # ✅ gru（因果）；其余已注册时序模型为非因果、仅全序列
   input_dim: 40        # ✅ 特征维；须等于 loader 产出（8 检测类 × 5）
   num_classes: 6       # ✅ 动作类数；须等于 labels/data.yaml 的 names 数
   hidden: 128          # 模型超参（gru/mstcn 均用 hidden）
@@ -187,9 +187,16 @@ python -m framework.cleansight_eval.cli.train \
 它只作用于 train，val/test 保持干净输入。配置会随 resolved config 和 checkpoint metadata 保存。
 
 组员提供的外部裸时序 `.pt` 可在 `evaluation.mode: exploratory` 下显式设置
-`model.allow_missing_meta: true`。此时模型由 YAML 重建，接受裸 state dict、`model_state` 或
-`state_dict` 包装，并以 `strict=True` 校验全部参数；结果保留 `missing_meta_fallback` 和未绑定事实。
+`model.allow_missing_meta: true`。此时模型由 YAML 重建，接受裸 state dict、`model_state`、
+`state_dict` 包装或 TorchScript 归档；TorchScript 使用 JIT API 安全提取 state dict，随后同样以
+`strict=True` 校验全部参数。结果保留 `missing_meta_fallback`、checkpoint 格式和未绑定事实。
 formal 模式仍要求与权重 SHA-256 绑定的同名 `.meta.json`。
+
+后端 CLEAN 离线 checkpoint 另注册为 `clean_mstcn_bilstm`、`clean_asformer`、`clean_bigru`，
+分别消费113/121/249维 recipe并复用全序列评测。其包装内的 NumPy normalizer 仅通过受限安全
+白名单读取；feature names/version、类别顺序和张量形状均严格校验。当前 ActionMixed 五列 bbox
+不含检测 confidence，配套 external YAML 使用显式 `detection_confidence_default: 1.0`，所以结果
+只能标记为 exploratory；正式复现应改用原后端 `FrameFeature` 或 offline-model feature store。
 
 ### 检测（YOLO）
 

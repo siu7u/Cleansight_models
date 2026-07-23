@@ -1,8 +1,7 @@
-"""Shared temporal model training and evaluation entrypoint.
+"""旧 ``temporal-*`` 目录共享的训练与评测入口。
 
-The temporal-* folders own their model class. This module owns the common
-training/evaluation workflow so model selection stays in `model_manager` and
-per-model `main.py` files stay thin.
+每个历史目录仍拥有自身模型类，本模块只复用原有训练循环。新模型选择和统一评测由
+``framework`` experiment YAML 负责；本兼容工具不再依赖集中 model catalog。
 """
 
 from __future__ import annotations
@@ -54,11 +53,7 @@ def print_device_info(args, device: torch.device) -> None:
 
 
 def build_model(model_name: str, model_class: Type[torch.nn.Module], input_dim: int, num_classes: int):
-    """Construct the single temporal model owned by the current subdirectory.
-
-    Cross-model selection belongs to `model_manager/models.yaml`; a temporal
-    subdirectory should only expose its own model class.
-    """
+    """构造当前历史子目录唯一拥有的模型，不在 legacy 工具中跨模型分派。"""
 
     return model_class(input_dim, num_classes)
 

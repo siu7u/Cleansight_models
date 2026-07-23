@@ -130,6 +130,12 @@ modelscope_upload
 .codex
 raw
 .cache_ggshield
+# 外部 checkpoint 目录采用白名单：只允许可复现 YAML 配置进入 Git。
+# 权重、评测报告、timeline 和其他本地产物无论扩展名为何都保持忽略。
+external_checkpoints/**
+!external_checkpoints/**/
+!external_checkpoints/**/*.yaml
+!external_checkpoints/**/*.yml
 # ---------------------------------------------------------------------------
 # Framework experiment CONFIGS are the 实验配置层 (source/config), keep tracked
 # even though **/experiments/ above ignores training-output experiment dirs.

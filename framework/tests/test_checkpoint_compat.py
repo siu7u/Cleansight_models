@@ -124,6 +124,20 @@ def test_external_temporal_checkpoint_accepts_common_state_dict_wrapper(tmp_path
     assert "rnn.weight_ih_l0" in state
 
 
+def test_external_temporal_checkpoint_accepts_torchscript_archive(tmp_path):
+    cfg = _external_cfg()
+    model = build_model(cfg["model"])
+    path = tmp_path / "external-gru-torchscript.pt"
+    torch.jit.save(torch.jit.script(model), path)
+    fallback = resolve_external_temporal_meta(cfg, "sliding_window_temporal")
+
+    state, meta = load_checkpoint(path, fallback_meta=fallback)
+
+    rebuilt = build_model(cfg["model"])
+    rebuilt.load_state_dict(state, strict=True)
+    assert meta["_checkpoint_format"] == "torchscript"
+
+
 @pytest.mark.parametrize(
     ("mode", "allow_missing_meta"),
     [("exploratory", False), ("formal", True)],
@@ -192,6 +206,7 @@ def test_external_sliding_checkpoint_runs_without_sidecar(tmp_path, monkeypatch)
 
     assert output.metadata["checkpoint_metadata_source"] == "missing_meta_fallback"
     assert output.metadata["checkpoint_metadata_bound"] is False
+    assert output.metadata["checkpoint_format"] == "state_dict"
     assert output.num_params > 0
 
 

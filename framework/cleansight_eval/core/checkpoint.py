@@ -10,10 +10,13 @@
 
 from __future__ import annotations
 
-import json
 import hashlib
+import json
+import pickle
+import zipfile
 from pathlib import Path
 
+import numpy as np
 import torch
 
 from .integrity import assert_checkpoint_config
@@ -45,6 +48,76 @@ def _extract_state_dict(payload):
             if isinstance(state, dict):
                 return state
     return payload
+
+
+def _is_torchscript_archive(path: str | Path) -> bool:
+    """识别 TorchScript zip，避免将其交给 ``torch.load`` 的 pickle 路径。"""
+
+    try:
+        with zipfile.ZipFile(path) as archive:
+            names = archive.namelist()
+    except (OSError, zipfile.BadZipFile):
+        return False
+    return any(name.endswith("/constants.pkl") for name in names) and any(
+        "/code/" in name for name in names
+    )
+
+
+def _load_model_state(path: str | Path, map_location):
+    """安全加载权重和可验证内嵌字段；TorchScript 通过 JIT API 提取参数。"""
+
+    if _is_torchscript_archive(path):
+        scripted = torch.jit.load(str(path), map_location=map_location)
+        return scripted.state_dict(), "torchscript", {}
+    try:
+        payload = torch.load(path, map_location=map_location, weights_only=True)
+    except pickle.UnpicklingError:
+        allowed_names = {
+            "numpy.dtype",
+            "numpy.ndarray",
+            "numpy._core.multiarray._reconstruct",
+            "numpy.core.multiarray._reconstruct",
+        }
+        unsafe = set(torch.serialization.get_unsafe_globals_in_checkpoint(path))
+        if not unsafe or not unsafe.issubset(allowed_names):
+            raise
+        # ``getattr(..., np.core)`` 会提前求值 fallback，并在 NumPy 2.x 触发
+        # ``np.core`` 弃用告警；只有旧版 NumPy 缺少 ``_core`` 时才访问它。
+        numpy_core = np._core if hasattr(np, "_core") else np.core
+        safe_globals = [np.dtype, np.ndarray, numpy_core.multiarray._reconstruct]
+        safe_globals.extend(
+            {
+                type(np.dtype(dtype))
+                for dtype in (
+                    np.bool_,
+                    np.int8,
+                    np.int16,
+                    np.int32,
+                    np.int64,
+                    np.uint8,
+                    np.float16,
+                    np.float32,
+                    np.float64,
+                )
+            }
+        )
+        with torch.serialization.safe_globals(safe_globals):
+            payload = torch.load(path, map_location=map_location, weights_only=True)
+    embedded = {}
+    if isinstance(payload, dict):
+        for key in (
+            "model_name",
+            "class_names",
+            "feature_names",
+            "feature_version",
+            "normalizer_mean",
+            "normalizer_std",
+            "best_recipe",
+            "feature_dim",
+        ):
+            if key in payload:
+                embedded[key] = payload[key]
+    return _extract_state_dict(payload), "state_dict", embedded
 
 
 def write_meta(checkpoint_path: str | Path, meta: dict) -> Path:
@@ -165,8 +238,11 @@ def load_checkpoint(
             "source": "config_fallback",
         }
     assert_checkpoint_config(meta, expected)
-    payload = torch.load(path, map_location=map_location)
-    return _extract_state_dict(payload), meta
+    state_dict, checkpoint_format, embedded = _load_model_state(path, map_location)
+    meta["_checkpoint_format"] = checkpoint_format
+    if embedded:
+        meta["_embedded_checkpoint"] = embedded
+    return state_dict, meta
 
 
 def load_training_checkpoint(

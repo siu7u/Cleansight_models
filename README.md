@@ -13,8 +13,7 @@ YOLO 单帧检测与 GRU / MS-TCN / MS-TCN++ / Transformer 时序模型。
 | [`framework/`](framework/) | 配置、训练、run、checkpoint、模型预测、报告和矩阵落盘 |
 | [`benchmark/`](benchmark/) | 固定 testset、指标口径、评估器、结果/artifact/交付契约 |
 | [`schemas/`](schemas/) | 供外部系统消费的稳定 JSON Schema |
-| `model_manager/` | 旧模型目录与命令的兼容管理；不替代 framework |
-| `temporal-*`、`yolo-detection/` | 历史模型资产、旧流水线、CARD、pin 和 registry |
+| `temporal-*`、`yolo-detection/` | 历史模型资产、旧流水线、CARD、pin 和 registry；旧命令直接从各自目录运行 |
 | `CleanSightBackend` | 在线推理、业务流程、真实延迟与生产验收 |
 
 ## 完整架构
@@ -71,7 +70,6 @@ Cleansight_models/
 ├── schemas/                           # 对外 JSON Schema，不含指标实现
 ├── usage/                             # YAML 配置索引和测试命令行教程
 ├── tools/                             # testset/CARD 校验和历史专项工具
-├── model_manager/                     # 旧模型脚本的目录与命令兼容层
 ├── yolo-detection/                    # 历史 YOLO 数据、流水线、registry 和 CARD
 ├── temporal-gru/                      # 历史 GRU 模型资产
 ├── temporal-causal-tcn/               # 历史 Causal TCN 模型资产
@@ -412,9 +410,14 @@ checkpoint + checkpoint metadata + CARD.md + pin.yaml
 
 ## 文档索引
 
+- [架构简述](docs/ARCHITECTURE_OVERVIEW.md)：用目录和数据流快速说明当前仓库结构。
 - [YAML 配置文档](usage/YAML_CONFIG.md)：所有受跟踪 YAML 的内容、读取方、功能和快速定位链接。
 - [测试命令行教程](usage/TEST_COMMANDS.md)：模型评测、timeline、矩阵和 pytest 的常用写法。
-- [模型集使用指南](MODELSET_USAGE_GUIDE.md)：从数据、训练、评估到交付的完整操作步骤。
+- [模型集使用指南](docs/MODELSET_USAGE_GUIDE.md)：从数据、训练、评估到交付的完整操作步骤。
+- [项目流程](docs/PROJECT_FLOW.md)：数据、训练、评测与交付的流程关系。
+- [模型集状态汇总](docs/MODELSET_STATUS_SUMMARY.md)：历史建设状态与阶段结论。
+- [模型集汇报摘要](docs/MODELSET_PRESENTATION_SUMMARY.md)：用于进度汇报的精简材料。
+- [历史任务状态](docs/TASK_STATUS.md)：早期任务记录，当前能力以实现状态文档为准。
 - [framework README](framework/README.md)：CLI、配置字段、resume 与扩展点。
 - [评估能力说明](docs/EVAL.md)：指标定义、聚合口径和完整性检查。
 - [benchmark README](benchmark/README.md)：单模型、feed-mode 和端到端 benchmark。
@@ -422,5 +425,5 @@ checkpoint + checkpoint metadata + CARD.md + pin.yaml
 - [实现状态](docs/TRAIN_EVAL_IMPLEMENTATION_STATUS.md)：当前能力与剩余事项。
 - [设计准则](docs/DESIGN.md)：framework/benchmark 职责与抽象边界。
 
-旧的 `temporal-*`、`yolo-detection/pipeline/` 和 `model_manager/` 命令仍保留用于复现历史结果；
-新训练与统一评估默认使用 `framework.cleansight_eval.cli.*`。
+旧的 `temporal-*` 和 `yolo-detection/pipeline/` 命令仍可直接运行以复现历史结果；不再通过第二份
+模型 catalog 转发。新训练与统一评估默认使用 `framework.cleansight_eval.cli.*`。

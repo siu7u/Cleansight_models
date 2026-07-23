@@ -1,0 +1,98 @@
+# 外部时序 checkpoint 探索性评测模板。
+#
+# 使用方法：
+#   1. 新建 external_checkpoints/<model-id>/；
+#   2. 将 checkpoint 和本文件副本放进该目录，并改成相同主文件名；
+#   3. 替换所有已启用字段中的 REPLACE_WITH_* / 0 占位值，删除不属于该模型的可选参数；
+#   4. 从仓库根目录执行 usage/TEST_COMMANDS.md 中的统一评测命令。
+#
+# 重要边界：YAML 只能描述已经注册的网络和 feature recipe。若 model.type 未在
+# framework/cleansight_eval/temporal/models/__init__.py 注册，或 feature_schema.version
+# 没有对应 extractor，需要先补代码，不能通过猜测 YAML 直接加载。
+
+schema_version: 1
+
+# full_sequence_temporal：离线输入 [1,T,F]，模型输出每帧 logits [1,T,C]。
+# sliding_window_temporal：因果输入 [1,window,F]，仅允许模型注册项 causal=true；
+# window 必须与训练时一致。不要仅根据 checkpoint 文件名猜测推理方式。
+pipeline: REPLACE_WITH_full_sequence_temporal_OR_sliding_window_temporal
+
+model:
+  # 已注册示例：gru、mstcn、mstcn2、transformer、clean_asformer、clean_bigru、
+  # clean_mstcn_bilstm。新架构必须先实现并注册。
+  type: REPLACE_WITH_REGISTERED_MODEL_TYPE
+  input_dim: 0       # REPLACE_WITH_CHECKPOINT_INPUT_DIM
+  num_classes: 0     # REPLACE_WITH_CHECKPOINT_NUM_CLASSES
+
+  # 只保留模型构造函数实际使用的参数，并与训练配置或 state_dict 形状严格一致。
+  # 常见参数示例；需要时取消注释：
+  # hidden: 64
+  # num_layers: 3
+  # dropout: 0.15
+  # nhead: 4
+  # d_model: 64
+  # dim_feedforward: 128
+  # max_len: 2048
+  # num_stages: 4
+  # lstm_layers: 2
+  # tcn_layers: 6
+  # refine_stages: 2
+
+  # 仅供没有可信 <checkpoint>.meta.json 的外部权重；必须同时使用 exploratory。
+  # 加载仍然是 strict=True，参数键或 tensor shape 不匹配会立即失败。
+  allow_missing_meta: true
+
+data:
+  name: REPLACE_WITH_DATASET_NAME_AND_VERSION
+
+  # exploratory 可直接给数据根；相对路径按“复制后的 YAML 所在目录”解析。
+  root: REPLACE_WITH_DATASET_ROOT
+  split_train: train
+  split_val: val
+  split_eval: test
+  fps: 7.5          # REPLACE_WITH_TRAINING_OR_FEATURE_SAMPLING_FPS
+
+  # 正式评测应优先使用 benchmark/testsets.yaml 已登记的数据身份：
+  # dataset_ref: REPLACE_WITH_CATALOG_DATASET_ID
+  # 使用 dataset_ref 时可删除 root，框架会从 catalog 解析并验证 split。
+
+feature_schema:
+  # dim 必须同时匹配 model.input_dim、extractor 输出和 checkpoint 内嵌 feature_dim。
+  dim: 0            # REPLACE_WITH_FEATURE_DIM
+  # 必须是已有且与训练完全相同的版本；不能临时编造一个名字绕过契约。
+  version: REPLACE_WITH_REGISTERED_FEATURE_MAPPING_VERSION
+
+  # 顺序是 checkpoint 输出 logit 的类别顺序，不一定等于数据集原始 action ID 顺序。
+  class_order:
+    - idle
+    - long_brush_insert
+    - long_brush_withdraw
+    - short_brush_cleaning
+    - flush
+    - air_injection
+
+  layout: REPLACE_WITH_FEATURE_LAYOUT
+  # 示例：none、checkpoint-zscore；必须与训练时一致。
+  normalization: REPLACE_WITH_NORMALIZATION
+
+  # 只有 CLEAN bbox recipe 且输入是无 confidence 的五列 YOLO 标注时才使用。
+  # 这会改变真实 YOLO 推理输入语义，因此只允许 exploratory 对比。
+  # detection_confidence_default: 1.0
+
+evaluation:
+  # 缺绑定 metadata、catalog testset 或 fingerprint 的外部权重只能 exploratory。
+  mode: exploratory
+  visualize: true
+  viz_per_page: 6
+
+  # 切换 formal 前必须准备绑定 checkpoint 的 metadata，并填写已登记 testset：
+  # testset_id: REPLACE_WITH_REGISTERED_TESTSET_ID
+
+# 当前时序 Pipeline 的配置契约要求 train 段，即使本文件只用于 eval 也要保留。
+# 这些值不会在 eval 命令中启动训练。
+train:
+  epochs: 0
+  lr: 0
+  batch_size: 0
+  # sliding_window_temporal 必须填写并核对 checkpoint 的训练窗口：
+  # window: 16

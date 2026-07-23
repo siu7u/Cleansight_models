@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import torch.nn as nn
 
+from .clean_offline import CleanASFormer, CleanBiGRU, CleanMSTCNBiLSTM
 from .gru import GRUClassifier
 from .mstcn import MSTCN
 from .mstcn2 import MSTCN2
@@ -60,8 +61,44 @@ def _build_transformer(cfg: dict) -> nn.Module:
     )
 
 
+def _build_clean_asformer(cfg: dict) -> nn.Module:
+    return CleanASFormer(
+        input_dim=cfg["input_dim"],
+        num_classes=cfg["num_classes"],
+        hidden=cfg.get("hidden", 64),
+        nhead=cfg.get("nhead", 4),
+        num_layers=cfg.get("num_layers", 4),
+        dropout=cfg.get("dropout", 0.15),
+    )
+
+
+def _build_clean_bigru(cfg: dict) -> nn.Module:
+    return CleanBiGRU(
+        input_dim=cfg["input_dim"],
+        num_classes=cfg["num_classes"],
+        hidden=cfg.get("hidden", 64),
+        num_layers=cfg.get("num_layers", 3),
+        dropout=cfg.get("dropout", 0.15),
+    )
+
+
+def _build_clean_mstcn_bilstm(cfg: dict) -> nn.Module:
+    return CleanMSTCNBiLSTM(
+        input_dim=cfg["input_dim"],
+        num_classes=cfg["num_classes"],
+        hidden=cfg.get("hidden", 64),
+        lstm_layers=cfg.get("lstm_layers", 2),
+        tcn_layers=cfg.get("tcn_layers", 6),
+        refine_stages=cfg.get("refine_stages", 2),
+        dropout=cfg.get("dropout", 0.15),
+    )
+
+
 # type -> {build: cfg->nn.Module, causal: bool}
 _MODELS = {
+    "clean_asformer": {"build": _build_clean_asformer, "causal": False},
+    "clean_bigru": {"build": _build_clean_bigru, "causal": False},
+    "clean_mstcn_bilstm": {"build": _build_clean_mstcn_bilstm, "causal": False},
     "gru": {"build": _build_gru, "causal": True},
     "mstcn": {"build": _build_mstcn, "causal": False},
     "mstcn2": {"build": _build_mstcn2, "causal": False},

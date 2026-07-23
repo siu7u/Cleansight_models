@@ -30,7 +30,9 @@ python -m framework.cleansight_eval.cli.matrix --runs runs
 
 `formal` 结果必须使用校验通过的固定 testset；外部权重或临时数据使用 `exploratory`，并在报告中
 保留降级事实。外部裸时序权重需同时设置 `model.allow_missing_meta: true`，由 YAML 声明模型结构；
-该 fallback 不写可信 sidecar，仍严格校验全部参数键和张量形状。
+该 fallback 不写可信 sidecar。裸 state dict、常见包装、仅含受限 NumPy normalizer 的可信包装和
+TorchScript 归档最终都转换为 state dict，仍严格校验全部参数键和张量形状；未知 pickle 全局对象
+不会通过 `weights_only=False` 降级加载。
 
 ## 1. 评估产物：统一 EvaluationResult
 
@@ -67,7 +69,7 @@ checkpoint 与 sidecar、testset manifest、prediction artifact 都记录 SHA-25
 |---|---|---|---|
 | `detection` | 单帧目标检测 | `single_frame`，无状态逐图独立推理 | YOLO |
 | `sliding_window_temporal` | 实时行为分割 | `windowed_causal`，滑窗逐帧前进、取窗口末帧决策 | 因果模型（GRU） |
-| `full_sequence_temporal` | 离线行为分割 | `full_sequence`，整段一次前向 | 非因果模型（MS-TCN / MS-TCN++ / Transformer），也可跑因果模型作离线上界 |
+| `full_sequence_temporal` | 离线行为分割 | `full_sequence`，整段一次前向 | 非因果模型（MS-TCN / MS-TCN++ / Transformer / CLEAN ASFormer、BiGRU、BiLSTM+MS-TCN），也可跑因果模型作离线上界 |
 
 **滑窗 vs 全序列的意义**：同一种因果网络结构可以分别在两条流水线中建立独立实验——全序列用于
 观察完整上下文下的离线表现，滑窗用于评估只能看到历史窗口的在线语义。一个 checkpoint 的训练和

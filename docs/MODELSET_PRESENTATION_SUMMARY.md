@@ -242,8 +242,8 @@ benchmark 对比 expected 和 prediction
 ```text
 MODELSET_USAGE_GUIDE.md
 MODELSET_STATUS_SUMMARY.md
-cleansight-yolo-pipeline-main/YOLO_PIPELINE_SUMMARY.md
-.codex/skills/modelset-quality/SKILL.md
+../cleansight-yolo-pipeline-main/YOLO_PIPELINE_SUMMARY.md
+../.codex/skills/modelset-quality/SKILL.md
 ```
 
 `modelset-quality` 主要约束：

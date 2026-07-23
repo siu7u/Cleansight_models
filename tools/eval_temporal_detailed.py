@@ -19,10 +19,9 @@ if str(ROOT) not in sys.path:
 from benchmark.core.metrics import temporal_metrics  # noqa: E402
 from benchmark.core.result import build_result, make_run_id, write_result  # noqa: E402
 from benchmark.core.temporal_data import TemporalItem, load_temporal_items  # noqa: E402
-from benchmark.core.testsets import get_testset, manifest_fingerprint  # noqa: E402
 from benchmark.core.artifacts import build_temporal_prediction_artifact  # noqa: E402
-from model_manager.catalog import ModelSpec, load_models  # noqa: E402
-from model_manager.history import append_evaluation_record  # noqa: E402
+from benchmark.core.testsets import get_testset, manifest_fingerprint  # noqa: E402
+from tools.card_history import append_evaluation_record  # noqa: E402
 
 
 VIDEO_NAMES = [
@@ -54,14 +53,19 @@ def build_model(model_name: str, input_dim: int, num_classes: int):
 
 
 def parse_args() -> argparse.Namespace:
-    """同时兼容旧 repo/checkpoint 参数和新的 model_manager 评估参数。"""
+    """解析 legacy 时序评测参数；模型定位显式传入，不再依赖集中 catalog。"""
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--repo", help="旧模式：时序模型目录")
-    parser.add_argument("--model", choices=["gru", "tcn", "transformer"], help="旧模式：模型名")
-    parser.add_argument("--checkpoint", help="旧模式：相对 repo 的 checkpoint 路径")
-    parser.add_argument("--model-id", help="models.yaml 中的模型 id，例如 temporal.gru")
-    parser.add_argument("--testset", help="benchmark/testsets.yaml 中的 temporal testset id")
+    parser.add_argument("--repo", required=True, help="legacy 时序模型目录")
+    parser.add_argument(
+        "--model",
+        required=True,
+        choices=["gru", "tcn", "transformer"],
+        help="legacy 模型类名",
+    )
+    parser.add_argument("--checkpoint", required=True, help="相对 repo 或绝对 checkpoint 路径")
+    parser.add_argument("--model-id", help="只写入结果的稳定模型 ID，不再用于 catalog 查询")
+    parser.add_argument("--testset", help="可选：benchmark/testsets.yaml 中的 temporal testset id")
     parser.add_argument("--device", default="auto", help="auto/cpu/cuda")
     parser.add_argument("--max-videos", type=int, help="smoke test: 最多评估多少个视频")
     parser.add_argument("--max-frames", type=int, help="smoke test: 每个视频最多评估多少帧")
@@ -87,34 +91,6 @@ def _checkpoint_path(repo: Path, checkpoint: str | Path) -> Path:
 
     path = Path(checkpoint).expanduser()
     return path.resolve() if path.is_absolute() else (repo / path).resolve()
-
-
-def _resolve_from_model_manager(args: argparse.Namespace) -> tuple[ModelSpec, Path, str, Path, int, int, list[str]]:
-    """把 model id/testset 解析为旧评估器需要的 repo、checkpoint 和形状参数。"""
-
-    if not args.model_id:
-        raise ValueError("缺少 --model-id 或旧模式 --repo/--model/--checkpoint")
-    if not args.testset:
-        raise ValueError("--model-id 模式必须提供 --testset")
-    models = load_models()
-    if args.model_id not in models:
-        raise ValueError(f"未知模型 id: {args.model_id}")
-    spec = models[args.model_id]
-    if spec.family != "temporal":
-        raise ValueError(f"{spec.id} 不是 temporal 模型")
-    if spec.checkpoint is None:
-        raise ValueError(f"{spec.id} 未登记 checkpoint")
-    input_cfg = spec.raw.get("input", {})
-    labels = [str(label) for label in input_cfg.get("labels", [])]
-    return (
-        spec,
-        spec.workdir,
-        spec.target,
-        spec.checkpoint,
-        int(input_cfg.get("input_dim", args.input_dim)),
-        len(labels) or args.num_classes,
-        labels,
-    )
 
 
 def _load_legacy_items(repo: Path, max_videos: int | None, max_frames: int | None) -> tuple[list[TemporalItem], dict[int, str]]:
@@ -251,33 +227,37 @@ def _legacy_summary(
 
 def main() -> int:
     args = parse_args()
-    spec: ModelSpec | None = None
-    testset = None
+    repo = Path(args.repo).resolve()
+    model_name = args.model
+    checkpoint = _checkpoint_path(repo, args.checkpoint)
+    input_dim = args.input_dim
+    num_classes = args.num_classes
+    testset = get_testset(args.testset) if args.testset else None
+    labels = list(testset.labels) if testset is not None else []
 
-    if args.model_id:
-        spec, repo, model_name, checkpoint, input_dim, num_classes, labels = _resolve_from_model_manager(args)
-        sys.path.insert(0, str(repo))
-        testset = get_testset(args.testset)
+    if testset is not None:
+        if testset.family != "temporal":
+            raise SystemExit(f"testset {testset.id!r} 不是 temporal 数据")
+        if testset.input_dim is not None and testset.input_dim != input_dim:
+            raise SystemExit(
+                f"--input-dim={input_dim} 与 testset input_dim={testset.input_dim} 不一致"
+            )
+        if labels and len(labels) != num_classes:
+            raise SystemExit(
+                f"--num-classes={num_classes} 与 testset labels={len(labels)} 不一致"
+            )
         items, index_to_action = load_temporal_items(
             testset,
             max_videos=args.max_videos,
             max_frames=args.max_frames,
         )
     else:
-        if not args.repo or not args.model or not args.checkpoint:
-            raise SystemExit("旧模式需要 --repo、--model 和 --checkpoint；新模式需要 --model-id 和 --testset")
-        repo = Path(args.repo).resolve()
-        model_name = args.model
-        checkpoint = _checkpoint_path(repo, args.checkpoint)
-        input_dim = args.input_dim
-        num_classes = args.num_classes
-        labels = []
         items, index_to_action = _load_legacy_items(repo, args.max_videos, args.max_frames)
-        sys.path.insert(0, str(repo))
+    sys.path.insert(0, str(repo))
 
     device = _device_from_arg(args.device)
     model = build_model(model_name, input_dim, num_classes).to(device)
-    model.load_state_dict(torch.load(checkpoint, map_location=device))
+    model.load_state_dict(torch.load(checkpoint, map_location=device, weights_only=True))
     model.eval()
 
     pred_by_item: dict[str, list[int]] = {}
@@ -331,15 +311,16 @@ def main() -> int:
             ),
         )
         result["artifacts"] = {"predictions": str(predictions_path)}
-        if spec is not None and testset is not None:
+        if testset is not None:
+            model_id = args.model_id or f"legacy.{model_name}"
             envelope = build_result(
                 benchmark="single_model_temporal",
                 task_type="temporal",
                 run_id=run_id,
                 model={
-                    "id": spec.id,
-                    "family": spec.family,
-                    "adapter": spec.adapter,
+                    "id": model_id,
+                    "family": "temporal",
+                    "adapter": "legacy_explicit",
                     "checkpoint": str(checkpoint),
                     "input_dim": input_dim,
                     "window": args.window,
@@ -377,7 +358,7 @@ def main() -> int:
                     Path(args.card),
                     {
                         "run_id": run_id,
-                        "model": spec.id,
+                        "model": model_id,
                         "split": testset.split,
                         "checkpoint": str(checkpoint),
                         "report": str(envelope_path),

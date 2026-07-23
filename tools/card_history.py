@@ -1,4 +1,8 @@
-"""以只追加方式维护模型 CARD 训练与评估记录。"""
+"""以只追加方式维护旧模型 CARD 的训练与评估记录。
+
+该工具只服务仍需复现的 legacy benchmark，不承担模型注册、训练调度或发布决策。
+新 framework run 使用自身的 ``history.csv`` 和评测报告，不依赖本模块。
+"""
 
 from __future__ import annotations
 
@@ -67,7 +71,12 @@ def _field_label(key: Any) -> str:
     """把常用英文字段名转换为 CARD 使用的中文标签。"""
 
     text = str(key)
-    return FIELD_LABELS.get(text, text if any("\u4e00" <= char <= "\u9fff" for char in text) else text.replace("_", " "))
+    return FIELD_LABELS.get(
+        text,
+        text
+        if any("\u4e00" <= char <= "\u9fff" for char in text)
+        else text.replace("_", " "),
+    )
 
 
 def _field_value(value: Any) -> str:
@@ -80,7 +89,9 @@ def _field_value(value: Any) -> str:
     if isinstance(value, Path):
         return value.as_posix()
     if isinstance(value, Mapping):
-        return json.dumps(dict(value), ensure_ascii=False, sort_keys=True, separators=(", ", ": "))
+        return json.dumps(
+            dict(value), ensure_ascii=False, sort_keys=True, separators=(", ", ": ")
+        )
     if isinstance(value, (list, tuple, set, frozenset)):
         return ", ".join(_field_value(item) for item in value)
     return str(value)
@@ -99,11 +110,10 @@ def append_card_record(
     run_id: str,
     fields: Mapping[str, Any],
 ) -> bool:
-    """在 CARD 文件尾追加一条记录。
+    """在 CARD 文件尾追加记录，并按 ``(section, run_id)`` 去重。
 
-    `(section, run_id)` 通过 HTML marker 去重。已有文件只会以二进制追加模式
-    写入，原有前缀字节保持不变。返回 ``True`` 表示已追加，重复记录返回
-    ``False``。
+    已有文件只会以二进制追加模式写入，原有前缀字节保持不变。返回 ``True`` 表示
+    已追加，重复记录返回 ``False``。
     """
 
     if not isinstance(fields, Mapping):
@@ -113,7 +123,6 @@ def append_card_record(
     path.parent.mkdir(parents=True, exist_ok=True)
     marker = _record_marker(str(section), str(run_id))
 
-    # a+b 保证所有写入发生在文件尾；读取仅用于 marker 去重和章节判断。
     with path.open("a+b") as stream:
         stream.seek(0)
         existing = stream.read()

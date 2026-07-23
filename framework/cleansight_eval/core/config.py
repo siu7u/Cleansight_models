@@ -31,14 +31,16 @@ KNOWN_SECTION_KEYS = {
     "model": {
         "type", "weights", "imgsz", "allow_missing_meta", "input_dim", "num_classes",
         "hidden", "num_layers", "num_stages", "dropout", "tmse_weight", "tmse_clip",
-        "d_model", "nhead", "dim_feedforward", "max_len",
+        "d_model", "nhead", "dim_feedforward", "max_len", "lstm_layers", "tcn_layers",
+        "refine_stages",
     },
     "data": {
         "name", "dataset_ref", "data_yaml", "eval_split", "root", "action_mapping", "labels_dir",
-        "frames_dir", "split_train", "split_val", "split_eval", "names",
+        "frames_dir", "split_train", "split_val", "split_eval", "names", "fps",
     },
     "feature_schema": {
         "dim", "version", "class_order", "layout", "normalization", "mask_targets",
+        "detection_confidence_default",
     },
     "augmentation": {"target_mask"},
     "evaluation": {
