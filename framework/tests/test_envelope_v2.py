@@ -2,17 +2,17 @@
 
 import json
 
-from cleansight_eval.cli import upgrade_envelope
-from cleansight_eval.core.artifacts import write_json_artifact
-from cleansight_eval.core.provenance import build_checkpoint_info, build_run_info, resolve_testset_info
-from cleansight_eval.temporal.artifacts import build_prediction_artifact
+from benchmark.cli import upgrade_envelope
+from benchmark.core.artifact_io import write_json_artifact
+from benchmark.core.artifacts import build_temporal_prediction_artifact
+from benchmark.core.provenance import build_checkpoint_info, build_run_info, resolve_testset_info
 
 
 def test_temporal_artifact_is_hashed_and_recomputable(tmp_path):
-    payload = build_prediction_artifact(
-        {"video-a": ["idle", "flush"]},
-        {"video-a": ["idle", "flush"]},
-        ["idle", "flush"],
+    payload = build_temporal_prediction_artifact(
+        pred_by_item={"video-a": [0, 1]},
+        truth_by_item={"video-a": [0, 1]},
+        index_to_action={0: "idle", 1: "flush"},
         window=None,
         inference_mode="full_sequence",
     )

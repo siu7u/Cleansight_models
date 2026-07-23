@@ -1,6 +1,6 @@
-"""checkpoint 级评估报告写入。
+"""checkpoint 级 benchmark 评估报告写入。
 
-每次 framework 评估除了结构化 EvaluationResult JSON，也在 checkpoint 旁边生成一份
+每次 benchmark 评估除了结构化 EvaluationResult JSON，也在 checkpoint 旁边生成一份
 面向该 ``.pt`` 的 Markdown 报告，并向同目录的单一版本管理报告追加本次记录。
 """
 
@@ -10,12 +10,12 @@ import os
 from collections.abc import Mapping
 from pathlib import Path
 
-from .envelope import EvaluationResult, MetricValue
-from .environment import now_stamp
+from benchmark.core.result import EvaluationResult, MetricValue
+from framework.cleansight_eval.core.environment import now_stamp
 
 
 VERSION_REPORT_NAME = "EVALUATION_REPORT.md"
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _markdown_file_link(
@@ -307,7 +307,7 @@ def write_checkpoint_reports(result: EvaluationResult, result_path: str | Path) 
         header = [
             "# 版本化评估报告",
             "",
-            "本文件由 framework eval 追加维护；同目录下每个 `.pt` 仍保留自己的 `*.eval.md`。",
+            "本文件由 benchmark eval 追加维护；同目录下每个 `.pt` 仍保留自己的 `*.eval.md`。",
             "",
             f"## {category}",
         ]

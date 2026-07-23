@@ -1,1 +1,1 @@
-"""cleansight_eval 分层评估框架。"""
+"""CleanSight 模型训练与推理框架。"""

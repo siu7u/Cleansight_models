@@ -1,37 +1,35 @@
-"""评估入口：python -m framework.cleansight_eval.cli.eval --config <yaml> --ckpt <path>。
+"""统一评测入口：python -m benchmark.cli.eval --config <yaml> --ckpt <path>。
 
-作为组合根按 ``predict → benchmark evaluator → persist/report`` 编排。framework pipeline
-只运行模型并返回 PredictionOutput；指标、artifact 和 EvaluationResult 由 benchmark 定义。
+benchmark 作为组合根按 ``framework predict → evaluator → persist/report`` 编排。
+framework 只运行模型并返回 PredictionOutput；指标、artifact、EvaluationResult 和呈现均由
+benchmark 定义，依赖方向保持为 benchmark → framework。
 """
 
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
-from ..core.artifacts import write_json_artifact
-from ..core.checkpoint import meta_path_for
-from ..core.config import load_config
-from ..core.environment import now_stamp, pick_device
-from ..core.integrity import assert_evaluation_profile, check_result_complete
-from ..core.provenance import build_checkpoint_info, build_run_info, resolve_testset_info, sha256_file
-from ..core.report import write_checkpoint_reports
-from ._registry import get_pipeline, get_visualizer
-
-try:
-    from benchmark.core.delivery import build_delivery_manifest, write_delivery_manifest
-    from benchmark.evaluators import evaluate_prediction
-except ModuleNotFoundError:  # pragma: no cover - 从 framework 目录运行时触发
-    repo_root = Path(__file__).resolve().parents[3]
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
-    from benchmark.core.delivery import build_delivery_manifest, write_delivery_manifest
-    from benchmark.evaluators import evaluate_prediction
+from benchmark.core.artifact_io import write_json_artifact
+from benchmark.core.delivery import build_delivery_manifest, write_delivery_manifest
+from benchmark.core.integrity import assert_evaluation_profile, check_result_complete
+from benchmark.core.provenance import (
+    build_checkpoint_info,
+    build_run_info,
+    resolve_testset_info,
+    sha256_file,
+)
+from benchmark.core.report import write_checkpoint_reports
+from benchmark.evaluators import evaluate_prediction
+from benchmark.visualizers import get_visualizer
+from framework.cleansight_eval.core.checkpoint import meta_path_for
+from framework.cleansight_eval.core.config import load_config
+from framework.cleansight_eval.core.environment import now_stamp, pick_device
+from framework.cleansight_eval.core.registry import get_pipeline
 
 
 def parse_args(argv=None):
-    p = argparse.ArgumentParser(description="cleansight_eval 评估入口")
+    p = argparse.ArgumentParser(description="CleanSight benchmark 统一评测入口")
     p.add_argument("--config", required=True, help="实验配置 YAML")
     p.add_argument(
         "--ckpt",

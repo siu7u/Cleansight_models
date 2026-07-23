@@ -1,25 +1,18 @@
-"""framework 评估 artifact 的确定性落盘与哈希引用。"""
+"""benchmark artifact 的确定性落盘、校验与哈希引用。"""
 
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
-from .provenance import sha256_file
+from benchmark.core.artifacts import prediction_artifact_recomputable
+from benchmark.core.provenance import sha256_file
 
 
 def _verify_recomputable(payload: dict[str, Any]) -> bool | None:
-    """调用 benchmark 唯一校验器；检测需结合 testset 真值，返回 None。"""
+    """调用唯一 artifact 校验器；检测需结合 testset 真值，返回 None。"""
 
-    try:
-        from benchmark.core.artifacts import prediction_artifact_recomputable
-    except ModuleNotFoundError:  # pragma: no cover - 从 framework 目录执行时触发
-        repo_root = Path(__file__).resolve().parents[3]
-        if str(repo_root) not in sys.path:
-            sys.path.insert(0, str(repo_root))
-        from benchmark.core.artifacts import prediction_artifact_recomputable
     return prediction_artifact_recomputable(payload)
 
 

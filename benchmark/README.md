@@ -1,16 +1,16 @@
 # CleanSight Benchmark
 
 `benchmark/` 是评估定义层，不负责训练模型。它统一维护固定 testset、指标口径、PredictionOutput
-评估器、`EvaluationResult v2`、prediction artifact 和 delivery manifest。
+评估器、`EvaluationResult v2`、prediction artifact、报告、矩阵和 delivery manifest。
 
-单模型的默认运行入口仍是 framework CLI；benchmark 负责“如何判分”，framework 负责“如何运行模型
-并把结果落到 run”。
+单模型评测入口是 `benchmark.cli.eval`。benchmark 负责组织评测、判分和落盘；需要加载
+checkpoint 或执行模型时，调用 framework 唯一的 Pipeline 推理能力，不重新实现模型。
 
 ## Benchmark 层级
 
 | 层级 | 目录/入口 | 回答的问题 |
 |---|---|---|
-| 单模型 | framework `cli.eval`、`benchmark/single_model/` | 单个 YOLO 或时序模型本身表现如何 |
+| 单模型 | `benchmark.cli.eval`、`benchmark/single_model/` | 单个 YOLO 或时序模型本身表现如何 |
 | Feed mode | `benchmark/temporal_feed_mode/` | 全序列与流式/滑窗推理是否一致、损失多大 |
 | 端到端场景 | `benchmark/e2e_3min/` | 完整业务流程的动作、阶段和告警是否正确 |
 
@@ -19,21 +19,36 @@
 ## 职责边界
 
 ```text
+benchmark cli.eval
+        ↓ 调用
 framework pipeline.predict()
         ↓ PredictionOutput
 benchmark/evaluators/{detection,temporal}.py
         ↓ EvaluationResult + pending prediction artifact
-framework cli.eval
-        ↓ evaluation/report/delivery 落盘
+benchmark cli.eval
+        ↓ evaluation/artifact/report/delivery 落盘
 ```
 
 - `benchmark/core/metrics.py`：时序指标数值真源；
 - `benchmark/evaluators/`：把检测/时序预测事实变成统一结果；
 - `benchmark/core/result.py`：结果 schema 和三态指标；
 - `benchmark/core/artifacts.py`：逐图/逐视频预测 artifact；
+- `benchmark/core/artifact_io.py`：artifact 确定性落盘、哈希与可复算标记；
 - `benchmark/core/testsets.py`：固定数据集指针、fingerprint 和泄漏检查；
+- `benchmark/core/report.py` / `matrix.py`：人读报告和跨模型结果矩阵；
 - `benchmark/core/delivery.py`：稳定交付清单；
 - `schemas/`：上述 JSON 的跨语言外部契约。
+
+三类核心产物各司其职：
+
+| 产物 | 默认位置 | 保存内容 | 主要用途 |
+|---|---|---|---|
+| `*.evaluation.json` | `<run>/evals/` | 模型/checkpoint 哈希、testset/fingerprint、feature schema、三态指标与 spec、推理语义、完整性及 artifact 引用 | 一次评测的结构化结论，也是矩阵和报告的输入 |
+| `*.predictions.json` | `<run>/artifacts/` | 时序逐视频预测/真值与对齐信息；或检测逐图类别、confidence、归一化 bbox | 保存可审计预测证据；时序可直接复算指标，检测需结合固定 GT |
+| `*.delivery.manifest.json` | `<run>/evals/` | checkpoint、metadata、evaluation、artifact、报告和配置等文件的 role/path/required/size/SHA-256 | 交付前核对文件集合；不复制、不上传、不决定发布 |
+
+评测还可能生成 `*.eval.md`、`EVALUATION_REPORT.md` 和 timeline PNG；这些是人读呈现，
+会被 EvaluationResult 引用或列入 delivery manifest，但不代替上面三种机器可读契约。
 
 benchmark 不上传模型、不注册版本，也不自动决定发布或上线。
 
@@ -65,7 +80,7 @@ fingerprint 和评测元数据；时序 `frame` 模式还会把实际帧ID分配
 ### YOLO
 
 ```bash
-python -m framework.cleansight_eval.cli.eval \
+python -m benchmark.cli.eval \
   --config framework/experiments/yolo-clean-large.yaml \
   --ckpt runs/<run>/checkpoints/group1_large/weights/best.pt
 ```
@@ -77,7 +92,7 @@ Ultralytics `val()`，benchmark evaluator 负责统一三态、spec、有效推�
 ### 时序
 
 ```bash
-python -m framework.cleansight_eval.cli.eval \
+python -m benchmark.cli.eval \
   --config framework/experiments/gru-actionmixed.yaml \
   --ckpt runs/<run>/checkpoints/best.pt
 ```
@@ -97,7 +112,7 @@ P/R/F1 口径相同，边界 MAE 的单位随输入时间轴变化。
 acceptance report。新 framework checkpoint 优先走上面的统一 eval，再用 matrix 汇总：
 
 ```bash
-python -m framework.cleansight_eval.cli.matrix --runs runs
+python -m benchmark.cli.matrix --runs runs
 ```
 
 不要把旧 summary JSON 与新的 `*.evaluation.json` 当成相同文件；历史结果由兼容读取/升级路径处理，

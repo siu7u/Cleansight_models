@@ -1,4 +1,4 @@
-"""异构评估矩阵汇总（framework 层）。
+"""异构 benchmark 评估矩阵汇总。
 
 需求 §9：矩阵同时支持人读与机读，允许不同模型拥有不同指标列，不适用显示
 ``N/A``、缺失显示 ``MISSING``、成功计算显示数值，三者严格区分；不对异构指标
@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .envelope import EvaluationResult, MetricState
+from benchmark.core.result import EvaluationResult, MetricState
 
 
 def collect_results(runs_dir: str | Path, pipeline: str | None = None) -> list[EvaluationResult]:

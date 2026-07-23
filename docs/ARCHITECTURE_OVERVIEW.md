@@ -7,8 +7,8 @@
 
 ```text
 Cleansight_models/
-├── framework/              # 统一训练、预测和评测入口
-├── benchmark/              # 数据集身份、指标和结果格式真源
+├── framework/              # 统一模型训练和推理实现
+├── benchmark/              # 评测入口、数据身份、指标和产物真源
 ├── external_checkpoints/   # 外部 checkpoint 的配套 YAML
 ├── yolo-detection/         # YOLO 数据构建、旧流水线和 registry
 ├── temporal-*/             # 历史时序模型资产与复现脚本
@@ -29,13 +29,13 @@ model manager 转发。
 
 ## 2. Framework：负责运行模型
 
-[`framework/cleansight_eval`](../framework/cleansight_eval/) 提供统一 CLI，并分成三层：
+[`framework/cleansight_eval`](../framework/cleansight_eval/) 提供统一模型执行能力，并分成三层：
 
 ```text
-cli/        读取 YAML，选择 Pipeline，组织完整命令
-core/       配置、checkpoint、run、报告、完整性和矩阵
-temporal/   时序数据、特征、模型、训练、预测和 timeline
-detection/  YOLO 训练、预测和检测产物
+cli/        训练命令
+core/       配置、checkpoint、run、Pipeline 注册和 PredictionOutput
+temporal/   时序数据、特征、模型、训练和预测
+detection/  YOLO 训练、checkpoint 加载和逐图预测
 ```
 
 当前有三条 Pipeline：
@@ -52,9 +52,10 @@ Pipeline 只负责训练和预测，输出统一的 `PredictionOutput`，不在�
 
 [`benchmark`](../benchmark/) 负责：
 
+- 提供单 checkpoint 评测、矩阵和历史结果升级入口；
 - 在 [`testsets.yaml`](../benchmark/testsets.yaml) 登记数据集版本、split、manifest 和重叠策略；
 - 计算 Accuracy、Edit、F1、Precision、Recall、Temporal IoU 和 YOLO 指标；
-- 生成统一的 `EvaluationResult`、prediction artifact 和 delivery manifest；
+- 生成统一的 `EvaluationResult`、prediction artifact、报告、矩阵和 delivery manifest；
 - 区分单模型、feed-mode 与端到端三分钟评测。
 
 正式评测优先通过 `dataset_ref` 引用已登记数据。直接填写本地 `data.root` 的配置只能作为
@@ -111,10 +112,39 @@ external_checkpoints/<model-id>/
 
 ```text
 实验 YAML + checkpoint
-  → Pipeline 加载并预测
+  → benchmark CLI 调用 framework Pipeline 加载并预测
   → PredictionOutput
   → benchmark 按统一口径计算指标
   → evaluation.json + predictions.json + report + timeline
+```
+
+评测的三类机器可读产物：
+
+| 产物 | 回答的问题 | 典型文件 |
+|---|---|---|
+| `EvaluationResult` | 模型表现怎么样？用什么数据和口径评的？ | `evals/*.evaluation.json` |
+| prediction artifact | 模型具体预测了什么？指标能否复查？ | `artifacts/*.predictions.json` |
+| delivery manifest | 这次模型交付需要哪些文件？文件有没有被替换？ | `evals/*.delivery.manifest.json` |
+
+三者是“结论、证据、交付清单”的关系：
+
+- `EvaluationResult` 是一次评测的汇总结论，记录模型和 checkpoint 身份、testset
+  fingerprint、feature schema、指标及其计算规范、推理语义、完整性状态，以及其他 artifact
+  的路径和 SHA-256。模型比较和评测矩阵主要读取这个文件。
+- prediction artifact 是支撑结论的逐样本证据。时序任务保存逐视频的预测/真值与帧对齐信息；
+  检测任务保存逐图的类别、置信度和归一化 bbox。它用于审计、指标复查和 timeline
+  重绘，不是另一份汇总报告。
+- delivery manifest 汇总 checkpoint、metadata、评测结果、prediction artifact、报告和可选
+  训练记录等交付文件，并为每项记录 `role`、`required`、文件大小和 SHA-256。它只检查并描述
+  一次交付是否完整，不复制、上传模型，也不重复保存指标。
+
+生成和引用关系如下：
+
+```text
+PredictionOutput
+  ├── prediction artifact（逐样本证据）
+  └── EvaluationResult（汇总指标，并引用 prediction artifact）
+        └── delivery manifest（列出 checkpoint、上述产物及其他交付文件）
 ```
 
 常用入口：
@@ -122,11 +152,11 @@ external_checkpoints/<model-id>/
 ```bash
 python -m framework.cleansight_eval.cli.train --config <experiment.yaml>
 
-python -m framework.cleansight_eval.cli.eval \
+python -m benchmark.cli.eval \
   --config <experiment.yaml> \
   --ckpt <checkpoint.pt>
 
-python -m framework.cleansight_eval.cli.matrix --runs runs
+python -m benchmark.cli.matrix --runs runs
 ```
 
 ## 7. 修改内容时应该去哪里

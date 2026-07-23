@@ -13,14 +13,14 @@
 
 | key | 选择什么 | 注册表 |
 |-----|---------|--------|
-| `pipeline` | 三条流水线之一 | `cli/_registry.py` `_PIPELINES` |
+| `pipeline` | 三条流水线之一 | `core/registry.py` `_PIPELINES` |
 | `model.type` | 具体模型 | 时序：`temporal/models/__init__.py` `_MODELS`；检测：`detection/yolo.py` `_ADAPTERS` |
 
-入口 `cli/train.py:main` / `cli/eval.py:main` → `get_pipeline(cfg["pipeline"])` → 交给对应流水线。
-三条流水线统一提供 `predict()` 产出不含指标口径的 `PredictionOutput`；CLI 再调用
-`benchmark/evaluators/` 生成 `EvaluationResult` 与 artifact，并由 framework 落盘报告。接入新流水线
-时需要实现训练（若支持）和 `predict()`，同时在 benchmark 侧注册对应 evaluator；pipeline 不实现正式
-`evaluate()`。
+训练入口 `framework/.../cli/train.py` 和评测入口 `benchmark/cli/eval.py` 都通过 framework
+`get_pipeline(cfg["pipeline"])` 取得同一实现。三条流水线统一提供 `predict()`，产出不含指标口径的
+`PredictionOutput`；benchmark CLI 再调用 evaluator 生成 `EvaluationResult`、artifact 和报告。
+接入新流水线时需要实现训练（若支持）和 `predict()`，同时在 benchmark 侧注册对应 evaluator；
+pipeline 不实现正式 `evaluate()`。
 
 **关键认知**：监督/loss 语义属于**流水线**，不属于模型。全序列一律逐帧 CE、滑窗一律末帧 CE +
 因果平滑。所以模型只需提供网络结构；同一种 `nn.Module`（如 GRU）可以在两条时序流水线中分别
@@ -45,7 +45,8 @@
 | 是否测延迟 | **流水线决定** | 滑窗测、全序列 N/A |
 | 训练主循环 / 优化器 / 梯度裁剪 | **共享**（各流水线内） | 两个流水线的 `train` |
 | 指标评估 / 延迟汇总 | **共享** | `benchmark/evaluators/temporal.py`；数值真源为 `benchmark/core/metrics.py` |
-| checkpoint 读写 / EvaluationResult / 完整性 | **共享** | framework `core/*` + benchmark `core/result.py` |
+| checkpoint 读写 | **共享** | framework `core/checkpoint.py` |
+| EvaluationResult / 评测完整性 | **共享** | benchmark `core/result.py`、`core/integrity.py` |
 
 参照四个现成实现：
 - **GRU**（因果）：无归一化；可用于**两条**时序流水线。

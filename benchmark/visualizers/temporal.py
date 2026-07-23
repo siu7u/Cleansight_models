@@ -1,9 +1,8 @@
-"""时序纵的分段可视化（呈现层，与 ``metrics`` 平级、纵自持）。
+"""benchmark 时序分段可视化。
 
 把逐帧 GT/预测画成经典 action-segmentation 时间轴：每个视频两条色带（上 GT、下 Pred），
-颜色即动作类别，标题带该视频逐帧准确率。这是**只对帧序列输出成立**的呈现，故归时序纵，
-不进脊柱；matplotlib 依赖**隔离在本模块**，评估/训练主链路不 import 本模块即不会引入它
-（``full_sequence_pipeline`` 以 lazy import 仅在需要出图时触达）。
+颜色即动作类别，标题带该视频逐帧准确率。该呈现只消费 framework 已产生的
+``PredictionOutput``，不进入模型训练或推理实现；matplotlib 依赖隔离在本模块并按需导入。
 
 纯渲染：只吃已经产生的 ``PredictionOutput`` 或 preds/gts，不做推理、不读 checkpoint。
 """

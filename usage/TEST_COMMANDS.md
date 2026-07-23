@@ -18,7 +18,7 @@ source ../CleanSightBackend/.venv/bin/activate
 确认 CLI 可用：
 
 ```bash
-python -m framework.cleansight_eval.cli.eval --help
+python -m benchmark.cli.eval --help
 ```
 
 ## 2. 模型评测命令格式
@@ -26,7 +26,7 @@ python -m framework.cleansight_eval.cli.eval --help
 统一格式：
 
 ```bash
-python -m framework.cleansight_eval.cli.eval \
+python -m benchmark.cli.eval \
   --config <实验配置.yaml> \
   --ckpt <checkpoint.pt> \
   --out-dir <可选输出目录>
@@ -47,7 +47,7 @@ python -m framework.cleansight_eval.cli.eval \
 ### 3.1 GRU 滑窗时序模型
 
 ```bash
-python -m framework.cleansight_eval.cli.eval \
+python -m benchmark.cli.eval \
   --config framework/experiments/gru-actionmixed.yaml \
   --ckpt runs/<gru-run-id>/checkpoints/best.pt
 ```
@@ -61,7 +61,7 @@ runs/<gru-run-id>/viz/segmentation-test-p01.png
 ### 3.2 MS-TCN / Transformer 全序列模型
 
 ```bash
-python -m framework.cleansight_eval.cli.eval \
+python -m benchmark.cli.eval \
   --config framework/experiments/mstcn2-actionmixed.yaml \
   --ckpt runs/<mstcn2-run-id>/checkpoints/best.pt
 ```
@@ -93,7 +93,7 @@ YAML 中的 Pipeline、模型类型、维度、层数、类别顺序、feature m
 配置完成后的统一命令：
 
 ```bash
-python -m framework.cleansight_eval.cli.eval \
+python -m benchmark.cli.eval \
   --config external_checkpoints/<model-id>/<model-id>.yaml \
   --ckpt external_checkpoints/<model-id>/<model-id>.pt \
   --out-dir runs/external-<model-id>
@@ -102,15 +102,15 @@ python -m framework.cleansight_eval.cli.eval \
 后端 CLEAN 三种离线 best checkpoint 已配套 exploratory YAML，可直接进入统一完整序列评测：
 
 ```bash
-python -m framework.cleansight_eval.cli.eval \
+python -m benchmark.cli.eval \
   --config external_checkpoints/asformer-offline/best_asformer_offline_segmenter.yaml \
   --ckpt external_checkpoints/asformer-offline/best_asformer_offline_segmenter.pt
 
-python -m framework.cleansight_eval.cli.eval \
+python -m benchmark.cli.eval \
   --config external_checkpoints/bigru-offline/best_bigru_offline_segmenter.yaml \
   --ckpt external_checkpoints/bigru-offline/best_bigru_offline_segmenter.pt
 
-python -m framework.cleansight_eval.cli.eval \
+python -m benchmark.cli.eval \
   --config external_checkpoints/mstcn-bilstm-offline/best_ms_tcn_offline_segmenter.yaml \
   --ckpt external_checkpoints/mstcn-bilstm-offline/best_ms_tcn_offline_segmenter.pt
 ```
@@ -122,7 +122,7 @@ python -m framework.cleansight_eval.cli.eval \
 ### 3.3 YOLO 检测模型
 
 ```bash
-python -m framework.cleansight_eval.cli.eval \
+python -m benchmark.cli.eval \
   --config framework/experiments/yolo-clean-large.yaml \
   --ckpt runs/<yolo-run-id>/checkpoints/group1_large/weights/best.pt
 ```
@@ -173,13 +173,13 @@ evaluation:
 汇总所有 Pipeline：
 
 ```bash
-python -m framework.cleansight_eval.cli.matrix --runs runs
+python -m benchmark.cli.matrix --runs runs
 ```
 
 只比较同类 Pipeline：
 
 ```bash
-python -m framework.cleansight_eval.cli.matrix \
+python -m benchmark.cli.matrix \
   --runs runs \
   --pipeline sliding_window_temporal
 ```

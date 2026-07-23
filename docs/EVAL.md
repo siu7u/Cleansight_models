@@ -20,12 +20,12 @@
 python tools/validate_testsets.py --catalog benchmark/testsets.yaml --json
 
 # 单 checkpoint 评估
-python -m framework.cleansight_eval.cli.eval \
+python -m benchmark.cli.eval \
   --config framework/experiments/gru-actionmixed.yaml \
   --ckpt runs/<run>/checkpoints/best.pt
 
 # 跨模型汇总
-python -m framework.cleansight_eval.cli.matrix --runs runs
+python -m benchmark.cli.matrix --runs runs
 ```
 
 `formal` 结果必须使用校验通过的固定 testset；外部权重或临时数据使用 `exploratory`，并在报告中
@@ -53,8 +53,8 @@ TorchScript 归档最终都转换为 state dict，仍严格校验全部参数键
 当前落盘格式为 schema v2，记录 `run / model / pipeline / testset / feature_schema /
 metrics.summary / metrics.details / performance / inference / artifacts / limits / integrity`。其中
 checkpoint 与 sidecar、testset manifest、prediction artifact 都记录 SHA-256，便于归档后核验。
-`framework/core/envelope.py` 只保留历史 `EvalEnvelope` import 别名，不再定义第二套 schema；旧
-`*.envelope.json` 仍可读取并参与矩阵汇总。
+旧 `*.envelope.json` 由 `benchmark.core.result.EvaluationResult` 的兼容读取路径处理，framework
+不再保留第二个结果类型或 import 转发模块。
 
 对应外部契约为 [`evaluation-result-v2.schema.json`](../schemas/evaluation-result-v2.schema.json)。
 另外两份 Schema 分别约束 prediction artifact 和 delivery manifest。Schema 不参与指标计算；仓库
@@ -62,8 +62,9 @@ checkpoint 与 sidecar、testset manifest、prediction artifact 都记录 SHA-25
 
 ## 2. 三条评估流水线
 
-评估入口 [cli/eval.py](../framework/cleansight_eval/cli/eval.py) 按配置中的 `pipeline` 字段
-分派（组合根 `cli/_registry.py`）：
+评估入口 [benchmark/cli/eval.py](../benchmark/cli/eval.py) 按配置中的 `pipeline` 字段，
+通过 framework 的 [Pipeline 注册表](../framework/cleansight_eval/core/registry.py) 获取唯一
+模型推理实现：
 
 | pipeline | 任务 | 推理语义 | 适用模型 |
 |---|---|---|---|
@@ -91,12 +92,12 @@ pipeline.predict() ──► predictions / targets / labels / native_metrics / r
 benchmark evaluator ─► metrics + EvaluationResult + prediction artifact
         │
         ▼
-framework CLI ───────► evaluation/report/delivery manifest 落盘
+benchmark CLI ───────► evaluation/report/delivery manifest 落盘
 ```
 
 `PredictionOutput` 不包含 `MetricValue`、指标 spec、PASS/FAIL 或报告字段，因此 framework 的模型
-运行能力可以被固定 benchmark 直接复用。pipeline 不再暴露正式 `evaluate()`；CLI 是唯一组合根。
-framework 负责运行模型和 run 内落盘，benchmark 负责指标、结果 schema 和 artifact。
+运行能力可以被固定 benchmark 直接复用。pipeline 不再暴露正式 `evaluate()`；benchmark CLI
+是唯一评测组合根。framework 负责运行模型，benchmark 负责指标、结果 schema、artifact 和落盘。
 
 ## 3. 当前覆盖的指标
 
@@ -175,7 +176,7 @@ framework 负责运行模型和 run 内落盘，benchmark 负责指标、结果 
 
 ## 6. 完整性检查
 
-每个结果落盘前经 [core/integrity.py](../framework/cleansight_eval/core/integrity.py) 校验，结果写入
+每个结果落盘前经 [benchmark/core/integrity.py](../benchmark/core/integrity.py) 校验，结果写入
 `integrity: {ok, checks, issues}`：
 
 - **checkpoint 兼容**：metadata schema v1 绑定 checkpoint SHA-256/大小；同时检查改变张量形状的字段（`type / input_dim / num_classes`），`window` 等可在
@@ -198,15 +199,15 @@ framework 负责运行模型和 run 内落盘，benchmark 负责指标、结果 
 
 ## 7. 矩阵聚合与可视化
 
-- **聚合**（[core/matrix.py](../framework/cleansight_eval/core/matrix.py)）：递归扫描新的
+- **聚合**（[benchmark/core/matrix.py](../benchmark/core/matrix.py)）：递归扫描新的
   `evals/*.evaluation.json` 和历史 `evals/*.envelope.json`，
   可按 pipeline 过滤；固定 ID 列 + 所有模型指标列的并集，逐格保留三态；渲染 Markdown 表并带 `N/A / MISSING /
   空白` 图例。
-- **时序分割可视化**（[temporal/viz.py](../framework/cleansight_eval/temporal/viz.py)）：GT / Pred 双色带状图，
+- **时序分割可视化**（[benchmark/visualizers/temporal.py](../benchmark/visualizers/temporal.py)）：GT / Pred 双色带状图，
   滑窗和全序列评估都直接消费本次 `PredictionOutput`，逐视频对照、标注帧数与帧准确率，分页输出
   `viz/segmentation-<split>-pNN.png`（默认每页 6 个视频），不会为出图重复执行模型推理；图片路径和
   SHA-256 进入 `artifacts.visualization`。可用 `evaluation.visualize: false` 关闭。
-- **checkpoint 报告**（[core/report.py](../framework/cleansight_eval/core/report.py)）：每个 `.pt` 旁写
+- **checkpoint 报告**（[benchmark/core/report.py](../benchmark/core/report.py)）：每个 `.pt` 旁写
   `<checkpoint>.eval.md`，并向同目录唯一的 `EVALUATION_REPORT.md` 追加版本记录。
 - **稳定交付清单**：每次评估写 `*.delivery.manifest.json`，列出 checkpoint、metadata、evaluation、
   artifact 和报告的相对路径、大小、SHA-256 与内容 schema。独立 JSON Schema 位于 `schemas/`。
@@ -219,7 +220,7 @@ framework 负责运行模型和 run 内落盘，benchmark 负责指标、结果 
 - 不做任何 PASS/FAIL、业务门槛或加权总分——只报原始指标，判定留给使用方。
 - 检测侧逐类只暴露 precision/recall（不含逐类 mAP）。
 - 本仓库只测时序滑窗单窗模型前向，不覆盖检测推理延迟、pipeline 或端到端吞吐。
-- framework CLI 仍负责把“模型运行 → benchmark 结果 → run 内文件”串起来；benchmark 已成为
-  指标、testset、`EvaluationResult v2` 及两类 prediction artifact 的唯一真源。
+- benchmark CLI 负责把“调用 framework 模型运行 → benchmark 判分 → run 内文件”串起来；
+  framework 不再提供第二个 eval/report/matrix 实现。
 - `decision` 只允许用于明确的 benchmark 协议判定，不代表发布/上线结论。旧 `release_gate.py`
   已退出 model manager，只生成需人工审阅的事实清单。

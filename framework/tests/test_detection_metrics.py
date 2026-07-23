@@ -7,8 +7,8 @@
 - 全程不含任何 PASS/FAIL / 达标判断字段。
 """
 
-from cleansight_eval.core.envelope import MetricState
-from cleansight_eval.detection.metrics import build_detection_metrics
+from benchmark.core.result import MetricState
+from benchmark.evaluators.detection import build_detection_metrics
 
 
 def _fake_val():

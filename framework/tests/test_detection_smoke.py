@@ -11,11 +11,11 @@ import torch
 
 from benchmark.evaluators import evaluate_prediction
 
+from benchmark.core.integrity import check_result_complete
 from cleansight_eval.core.checkpoint import write_meta
-from cleansight_eval.core.envelope import MetricState
+from benchmark.core.result import MetricState
 from cleansight_eval.core.execution import PredictionOutput
-from cleansight_eval.core.integrity import check_result_complete
-from cleansight_eval.core.matrix import build_matrix
+from benchmark.core.matrix import build_matrix
 from cleansight_eval.detection import pipeline as det
 from cleansight_eval.detection.yolo import YoloAdapter
 

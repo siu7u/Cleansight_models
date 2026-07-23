@@ -1,12 +1,12 @@
 """单帧检测流水线（DetectionPipeline）。
 
-一条完整的训练+评估单元：消费 cleansight-yolo-pipeline 产出的标准 YOLO 数据集
-（images/labels/data.yaml），用 ultralytics 训练/验证，**只产事实结果**：mAP / P / R 逐类
-三态指标 + 完整性，不含任何业务门槛、不判 PASS/FAIL、不设非零退出码。
+一条完整的训练+推理单元：消费 cleansight-yolo-pipeline 产出的标准 YOLO 数据集
+（images/labels/data.yaml），用 ultralytics 训练并输出逐图预测事实。正式指标、完整性、
+artifact 和报告全部由 benchmark 负责。
 
-检测是**单帧无状态**语义：流水线自持推理（ultralytics.val），单帧语义写成模块常量
-``SINGLE_FRAME_SEMANTICS`` 直接写入结果；实时延迟标 N/A（离线检测不测实时延迟）。检测域
-与时序域不共享任何数据/模型抽象，仅在统一结果与矩阵处汇合。
+检测是**单帧无状态**语义：流水线自持模型执行，单帧语义写成模块常量
+``SINGLE_FRAME_SEMANTICS`` 并随 ``PredictionOutput`` 交给 benchmark。检测域与时序域不共享
+任何数据/模型抽象，只通过公共执行事实边界汇合。
 """
 
 from __future__ import annotations

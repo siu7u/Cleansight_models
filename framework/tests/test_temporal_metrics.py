@@ -1,12 +1,11 @@
-"""时序指标口径可独立测试（需求 §12.3）。"""
+"""benchmark 时序指标口径可独立测试。"""
 
-from cleansight_eval.core.envelope import MetricState
-from cleansight_eval.temporal.metrics import (
+from benchmark.core.metrics import edit_score
+from benchmark.core.result import MetricState
+from benchmark.evaluators.temporal import (
     SPEC_ACC,
     compute_temporal_metrics,
     compute_temporal_metrics_by_item,
-    edit_score,
-    f_score,
 )
 
 
@@ -27,9 +26,8 @@ def test_edit_and_fscore_basic():
     # 逐帧 3/4 正确
     m = compute_temporal_metrics(pred, gt)
     assert m["acc"].value == 75.0
-    # segmental：两个序列各 1 个非背景段，IoU 高 → tp>=1
-    tp, fp, fn = f_score(pred, gt, 0.1)
-    assert tp >= 1
+    # segmental：两个序列在主 IoU 阈值下至少匹配一个片段。
+    assert m["tp@0.5"].value >= 1
 
 
 def test_length_mismatch_is_missing():
@@ -40,7 +38,7 @@ def test_length_mismatch_is_missing():
 
 def test_edit_score_symmetric_labels():
     seq = ["A", "B", "A"]
-    assert edit_score(seq, seq) == 100.0
+    assert edit_score(seq, seq) == 1.0
 
 
 def test_benchmark_metrics_preserve_video_boundaries_and_counts():

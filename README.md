@@ -85,9 +85,12 @@ checkpoint 追溯，但不与新 framework 再维护一套重复抽象。
 
 ```mermaid
 flowchart TB
-    CFG["experiments/*.yaml"] --> CLI["framework CLI<br/>train / eval / matrix"]
-    CLI --> PREG["cli/_registry.py<br/>pipeline registry"]
-    CLI --> CORE["framework/core<br/>config · run · checkpoint · integrity<br/>execution · report · matrix"]
+    CFG["experiments/*.yaml"] --> TRAIN["framework CLI<br/>train"]
+    CFG --> EVAL["benchmark CLI<br/>eval / matrix"]
+    TRAIN --> PREG["framework/core/registry.py<br/>pipeline registry"]
+    EVAL --> PREG
+    TRAIN --> CORE["framework/core<br/>config · run · checkpoint · execution"]
+    EVAL --> CORE
 
     PREG --> DP["detection pipeline"]
     PREG --> SP["sliding-window temporal pipeline"]
@@ -108,18 +111,18 @@ flowchart TB
     TE -. uses .-> BC
     DE --> ER["EvaluationResult v2"]
     TE --> ER
-    ER --> PERSIST["framework CLI<br/>persist · report · delivery · matrix"]
+    ER --> PERSIST["benchmark CLI<br/>persist · report · delivery · matrix"]
     SCHEMA["schemas/*.schema.json"] -. 对外契约 .-> ER
 ```
 
 关键依赖规则：
 
-- `framework/core` 不 import 具体模型；具体 pipeline 只在 `cli/_registry.py` 汇合。
+- `framework/core` 不 import 评测结果或报告；具体 Pipeline 只在 `core/registry.py` 汇合。
 - detection 与 temporal 两个纵向领域互不依赖，避免图像格式和时序特征格式互相污染。
 - pipeline 只实现 `validate_config()`、`train()`、`predict()`，不拥有正式指标口径。
 - `PredictionOutput` 是执行层与评估层的边界，不包含 `MetricValue`、报告字段或发布判定。
-- benchmark evaluator 不要求 import framework 类型，可以消费同字段的对象或 mapping。
-- `EvaluationResult v2` 由 `benchmark/core/result.py` 唯一定义；framework 的 envelope 仅保留历史别名。
+- benchmark CLI 调用 framework 的 Pipeline 执行模型，framework 不提供第二个评测入口。
+- `EvaluationResult v2` 由 `benchmark/core/result.py` 唯一定义，旧 envelope 由该类型兼容读取。
 
 ### 4. 三条模型流水线
 
@@ -161,7 +164,7 @@ best/last、resume、NaN/异常状态和训练历史。训练环境信息留在 
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant E as cli.eval
+    participant E as benchmark.cli.eval
     participant T as Testset/Profile
     participant P as Pipeline
     participant B as Benchmark Evaluator
@@ -170,7 +173,7 @@ sequenceDiagram
     U->>E: --config + --ckpt
     E->>T: 解析 testset、fingerprint、formal/exploratory
     T-->>E: 已登记/完整性/泄漏检查事实
-    E->>P: 加载 checkpoint + metadata，执行 predict
+    E->>P: 调用 framework 加载 checkpoint + metadata，执行 predict
     P-->>E: PredictionOutput
     E->>B: evaluate_prediction(output)
     B-->>E: metrics + details + pending artifacts
@@ -329,17 +332,17 @@ YOLO 训练复用 Ultralytics 的 `results.csv`、`results.png` 和 best/last �
 
 ```bash
 # YOLO
-python -m framework.cleansight_eval.cli.eval \
+python -m benchmark.cli.eval \
   --config framework/experiments/yolo-clean-large.yaml \
   --ckpt runs/<yolo-run>/checkpoints/group1_large/weights/best.pt
 
 # GRU
-python -m framework.cleansight_eval.cli.eval \
+python -m benchmark.cli.eval \
   --config framework/experiments/gru-actionmixed.yaml \
   --ckpt runs/<gru-run>/checkpoints/best.pt
 
 # Transformer
-python -m framework.cleansight_eval.cli.eval \
+python -m benchmark.cli.eval \
   --config framework/experiments/transformer-actionmixed.yaml \
   --ckpt runs/<transformer-run>/checkpoints/best.pt
 ```
@@ -368,8 +371,8 @@ F1@0.1/0.25/0.5、TP/FP/FN、P/R、Temporal IoU 和帧级指标。模型前向�
 ### 5. 汇总矩阵
 
 ```bash
-python -m framework.cleansight_eval.cli.matrix --runs runs
-python -m framework.cleansight_eval.cli.matrix --runs runs --pipeline detection
+python -m benchmark.cli.matrix --runs runs
+python -m benchmark.cli.matrix --runs runs --pipeline detection
 ```
 
 矩阵保留 `computed`、`not_applicable`、`missing` 三态，不生成跨任务综合分。
@@ -426,4 +429,5 @@ checkpoint + checkpoint metadata + CARD.md + pin.yaml
 - [设计准则](docs/DESIGN.md)：framework/benchmark 职责与抽象边界。
 
 旧的 `temporal-*` 和 `yolo-detection/pipeline/` 命令仍可直接运行以复现历史结果；不再通过第二份
-模型 catalog 转发。新训练与统一评估默认使用 `framework.cleansight_eval.cli.*`。
+模型 catalog 转发。新训练使用 `framework.cleansight_eval.cli.train`，统一评测使用
+`benchmark.cli.eval` / `benchmark.cli.matrix`。

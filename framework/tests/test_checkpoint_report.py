@@ -3,12 +3,12 @@
 import os
 from pathlib import Path
 
-from cleansight_eval.core.envelope import EvalEnvelope, MetricValue
-from cleansight_eval.core.report import write_checkpoint_reports
+from benchmark.core.result import EvaluationResult, MetricValue
+from benchmark.core.report import write_checkpoint_reports
 
 
 def _env(ckpt, timestamp):
-    return EvalEnvelope(
+    return EvaluationResult(
         model_type="gru",
         model_id="gru-1k",
         pipeline="sliding_window_temporal",

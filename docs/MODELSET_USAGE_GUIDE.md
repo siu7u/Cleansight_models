@@ -8,8 +8,8 @@
 | 需求 | 推荐入口 |
 |---|---|
 | 训练一个 YOLO/GRU/MS-TCN/Transformer | `python -m framework.cleansight_eval.cli.train` |
-| 评估单个 checkpoint | `python -m framework.cleansight_eval.cli.eval` |
-| 汇总多个模型 | `python -m framework.cleansight_eval.cli.matrix` |
+| 评估单个 checkpoint | `python -m benchmark.cli.eval` |
+| 汇总多个模型 | `python -m benchmark.cli.matrix` |
 | 校验固定测试集 | `python tools/validate_testsets.py` |
 | 全序列与流式一致性 | `benchmark/temporal_feed_mode/` |
 | 3 分钟业务场景 | `benchmark/e2e_3min/` |
@@ -159,7 +159,7 @@ YOLO 的 best/last 位于 `checkpoints/<data.name>/weights/`，训练曲线使�
 ### 7.1 YOLO
 
 ```bash
-python -m framework.cleansight_eval.cli.eval \
+python -m benchmark.cli.eval \
   --config framework/experiments/yolo-clean-large.yaml \
   --ckpt runs/<run>/checkpoints/group1_large/weights/best.pt
 ```
@@ -170,11 +170,11 @@ python -m framework.cleansight_eval.cli.eval \
 ### 7.2 时序模型
 
 ```bash
-python -m framework.cleansight_eval.cli.eval \
+python -m benchmark.cli.eval \
   --config framework/experiments/gru-actionmixed.yaml \
   --ckpt runs/<run>/checkpoints/best.pt
 
-python -m framework.cleansight_eval.cli.eval \
+python -m benchmark.cli.eval \
   --config framework/experiments/transformer-actionmixed.yaml \
   --ckpt runs/<run>/checkpoints/best.pt
 ```
@@ -247,8 +247,8 @@ evaluation:
 ## 10. 汇总矩阵
 
 ```bash
-python -m framework.cleansight_eval.cli.matrix --runs runs
-python -m framework.cleansight_eval.cli.matrix --runs runs --pipeline full_sequence_temporal
+python -m benchmark.cli.matrix --runs runs
+python -m benchmark.cli.matrix --runs runs --pipeline full_sequence_temporal
 ```
 
 输出 `matrix.json` 和 `matrix.md`。不同任务指标取并集，`N/A`、`MISSING` 和未产出保持不同语义。

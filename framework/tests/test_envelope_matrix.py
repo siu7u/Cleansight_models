@@ -1,7 +1,7 @@
 """信封三态与矩阵机读/人读（需求 §9 / §10）。"""
 
-from cleansight_eval.core.envelope import EvalEnvelope, MetricState, MetricValue
-from cleansight_eval.core.matrix import build_matrix, render_markdown
+from benchmark.core.result import EvaluationResult, MetricState, MetricValue
+from benchmark.core.matrix import build_matrix, render_markdown
 
 
 def _envelope(pipeline, latency_state):
@@ -10,7 +10,7 @@ def _envelope(pipeline, latency_state):
         if latency_state == "computed"
         else MetricValue.not_applicable("全序列不测延迟", spec="latency/v1")
     }
-    return EvalEnvelope(
+    return EvaluationResult(
         model_type="gru",
         model_id="gru-128h",
         pipeline=pipeline,
@@ -57,7 +57,7 @@ def test_markdown_renders_states():
 def test_envelope_roundtrip(tmp_path):
     env = _envelope("sliding_window_temporal", "computed")
     p = env.write(tmp_path / "e.envelope.json")
-    back = EvalEnvelope.read(p)
+    back = EvaluationResult.read(p)
     assert back.metrics["acc"].value == 88.0
     assert back.performance["latency_mean_ms"].state is MetricState.COMPUTED
     assert back.to_dict()["schema_version"] == 2
@@ -73,7 +73,7 @@ def test_read_legacy_v1_envelope():
         "metrics": {"acc": MetricValue.computed(50.0, spec="acc/v1").to_dict()},
         "performance": {},
     }
-    env = EvalEnvelope.from_dict(legacy)
+    env = EvaluationResult.from_dict(legacy)
     assert env.model_id == "gru-old"
     assert env.metrics["acc"].value == 50.0
     assert env.to_dict()["schema_version"] == 2

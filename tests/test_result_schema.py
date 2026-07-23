@@ -8,12 +8,6 @@ from benchmark.core.result import (
     upgrade_legacy_result,
     validate_result,
 )
-from framework.cleansight_eval.core.envelope import EvalEnvelope
-
-
-def test_framework_envelope_is_only_compatibility_alias():
-    assert EvalEnvelope is EvaluationResult
-
 
 def test_model_evaluation_v2_roundtrip_and_optional_decision(tmp_path):
     result = EvaluationResult(

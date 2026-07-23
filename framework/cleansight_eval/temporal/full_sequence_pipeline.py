@@ -1,12 +1,13 @@
 """全序列时序流水线（离线全量推理）。
 
-一条完整的训练+评估单元：一次看到完整特征序列 ``[1, T, F]``、**逐帧监督**、逐帧 argmax
-推理。训练与评估使用同一种数据组织（整段序列 + 逐帧标签），不测实时延迟（离线，标 N/A）。
+一条完整的训练+推理单元：一次看到完整特征序列 ``[1, T, F]``、**逐帧监督**、逐帧 argmax
+推理。训练与预测使用同一种数据组织（整段序列 + 逐帧标签）；正式评测由 benchmark 调用本
+Pipeline 的 ``predict()`` 后完成。
 
 模型作为可替换组件（GRU / MS-TCN / MS-TCN++…）由 ``model.type`` 选取，只需满足
 ``[B,T,F] -> [B,T,C]`` 的前向约定；监督口径（逐帧 CE、类别加权）与推理方式（逐帧 argmax）
-由本流水线拥有，不写在模型里。数据读取/指标/延迟工具与滑窗流水线共享（``data`` /
-``metrics``），但绝不跨到 detection 域。
+由本流水线拥有，不写在模型里。数据读取与训练验证摘要由两条时序流水线共享，但绝不跨到
+detection 域。
 
 两个 **可选 duck-type 钩子**（有则调、无则退化，不写基类）让个别模型携带自身的训练细节而
 不污染通用脊柱：``fit_normalization(features)`` 训练前按训练集统计写归一化 buffer；
@@ -48,8 +49,8 @@ from .data import (
     split_video_names,
 )
 from .external import configure_external_model
-from .metrics import compute_temporal_metrics_by_item
 from .models import build_model
+from .training_validation import summarize_training_metrics
 from .util import compute_class_weights
 
 
@@ -91,11 +92,6 @@ def _loss_is_finite(loss: torch.Tensor) -> bool:
     return bool(torch.isfinite(loss.detach()).cpu().item())
 
 
-def _metric_value(metrics: dict, name: str):
-    value = metrics.get(name)
-    return None if value is None or value.value is None else float(value.value)
-
-
 def _validation_split_name(cfg: dict) -> str:
     """训练期 validation 优先用 split_val；旧配置没有时回退 split_eval。"""
 
@@ -129,12 +125,13 @@ def _evaluate_full_sequence(model, features, truths, id2name, criterion, device)
         f"video-{index:04d}": [id2name[int(value)] for value in video]
         for index, video in enumerate(truths)
     }
-    metrics = compute_temporal_metrics_by_item(pred_by_item, truth_by_item, list(id2name.values()))
     return {
         "val_loss": float(np.mean(losses)) if losses else None,
-        "val_acc": _metric_value(metrics, "acc"),
-        "val_edit": _metric_value(metrics, "edit"),
-        "val_f1_0.5": _metric_value(metrics, "f1@0.5"),
+        **summarize_training_metrics(
+            pred_by_item,
+            truth_by_item,
+            list(id2name.values()),
+        ),
     }
 
 

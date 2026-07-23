@@ -1,4 +1,4 @@
-"""评估矩阵入口：python -m framework.cleansight_eval.cli.matrix --runs <dir>。
+"""评估矩阵入口：python -m benchmark.cli.matrix --runs <dir>。
 
 汇总 run 目录下所有新旧评估结果，产出 matrix.json（机读）+ matrix.md（人读），异构
 指标列并保留 N/A / MISSING / 已计算三态（需求 §9）。
@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import argparse
 
-from ..core.matrix import write_matrix
+from benchmark.core.matrix import write_matrix
 
 
 def parse_args(argv=None):
-    p = argparse.ArgumentParser(description="cleansight_eval 评估矩阵")
+    p = argparse.ArgumentParser(description="CleanSight benchmark 评估矩阵")
     p.add_argument("--runs", required=True, help="包含 *.evaluation.json 或历史 *.envelope.json 的运行目录")
     p.add_argument("--out", default=None, help="矩阵输出目录，默认与 --runs 相同")
     p.add_argument(

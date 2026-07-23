@@ -1,8 +1,8 @@
 """模型执行阶段的公共输出，不包含任何指标或报告语义。
 
 ``PredictionOutput`` 是 framework 运行模型后的边界对象：它只描述模型、数据、预测、
-真值（若当前数据源提供）、原生验证结果和原始耗时样本。benchmark 可以消费这些事实计算
-指标；现阶段 framework 的 ``evaluate()`` 也会消费它，以保持既有 CLI 和报告兼容。
+真值（若当前数据源提供）、原生验证结果和原始耗时样本。benchmark 消费这些事实计算
+指标、生成 artifact 和报告；framework 不拥有评测入口或 EvaluationResult。
 """
 
 from __future__ import annotations

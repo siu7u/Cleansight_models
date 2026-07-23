@@ -6,7 +6,7 @@ import torch
 
 from cleansight_eval.core.execution import PredictionOutput, sample_callable_latency
 from cleansight_eval.core.pipeline import Pipeline
-from cleansight_eval.cli._registry import get_visualizer
+from benchmark.visualizers import get_visualizer
 from cleansight_eval.detection.pipeline import DetectionPipeline
 from cleansight_eval.temporal.full_sequence_pipeline import FullSequenceTemporalPipeline
 from cleansight_eval.temporal.sliding_window_pipeline import SlidingWindowTemporalPipeline

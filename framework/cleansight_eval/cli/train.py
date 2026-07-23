@@ -16,7 +16,7 @@ from typing import Any
 
 from ..core.config import apply_overrides, load_config
 from ..core.environment import pick_device
-from ._registry import get_pipeline
+from ..core.registry import get_pipeline
 
 
 def parse_args(argv=None):

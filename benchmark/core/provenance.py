@@ -1,4 +1,4 @@
-"""schema v2 评估结果的运行、checkpoint 与 testset 溯源信息。"""
+"""EvaluationResult v2 的运行、checkpoint 与 testset 溯源信息。"""
 
 from __future__ import annotations
 
@@ -7,10 +7,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .environment import now_iso
+from framework.cleansight_eval.core.environment import now_iso
 
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def sha256_file(path: str | Path) -> str:
@@ -104,29 +104,14 @@ def resolve_testset_info(cfg: dict) -> dict[str, Any]:
             "validation_errors": ["配置未声明 evaluation.testset_id，无法钉定 benchmark testset"],
         }
 
-    # benchmark 尚未安装成独立包，兼容从仓库根目录或 framework 目录执行。
-    try:
-        from benchmark.core.testsets import (
-            get_dataset_split,
-            load_testsets,
-            manifest_fingerprint,
-            read_split_items,
-            resolve_path,
-            validate_catalog,
-        )
-    except ModuleNotFoundError:  # pragma: no cover - 与 temporal.metrics 相同的 cwd 兼容路径
-        import sys
-
-        if str(_REPO_ROOT) not in sys.path:
-            sys.path.insert(0, str(_REPO_ROOT))
-        from benchmark.core.testsets import (
-            get_dataset_split,
-            load_testsets,
-            manifest_fingerprint,
-            read_split_items,
-            resolve_path,
-            validate_catalog,
-        )
+    from benchmark.core.testsets import (
+        get_dataset_split,
+        load_testsets,
+        manifest_fingerprint,
+        read_split_items,
+        resolve_path,
+        validate_catalog,
+    )
 
     catalog = load_testsets()
     if dataset_ref:

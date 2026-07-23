@@ -12,10 +12,10 @@ import numpy as np
 import torch
 import yaml
 
-from cleansight_eval.cli import eval as eval_cli
-from cleansight_eval.cli import matrix as matrix_cli
+from benchmark.cli import eval as eval_cli
+from benchmark.cli import matrix as matrix_cli
 from cleansight_eval.cli import train as train_cli
-from cleansight_eval.core.envelope import MetricState
+from benchmark.core.result import MetricState
 
 _ACTIONS = ["idle", "air_injection", "flush", "long_brush_insert", "long_brush_withdraw", "short_brush_cleaning"]
 

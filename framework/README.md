@@ -1,7 +1,7 @@
-# cleansight_eval —— 三条流水线的训练与评估框架
+# cleansight_eval —— 三条流水线的训练与推理框架
 
 本目录是对 `docs/TRAIN_EVAL_REQUIREMENTS.md` 的一次落地。**架构是三条完整流水线 + 一条薄
-公共层**。三条 pipeline 负责训练和预测；正式指标与 artifact 统一由 benchmark evaluator 生成：
+公共层**。三条 pipeline 只负责训练和预测；benchmark 在外层调用预测能力并独占正式评测：
 
 | 流水线 | `pipeline` | 训练/预测输入 | 主要指标 | 模型前向基准 |
 |---|---|---|---|---|
@@ -20,14 +20,14 @@
 
 | 层 | 目录 | 职责 |
 |---|---|---|
-| **公共层** | `cleansight_eval/core/` | run 组织、配置、环境、checkpoint 守卫、模型执行事实 `PredictionOutput`、结果兼容导出、矩阵、报告与完整性检查 |
-| **评估真源** | `../benchmark/core/`、`../benchmark/evaluators/` | 指标口径、固定 testset、评估器、`EvaluationResult v2`、prediction artifact 与交付 manifest |
-| **时序域** | `cleansight_eval/temporal/` | 两条时序流水线（`full_sequence_pipeline` / `sliding_window_pipeline`）+ 共享的 `data`（loader + meta）/ `metrics`（指标 + 延迟）/ `util`；模型在 `models/`（`gru`/`mstcn`/`mstcn2`/`transformer` + 注册表） |
-| **检测域** | `cleansight_eval/detection/` | 单帧检测流水线（`pipeline`）+ 薄 ultralytics 适配器（`yolo`）+ 指标 |
-| CLI | `cleansight_eval/cli/` | `train`/`eval` 按 `pipeline` 分派；`matrix` 汇总三类正式结果成单一矩阵 |
+| **公共层** | `cleansight_eval/core/` | run 组织、配置、环境、checkpoint 守卫、Pipeline 注册和模型执行事实 `PredictionOutput` |
+| **评测层** | `../benchmark/` | 评测 CLI、固定 testset、指标、`EvaluationResult v2`、prediction artifact、报告、矩阵与交付 manifest |
+| **时序域** | `cleansight_eval/temporal/` | 两条时序流水线、数据/feature adapter、模型、训练循环和推理后处理 |
+| **检测域** | `cleansight_eval/detection/` | 单帧检测流水线和唯一 Ultralytics 模型适配器 |
+| CLI | `cleansight_eval/cli/` | 只保留 `train`；评测与矩阵入口位于 `benchmark/cli/` |
 | 实验配置层 | `experiments/` | 流水线 + 模型类型/规模 + 数据 + 特征 + 训练参数 |
 
-> 时序共享的 `data`/`metrics`/`artifacts`/`util` **只在两条时序流水线间复用**，绝不跨到 detection——
+> 时序共享的 `data`/`util` **只在两条时序流水线间复用**，绝不跨到 detection——
 > 检测输入是图像、由 ultralytics 从 `data.yaml` 自持读入，与时序的 40 维特征序列是两套不相交
 > 的数据格式。`feature_schema` 是上游检测/特征提取与下游时序之间唯一的显式接口。
 
@@ -41,7 +41,7 @@
   全序列与检测不伪造模型前向基准，生产延迟始终交给后端测量。
 - **执行与判分分层**（`core/execution.py`）：pipeline 的 `predict()` 只产事实；CLI 把它交给
   `benchmark/evaluators`，pipeline 不再拥有 `evaluate()`。
-- **异构评估矩阵**（`core/matrix.py`）：允许不同模型不同指标列，不生成综合分数。
+- **异构评估矩阵**（`../benchmark/core/matrix.py`）：允许不同模型不同指标列，不生成综合分数。
 - **不含业务门槛/自动晋升判断**：只产出评估事实（晋升决定由人负责）。
 
 > 抽象/复用/过度设计的取舍准则见仓库级 [`docs/DESIGN.md`](../docs/DESIGN.md)。
@@ -60,9 +60,9 @@ python3.12 -m venv .venv && source .venv/bin/activate && pip install -r framewor
 
 ## 用法
 
-三类模型**共用同一套 CLI**（`train` / `eval` / `matrix`），由配置里的 `pipeline` 字段分派到
-对应流水线；换模型只换 `--config`。本文统一从仓库根目录执行，模块名使用
-`framework.cleansight_eval`，避免在根目录和 `framework/` 之间切换后混淆相对路径。
+三类模型共用 framework 的 `train` 和 benchmark 的 `eval` / `matrix`。两侧都根据配置里的
+`pipeline` 字段取得同一条 Pipeline；benchmark 直接调用 framework 的 `predict()`，不复制
+checkpoint 加载、feature adapter 或模型前向。本文所有命令从仓库根目录执行。
 
 - **训练**读配置、跑训练、落 checkpoint（+ 重建元信息 sidecar），打印 `run_dir` 与
   `checkpoint` 路径。`-S/--set 点路径=值`（可多次）临时覆盖配置、不改文件；核心 CLI **不预设
@@ -88,7 +88,7 @@ python3.12 -m venv .venv && source .venv/bin/activate && pip install -r framewor
 
 ```bash
 python -m framework.cleansight_eval.cli.train --config framework/experiments/yolo-group1.yaml
-python -m framework.cleansight_eval.cli.eval --config framework/experiments/yolo-group1.yaml \
+python -m benchmark.cli.eval --config framework/experiments/yolo-group1.yaml \
   --ckpt runs/<run>/checkpoints/group1_large/weights/best.pt
 ```
 
@@ -100,7 +100,7 @@ python -m framework.cleansight_eval.cli.eval --config framework/experiments/yolo
 
 ```bash
 python -m framework.cleansight_eval.cli.train --config framework/experiments/gru-actionmixed.yaml
-python -m framework.cleansight_eval.cli.eval --config framework/experiments/gru-actionmixed.yaml \
+python -m benchmark.cli.eval --config framework/experiments/gru-actionmixed.yaml \
   --ckpt runs/<run>/checkpoints/best.pt
 ```
 
@@ -111,14 +111,14 @@ python -m framework.cleansight_eval.cli.eval --config framework/experiments/gru-
 
 ```bash
 python -m framework.cleansight_eval.cli.train --config framework/experiments/mstcn-actionmixed.yaml
-python -m framework.cleansight_eval.cli.eval --config framework/experiments/mstcn-actionmixed.yaml \
+python -m benchmark.cli.eval --config framework/experiments/mstcn-actionmixed.yaml \
   --ckpt runs/<run>/checkpoints/best.pt
 ```
 
 ### 汇总评估矩阵（三类结果汇入同一张表）
 
 ```bash
-python -m framework.cleansight_eval.cli.matrix --runs runs
+python -m benchmark.cli.matrix --runs runs
 ```
 
 ## 配置字段速查
@@ -226,7 +226,7 @@ train:                 # 整段可选，透传给 ultralytics
 历史 envelope 不原地覆盖，使用转换命令生成旁路 v2 文件；矩阵可同时读取新旧文件：
 
 ```bash
-python -m framework.cleansight_eval.cli.upgrade_envelope \
+python -m benchmark.cli.upgrade_envelope \
   --input runs/<run>/evals/<old>.envelope.json
 ```
 

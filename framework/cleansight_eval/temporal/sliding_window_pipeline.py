@@ -1,13 +1,13 @@
 """历史滑窗时序流水线（有界因果窗流式推理）。
 
-一条完整的训练+评估单元：逐 tick 只喂当前窗口 ``[1, window, F]``、取窗口**最后一帧** logits、
-**末帧监督**；评估逐窗推理，经因果平滑 ``causal_decision`` 得稳定预测。前 ``window-1`` 帧为
-冷启动填充 idle，每个视频开始前 reset。训练与评估使用同一种数据组织（窗口 + 末帧标签），
-按需记录单 tick 延迟。
+一条完整的训练+推理单元：逐 tick 只喂当前窗口 ``[1, window, F]``、取窗口**最后一帧** logits、
+**末帧监督**；预测逐窗前进，经因果平滑 ``causal_decision`` 得稳定结果。前 ``window-1`` 帧为
+冷启动填充 idle，每个视频开始前 reset。正式评测由 benchmark 调用本 Pipeline 的 ``predict()``
+并消费其预测事实。
 
 模型作为可替换组件（GRU / causal-TCN…）由 ``model.type`` 选取，**必须因果**（``is_causal``
-为真），否则拒绝——非因果模型（如 MS-TCN）逐窗末帧语义不成立。数据读取/指标/延迟工具与
-全序列流水线共享（``data`` / ``metrics``），但绝不跨到 detection 域。
+为真），否则拒绝——非因果模型（如 MS-TCN）逐窗末帧语义不成立。数据读取和训练验证摘要与
+全序列流水线共享，但绝不跨到 detection 域。
 """
 
 from __future__ import annotations
@@ -44,8 +44,8 @@ from .data import (
     split_video_names,
 )
 from .external import configure_external_model
-from .metrics import compute_temporal_metrics_by_item
 from .models import build_model, is_causal
+from .training_validation import summarize_training_metrics
 from .util import causal_decision, compute_class_weights
 
 IDLE_ID = 0
@@ -73,11 +73,6 @@ def _loss_is_finite(loss: torch.Tensor) -> bool:
     """训练可靠性护栏：NaN/Inf loss 立即中断并写入 run status。"""
 
     return bool(torch.isfinite(loss.detach()).cpu().item())
-
-
-def _metric_value(metrics: dict, name: str):
-    value = metrics.get(name)
-    return None if value is None or value.value is None else float(value.value)
 
 
 def _validation_split_name(cfg: dict) -> str:
@@ -117,12 +112,13 @@ def _evaluate_sliding_window(model, datasets, id2name, criterion, device) -> dic
         f"video-{index:04d}": [id2name[int(value)] for value in video]
         for index, video in enumerate(video_gts)
     }
-    metrics = compute_temporal_metrics_by_item(pred_by_item, truth_by_item, list(id2name.values()))
     return {
         "val_loss": float(np.mean(losses)) if losses else None,
-        "val_acc": _metric_value(metrics, "acc"),
-        "val_edit": _metric_value(metrics, "edit"),
-        "val_f1_0.5": _metric_value(metrics, "f1@0.5"),
+        **summarize_training_metrics(
+            pred_by_item,
+            truth_by_item,
+            list(id2name.values()),
+        ),
     }
 
 

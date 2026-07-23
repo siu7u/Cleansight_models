@@ -11,14 +11,15 @@
 的结构：
 
 - **framework 脊柱**（`framework/cleansight_eval/core/`）：与模型语义无关的运行能力，包括 run
-  组织、配置解析、环境记录、checkpoint 自描述、`PredictionOutput`、异构矩阵和完整性检查。
+  组织、配置解析、环境记录、checkpoint 自描述、Pipeline 注册和 `PredictionOutput`。
 - **benchmark 真源**（`benchmark/core/` + `benchmark/evaluators/`）：统一拥有指标口径、固定
-  testset、`EvaluationResult v2`、prediction artifact schema，以及 PredictionOutput 到正式结果的评估器。
+  testset、`EvaluationResult v2`、prediction artifact schema、报告、矩阵、交付清单和评测 CLI。
 - **两纵**（`temporal/`、`detection/`）：各自实现训练和 `predict()`，只产模型执行事实，不组装正式指标。
-- **组合根**（`cli/eval.py` + `cli/_registry.py`）：按配置选择 pipeline，执行
-  `predict → benchmark evaluator → persist/report/delivery`。
+- **组合根**（`benchmark/cli/eval.py`）：从 framework 注册表取得 Pipeline，执行
+  `framework predict → benchmark evaluator → persist/report/delivery`。
 
-依赖方向始终单向指向脊柱。这是下面所有准则的物理基础。
+评测依赖方向固定为 `benchmark → framework`；训练入口仍由 framework 自持。这是下面所有准则的
+物理基础。
 
 ## 1. 抽象原则
 
@@ -56,7 +57,7 @@
 否则这道闸门就该拦下它。违反它就是最典型的过度设计——**抽象无人使用**（建了却没有任何调用方）：已删除的 `feature_schema.py`
 中的 `FeatureSchema` 类从未被实例化，特征兼容检查实际由 `integrity.check_feature_schema` 以字典比较
 完成。判据：任何抽象至少要有一个真实调用点，承担公共职责的抽象要有两个以上的跨模块使用者；删除前先
-检索调用点，确认无人调用即可删除。
+  检索调用点，确认无人调用即可删除。
 
 ### 抽象层之间的隔离与扩展
 
@@ -73,7 +74,7 @@
   携带自身的训练细节，通过可选的 duck-type 钩子（`fit_normalization`、`compute_loss`）暴露，流水线在
   钩子存在时调用、不存在时回退到默认路径，不为此引入基类。
 - **必要的跨层耦合集中到单一组合根。** 有些依赖无法消除——总得有一处知道全部流水线；正确的做法是把
-  它收敛到一个显式位置，而非散落各处。`cli/_registry.py` 是唯一同时依赖两纵的地方，脊柱与两纵因此都
+  它收敛到一个显式位置，而非散落各处。`core/registry.py` 是唯一同时依赖两纵的地方，脊柱与两纵因此都
   保持互不交叉依赖。
 
 **6. 新增模型的接入点相对集中，不散落各处。** 接入一个新模型时要改动的位置应当收敛、可预测，而不是

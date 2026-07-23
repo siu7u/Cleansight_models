@@ -2,19 +2,19 @@ import pytest
 
 from types import SimpleNamespace
 
-from cleansight_eval.core.envelope import MetricValue
-from cleansight_eval.core.integrity import (
-    CompatibilityError,
+from benchmark.core.integrity import (
+    EvaluationProfileError,
     assert_evaluation_profile,
     check_result_complete,
 )
+from benchmark.core.result import MetricValue
 
 
 def test_formal_profile_requires_registered_valid_testset():
     cfg = {"evaluation": {"mode": "formal"}}
-    with pytest.raises(CompatibilityError, match="已登记"):
+    with pytest.raises(EvaluationProfileError, match="已登记"):
         assert_evaluation_profile(cfg, {"registered": False, "validation_errors": []})
-    with pytest.raises(CompatibilityError, match="校验失败"):
+    with pytest.raises(EvaluationProfileError, match="校验失败"):
         assert_evaluation_profile(cfg, {"registered": True, "validation_errors": ["leak"]})
 
 

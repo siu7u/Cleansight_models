@@ -6,13 +6,13 @@ import argparse
 import json
 from pathlib import Path
 
-from ..core.envelope import EvaluationResult
-from ..core.integrity import check_result_complete
-from ..core.provenance import build_checkpoint_info
+from benchmark.core.integrity import check_result_complete
+from benchmark.core.provenance import build_checkpoint_info
+from benchmark.core.result import EvaluationResult
 
 
 def parse_args(argv=None):
-    parser = argparse.ArgumentParser(description="升级 framework eval envelope 到 schema v2")
+    parser = argparse.ArgumentParser(description="升级历史 eval envelope 到 schema v2")
     parser.add_argument("--input", required=True, help="历史 *.envelope.json")
     parser.add_argument("--out", help="输出路径；默认在原文件名后增加 .v2.json，不覆盖历史文件")
     return parser.parse_args(argv)

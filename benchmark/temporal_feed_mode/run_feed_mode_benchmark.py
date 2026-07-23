@@ -23,10 +23,11 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 import torch
+
+from benchmark.core.metrics import temporal_metrics
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -206,93 +207,6 @@ def predict_streaming(
     return preds, latencies_ms
 
 
-def segments(labels: Iterable[int], bg_class: set[int] | None = None) -> tuple[list[int], list[int], list[int]]:
-    """把逐帧标签折叠为片段标签、起点索引和终点索引。"""
-
-    values = list(labels)
-    if not values:
-        return [], [], []
-    bg_class = bg_class or set()
-    out_labels: list[int] = []
-    starts: list[int] = []
-    ends: list[int] = []
-    last = values[0]
-    if last not in bg_class:
-        out_labels.append(last)
-        starts.append(0)
-    for i, value in enumerate(values):
-        if value == last:
-            continue
-        if value not in bg_class:
-            out_labels.append(value)
-            starts.append(i)
-        if last not in bg_class:
-            ends.append(i)
-        last = value
-    if last not in bg_class:
-        ends.append(len(values))
-    return out_labels, starts, ends
-
-
-def levenstein(pred: list[int], truth: list[int], norm: bool = True) -> float:
-    """基于 Levenshtein 距离计算片段级 edit score。"""
-
-    rows, cols = len(pred), len(truth)
-    dp = np.zeros((rows + 1, cols + 1), dtype=np.float64)
-    for i in range(rows + 1):
-        dp[i, 0] = i
-    for j in range(cols + 1):
-        dp[0, j] = j
-    for i in range(1, rows + 1):
-        for j in range(1, cols + 1):
-            if pred[i - 1] == truth[j - 1]:
-                dp[i, j] = dp[i - 1, j - 1]
-            else:
-                dp[i, j] = min(dp[i - 1, j] + 1, dp[i, j - 1] + 1, dp[i - 1, j - 1] + 1)
-    if not norm:
-        return float(dp[-1, -1])
-    return float((1 - dp[-1, -1] / max(rows, cols, 1)) * 100)
-
-
-def edit_score(pred: np.ndarray, truth: np.ndarray) -> float:
-    """将逐帧标签折叠为片段后计算归一化 edit score。"""
-
-    p_labels, _, _ = segments(pred)
-    y_labels, _, _ = segments(truth)
-    return levenstein(p_labels, y_labels, norm=True)
-
-
-def f_score(pred: np.ndarray, truth: np.ndarray, overlap: float) -> tuple[float, float, float]:
-    """返回片段级 true positive、false positive 和 false negative。"""
-
-    p_label, p_start, p_end = segments(pred)
-    y_label, y_start, y_end = segments(truth)
-    if not p_label and not y_label:
-        return 0.0, 0.0, 0.0
-    if not p_label:
-        return 0.0, 0.0, float(len(y_label))
-    if not y_label:
-        return 0.0, float(len(p_label)), 0.0
-
-    tp = 0.0
-    fp = 0.0
-    hits = np.zeros(len(y_label), dtype=np.float32)
-    y_start_np = np.asarray(y_start)
-    y_end_np = np.asarray(y_end)
-    for j, label in enumerate(p_label):
-        intersection = np.minimum(p_end[j], y_end_np) - np.maximum(p_start[j], y_start_np)
-        union = np.maximum(p_end[j], y_end_np) - np.minimum(p_start[j], y_start_np)
-        iou = (intersection / np.maximum(union, 1)) * np.asarray([label == item for item in y_label])
-        idx = int(np.argmax(iou))
-        if iou[idx] >= overlap and not hits[idx]:
-            tp += 1
-            hits[idx] = 1
-        else:
-            fp += 1
-    fn = float(len(y_label) - hits.sum())
-    return tp, fp, fn
-
-
 def score_predictions(
     pred_by_video: dict[str, np.ndarray],
     truth_by_video: dict[str, np.ndarray],
@@ -302,11 +216,8 @@ def score_predictions(
 ) -> dict:
     """在共同裁剪后的帧范围上评分，保证两种喂法公平对比。"""
 
-    all_pred = []
-    all_truth = []
-    edit_scores = []
-    f_totals = {0.1: [0.0, 0.0, 0.0], 0.25: [0.0, 0.0, 0.0], 0.5: [0.0, 0.0, 0.0]}
-
+    clean_pred: dict[str, list[int]] = {}
+    clean_truth: dict[str, list[int]] = {}
     for name, pred in pred_by_video.items():
         truth = truth_by_video[name]
         pred_crop = pred[start_frame:]
@@ -316,41 +227,42 @@ def score_predictions(
         truth_crop = truth_crop[valid]
         if len(pred_crop) == 0:
             continue
-        all_pred.append(pred_crop)
-        all_truth.append(truth_crop)
-        edit_scores.append(edit_score(pred_crop, truth_crop))
-        for overlap in f_totals:
-            tp, fp, fn = f_score(pred_crop, truth_crop, overlap)
-            f_totals[overlap][0] += tp
-            f_totals[overlap][1] += fp
-            f_totals[overlap][2] += fn
+        clean_pred[name] = [int(value) for value in pred_crop]
+        clean_truth[name] = [int(value) for value in truth_crop]
 
-    all_pred_np = np.concatenate(all_pred)
-    all_truth_np = np.concatenate(all_truth)
-    confusion = np.zeros((num_classes, num_classes), dtype=np.int64)
-    for gt, pred in zip(all_truth_np, all_pred_np):
-        if 0 <= gt < num_classes and 0 <= pred < num_classes:
-            confusion[int(gt), int(pred)] += 1
-
-    recalls = {}
-    for i in range(num_classes):
-        denom = int(confusion[i].sum())
-        recalls[idx_to_action.get(i, str(i))] = None if denom == 0 else round(float(confusion[i, i] / denom), 4)
-
-    f1 = {}
-    for overlap, (tp, fp, fn) in f_totals.items():
-        precision = tp / (tp + fp) if (tp + fp) else 0.0
-        recall = tp / (tp + fn) if (tp + fn) else 0.0
-        value = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
-        f1[str(overlap)] = round(value * 100, 2)
+    raw = temporal_metrics(
+        clean_pred,
+        clean_truth,
+        labels=list(range(num_classes)),
+        thresholds=(0.1, 0.25, 0.5),
+    )
+    frame = raw["frame"]
+    segment = raw["segment"]
+    recalls = {
+        idx_to_action.get(index, str(index)): (
+            None
+            if frame["per_class"].get(index, {}).get("recall") is None
+            else round(float(frame["per_class"][index]["recall"]), 4)
+        )
+        for index in range(num_classes)
+    }
+    f1 = {
+        str(threshold): round(
+            float(segment["details_at_iou"][f"{threshold:.2f}"]["f1"]) * 100,
+            2,
+        )
+        for threshold in (0.1, 0.25, 0.5)
+    }
 
     return {
-        "num_frames": int(len(all_truth_np)),
-        "acc": round(float((all_pred_np == all_truth_np).mean() * 100), 2),
-        "edit": round(float(statistics.mean(edit_scores)) if edit_scores else 0.0, 2),
+        "num_frames": int(frame["num_frames"]),
+        "acc": round(float(frame["accuracy"] or 0.0) * 100, 2),
+        "edit": round(float(segment["edit"] or 0.0) * 100, 2),
         "f1": f1,
         "per_class_recall": recalls,
-        "confusion_matrix_rows_gt_cols_pred": confusion.tolist(),
+        "confusion_matrix_rows_gt_cols_pred": frame[
+            "confusion_matrix_rows_truth_cols_prediction"
+        ],
     }
 
 

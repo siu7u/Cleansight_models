@@ -1,8 +1,8 @@
 """benchmark 评估结果的唯一 schema 真源。
 
 schema v2 同时承载模型评估事实和 benchmark 门禁结果：模型评估使用三态 ``MetricValue``；
-只有确实执行门禁时才写 ``decision``。framework 只运行模型并通过兼容模块使用这里的结果类型，
-不再维护第二套 envelope 定义。
+只有确实执行门禁时才写 ``decision``。framework 只运行模型并返回 ``PredictionOutput``；
+结果结构、门禁、报告和矩阵均由 benchmark 维护。
 """
 
 from __future__ import annotations
@@ -84,7 +84,7 @@ class MetricValue:
 class EvaluationResult:
     """一次单模型评估的结构化结果。
 
-    扁平属性供 framework 的报告和矩阵代码使用；``to_dict`` 统一输出 schema v2。模型、
+    扁平属性供 benchmark 的报告和矩阵代码使用；``to_dict`` 统一输出 schema v2。模型、
     checkpoint、testset、feature schema、推理方式和 artifact 均保留版本追溯信息。
     """
 

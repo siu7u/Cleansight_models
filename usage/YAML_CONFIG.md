@@ -15,7 +15,7 @@
 
 ## 1. Framework 实验配置
 
-这些配置由 `framework.cleansight_eval.cli.train` 和 `framework.cleansight_eval.cli.eval` 读取，
+这些配置由 `framework.cleansight_eval.cli.train` 和 `benchmark.cli.eval` 读取，
 `framework/cleansight_eval/core/config.py` 负责加载、默认值、相对路径解析和配置溯源，再由对应
 Pipeline 校验并执行。
 
@@ -35,7 +35,7 @@ Pipeline 校验并执行。
 | YAML | 主要内容 | 功能 |
 |---|---|---|
 | [`framework/experiments/gru-actionmixed.yaml`](../framework/experiments/gru-actionmixed.yaml) | GRU、`temporal.actionmixed-v2`、40 维 bbox 特征、6 类、16 帧窗口；含默认关闭的随机目标遮罩 | 滑窗、末帧监督、因果推理的时序参照实验；测试默认输出 GT/Prediction timeline。 |
-| [`external_checkpoints/external-temporal-template.yaml`](../external_checkpoints/external-temporal-template.yaml) | 外部时序 checkpoint 的复制模板；逐项提示 Pipeline、注册模型、网络规模、数据来源、feature mapping、类别顺序、归一化和窗口契约 | 供组员为裸 `.pt` 建立配套 exploratory 配置；`REPLACE_WITH_*` 必须全部替换，模板不能直接运行，YAML 也不能代替未实现的模型或特征代码。 |
+| [`external_checkpoints/external-temporal-template.yaml`](../external_checkpoints/external-temporal-template.yaml) | 外部时序 checkpoint 的复制模板；用 `[选择]`、`[确认]`、`[自动]` 注释区分可选枚举、必须回查训练事实和 catalog 自动字段，并列出 Pipeline、注册模型、数据来源、feature mapping/维度、归一化及窗口候选 | 供组员为裸 `.pt` 建立配套 exploratory 配置；数据来源必须在 `dataset_ref` 与 `name + root` 中二选一，`REPLACE_WITH_*`/`0` 必须替换，注释示例不是通用默认值，YAML 也不能代替未实现的模型或特征代码。 |
 | [`external_checkpoints/gru-v0.4.0/gru-v0.4.0.yaml`](../external_checkpoints/gru-v0.4.0/gru-v0.4.0.yaml) | 外部 TorchScript GRU v0.4.0、48 维输入、64 隐层、3 层和6类；启用无 metadata 的探索性加载 | 与同目录 `.pt` 配套保存已确认的网络结构；48维 feature mapping、类别顺序和训练窗口未确认前，不得作为正式评测配置。 |
 | [`external_checkpoints/asformer-offline/best_asformer_offline_segmenter.yaml`](../external_checkpoints/asformer-offline/best_asformer_offline_segmenter.yaml) | 后端 CLEAN ASFormer、121维 v2+业务先验、checkpoint z-score 和外部类别顺序 | 配套评测同目录 best checkpoint；五列 bbox 的 confidence=1.0 替代使其仅为 exploratory。 |
 | [`external_checkpoints/bigru-offline/best_bigru_offline_segmenter.yaml`](../external_checkpoints/bigru-offline/best_bigru_offline_segmenter.yaml) | 后端 CLEAN BiGRU、249维居中窗口统计+业务先验、完整序列离线推理 | 配套评测同目录 best checkpoint；模型与 centered feature 都是非因果。 |

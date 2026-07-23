@@ -1,1 +1,1 @@
-"""cleansight_eval 分层评估框架。"""
+"""CleanSight framework 训练命令。"""

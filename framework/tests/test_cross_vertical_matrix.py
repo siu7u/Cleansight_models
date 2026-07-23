@@ -5,12 +5,12 @@
 能把它拆成两份。
 """
 
-from cleansight_eval.core.envelope import EvalEnvelope, MetricState, MetricValue
-from cleansight_eval.core.matrix import build_matrix, collect_envelopes, render_markdown
+from benchmark.core.result import EvaluationResult, MetricState, MetricValue
+from benchmark.core.matrix import build_matrix, collect_envelopes, render_markdown
 
 
-def _temporal_env() -> EvalEnvelope:
-    return EvalEnvelope(
+def _temporal_env() -> EvaluationResult:
+    return EvaluationResult(
         model_type="gru",
         model_id="gru-128h",
         pipeline="sliding_window_temporal",
@@ -28,8 +28,8 @@ def _temporal_env() -> EvalEnvelope:
     )
 
 
-def _detection_env() -> EvalEnvelope:
-    return EvalEnvelope(
+def _detection_env() -> EvaluationResult:
+    return EvaluationResult(
         model_type="yolo",
         model_id="yolo-group1",
         pipeline="detection",

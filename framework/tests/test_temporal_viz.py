@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from cleansight_eval.core.execution import PredictionOutput
-from cleansight_eval.temporal.viz import render_prediction_timeline
+from benchmark.visualizers.temporal import render_prediction_timeline
 
 
 def _prediction_output() -> PredictionOutput:
