@@ -14,7 +14,7 @@ model:
 data:
   name: group1_large
   # 指向 YOLO 数据构建流水线产出的数据集清单；不复制数据集本体。
-  data_yaml: ../../yolo-detection/pipeline/datasets/group1_large/data.yaml
+  data_yaml: ../../datasets/yolo/group1_large/data.yaml
   eval_split: val        # 评估用的 split（train/val/test）
 
 evaluation:

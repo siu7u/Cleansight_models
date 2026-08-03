@@ -11,7 +11,7 @@ model:
 
 data:
   name: group1_large
-  data_yaml: ../../yolo-detection/pipeline/datasets/group1_large/data.yaml
+  data_yaml: ../../datasets/yolo/group1_large/data.yaml
   eval_split: val
 
 evaluation:

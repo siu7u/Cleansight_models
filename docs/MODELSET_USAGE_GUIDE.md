@@ -14,8 +14,8 @@
 | 全序列与流式一致性 | `benchmark/temporal_feed_mode/` |
 | 3 分钟业务场景 | `benchmark/e2e_3min/` |
 
-各 `temporal-*` 和 `yolo-detection/pipeline/` 独立脚本仅用于历史资产复现，不再经过集中 manager；
-它们不是新实验的默认入口。
+迁移前的独立脚本已冻结到 `legacy/`，不再作为受支持入口。历史 GRU、Causal TCN 和 Causal
+Transformer checkpoint 也通过 framework 兼容模型和 `legacy-*.yaml` 评测，不需要运行旧脚本。
 
 ## 2. 环境准备
 
@@ -53,6 +53,9 @@ data:
 根目录、版本、类别、feature mapping 和 manifest 由 `benchmark/testsets.yaml` 解析。只有未登记的
 临时/合成数据才直接使用 `data.root`；相对路径仍以 YAML 所在目录为基准。
 
+历史 20 维 Endo Project 数据从 `datasets/endo-project-v1` 挂载。新机器只需让该路径指向包含
+`mapping.txt`、`features/`、`groundTruth/` 和 `splits/` 的真实目录；数据本体与绝对链接不提交。
+
 评估前执行：
 
 ```bash
@@ -72,6 +75,9 @@ python tools/validate_testsets.py --catalog benchmark/testsets.yaml --json
 | MS-TCN | `framework/experiments/mstcn-actionmixed.yaml` | `full_sequence_temporal` |
 | MS-TCN++ | `framework/experiments/mstcn2-actionmixed.yaml` | `full_sequence_temporal` |
 | Transformer | `framework/experiments/transformer-actionmixed.yaml` | `full_sequence_temporal` |
+| 历史 GRU v1 | `framework/experiments/legacy-gru-v1.yaml` | `sliding_window_temporal` |
+| 历史 Causal TCN v1 | `framework/experiments/legacy-causal-tcn-v1.yaml` | `sliding_window_temporal` |
+| 历史 Causal Transformer v1 | `framework/experiments/legacy-causal-transformer-v1.yaml` | `sliding_window_temporal` |
 
 复制最接近的配置建立新实验。`schema_version: 1` 必填；未知顶层字段、未知 section 字段和未知
 `-S` 路径会直接报错，避免拼写错误被静默忽略。

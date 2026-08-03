@@ -11,6 +11,7 @@
 numpy>=1.26,<2
 torch>=2.8
 PyYAML>=6.0
+pytorch-tcn>=1.2,<2
 
 # ---- 检测纵（YOLO；可选，仅 task: detection 需要）----
 ultralytics>=8.3

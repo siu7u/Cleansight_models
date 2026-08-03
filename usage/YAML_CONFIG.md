@@ -10,7 +10,8 @@
 - 字段、默认值、约束、读取方或运行影响变化时，即使文件路径不变，也要更新对应说明。
 - 被 `.gitignore` 排除的构建、训练和打包产物不纳入逐文件清单，统一在文末说明。
 
-当前共登记 26 个 YAML，其中包含 4 个与本地外部 checkpoint 配套的探索性配置和 1 个组员
+当前共登记 29 个 YAML，其中包含 4 个与本地外部 checkpoint 配套的探索性配置、3 个历史
+时序 checkpoint 的 framework 兼容实验和 1 个组员
 接入外部时序权重时使用的模板。
 
 ## 1. Framework 实验配置
@@ -35,6 +36,9 @@ Pipeline 校验并执行。
 | YAML | 主要内容 | 功能 |
 |---|---|---|
 | [`framework/experiments/gru-actionmixed.yaml`](../framework/experiments/gru-actionmixed.yaml) | GRU、`temporal.actionmixed-v2`、40 维 bbox 特征、6 类、16 帧窗口；含默认关闭的随机目标遮罩 | 滑窗、末帧监督、因果推理的时序参照实验；测试默认输出 GT/Prediction timeline。 |
+| [`framework/experiments/legacy-gru-v1.yaml`](../framework/experiments/legacy-gru-v1.yaml) | 历史 20 维 GRU、3 类、64 帧因果窗口及 `temporal.endo-project-v1` | 通过 framework 严格加载 registry 中 GRU v1 裸 state dict；无绑定 metadata，因此只允许 exploratory。 |
+| [`framework/experiments/legacy-causal-tcn-v1.yaml`](../framework/experiments/legacy-causal-tcn-v1.yaml) | 历史三层 64 通道 Causal TCN 的精确结构和 20 维输入契约 | 供统一单模型与 feed-mode benchmark 调用 framework，不再动态导入历史目录。 |
+| [`framework/experiments/legacy-causal-transformer-v1.yaml`](../framework/experiments/legacy-causal-transformer-v1.yaml) | 历史 128 维、3 层、4 head 因果 Transformer 的精确结构 | 与当前非因果 `transformer` 区分，保持旧 checkpoint 参数键和在线窗口语义。 |
 | [`external_checkpoints/external-temporal-template.yaml`](../external_checkpoints/external-temporal-template.yaml) | 外部时序 checkpoint 的复制模板；用 `[选择]`、`[确认]`、`[自动]` 注释区分可选枚举、必须回查训练事实和 catalog 自动字段，并列出 Pipeline、注册模型、数据来源、feature mapping/维度、归一化及窗口候选 | 供组员为裸 `.pt` 建立配套 exploratory 配置；数据来源必须在 `dataset_ref` 与 `name + root` 中二选一，`REPLACE_WITH_*`/`0` 必须替换，注释示例不是通用默认值，YAML 也不能代替未实现的模型或特征代码。 |
 | [`external_checkpoints/gru-v0.4.0/gru-v0.4.0.yaml`](../external_checkpoints/gru-v0.4.0/gru-v0.4.0.yaml) | 外部 TorchScript GRU v0.4.0、48 维输入、64 隐层、3 层和6类；启用无 metadata 的探索性加载 | 与同目录 `.pt` 配套保存已确认的网络结构；48维 feature mapping、类别顺序和训练窗口未确认前，不得作为正式评测配置。 |
 | [`external_checkpoints/asformer-offline/best_asformer_offline_segmenter.yaml`](../external_checkpoints/asformer-offline/best_asformer_offline_segmenter.yaml) | 后端 CLEAN ASFormer、121维 v2+业务先验、checkpoint z-score 和外部类别顺序 | 配套评测同目录 best checkpoint；五列 bbox 的 confidence=1.0 替代使其仅为 exploratory。 |
@@ -87,27 +91,23 @@ revision、train/val/eval split fingerprint 以及动作/检测映射摘要，re
 
 ## 4. 时序模型版本 pin
 
-三个 pin 都记录模型版本、数据来源、上游 YOLO、feature mapping、在线因果属性、感受野和输出
-标签。各模型的 `scripts/validate_pin.py` 校验必需字段，模型管理及交付资料引用这些文件；它们
-用于复现和部署追溯，不控制 framework 训练循环。
+三个 pin 都记录模型版本、checkpoint SHA-256、统一数据挂载、feature mapping、在线因果属性、
+感受野和输出标签。它们用于复现和部署追溯，不控制 framework 训练循环。
 
 | YAML | 内容与功能 |
 |---|---|
-| [`temporal-gru/pin.yaml`](../temporal-gru/pin.yaml) | 固定 GRU v1 的 legacy-20d 输入、64 帧窗口和三类输出契约。 |
-| [`temporal-causal-tcn/pin.yaml`](../temporal-causal-tcn/pin.yaml) | 固定 causal TCN v1 的数据、特征和在线契约。 |
-| [`temporal-transformer/pin.yaml`](../temporal-transformer/pin.yaml) | 固定旧 Transformer v1 的数据、特征和运行契约。 |
+| [`registry/temporal/gru-v1/pin.yaml`](../registry/temporal/gru-v1/pin.yaml) | 固定 GRU v1 checkpoint、legacy-20d 输入、64 帧窗口和三类输出契约。 |
+| [`registry/temporal/causal-tcn-v1/pin.yaml`](../registry/temporal/causal-tcn-v1/pin.yaml) | 固定 Causal TCN v1 checkpoint、数据、特征和在线契约。 |
+| [`registry/temporal/causal-transformer-v1/pin.yaml`](../registry/temporal/causal-transformer-v1/pin.yaml) | 固定旧因果 Transformer v1 checkpoint、结构和运行契约。 |
 
-其中为 `TODO` 的 repo、revision、hash 或 fps 表示版本尚未完全钉定，正式交付前需要补齐。
-
-## 5. YOLO 数据构建流水线
+## 5. Legacy YOLO 快照配置
 
 | YAML | 读取方 | 内容与功能 |
 |---|---|---|
-| [`yolo-detection/pipeline/config.yaml`](../yolo-detection/pipeline/config.yaml) | `pipeline/utils/common.py` 及拉取、状态、构建、训练、验证脚本 | 中央配置：两组类别顺序、质检视频白名单、抽帧、未来样本切分参数、训练超参和验收阈值。类别只能末尾追加，以保护已有 class ID。 |
-| [`yolo-detection/pipeline/splits.yaml`](../yolo-detection/pipeline/splits.yaml) | `pipeline/utils/split.py`、`00_status.py`、`02_build_dataset.py` | 视频 stem 到 train/val/test/e2e_test 的稳定分配真源；已有 assignment 不自动重排。 |
+| [`legacy/yolo-detection/pipeline/config.yaml`](../legacy/yolo-detection/pipeline/config.yaml) | 仅供审计旧 pipeline | 保存迁移前两组类别、抽帧、训练超参和验收阈值；活跃训练和评测不得读取。 |
+| [`legacy/yolo-detection/pipeline/splits.yaml`](../legacy/yolo-detection/pipeline/splits.yaml) | 仅供审计旧 split | 保存迁移前视频 stem 分配；当前评测身份由 `benchmark/testsets.yaml` 管理。 |
 
-`config.yaml` 决定新视频如何处理，`splits.yaml` 保存已经发生的分配；其中 `val_ratio` 和 `seed`
-需要保持一致。
+legacy YAML 是冻结快照，不再接收新字段或成为数据/模型真源。
 
 ## 6. YOLO registry 元数据
 
@@ -115,23 +115,22 @@ revision、train/val/eval split fingerprint 以及动作/检测映射摘要，re
 
 | YAML | 内容与功能 |
 |---|---|
-| [`yolo-detection/registry/yolo-group1-large-v1/classes.yaml`](../yolo-detection/registry/yolo-group1-large-v1/classes.yaml) | 固定 group1 checkpoint 的 class ID：hand、scope control body、scope mid section。 |
-| [`yolo-detection/registry/yolo-group1-large-v1/train_config.yaml`](../yolo-detection/registry/yolo-group1-large-v1/train_config.yaml) | 记录 group1 的架构、图像尺寸、训练超参、stride 和验收门槛。 |
-| [`yolo-detection/registry/yolo-group2-small-v1/classes.yaml`](../yolo-detection/registry/yolo-group2-small-v1/classes.yaml) | 固定 group2 checkpoint 的 class ID：syringe、air gun、scope distal end。 |
-| [`yolo-detection/registry/yolo-group2-small-v1/train_config.yaml`](../yolo-detection/registry/yolo-group2-small-v1/train_config.yaml) | 记录 group2 的训练事实和验收门槛；小目标重点审查 recall。 |
+| [`registry/detection/yolo-group1-large-v1/classes.yaml`](../registry/detection/yolo-group1-large-v1/classes.yaml) | 固定 group1 checkpoint 的 class ID：hand、scope control body、scope mid section。 |
+| [`registry/detection/yolo-group1-large-v1/train_config.yaml`](../registry/detection/yolo-group1-large-v1/train_config.yaml) | 记录 group1 的架构、图像尺寸、训练超参、stride 和验收门槛。 |
+| [`registry/detection/yolo-group2-small-v1/classes.yaml`](../registry/detection/yolo-group2-small-v1/classes.yaml) | 固定 group2 checkpoint 的 class ID：syringe、air gun、scope distal end。 |
+| [`registry/detection/yolo-group2-small-v1/train_config.yaml`](../registry/detection/yolo-group2-small-v1/train_config.yaml) | 记录 group2 的训练事实和验收门槛；小目标重点审查 recall。 |
 
 ## 7. 生成或本地 YAML
 
-以下文件受 `.gitignore` 排除，不进入上面的 26 文件清单：
+以下文件受 `.gitignore` 排除，不进入上面的 29 文件清单：
 
-- `yolo-detection/pipeline/datasets/**/data.yaml`：数据构建产生的 Ultralytics 清单；真源是 pipeline
-  配置、稳定 split 和已导入数据。
-- `yolo-detection/pipeline/raw/**/data.yaml`：外部数据随附的类别或动作映射；experiment/testset
-  保存其路径和 mapping 版本。
-- `**/runs/**/args.yaml`、`yolo-detection/experiments/**/args.yaml`：训练过程生成的参数快照。
+- `datasets/yolo/**/data.yaml`：本地 YOLO 数据挂载及生成的 Ultralytics 清单；framework
+  experiment 和 testset catalog 只引用该统一路径。
+- `datasets/raw/**/*.yaml`：外部数据随附映射；不得作为仓库配置提交。
+- `**/runs/**/args.yaml`、`legacy/**/experiments/**/args.yaml`：训练过程或历史环境快照。
+- `legacy/**/raw/**/*.yaml`：随历史目录移动的本地原始数据，不受兼容性保证。
 - `modelscope_upload/**/*.yaml`：打包输出副本，应由受跟踪的 experiment、pin 或 registry 重新生成。
-- `cleansight-yolo-pipeline-main/**/*.yaml`：本地兼容镜像；可维护真源位于
-  `yolo-detection/pipeline/` 和 `yolo-detection/registry/`。
+- `cleansight-yolo-pipeline-main/**/*.yaml`：本地兼容镜像，不是当前 framework/benchmark 真源。
 
 若生成文件以后转为受 Git 跟踪的稳定契约，必须将其加入本文档的逐文件清单。
 

@@ -86,9 +86,9 @@ YOLO 检测模型已经完成分组训练和验证流程，但当前两个分组
 当前已经建立三套时序模型仓库：
 
 ```text
-temporal-gru/
-temporal-causal-tcn/
-temporal-transformer/
+legacy/temporal-gru/
+legacy/temporal-causal-tcn/
+legacy/temporal-transformer/
 ```
 
 每个仓库都包含：

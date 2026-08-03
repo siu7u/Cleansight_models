@@ -338,11 +338,14 @@ class SlidingWindowTemporalPipeline(Pipeline):
             meta["num_params"] = sum(parameter.numel() for parameter in model.parameters())
 
         window = meta.get("window") or cfg["train"].get("window", 64)
+        limits = (cfg.get("evaluation") or {}).get("limits") or {}
         features, truths, id2name = load_split(
             cfg["data"],
             cfg["data"]["split_eval"],
             window=window,
             feature_schema=cfg.get("feature_schema"),
+            max_videos=limits.get("max_videos"),
+            max_frames=limits.get("max_frames"),
         )
         datasets = [SlidingWindowDataset(features[i], truths[i], window) for i in range(len(features))]
 
@@ -364,7 +367,13 @@ class SlidingWindowTemporalPipeline(Pipeline):
                 video_preds.append(preds)
                 video_gts.append(ds.y.numpy())
 
-        names = split_video_names(cfg["data"], cfg["data"]["split_eval"], window=window)
+        names = split_video_names(
+            cfg["data"],
+            cfg["data"]["split_eval"],
+            window=window,
+            max_videos=limits.get("max_videos"),
+            max_frames=limits.get("max_frames"),
+        )
         pred_by_item = {
             name: [id2name[int(value)] for value in video]
             for name, video in zip(names, video_preds)

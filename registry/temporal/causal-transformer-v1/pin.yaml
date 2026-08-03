@@ -1,0 +1,28 @@
+model:
+  name: legacy_causal_transformer_v1
+  version: v1
+  checkpoint: transformer-final-20260704-161653.pt
+  checkpoint_sha256: 80e8fd1119d929c98203309cb1e53260ceacf1b00f1980bfae0c72555522389b
+
+dataset:
+  view_b: endo-project-v1
+  path: datasets/endo-project-v1
+  source: legacy MS-TCN2 Endo_Project
+
+detection:
+  yolo_version: yolo-v1
+  registry_path: registry/detection
+  feature_dim: 20
+
+feature_mapping:
+  version: legacy-20d-v1
+  implementation: framework/cleansight_eval/temporal/data.py
+
+runtime:
+  online_causal: true
+  receptive_field_frames: 64
+  inference_mode: sliding_window_temporal
+  output_labels:
+    - Idle
+    - Long_Brushing
+    - Short_Brushing

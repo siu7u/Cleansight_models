@@ -21,7 +21,7 @@ datasets:
   temporal.endo-project-v1:
     family: temporal
     dataset_version: endo-project-v1
-    data_root: temporal-gru/data/Endo_Project
+    data_root: datasets/endo-project-v1
     feature_mapping: legacy-20d-v1
     input_dim: 20
     labels: [Idle, Long_Brushing, Short_Brushing]
@@ -29,7 +29,7 @@ datasets:
   yolo.group1_large-v1:
     family: yolo
     dataset_version: cleansight-actionmixed-detection-v1
-    manifest: yolo-detection/pipeline/datasets/group1_large/data.yaml
+    manifest: datasets/yolo/group1_large/data.yaml
     feature_mapping: yolo-bbox-group1-v1
     input_dim: 3
     labels: [hand, scope_control_body, scope_mid_section]
@@ -38,7 +38,7 @@ datasets:
   yolo.group2_small-v1:
     family: yolo
     dataset_version: cleansight-actionmixed-detection-v1
-    manifest: yolo-detection/pipeline/datasets/group2_small/data.yaml
+    manifest: datasets/yolo/group2_small/data.yaml
     feature_mapping: yolo-bbox-group2-v1
     input_dim: 3
     labels: [syringe, air_gun, scope_distal_end]
@@ -75,7 +75,7 @@ testsets:
   temporal.endo-project-v1.train:
     dataset: temporal.endo-project-v1
     split: train
-    manifest: temporal-gru/data/Endo_Project/splits/train.split1.bundle
+    manifest: datasets/endo-project-v1/splits/train.split1.bundle
     purpose: training_only
     expected_items:
       - export9
@@ -98,7 +98,7 @@ testsets:
   temporal.endo-project-v1.test:
     dataset: temporal.endo-project-v1
     split: test
-    manifest: temporal-gru/data/Endo_Project/splits/test.split1.bundle
+    manifest: datasets/endo-project-v1/splits/test.split1.bundle
     purpose: locked_holdout_benchmark
     expected_items:
       - export16-480P

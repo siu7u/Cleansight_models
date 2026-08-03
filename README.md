@@ -10,10 +10,12 @@ YOLO 单帧检测与 GRU / MS-TCN / MS-TCN++ / Transformer 时序模型。
 
 | 模块 | 职责 |
 |---|---|
-| [`framework/`](framework/) | 配置、训练、run、checkpoint、模型预测、报告和矩阵落盘 |
-| [`benchmark/`](benchmark/) | 固定 testset、指标口径、评估器、结果/artifact/交付契约 |
+| [`framework/`](framework/) | 配置、训练、run、checkpoint、模型注册与预测 |
+| [`benchmark/`](benchmark/) | 评测 CLI、固定 testset、指标口径、结果/artifact/报告/交付契约 |
 | [`schemas/`](schemas/) | 供外部系统消费的稳定 JSON Schema |
-| `temporal-*`、`yolo-detection/` | 历史模型资产、旧流水线、CARD、pin 和 registry；旧命令直接从各自目录运行 |
+| [`registry/`](registry/) | 已登记模型的 CARD、pin、报告和历史 checkpoint |
+| [`datasets/`](datasets/) | 本地数据挂载点；除说明文档外不进入 Git |
+| [`legacy/`](legacy/) | 冻结的旧流水线与复现代码，仅供追溯，不被活跃代码依赖 |
 | `CleanSightBackend` | 在线推理、业务流程、真实延迟与生产验收 |
 
 ## 完整架构
@@ -52,11 +54,11 @@ Cleansight_models/
 ├── framework/
 │   ├── experiments/                   # 三条流水线的实验 YAML
 │   ├── cleansight_eval/
-│   │   ├── cli/                       # train / eval / matrix 组合根
-│   │   ├── core/                      # 配置、run、checkpoint、完整性、报告、矩阵
+│   │   ├── cli/                       # train 入口
+│   │   ├── core/                      # 配置、run、checkpoint、执行环境
 │   │   ├── detection/                 # 单帧检测 pipeline + YOLO adapter
 │   │   └── temporal/
-│   │       ├── models/                # GRU / MS-TCN / MS-TCN++ / Transformer
+│   │       ├── models/                # 当前模型与历史 checkpoint 兼容实现
 │   │       ├── sliding_window_pipeline.py
 │   │       └── full_sequence_pipeline.py
 │   └── tests/                         # framework 契约与 pipeline smoke tests
@@ -69,17 +71,17 @@ Cleansight_models/
 │   └── e2e_3min/                      # 3 分钟业务场景评估
 ├── schemas/                           # 对外 JSON Schema，不含指标实现
 ├── usage/                             # YAML 配置索引和测试命令行教程
-├── tools/                             # testset/CARD 校验和历史专项工具
-├── yolo-detection/                    # 历史 YOLO 数据、流水线、registry 和 CARD
-├── temporal-gru/                      # 历史 GRU 模型资产
-├── temporal-causal-tcn/               # 历史 Causal TCN 模型资产
-├── temporal-transformer/              # 历史 Transformer 模型资产
+├── tools/                             # testset/CARD 等非模型执行工具
+├── registry/                          # 模型版本元数据、报告与已登记权重
+├── datasets/                          # 本地数据入口（内容默认忽略）
+├── external_checkpoints/              # 外部权重的配套配置模板
+├── legacy/                            # 冻结的历史 YOLO/时序实现和专项工具
 ├── runs/                              # 本地运行产物，不进入 Git
 └── tests/                             # benchmark/schema/交付契约测试
 ```
 
-新代码的主路径是 `framework/ + benchmark/ + schemas/`。历史模型目录仍用于复现、CARD/pin 和旧
-checkpoint 追溯，但不与新 framework 再维护一套重复抽象。
+活跃代码主路径是 `framework/ + benchmark/ + schemas/`。模型资产集中在 `registry/`，数据从
+`datasets/` 挂载。`legacy/` 只保存迁移前快照，活跃模块禁止反向依赖它。
 
 ### 3. 运行时分层与依赖方向
 
@@ -129,7 +131,7 @@ flowchart TB
 | 流水线 | 领域实现 | 模型/适配器 | 输入与监督 | 预测语义 |
 |---|---|---|---|---|
 | `detection` | `framework/.../detection/pipeline.py` | Ultralytics `YoloAdapter` | 图像与 YOLO 标签；训练由 Ultralytics 管理 | 单帧、无状态，输出框/类别/置信度 |
-| `sliding_window_temporal` | `temporal/sliding_window_pipeline.py` | 当前注册的因果模型：GRU | `[B,window,F]`，窗口末帧监督 | 因果滑窗、逐 tick 前进、冷启动与因果平滑 |
+| `sliding_window_temporal` | `temporal/sliding_window_pipeline.py` | GRU；历史 GRU/Causal TCN/Causal Transformer 兼容实现 | `[B,window,F]`，窗口末帧监督 | 因果滑窗、逐 tick 前进、冷启动与因果平滑 |
 | `full_sequence_temporal` | `temporal/full_sequence_pipeline.py` | GRU、MS-TCN、MS-TCN++、Transformer | `[1,T,F]`，逐帧监督 | 整段上下文、逐帧输出，主要用于离线评估 |
 
 一个 checkpoint 的训练与评估必须属于同一条 pipeline。网络结构可以在不同 pipeline 中分别建立
@@ -428,6 +430,7 @@ checkpoint + checkpoint metadata + CARD.md + pin.yaml
 - [实现状态](docs/TRAIN_EVAL_IMPLEMENTATION_STATUS.md)：当前能力与剩余事项。
 - [设计准则](docs/DESIGN.md)：framework/benchmark 职责与抽象边界。
 
-旧的 `temporal-*` 和 `yolo-detection/pipeline/` 命令仍可直接运行以复现历史结果；不再通过第二份
-模型 catalog 转发。新训练使用 `framework.cleansight_eval.cli.train`，统一评测使用
-`benchmark.cli.eval` / `benchmark.cli.matrix`。
+迁移前的独立实现已冻结到 [`legacy/`](legacy/)；它们不属于受支持的训练或评测入口。历史权重已由
+framework 兼容模型接管，可通过 `framework/experiments/legacy-*.yaml` 运行。新训练使用
+`framework.cleansight_eval.cli.train`，统一评测使用 `benchmark.cli.eval` /
+`benchmark.cli.matrix`。

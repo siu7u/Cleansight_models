@@ -36,8 +36,19 @@ def set_seed(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
-def pick_device() -> torch.device:
-    """选择训练/评估设备：CUDA > MPS(Apple) > CPU。"""
+def pick_device(preferred: str = "auto") -> torch.device:
+    """解析显式设备；``auto`` 按 CUDA、MPS、CPU 顺序选择。"""
+
+    if preferred != "auto":
+        device = torch.device(preferred)
+        if device.type == "cuda" and not torch.cuda.is_available():
+            raise ValueError("请求了 CUDA，但当前环境 torch.cuda.is_available() 为 False")
+        if device.type == "mps" and (
+            getattr(torch.backends, "mps", None) is None
+            or not torch.backends.mps.is_available()
+        ):
+            raise ValueError("请求了 MPS，但当前环境不可用")
+        return device
 
     if torch.cuda.is_available():
         return torch.device("cuda")

@@ -11,7 +11,7 @@ model:
 
 data:
   name: group2_small
-  data_yaml: ../../yolo-detection/pipeline/datasets/group2_small/data.yaml
+  data_yaml: ../../datasets/yolo/group2_small/data.yaml
   eval_split: val
 
 evaluation:

@@ -5,6 +5,10 @@
 （见 ``full_sequence_pipeline`` / ``sliding_window_pipeline``）。另提供 checkpoint 重建
 元信息的构造助手 ``build_temporal_meta``，两条时序流水线复用同一份口径。
 
+历史 ``legacy-20d-v1`` 数据通过同一入口读取 Endo Project 的 ``features/*.npy``、
+``groundTruth/*.txt`` 和 ``mapping.txt``。兼容逻辑只处理数据格式，不再保留独立训练或
+推理入口。
+
 真实数据格式（已按 train/val/test 目录切分）：
 
     <root>/labels/data.yaml                      动作类别（nc / names，6 类）
@@ -29,6 +33,7 @@ from .features import CLEAN_FEATURE_DIMS, build_clean_bbox_features
 
 N_DET_CLASSES = 8  # frames/data.yaml 的检测类数（每类 5 维）
 FEATURE_DIM = N_DET_CLASSES * 5  # = 40
+LEGACY_FEATURE_VERSION = "legacy-20d-v1"
 
 
 def featurize_frame_bbox(
@@ -262,11 +267,115 @@ def _iter_split_sequences(data_cfg: dict, split: str, window: int | None = None)
         yield stem, frame_ids, action_ids
 
 
+def _load_legacy_mapping(root: Path) -> tuple[dict[str, int], dict[int, str]]:
+    """读取 Endo Project ``mapping.txt``，返回双向类别映射。"""
+
+    action_to_id: dict[str, int] = {}
+    id_to_action: dict[int, str] = {}
+    mapping_path = root / "mapping.txt"
+    for raw in mapping_path.read_text(encoding="utf-8").splitlines():
+        if not raw.strip():
+            continue
+        index_text, action = raw.split(maxsplit=1)
+        index = int(index_text)
+        if action in action_to_id or index in id_to_action:
+            raise ValueError(f"mapping.txt 含重复类别: {raw!r}")
+        action_to_id[action] = index
+        id_to_action[index] = action
+    if not id_to_action:
+        raise ValueError(f"标签映射为空: {mapping_path}")
+    return action_to_id, id_to_action
+
+
+def _load_legacy_endo_split(
+    data_cfg: dict,
+    split: str,
+    *,
+    window: int | None,
+    feature_schema: dict | None,
+    max_videos: int | None = None,
+    max_frames: int | None = None,
+):
+    """读取历史 Endo Project split，规范成 framework 的 ``[T,F]`` 序列列表。"""
+
+    root = Path(data_cfg["root"])
+    action_to_id, source_id2name = _load_legacy_mapping(root)
+    class_order = (feature_schema or {}).get("class_order")
+    if class_order is None:
+        id2name = source_id2name
+        action_id_remap = {index: index for index in source_id2name}
+    else:
+        if not isinstance(class_order, list) or set(class_order) != set(source_id2name.values()):
+            raise ValueError(
+                "feature_schema.class_order 与 legacy mapping 不一致: "
+                f"configured={class_order}, dataset={list(source_id2name.values())}"
+            )
+        name_to_target = {name: index for index, name in enumerate(class_order)}
+        action_id_remap = {
+            source_id: name_to_target[name] for source_id, name in source_id2name.items()
+        }
+        id2name = {index: name for index, name in enumerate(class_order)}
+
+    names = _registered_split_items(data_cfg, split)
+    if names is None:
+        bundle = root / "splits" / f"{split}.split1.bundle"
+        if not bundle.is_file():
+            raise FileNotFoundError(f"legacy split 清单不存在: {bundle}")
+        names = [line.strip() for line in bundle.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if max_videos is not None:
+        names = names[:max_videos]
+
+    expected_dim = int((feature_schema or {}).get("dim", data_cfg.get("input_dim", 20)))
+    features: list[np.ndarray] = []
+    truths: list[np.ndarray] = []
+    accepted_names: list[str] = []
+    for name in names:
+        feature_path = root / "features" / f"{name}.npy"
+        truth_path = root / "groundTruth" / f"{name}.txt"
+        raw_features = np.load(feature_path)
+        if raw_features.ndim != 2:
+            raise ValueError(f"{name}: legacy 特征必须是二维，实际 {raw_features.shape}")
+        if raw_features.shape[1] == expected_dim:
+            sequence = raw_features
+        elif raw_features.shape[0] == expected_dim:
+            sequence = raw_features.T
+        else:
+            raise ValueError(
+                f"{name}: legacy 特征无法对齐 dim={expected_dim}，实际 {raw_features.shape}"
+            )
+        labels = []
+        for raw_label in truth_path.read_text(encoding="utf-8").splitlines():
+            label = raw_label.strip()
+            if not label:
+                continue
+            if label not in action_to_id:
+                raise ValueError(f"{name}: 未登记动作标签 {label!r}")
+            labels.append(action_id_remap[action_to_id[label]])
+        common = min(len(sequence), len(labels))
+        if max_frames is not None:
+            common = min(common, max_frames)
+        if window is not None and common < window:
+            print(f"  [skip] {name}: 采样帧 {common} < window {window}")
+            continue
+        if common <= 0:
+            continue
+        features.append(np.asarray(sequence[:common], dtype=np.float32))
+        truths.append(np.asarray(labels[:common], dtype=np.int64))
+        accepted_names.append(name)
+
+    if not features:
+        raise ValueError(f"{root} 的 legacy split={split!r} 没有可用序列")
+    return features, truths, id2name, accepted_names
+
+
 def load_split(
     data_cfg: dict,
     split: str,
     window: int | None = None,
     feature_schema: dict | None = None,
+    *,
+    max_videos: int | None = None,
+    max_frames: int | None = None,
 ):
     """读某个 split 目录的全部视频，返回 (features_list, truths_list, id2name)。
 
@@ -274,7 +383,20 @@ def load_split(
     索引与 ``labels/<split>/`` 下的视频对齐（同 ``split_video_names`` 的顺序）。若给了
     ``window``，跳过 ``T < window`` 的过短序列（窗口喂入 SlidingWindowDataset 无法开窗）并告警。
     ``feature_schema.mask_targets`` 可按 ``frames/data.yaml`` 的目标名或 ID 遮罩整组 5 维特征。
+    ``max_videos`` / ``max_frames`` 仅用于显式 smoke 评测限制，训练调用不传这两个参数。
     """
+    feature_version = (feature_schema or {}).get("version", "actionmixed-bbox-8cls-v1")
+    if feature_version == LEGACY_FEATURE_VERSION:
+        features, truths, id2name, _names = _load_legacy_endo_split(
+            data_cfg,
+            split,
+            window=window,
+            feature_schema=feature_schema,
+            max_videos=max_videos,
+            max_frames=max_frames,
+        )
+        return features, truths, id2name
+
     root = Path(data_cfg["root"])
     frames_dir = root / data_cfg.get("frames_dir", "frames") / split
     source_id2name = load_action_mapping(root, data_cfg.get("action_mapping", "labels/data.yaml"))
@@ -299,7 +421,6 @@ def load_split(
         }
         id2name = {index: name for index, name in enumerate(class_order)}
     mask_target_ids = resolve_mask_target_ids(data_cfg, feature_schema)
-    feature_version = (feature_schema or {}).get("version", "actionmixed-bbox-8cls-v1")
     clean_recipe = feature_version in CLEAN_FEATURE_DIMS
     detection_mapping = load_detection_mapping(data_cfg) if clean_recipe else None
     fps = float(data_cfg.get("fps", 7.5))
@@ -309,6 +430,13 @@ def load_split(
 
     features, truths = [], []
     for stem, frame_ids, action_ids in _iter_split_sequences(data_cfg, split, window):
+        if max_videos is not None and len(features) >= max_videos:
+            break
+        if max_frames is not None:
+            frame_ids = frame_ids[:max_frames]
+            action_ids = action_ids[:max_frames]
+            if window is not None and len(frame_ids) < window:
+                continue
         frame_paths = [frames_dir / f"{stem}-{frame_id:06d}.txt" for frame_id in frame_ids]
         if clean_recipe:
             feats, _feature_names, actual_version = build_clean_bbox_features(
@@ -340,9 +468,38 @@ def load_split(
     return features, truths, id2name
 
 
-def split_video_names(data_cfg: dict, split: str, window: int | None = None) -> list[str]:
+def split_video_names(
+    data_cfg: dict,
+    split: str,
+    window: int | None = None,
+    *,
+    max_videos: int | None = None,
+    max_frames: int | None = None,
+) -> list[str]:
     """与 ``load_split`` 完全一致顺序的视频名列表（供可视化把逐帧预测贴回具体视频）。"""
-    return [stem for stem, _fids, _acts in _iter_split_sequences(data_cfg, split, window)]
+
+    root = Path(data_cfg["root"])
+    if (root / "mapping.txt").is_file() and (root / "features").is_dir():
+        _features, _truths, _mapping, names = _load_legacy_endo_split(
+            data_cfg,
+            split,
+            window=window,
+            feature_schema={
+                "version": LEGACY_FEATURE_VERSION,
+                "dim": data_cfg.get("input_dim", 20),
+            },
+            max_videos=max_videos,
+            max_frames=max_frames,
+        )
+        return names
+    names = []
+    for stem, frame_ids, _action_ids in _iter_split_sequences(data_cfg, split, window):
+        if max_frames is not None and window is not None and len(frame_ids[:max_frames]) < window:
+            continue
+        names.append(stem)
+        if max_videos is not None and len(names) >= max_videos:
+            break
+    return names
 
 
 def build_dataset_provenance(data_cfg: dict, feature_schema: dict | None) -> dict:
@@ -391,8 +548,17 @@ def build_dataset_provenance(data_cfg: dict, feature_schema: dict | None) -> dic
         }
 
     root = Path(data_cfg["root"])
-    action_mapping = root / data_cfg.get("action_mapping", "labels/data.yaml")
-    detection_mapping = root / data_cfg.get("frames_dir", "frames") / "data.yaml"
+    legacy = baseline.feature_mapping == LEGACY_FEATURE_VERSION
+    action_mapping = (
+        root / "mapping.txt"
+        if legacy
+        else root / data_cfg.get("action_mapping", "labels/data.yaml")
+    )
+    detection_mapping = (
+        None
+        if legacy
+        else root / data_cfg.get("frames_dir", "frames") / "data.yaml"
+    )
 
     def mapping_info(path: Path) -> dict:
         return {
@@ -400,7 +566,7 @@ def build_dataset_provenance(data_cfg: dict, feature_schema: dict | None) -> dic
             "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
         }
 
-    return {
+    provenance = {
         "registered": True,
         "id": str(dataset_ref),
         "version": baseline.dataset_version,
@@ -412,9 +578,11 @@ def build_dataset_provenance(data_cfg: dict, feature_schema: dict | None) -> dic
         "roles": roles,
         "splits": splits,
         "action_mapping": mapping_info(action_mapping),
-        "detection_mapping": mapping_info(detection_mapping),
         "feature_schema": dict(feature_schema or {}),
     }
+    if detection_mapping is not None:
+        provenance["detection_mapping"] = mapping_info(detection_mapping)
+    return provenance
 
 
 def assert_resume_dataset_compatible(checkpoint_meta: dict, current: dict) -> None:

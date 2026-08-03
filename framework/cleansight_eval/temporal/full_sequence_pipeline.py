@@ -355,14 +355,22 @@ class FullSequenceTemporalPipeline(Pipeline):
         """运行全序列模型，返回不含指标判分的逐视频预测事实。"""
 
         model, meta = _load_eval_model(cfg, ckpt, device)
+        limits = (cfg.get("evaluation") or {}).get("limits") or {}
         features, truths, id2name = load_split(
             cfg["data"],
             cfg["data"]["split_eval"],
             feature_schema=cfg.get("feature_schema"),
+            max_videos=limits.get("max_videos"),
+            max_frames=limits.get("max_frames"),
         )
 
         video_preds = _infer_split(model, features, device)
-        names = split_video_names(cfg["data"], cfg["data"]["split_eval"])
+        names = split_video_names(
+            cfg["data"],
+            cfg["data"]["split_eval"],
+            max_videos=limits.get("max_videos"),
+            max_frames=limits.get("max_frames"),
+        )
         pred_by_item = {
             name: [id2name[int(value)] for value in video]
             for name, video in zip(names, video_preds)

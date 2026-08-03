@@ -5,11 +5,11 @@
 - 检测分组：`group2_small`
 - YOLO 版本：`yolo-group2-small-v1`
 - 数据视图 A：`project-10-at-2026-07-04-11-10-13954db4`
-- 权重：`yolo-detection/pipeline/runs/group2_small/weights/best.pt`
+- 权重：`legacy/yolo-detection/pipeline/runs/group2_small/weights/best.pt`
 - 训练配置：`registry/yolo-group2-small-v1/train_config.yaml`
 - 类别配置：`registry/yolo-group2-small-v1/classes.yaml`
-- 来源流水线：`yolo-detection/pipeline`
-- 验收报告：`yolo-detection/pipeline/runs/group2_small/acceptance_report.md`
+- 来源流水线：`legacy/yolo-detection/pipeline`
+- 验收报告：`legacy/yolo-detection/pipeline/runs/group2_small/acceptance_report.md`
 
 ## 类别
 

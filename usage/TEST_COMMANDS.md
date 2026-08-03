@@ -119,7 +119,29 @@ python -m benchmark.cli.eval \
 指标的 exploratory 对比；正式复现必须消费带真实检测 confidence/timestamp 的后端
 `FrameFeature` 或原 offline-model feature store。
 
-### 3.3 YOLO 检测模型
+### 3.3 已迁移的历史时序模型
+
+历史模型不再运行 `legacy/temporal-*/main.py`，而是使用 framework 兼容模型、顶层 registry
+checkpoint 和统一 benchmark：
+
+```bash
+python -m benchmark.cli.eval \
+  --config framework/experiments/legacy-gru-v1.yaml \
+  --ckpt registry/temporal/gru-v1/gru-final-20260704-150629.pt
+
+python -m benchmark.cli.eval \
+  --config framework/experiments/legacy-causal-tcn-v1.yaml \
+  --ckpt registry/temporal/causal-tcn-v1/tcn-final-20260704-160652.pt
+
+python -m benchmark.cli.eval \
+  --config framework/experiments/legacy-causal-transformer-v1.yaml \
+  --ckpt registry/temporal/causal-transformer-v1/transformer-final-20260704-161653.pt
+```
+
+这些旧权重没有当前 checkpoint metadata 绑定，因此配置固定为 `exploratory`。运行前需要按
+[`datasets/README.md`](../datasets/README.md) 挂载 `datasets/endo-project-v1`。
+
+### 3.4 YOLO 检测模型
 
 ```bash
 python -m benchmark.cli.eval \

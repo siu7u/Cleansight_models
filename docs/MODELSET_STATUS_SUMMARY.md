@@ -37,9 +37,9 @@ Cleansight_models/
 已建立 YOLO 管理链路：
 
 ```text
-yolo-detection/
+legacy/yolo-detection/
 cleansight-yolo-pipeline-main/
-yolo-detection/pipeline/
+legacy/yolo-detection/pipeline/
 ```
 
 当前 YOLO 已按目标特性拆分为两个分组：
@@ -64,9 +64,9 @@ yolo-detection/pipeline/
 已建立三套时序模型仓库：
 
 ```text
-temporal-gru/
-temporal-causal-tcn/
-temporal-transformer/
+legacy/temporal-gru/
+legacy/temporal-causal-tcn/
+legacy/temporal-transformer/
 ```
 
 每个时序模型仓库已包含：

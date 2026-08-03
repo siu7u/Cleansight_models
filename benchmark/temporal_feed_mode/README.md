@@ -5,15 +5,16 @@
 - 整段喂：一次输入完整特征序列 `[1, T, F]`。
 - 流式喂：逐 tick 维护最近 `window` 帧，只输入 `[1, window, F]` 并取最后一帧预测。
 
-当前默认数据源为旧版 `legacy-20d-v1`：
+当前默认数据源为旧版 `legacy-20d-v1`，通过 catalog 的统一本地挂载读取：
 
 ```text
-../CleanSightBackend/MS-TCN2/data/Endo_Project
+datasets/endo-project-v1
 ```
 
-该脚本当前面向旧 `legacy-20d-v1` 资产，不会自动发现 framework 新 run。等新特征和 checkpoint
-满足两种 feed mode 的结构契约后，可以继续复用，但必须同步调整模型配置、`input_dim`、类别映射和
-数据目录。固定窗口训练出的 checkpoint 不能默认宣称支持任意长全序列。
+脚本用 `framework/experiments/legacy-*.yaml` 和顶层 `registry/temporal/` 运行历史 checkpoint，
+不会动态导入 `legacy/` 中的旧模型代码，也不会自动发现 framework 新 run。等新特征和 checkpoint
+满足两种 feed mode 的结构契约后，可以继续复用，但必须同步调整模型配置、`input_dim`、类别映射
+和数据目录。固定窗口训练出的 checkpoint 不能默认宣称支持任意长全序列。
 
 ## 运行
 
@@ -38,7 +39,8 @@ python benchmark/temporal_feed_mode/run_feed_mode_benchmark.py \
   --max-frames 256
 ```
 
-`--max-videos` 和 `--max-frames` 只用于 smoke test。正式汇报或打榜时不要传这两个参数，或改用 GPU 后台全量运行。
+`--max-videos` 和 `--max-frames` 会限制 framework 实际加载与推理的数据，只用于 smoke test。
+正式汇报或打榜时不要传这两个参数，或改用 GPU 后台全量运行。
 
 ## 输出
 

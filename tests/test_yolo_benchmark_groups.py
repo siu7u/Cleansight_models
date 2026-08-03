@@ -1,4 +1,4 @@
-"""旧 YOLO benchmark 从 pipeline 真源解析模型分组的快速测试。"""
+"""YOLO benchmark 从顶层 registry 解析模型分组的快速测试。"""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from benchmark.single_model.run_yolo_benchmark import (
 class YoloBenchmarkGroupsTest(unittest.TestCase):
     """验证 model-id 约定不再依赖第二份 model catalog。"""
 
-    def test_loads_group_and_class_order_from_pipeline_config(self) -> None:
+    def test_explicit_compatibility_group_file_preserves_class_order(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "config.yaml"
             path.write_text(

@@ -84,8 +84,16 @@ datasets/
 **/mlruns/
 
 # YOLO local assets that are not registry metadata.
-yolo-detection/base_weights/
-yolo-detection/experiments/
+legacy/yolo-detection/base_weights/
+legacy/yolo-detection/experiments/
+legacy/yolo-detection/pipeline/raw/
+legacy/yolo-detection/pipeline/runs/
+legacy/yolo-detection/pipeline/versioned_weights/
+legacy/yolo-detection/pipeline/yolo*.pt
+legacy/temporal-*/checkpoints/
+legacy/temporal-*/experiments/
+legacy/temporal-*/weights/
+legacy/**/__pycache__/
 
 # Keep benchmark scripts and markdown summaries, but ignore bulky benchmark
 # outputs unless explicitly promoted into reports.
@@ -111,12 +119,19 @@ benchmark/**/*.mov
 *.safetensors
 
 # Registry metadata should stay visible even though model binaries are ignored.
-!**/registry/
-!**/registry/**
-!**/registry/**/*.md
-!**/registry/**/*.json
-!**/registry/**/*.yaml
-!**/registry/**/*.yml
+!/registry/
+!/registry/**/
+!/registry/**/*.md
+!/registry/**/*.json
+!/registry/**/*.yaml
+!/registry/**/*.yml
+
+# 迁移前已经受 Git 跟踪的四个时序权重继续保留，便于复核历史结果。
+# 新 checkpoint 不得再增加例外，应由 pin.yaml 引用外部对象存储。
+!/registry/temporal/gru-v1/gru-final-20260704-150629.pt
+!/registry/temporal/gru-v1/gru-final-20260704-155233.pt
+!/registry/temporal/causal-tcn-v1/tcn-final-20260704-160652.pt
+!/registry/temporal/causal-transformer-v1/transformer-final-20260704-161653.pt
 
 # ---------------------------------------------------------------------------
 # Legacy imported source snapshots
@@ -124,6 +139,11 @@ benchmark/**/*.mov
 CausalModel-master/
 cleansight-yolo-pipeline-main/
 cleansight-ActionMixed/
+
+# 本地数据挂载；catalog 只登记稳定相对路径，数据本体和绝对符号链接不入 Git。
+!/datasets/
+/datasets/*
+!/datasets/README.md
 cleansight-ActionSequence/
 references
 modelscope_upload

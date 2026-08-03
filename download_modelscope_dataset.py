@@ -11,12 +11,12 @@ from urllib.parse import urlparse
 DATASET_PRESETS = {
     "actionmixed": {
         "dataset": "lhh010/cleansight-ActionMixed",
-        "output": Path("yolo-detection/pipeline/raw/modelscope/cleansight-ActionMixed"),
+        "output": Path("datasets/raw/modelscope/cleansight-ActionMixed"),
         "description": "已打包的 ActionMixed 检测/时序样本",
     },
     "raw": {
         "dataset": "lhh010/cleansight-raw",
-        "output": Path("yolo-detection/pipeline/raw/modelscope/cleansight-raw"),
+        "output": Path("datasets/raw/modelscope/cleansight-raw"),
         "description": "ModelScope cleansight-raw 原始数据集",
     },
 }

@@ -32,7 +32,7 @@ KNOWN_SECTION_KEYS = {
         "type", "weights", "imgsz", "allow_missing_meta", "input_dim", "num_classes",
         "hidden", "num_layers", "num_stages", "dropout", "tmse_weight", "tmse_clip",
         "d_model", "nhead", "dim_feedforward", "max_len", "lstm_layers", "tcn_layers",
-        "refine_stages",
+        "refine_stages", "hidden_dims",
     },
     "data": {
         "name", "dataset_ref", "data_yaml", "eval_split", "root", "action_mapping", "labels_dir",

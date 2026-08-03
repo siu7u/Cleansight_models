@@ -29,21 +29,21 @@
 
 已完成：
 
-- 已建立集中式 YOLO 仓库：`yolo-detection/`
-- 已接入新 YOLO pipeline：`yolo-detection/pipeline/`
-- 已完成数据视图 A 登记：`yolo-detection/data/DATASET_VIEW_A.md`
+- 已建立集中式 YOLO 仓库：`legacy/yolo-detection/`
+- 已接入新 YOLO pipeline：`legacy/yolo-detection/pipeline/`
+- 已完成数据视图 A 登记：`legacy/yolo-detection/data/DATASET_VIEW_A.md`
 - 已按目标特性拆分两个检测分组：
   - `group1_large`：hand / scope_control_body / scope_mid_section
   - `group2_small`：syringe / air_gun / scope_distal_end
 - 已完成首轮训练和验证：
-  - `yolo-detection/pipeline/runs/group1_large/weights/best.pt`
-  - `yolo-detection/pipeline/runs/group2_small/weights/best.pt`
+  - `legacy/yolo-detection/pipeline/runs/group1_large/weights/best.pt`
+  - `legacy/yolo-detection/pipeline/runs/group2_small/weights/best.pt`
 - 已登记 registry：
-  - `yolo-detection/registry/yolo-group1-large-v1/`
-  - `yolo-detection/registry/yolo-group2-small-v1/`
+  - `legacy/yolo-detection/registry/yolo-group1-large-v1/`
+  - `legacy/yolo-detection/registry/yolo-group2-small-v1/`
 - 已生成评估报告：
-  - `yolo-detection/registry/yolo-group1-large-v1/eval_report.md`
-  - `yolo-detection/registry/yolo-group2-small-v1/eval_report.md`
+  - `legacy/yolo-detection/registry/yolo-group1-large-v1/eval_report.md`
+  - `legacy/yolo-detection/registry/yolo-group2-small-v1/eval_report.md`
 - 已整理 ModelScope 上传目录：
   - `modelscope_upload/yolo-group1-large-v1/`
   - `modelscope_upload/yolo-group2-small-v1/`
@@ -69,9 +69,9 @@
 已完成：
 
 - 已建立三套时序模型仓库：
-  - `temporal-gru/`
-  - `temporal-causal-tcn/`
-  - `temporal-transformer/`
+  - `legacy/temporal-gru/`
+  - `legacy/temporal-causal-tcn/`
+  - `legacy/temporal-transformer/`
 - 每个仓库均包含模板要求字段：
   - `feature_mapping.py`
   - `build_testset.py`
@@ -79,9 +79,9 @@
   - `pin.yaml`
   - `REPORT.md`
 - 已完成首轮训练和 registry 权重登记：
-  - `temporal-gru/registry/gru-v1/gru-final-20260704-150629.pt`
-  - `temporal-causal-tcn/registry/tcn-v1/tcn-final-20260704-160652.pt`
-  - `temporal-transformer/registry/transformer-v1/transformer-final-20260704-161653.pt`
+  - `legacy/temporal-gru/registry/gru-v1/gru-final-20260704-150629.pt`
+  - `legacy/temporal-causal-tcn/registry/tcn-v1/tcn-final-20260704-160652.pt`
+  - `legacy/temporal-transformer/registry/transformer-v1/transformer-final-20260704-161653.pt`
 - 已完成逐类召回和混淆矩阵评估。
 - 已整理 ModelScope 上传目录：
   - `modelscope_upload/temporal-gru-v1/`
@@ -162,11 +162,11 @@
 
 | 编号 | 主题 | 当前状态 | 证据位置 |
 | --- | --- | --- | --- |
-| M1 | YOLO 检测验收线 | 部分完成 | `yolo-detection/registry/*/eval_report.md` |
+| M1 | YOLO 检测验收线 | 部分完成 | `legacy/yolo-detection/registry/*/eval_report.md` |
 | M2 | YOLO 架构对照范围 | 待完成 | 当前仅完成分组 YOLO 首轮训练 |
 | M3 | 时序候选模型优先级/打榜方式 | 部分完成 | 三个 `temporal-*/REPORT.md` 和 `CARD.md` |
 | M4 | 特征通道定稿 | 部分完成 | `feature_mapping.py` 有契约骨架，但新 YOLO 特征未落地 |
-| M5 | conf 阈值 / 抽帧率 | 部分完成 | `yolo-detection/pipeline/config.yaml`、`DATASET_VIEW_A.md` |
+| M5 | conf 阈值 / 抽帧率 | 部分完成 | `legacy/yolo-detection/pipeline/config.yaml`、`DATASET_VIEW_A.md` |
 | M6 | P0 同源核查 | 待完成 | 尚未实现离线训练特征和在线推理特征共用同一 `step()` |
 | M7 | 集中评测 harness | 部分完成 | `benchmark/` |
 | M8 | 窗口大小 / 平滑参数 | 待完成 | 当前窗口主要为 64 |

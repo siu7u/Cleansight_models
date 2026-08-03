@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""运行并汇总 CleanSight 分组 YOLO 模型的单模型 benchmark。"""
+"""通过统一 framework→benchmark 主链路批量评测分组 YOLO 权重。"""
 
 from __future__ import annotations
 
@@ -15,14 +15,22 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[2]
-PIPELINE = ROOT / "yolo-detection" / "pipeline"
 OUT_DIR = ROOT / "benchmark" / "single_model"
 LATEST_DIR = OUT_DIR / "latest"
-PIPELINE_CONFIG = PIPELINE / "config.yaml"
+GROUP_CONFIGS = {
+    "group1_large": {
+        "config": "framework/experiments/yolo-clean-large.yaml",
+        "registry": "registry/detection/yolo-group1-large-v1",
+    },
+    "group2_small": {
+        "config": "framework/experiments/yolo-clean-small.yaml",
+        "registry": "registry/detection/yolo-group2-small-v1",
+    },
+}
 
 
 def build_run_id(version: str | None) -> str:
-    """生成用于归档 benchmark summary 的版本化运行编号。"""
+    """生成稳定归档编号。"""
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     if not version:
@@ -31,31 +39,38 @@ def build_run_id(version: str | None) -> str:
     return f"{slug or 'version'}-{timestamp}"
 
 
-def load_pipeline_groups(path: Path = PIPELINE_CONFIG) -> dict[str, list[str]]:
-    """从 YOLO 数据/训练真源读取 ``group -> class_order``，不维护第二份模型 catalog。"""
+def load_pipeline_groups(path: Path | None = None) -> dict[str, list[str]]:
+    """读取分组类别；显式 path 兼容旧 groups YAML，默认读取顶层 registry。"""
 
-    payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    raw_groups = payload.get("groups")
-    if not isinstance(raw_groups, dict) or not raw_groups:
-        raise ValueError(f"{path} 缺少非空 groups mapping")
+    if path is not None:
+        payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        raw_groups = payload.get("groups")
+        if not isinstance(raw_groups, dict) or not raw_groups:
+            raise ValueError(f"{path} 缺少非空 groups mapping")
+        return {
+            str(group): [str(label) for label in labels]
+            for group, labels in raw_groups.items()
+        }
+
     groups: dict[str, list[str]] = {}
-    for name, labels in raw_groups.items():
-        if not isinstance(name, str) or not name:
-            raise ValueError(f"{path} 包含非法 group 名: {name!r}")
-        if not isinstance(labels, list) or not all(isinstance(label, str) for label in labels):
-            raise ValueError(f"{path} group={name!r} 的类别必须是字符串列表")
-        groups[name] = list(labels)
+    for group, item in GROUP_CONFIGS.items():
+        classes_path = ROOT / item["registry"] / "classes.yaml"
+        payload = yaml.safe_load(classes_path.read_text(encoding="utf-8")) or {}
+        classes = payload.get("classes")
+        if not isinstance(classes, dict) or not classes:
+            raise ValueError(f"{classes_path} 缺少 classes mapping")
+        groups[group] = [str(classes[key]) for key in sorted(classes, key=int)]
     return groups
 
 
 def model_id_for_group(group: str) -> str:
-    """按稳定约定返回 YOLO 模型 ID；group 本身由 pipeline 配置验证。"""
+    """按稳定约定返回 YOLO 模型 ID。"""
 
     return f"yolo.{group}"
 
 
 def group_for_model_id(model_id: str, groups: dict[str, list[str]]) -> str:
-    """把 ``yolo.<group>`` 解析为配置中真实存在的 YOLO 分组。"""
+    """把 ``yolo.<group>`` 解析为已登记分组。"""
 
     prefix = "yolo."
     group = model_id[len(prefix) :] if model_id.startswith(prefix) else ""
@@ -65,110 +80,8 @@ def group_for_model_id(model_id: str, groups: dict[str, list[str]]) -> str:
     return group
 
 
-def report_path_for(group: str, split: str) -> Path:
-    """返回某个分组和 split 对应的当前验证报告路径。"""
-
-    name = "acceptance_report.md" if split == "val" else f"acceptance_report_{split}.md"
-    return PIPELINE / "runs" / group / name
-
-
-def default_checkpoint_for(group: str) -> Path:
-    """返回某个 YOLO 分组默认使用的 checkpoint 路径。"""
-
-    return PIPELINE / "runs" / group / "weights" / "best.pt"
-
-
-def parse_report(path: Path, model_id: str | None, split: str, checkpoint: Path | None) -> dict:
-    """解析一份 YOLO 验收 Markdown 报告，提取 benchmark 字段。"""
-
-    text = path.read_text(encoding="utf-8")
-    parsed_split = split
-    split_match = re.search(r"数据集 split:\s*`([^`]+)`", text)
-    if split_match:
-        parsed_split = split_match.group(1)
-
-    parsed_checkpoint = str(checkpoint) if checkpoint else None
-    ckpt_match = re.search(r"权重:\s*`([^`]+)`", text)
-    if ckpt_match:
-        parsed_checkpoint = ckpt_match.group(1)
-
-    result = {
-        "group": path.parent.name,
-        "model_id": model_id,
-        "family": "yolo",
-        "checkpoint": parsed_checkpoint,
-        "dataset": {
-            "name": f"datasets/{path.parent.name}",
-            "split": parsed_split,
-            "format": "ultralytics-yolo",
-        },
-        "report": str(path.relative_to(ROOT)),
-        "status": "PASS" if "PASS" in text else "FAIL" if "FAIL" in text else "UNKNOWN",
-        "overall": {},
-        "per_class": [],
-        "artifacts": {},
-        "reasons": [],
-    }
-    artifact_match = re.search(r"逐图预测:\s*`([^`]+)`", text)
-    if artifact_match:
-        result["artifacts"]["predictions"] = artifact_match.group(1)
-
-    for name, key in [
-        ("mAP@0.5", "map50"),
-        ("mAP@0.5:0.95", "map50_95"),
-        ("平均 precision", "precision"),
-        ("平均 recall", "recall"),
-    ]:
-        match = re.search(rf"\|\s*{re.escape(name)}\s*\|\s*([0-9.]+)", text)
-        if match:
-            result["overall"][key] = float(match.group(1))
-
-    class_row = re.compile(r"^\|\s*([^|]+?)\s*\|\s*([0-9.]+)\s*\|\s*([0-9.]+)\s*\|\s*([0-9.]+)\s*\|$")
-    for line in text.splitlines():
-        match = class_row.match(line.strip())
-        if not match:
-            continue
-        label = match.group(1).strip()
-        if label in {"类别", "------"}:
-            continue
-        result["per_class"].append(
-            {
-                "class": label,
-                "precision": float(match.group(2)),
-                "recall": float(match.group(3)),
-                "map50": float(match.group(4)),
-            }
-        )
-
-    if "## 未达标项" in text:
-        tail = text.split("## 未达标项", 1)[1]
-        result["reasons"] = [line[2:].strip() for line in tail.splitlines() if line.startswith("- ")]
-
-    result["metrics"] = {
-        "overall": result["overall"],
-        "per_class": result["per_class"],
-    }
-    result["gates"] = {
-        "status": result["status"],
-        "reasons": result["reasons"],
-    }
-    return result
-
-
-def run_validate(groups: list[str], split: str, weights: str | None) -> int:
-    """对指定 YOLO 分组调用 `04_validate.py`，并返回退出码。"""
-
-    cmd = [sys.executable, "04_validate.py", *groups, "--split", split]
-    if weights:
-        if len(groups) != 1:
-            raise SystemExit("--weights 只能和单个 YOLO 分组或 --model 一起使用")
-        cmd.extend(["--weights", weights])
-    proc = subprocess.run(cmd, cwd=PIPELINE)
-    return proc.returncode
-
-
 def collect_groups(requested: list[str], groups: dict[str, list[str]]) -> list[str]:
-    """验证显式分组；未指定时返回 pipeline 配置中的全部分组。"""
+    """验证显式分组；未指定时返回全部 registry 分组。"""
 
     selected = requested or list(groups)
     unknown = [name for name in selected if name not in groups]
@@ -179,166 +92,147 @@ def collect_groups(requested: list[str], groups: dict[str, list[str]]) -> list[s
     return selected
 
 
-def write_summary(
-    items: list[dict],
-    validate_code: int,
-    version: str | None,
-    split: str,
-    weights: str | None,
-) -> tuple[Path, Path]:
-    """将 YOLO 单模型 benchmark 汇总写成 JSON 和 Markdown。"""
+def _parse_weights(items: list[str]) -> dict[str, Path]:
+    """解析可重复的 ``--weights group=/path/best.pt`` 参数。"""
+
+    result: dict[str, Path] = {}
+    for item in items:
+        if "=" not in item:
+            raise SystemExit("--weights 必须使用 group=/path/to/best.pt")
+        group, raw_path = item.split("=", 1)
+        path = Path(raw_path).expanduser().resolve()
+        if not path.is_file():
+            raise SystemExit(f"YOLO 权重不存在: {path}")
+        result[group] = path
+    return result
+
+
+def _run_group(group: str, checkpoint: Path) -> dict:
+    """调用统一 eval CLI 并读取生成的 EvaluationResult。"""
+
+    item = GROUP_CONFIGS[group]
+    invocation_id = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    output_dir = LATEST_DIR / group / invocation_id
+    command = [
+        sys.executable,
+        "-m",
+        "benchmark.cli.eval",
+        "--config",
+        str(ROOT / item["config"]),
+        "--ckpt",
+        str(checkpoint),
+        "--out-dir",
+        str(output_dir),
+    ]
+    proc = subprocess.run(command, cwd=ROOT, text=True, capture_output=True)
+    evaluations = sorted(
+        output_dir.glob("*.evaluation.json"),
+        key=lambda path: path.stat().st_mtime,
+    )
+    evaluation_path = evaluations[-1] if evaluations else None
+    evaluation = (
+        json.loads(evaluation_path.read_text(encoding="utf-8"))
+        if evaluation_path is not None
+        else None
+    )
+    return {
+        "group": group,
+        "model_id": model_id_for_group(group),
+        "checkpoint": str(checkpoint),
+        "config": item["config"],
+        "evaluation": evaluation,
+        "evaluation_path": (
+            str(evaluation_path.relative_to(ROOT)) if evaluation_path is not None else None
+        ),
+        "exit_code": proc.returncode,
+        "log_tail": (proc.stdout + proc.stderr)[-3000:],
+    }
+
+
+def _metric(item: dict, name: str) -> str:
+    metric = (
+        ((item.get("evaluation") or {}).get("metrics") or {}).get("summary") or {}
+    ).get(name, {})
+    if metric.get("state") != "computed":
+        return metric.get("state", "MISSING")
+    value = metric.get("value")
+    return f"{float(value):.4f}" if isinstance(value, (int, float)) else str(value)
+
+
+def write_summary(results: list[dict], version: str | None) -> tuple[Path, Path]:
+    """汇总 EvaluationResult；不解析历史 Markdown 验收报告。"""
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     LATEST_DIR.mkdir(parents=True, exist_ok=True)
-    archive_dir = OUT_DIR / "reports"
-    archive_dir.mkdir(parents=True, exist_ok=True)
+    reports = OUT_DIR / "reports"
+    reports.mkdir(parents=True, exist_ok=True)
     run_id = build_run_id(version)
     payload = {
-        "schema_version": 1,
         "benchmark": "single_model_yolo",
         "version": version,
         "run_id": run_id,
-        "family": "yolo",
-        "pipeline": str(PIPELINE.relative_to(ROOT)),
-        "dataset": {
-            "split": split,
-            "format": "ultralytics-yolo",
-            "source": "yolo-detection/pipeline/datasets",
-        },
-        "checkpoint": weights,
-        "validate_exit_code": validate_code,
-        "groups": items,
-        "status": "PASS" if items and all(item["status"] == "PASS" for item in items) else "FAIL",
+        "groups": results,
     }
-    json_text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
     latest_json = LATEST_DIR / "yolo_summary.json"
-    archive_json = archive_dir / f"yolo_summary_{run_id}.json"
-    latest_json.write_text(json_text, encoding="utf-8")
-    archive_json.write_text(json_text, encoding="utf-8")
+    archive_json = reports / f"yolo_summary_{run_id}.json"
+    text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+    latest_json.write_text(text, encoding="utf-8")
+    archive_json.write_text(text, encoding="utf-8")
 
     lines = [
         "# YOLO 单模型 Benchmark 汇总",
         "",
         f"- 版本：`{version or run_id}`",
-        f"- 归档编号：`{run_id}`",
-        f"- 流水线：`{PIPELINE.relative_to(ROOT)}`",
-        f"- 数据集 split：`{split}`",
-        f"- 指定权重：`{weights or '默认 runs/<组>/weights/best.pt'}`",
-        f"- 验证退出码：`{validate_code}`",
+        "- 训练与推理：`framework`",
+        "- 指标与产物：`benchmark`",
         "",
-        "| 模型 | 组 | 结论 | mAP@0.5 | mAP@0.5:0.95 | Precision | Recall | 报告 |",
-        "| --- | --- | --- | ---: | ---: | ---: | ---: | --- |",
+        "| 模型 | mAP@0.5 | mAP@0.5:0.95 | Precision | Recall | 结果 | 状态 |",
+        "| --- | ---: | ---: | ---: | ---: | --- | --- |",
     ]
-    for item in items:
-        overall = item.get("overall", {})
+    for item in results:
         lines.append(
-            "| {model_id} | {group} | {status} | {map50} | {map50_95} | {precision} | {recall} | `{report}` |".format(
-                model_id=item.get("model_id") or "未登记",
-                group=item["group"],
-                status=item["status"],
-                map50=f"{overall.get('map50', 0):.3f}" if "map50" in overall else "待测",
-                map50_95=f"{overall.get('map50_95', 0):.3f}" if "map50_95" in overall else "待测",
-                precision=f"{overall.get('precision', 0):.3f}" if "precision" in overall else "待测",
-                recall=f"{overall.get('recall', 0):.3f}" if "recall" in overall else "待测",
-                report=item["report"],
-            )
+            f"| {item['model_id']} | {_metric(item, 'map50')} | {_metric(item, 'map50_95')} | "
+            f"{_metric(item, 'precision')} | {_metric(item, 'recall')} | "
+            f"`{item.get('evaluation_path') or '未生成'}` | "
+            f"{'OK' if item['exit_code'] == 0 else 'CHECK'} |"
         )
-
-    lines += ["", "## 逐类召回", ""]
-    for item in items:
-        lines += [f"### {item['group']}", "", "| 类别 | Precision | Recall | mAP@0.5 |", "| --- | ---: | ---: | ---: |"]
-        if item["per_class"]:
-            for pc in item["per_class"]:
-                lines.append(f"| {pc['class']} | {pc['precision']:.3f} | {pc['recall']:.3f} | {pc['map50']:.3f} |")
-        else:
-            lines.append("| 待测 | 待测 | 待测 | 待测 |")
-        if item["reasons"]:
-            lines += ["", "未达标项："]
-            lines += [f"- {reason}" for reason in item["reasons"]]
-        lines.append("")
-
-    md_text = "\n".join(lines)
     latest_md = LATEST_DIR / "yolo_summary.md"
-    archive_md = archive_dir / f"yolo_summary_{run_id}.md"
-    latest_md.write_text(md_text, encoding="utf-8")
-    archive_md.write_text(md_text, encoding="utf-8")
+    archive_md = reports / f"yolo_summary_{run_id}.md"
+    markdown = "\n".join(lines) + "\n"
+    latest_md.write_text(markdown, encoding="utf-8")
+    archive_md.write_text(markdown, encoding="utf-8")
     return latest_md, archive_md
 
 
 def main() -> int:
-    """运行或汇总分组检测 checkpoint 的 YOLO 验证报告。"""
+    """评测显式提供的分组权重。"""
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("groups", nargs="*", help="只验证指定 YOLO 分组，例如 group1_large")
-    parser.add_argument("--model", help="按 yolo.<pipeline-group> 指定稳定模型 ID")
-    parser.add_argument("--skip-run", action="store_true", help="只汇总已有报告，不调用 04_validate.py")
-    parser.add_argument("--version", help="为本次 benchmark summary 指定版本名，例如 yolo-large-v2")
+    parser.add_argument("groups", nargs="*")
+    parser.add_argument("--model", help="只评测一个 yolo.<group> 模型")
     parser.add_argument(
-        "--split",
-        choices=("val", "test"),
-        default="val",
-        help="评估数据 split。val 用于训练后验收,test 用于最终 holdout。",
+        "--weights",
+        action="append",
+        default=[],
+        help="可重复：group=/path/to/best.pt",
     )
-    parser.add_argument("--weights", help="指定单个 YOLO 分组要评估的权重路径")
+    parser.add_argument("--version")
     args = parser.parse_args()
-
-    if not PIPELINE.exists():
-        raise SystemExit(f"缺少 YOLO pipeline: {PIPELINE}")
-
-    configured_groups = load_pipeline_groups()
-    requested_groups = list(args.groups)
-    if args.model:
-        requested_groups.append(group_for_model_id(args.model, configured_groups))
-    groups = collect_groups(requested_groups, configured_groups)
-    groups = list(dict.fromkeys(groups))
-    if args.weights and len(groups) != 1:
-        raise SystemExit("--weights 只能和单个 YOLO 分组或 --model 一起使用")
-
-    validate_code = 0
-    if not args.skip_run:
-        validate_code = run_validate(groups, args.split, args.weights)
-
-    items = []
-    missing = []
-    for group in groups:
-        model_id = model_id_for_group(group)
-        report = report_path_for(group, args.split)
-        checkpoint = Path(args.weights) if args.weights else default_checkpoint_for(group)
-        if report.exists():
-            items.append(parse_report(report, model_id, args.split, checkpoint))
-        else:
-            missing.append(group)
-            items.append(
-                {
-                    "group": group,
-                    "model_id": model_id,
-                    "family": "yolo",
-                    "checkpoint": str(checkpoint),
-                    "dataset": {
-                        "name": f"datasets/{group}",
-                        "split": args.split,
-                        "format": "ultralytics-yolo",
-                    },
-                    "report": str(report.relative_to(ROOT)),
-                    "status": "MISSING",
-                    "overall": {},
-                    "per_class": [],
-                    "artifacts": {},
-                    "metrics": {"overall": {}, "per_class": []},
-                    "gates": {
-                        "status": "MISSING",
-                        "reasons": ["缺少验收报告；需要先运行 benchmark 或 04_validate.py。"],
-                    },
-                    "reasons": ["缺少 acceptance_report.md；需要先完成数据集、权重和验证集。"],
-                }
-            )
-
-    latest_md, archive_md = write_summary(items, validate_code, args.version, args.split, args.weights)
+    groups = load_pipeline_groups()
+    requested = [group_for_model_id(args.model, groups)] if args.model else args.groups
+    selected = collect_groups(requested, groups)
+    weights = _parse_weights(args.weights)
+    missing = [group for group in selected if group not in weights]
+    if missing:
+        raise SystemExit(
+            "迁移后的 benchmark 不再猜测历史 runs 权重；请提供 "
+            + " ".join(f"--weights {group}=/path/to/best.pt" for group in missing)
+        )
+    results = [_run_group(group, weights[group]) for group in selected]
+    latest_md, archive_md = write_summary(results, args.version)
     print(f"已写入 {latest_md}")
     print(f"已归档 {archive_md}")
-    if missing:
-        print("缺少报告的组: " + ", ".join(missing))
-    return validate_code if validate_code else (2 if missing else 0)
+    return 0 if all(item["exit_code"] == 0 for item in results) else 2
 
 
 if __name__ == "__main__":

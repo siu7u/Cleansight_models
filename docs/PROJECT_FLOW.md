@@ -1,6 +1,7 @@
 # CleanSight Models 项目流程图
 
-> 本文下半部分保留旧 `yolo-detection/pipeline`、`temporal-*` 和 registry 流程，主要用于追溯历史
+> 本文下半部分保留 `legacy/yolo-detection/pipeline`、`legacy/temporal-*` 和旧 registry 流程，
+> 主要用于追溯历史
 > 资产。当前新实验使用 `framework pipeline.predict → benchmark evaluator → report/delivery`；发布、
 > ModelScope 上传和上线决定由人工或外部模型管理系统负责，不由评估代码自动 PASS/FAIL。
 
@@ -30,9 +31,9 @@ flowchart TD
     C2 --> G
     G --> H[feature_mapping<br/>检测结果 -> 时序特征]
 
-    H --> I1[temporal-gru]
-    H --> I2[temporal-causal-tcn]
-    H --> I3[temporal-transformer]
+    H --> I1[legacy/temporal-gru]
+    H --> I2[legacy/temporal-causal-tcn]
+    H --> I3[legacy/temporal-transformer]
     H --> I4[temporal-mstcn-offline<br/>离线上限参考]
 
     I1 --> J[时序单模型评估]
@@ -110,7 +111,8 @@ flowchart TD
 当前已有自动化:
 
 - `03_train.py` 会复制 `runs/<group>/weights/best.pt` 到 `versioned_weights/<model>-vN/best.pt`。
-- `03_train.py` 会通过 `yolo-detection/pipeline/utils/card.py` 追加训练历史到 registry 的 `CARD.md`。
+- 历史 `03_train.py` 会通过 `legacy/yolo-detection/pipeline/utils/card.py` 追加训练历史到旧 registry
+  的 `CARD.md`；当前训练不再调用该脚本。
 - `04_validate.py` 会写 `runs/<group>/acceptance_report.md`、`acceptance_report_test.md` 和 timestamp 归档报告。
 
 当前仍需补齐自动化:
@@ -127,19 +129,19 @@ flowchart TD
     B --> C[时序特征<br/>当前历史版本 legacy-20d-v1]
     C --> D[build_testset.py<br/>构造 window=64 样本]
 
-    D --> E1[temporal-gru/main.py]
-    D --> E2[temporal-causal-tcn/main.py]
-    D --> E3[temporal-transformer/main.py]
+    D --> E1[legacy/temporal-gru/main.py]
+    D --> E2[legacy/temporal-causal-tcn/main.py]
+    D --> E3[legacy/temporal-transformer/main.py]
 
     E1 --> F1[registry/gru-v1/*.pt]
     E2 --> F2[registry/tcn-v1/*.pt]
     E3 --> F3[registry/transformer-v1/*.pt]
 
-    F1 --> G[tools/eval_temporal_detailed.py<br/>Acc / Edit / F1 / per-class recall]
+    F1 --> G[legacy/tools/eval_temporal_detailed.py<br/>历史 Acc / Edit / F1 / per-class recall]
     F2 --> G
     F3 --> G
 
-    F1 --> H[tools/measure_temporal_latency.py<br/>部署机延迟]
+    F1 --> H[legacy/tools/measure_temporal_latency.py<br/>历史部署机延迟]
     F2 --> H
     F3 --> H
 
@@ -188,9 +190,9 @@ flowchart TD
 ```mermaid
 sequenceDiagram
     participant LS as Label Studio / ModelScope
-    participant YP as yolo-detection/pipeline
+    participant YP as legacy/yolo-detection/pipeline
     participant YOLO as YOLO weights
-    participant TM as temporal-* models
+    participant TM as legacy/temporal-* models
     participant BM as benchmark
     participant REG as registry / CARD / pin
     participant BE as CleanSightBackend

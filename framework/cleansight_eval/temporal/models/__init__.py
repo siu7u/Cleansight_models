@@ -13,6 +13,7 @@ import torch.nn as nn
 
 from .clean_offline import CleanASFormer, CleanBiGRU, CleanMSTCNBiLSTM
 from .gru import GRUClassifier
+from .legacy_causal import LegacyCausalTCN, LegacyCausalTransformer
 from .mstcn import MSTCN
 from .mstcn2 import MSTCN2
 from .transformer import TransformerClassifier
@@ -32,6 +33,26 @@ def _build_mstcn(cfg: dict) -> nn.Module:
         in_dim=cfg["input_dim"],
         classes=cfg["num_classes"],
         hidden=cfg.get("hidden", 32),
+    )
+
+
+def _build_legacy_causal_tcn(cfg: dict) -> nn.Module:
+    raw_hidden = cfg.get("hidden_dims", (64, 64, 64))
+    return LegacyCausalTCN(
+        input_dim=cfg["input_dim"],
+        num_classes=cfg["num_classes"],
+        hidden_dims=tuple(int(value) for value in raw_hidden),
+    )
+
+
+def _build_legacy_causal_transformer(cfg: dict) -> nn.Module:
+    return LegacyCausalTransformer(
+        input_dim=cfg["input_dim"],
+        num_classes=cfg["num_classes"],
+        d_model=cfg.get("d_model", 128),
+        nhead=cfg.get("nhead", 4),
+        num_layers=cfg.get("num_layers", 3),
+        dim_feedforward=cfg.get("dim_feedforward", 256),
     )
 
 
@@ -100,6 +121,12 @@ _MODELS = {
     "clean_bigru": {"build": _build_clean_bigru, "causal": False},
     "clean_mstcn_bilstm": {"build": _build_clean_mstcn_bilstm, "causal": False},
     "gru": {"build": _build_gru, "causal": True},
+    "legacy_gru_v1": {"build": _build_gru, "causal": True},
+    "legacy_causal_tcn_v1": {"build": _build_legacy_causal_tcn, "causal": True},
+    "legacy_causal_transformer_v1": {
+        "build": _build_legacy_causal_transformer,
+        "causal": True,
+    },
     "mstcn": {"build": _build_mstcn, "causal": False},
     "mstcn2": {"build": _build_mstcn2, "causal": False},
     "transformer": {"build": _build_transformer, "causal": False},

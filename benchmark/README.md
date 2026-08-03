@@ -108,8 +108,10 @@ P/R/F1 口径相同，边界 MAE 的单位随输入时间轴变化。
 
 ### 历史批量脚本
 
-`benchmark/single_model/run_yolo_benchmark.py` 和 `run_temporal_benchmark.py` 继续用于汇总旧 registry/
-acceptance report。新 framework checkpoint 优先走上面的统一 eval，再用 matrix 汇总：
+`benchmark/single_model/run_yolo_benchmark.py` 和 `run_temporal_benchmark.py` 是批量包装器：前者要求
+显式传入分组 YOLO 权重，后者读取顶层历史时序 registry；两者都逐个调用统一 eval 并汇总
+`EvaluationResult`，不再解析旧 acceptance report 或直接执行模型。新 framework checkpoint
+优先走上面的统一 eval，再用 matrix 汇总：
 
 ```bash
 python -m benchmark.cli.matrix --runs runs

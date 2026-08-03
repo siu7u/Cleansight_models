@@ -10,10 +10,11 @@ Cleansight_models/
 ├── framework/              # 统一模型训练和推理实现
 ├── benchmark/              # 评测入口、数据身份、指标和产物真源
 ├── external_checkpoints/   # 外部 checkpoint 的配套 YAML
-├── yolo-detection/         # YOLO 数据构建、旧流水线和 registry
-├── temporal-*/             # 历史时序模型资产与复现脚本
+├── registry/               # 模型 CARD、pin、报告和已登记权重
+├── datasets/               # 本地数据挂载点，内容默认不跟踪
+├── legacy/                 # 冻结的迁移前 YOLO/时序实现
 ├── schemas/                # 对外 JSON Schema
-├── tools/                  # 校验和历史兼容工具
+├── tools/                  # 校验等非模型执行工具
 ├── usage/                  # YAML 与命令行教程
 └── docs/                   # 设计、接入和评测文档
 ```
@@ -24,8 +25,8 @@ Cleansight_models/
 framework + benchmark + schemas
 ```
 
-`temporal-*` 和 `yolo-detection/pipeline` 主要用于保存与复现历史模型，不再通过单独的
-model manager 转发。
+`legacy/` 只保存迁移前快照，不被 framework、benchmark 或活跃 tools import。历史 checkpoint
+的网络兼容层已经进入 framework，模型身份与交付资料集中到 `registry/`。
 
 ## 2. Framework：负责运行模型
 
@@ -170,7 +171,8 @@ python -m benchmark.cli.matrix --runs runs
 | 修改训练/推理方式 | 对应 temporal 或 detection Pipeline |
 | 修改指标定义 | `benchmark/core/metrics.py` 或 evaluator |
 | 修改固定数据集/split | `benchmark/testsets.yaml` 和 manifest |
-| 修改 YOLO 数据构建 | `yolo-detection/pipeline/` |
+| 修改本地数据挂载 | `datasets/` 与 `benchmark/testsets.yaml` |
+| 查看迁移前 YOLO 数据构建 | `legacy/yolo-detection/pipeline/`（只读历史参考） |
 | 修改结果对外格式 | `schemas/` 和对应 Python 校验器 |
 
 更详细的抽象原则见 [`DESIGN.md`](DESIGN.md)，实际命令见
