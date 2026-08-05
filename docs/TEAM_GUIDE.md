@@ -48,11 +48,11 @@ python tools/team_env.py --setup
 
 ```bash
 # 一键下载训练所需的全部数据集（YOLO + 时序），自动放到 datasets/ 正确位置
-python tools/team_dataset.py --preset all
+python -m framework.cleansight_eval.cli.dataset --preset all
 
 # 只看数据源清单 / 校验是否就绪
-python tools/team_dataset.py --list-presets
-python tools/team_dataset.py --check
+python -m framework.cleansight_eval.cli.dataset --list-presets
+python -m framework.cleansight_eval.cli.dataset --check
 ```
 
 | 数据集 | 用途 | 落盘位置 |
@@ -69,28 +69,28 @@ python tools/team_dataset.py --check
 ### 4.1 看有哪些模型可以训练
 
 ```bash
-python tools/team_train.py --list
+python -m framework.cleansight_eval.cli.train --list-models
 ```
 
 ### 4.2 训练速查表（复制即用）
 
 | 想训练 | 命令 |
 |---|---|
-| **YOLO nano 大目标组** | `python tools/team_train.py --model yolo11n --group group1_large` |
-| **YOLO small 大目标组** | `python tools/team_train.py --model yolo11s --group group1_large` |
-| **YOLO medium 大目标组** | `python tools/team_train.py --model yolo11m --group group1_large` |
-| **YOLO nano 小目标组** | `python tools/team_train.py --model yolo11n --group group2_small` |
-| **GRU 因果滑窗** | `python tools/team_train.py --model gru` |
-| **MS-TCN 全序列** | `python tools/team_train.py --model mstcn` |
-| **MS-TCN++ 全序列** | `python tools/team_train.py --model mstcn2` |
-| **Transformer 全序列** | `python tools/team_train.py --model transformer` |
-| **ROI 特征融合** | `python tools/team_train.py --model feature_fusion -S data.classes=<类名>` |
+| **YOLO nano 大目标组** | `python -m framework.cleansight_eval.cli.train --model yolo11n --group group1_large` |
+| **YOLO small 大目标组** | `python -m framework.cleansight_eval.cli.train --model yolo11s --group group1_large` |
+| **YOLO medium 大目标组** | `python -m framework.cleansight_eval.cli.train --model yolo11m --group group1_large` |
+| **YOLO nano 小目标组** | `python -m framework.cleansight_eval.cli.train --model yolo11n --group group2_small` |
+| **GRU 因果滑窗** | `python -m framework.cleansight_eval.cli.train --model gru` |
+| **MS-TCN 全序列** | `python -m framework.cleansight_eval.cli.train --model mstcn` |
+| **MS-TCN++ 全序列** | `python -m framework.cleansight_eval.cli.train --model mstcn2` |
+| **Transformer 全序列** | `python -m framework.cleansight_eval.cli.train --model transformer` |
+| **ROI 特征融合** | `python -m framework.cleansight_eval.cli.train --model feature_fusion -S data.classes=<类名>` |
 
 ### 4.3 调整训练参数（不用改文件）
 
 ```bash
 # -S 点路径覆盖任意超参，例如：
-python tools/team_train.py --model yolo11m --group group1_large \
+python -m framework.cleansight_eval.cli.train --model yolo11m --group group1_large \
     -S train.epochs=200 -S model.imgsz=960 -S train.batch=8
 ```
 
@@ -129,7 +129,7 @@ python -m benchmark.cli.eval \
 | `torch.cuda.is_available()` 为 False | 检查驱动 `nvidia-smi`；无 GPU 则用 CPU（慢） |
 | 显存不足（OOM） | 调小 batch：`-S train.batch=4`，或降分辨率 `-S model.imgsz=640` |
 | yolo11s/m 权重下载失败 | 首次训练需联网下载预训练权重（约 20-50MB），重试或换 `yolo11n` |
-| 提示"数据集未就绪" | 先跑 `python tools/team_dataset.py --preset all` |
+| 提示"数据集未就绪" | 先跑 `python -m framework.cleansight_eval.cli.dataset --preset all` |
 | 训练很慢 | 小实验先降 epoch：`-S train.epochs=5`；正式训练请用 GPU 机器 |
 | matplotlib 缓存目录告警 | `export MPLCONFIGDIR=/tmp/matplotlib` |
 

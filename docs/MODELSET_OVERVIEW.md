@@ -24,8 +24,8 @@ small 组淘汰 <0.3 的类走特征融合）并用新 YOLO 特征重训时序�
 | 需求 | 推荐入口 |
 |---|---|
 | **组员快速上手（训练/数据/环境）** | **`docs/TEAM_GUIDE.md`**（一条命令一个模型） |
-| 训练一个 YOLO/GRU/MS-TCN/Transformer/特征融合 | `python tools/team_train.py --model <模型>`（组员）或 `python -m framework.cleansight_eval.cli.train`（进阶） |
-| 一键下载训练数据集 / 校验就绪 | `python tools/team_dataset.py --preset all` / `--check` |
+| 训练一个 YOLO/GRU/MS-TCN/Transformer/特征融合 | `python -m framework.cleansight_eval.cli.train --model <别名>`（`--list-models` 查看；进阶用 `--config <yaml>`） |
+| 一键下载训练数据集 / 校验就绪 | `python -m framework.cleansight_eval.cli.dataset --preset all` / `--check` |
 | 环境检查与安装 | `python tools/team_env.py` / `--setup` / `--setup-venv` |
 | YOLO 多方法优化实验（预设/grid） | `python -m framework.cleansight_eval.cli.sweep` |
 | 小目标逐类阈值分析与淘汰决策 | `python -m benchmark.cli.analyze` |

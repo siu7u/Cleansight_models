@@ -29,23 +29,23 @@ python tools/team_env.py --setup-venv  # 创建仓库内 .venv 并安装
 python -m benchmark.cli.eval --help
 ```
 
-## 1.1 组员快速训练（tools/team_train.py）
+## 1.1 组员快速训练（framework CLI --model）
 
-训练入口简化：一条命令一个模型，无需手动挑 yaml：
+训练入口简化（framework CLI）：一条命令一个模型，无需手动挑 yaml：
 
 ```bash
-python tools/team_train.py --list                          # 列出所有可训模型
-python tools/team_train.py --model yolo11s --group group1_large   # YOLO 指定规模+组
-python tools/team_train.py --model gru                     # GRU 时序
-python tools/team_train.py --model mstcn                   # MS-TCN
-python tools/team_train.py --model feature_fusion -S data.classes=air_gun  # ROI 特征融合
+python -m framework.cleansight_eval.cli.train --list-models   # 列出所有可训模型
+python -m framework.cleansight_eval.cli.train --model yolo11s --group group1_large  # YOLO 指定规模+组
+python -m framework.cleansight_eval.cli.train --model gru      # GRU 时序
+python -m framework.cleansight_eval.cli.train --model mstcn    # MS-TCN
+python -m framework.cleansight_eval.cli.train --model feature_fusion -S data.classes=air_gun  # ROI 特征融合
 ```
 
-数据下载与校验：
+数据下载与校验（framework 数据契约层 CLI）：
 
 ```bash
-python tools/team_dataset.py --preset all   # 一键下载训练所需全部数据集
-python tools/team_dataset.py --check       # 校验是否就绪
+python -m framework.cleansight_eval.cli.dataset --preset all   # 一键下载训练所需全部数据集
+python -m framework.cleansight_eval.cli.dataset --check        # 校验是否就绪
 ```
 
 完整入门见 [`docs/TEAM_GUIDE.md`](../docs/TEAM_GUIDE.md)。
