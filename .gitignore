@@ -10,6 +10,7 @@
 .DS_Store
 ._*
 Thumbs.db
+*:Zone.Identifier
 *.swp
 *.swo
 *~
@@ -83,8 +84,16 @@ datasets/
 **/mlruns/
 
 # YOLO local assets that are not registry metadata.
-yolo-detection/base_weights/
-yolo-detection/experiments/
+legacy/yolo-detection/base_weights/
+legacy/yolo-detection/experiments/
+legacy/yolo-detection/pipeline/raw/
+legacy/yolo-detection/pipeline/runs/
+legacy/yolo-detection/pipeline/versioned_weights/
+legacy/yolo-detection/pipeline/yolo*.pt
+legacy/temporal-*/checkpoints/
+legacy/temporal-*/experiments/
+legacy/temporal-*/weights/
+legacy/**/__pycache__/
 
 # Keep benchmark scripts and markdown summaries, but ignore bulky benchmark
 # outputs unless explicitly promoted into reports.
@@ -110,20 +119,44 @@ benchmark/**/*.mov
 *.safetensors
 
 # Registry metadata should stay visible even though model binaries are ignored.
-!**/registry/
-!**/registry/**
-!**/registry/**/*.md
-!**/registry/**/*.json
-!**/registry/**/*.yaml
-!**/registry/**/*.yml
+!/registry/
+!/registry/**/
+!/registry/**/*.md
+!/registry/**/*.json
+!/registry/**/*.yaml
+!/registry/**/*.yml
+
+# 历史时序权重不再入 Git：由各 pin.yaml 引用外部对象存储（ModelScope）。
+# 本地复核测试（framework/tests/test_legacy_checkpoint_compat.py）在文件缺失时自动跳过。
 
 # ---------------------------------------------------------------------------
 # Legacy imported source snapshots
 # ---------------------------------------------------------------------------
 CausalModel-master/
 cleansight-yolo-pipeline-main/
+
+# 本地数据挂载；catalog 只登记稳定相对路径，数据本体和绝对符号链接不入 Git。
+!/datasets/
+/datasets/*
+!/datasets/README.md
 references
 modelscope_upload
 .codex
 raw
+.cache_ggshield
+# 外部 checkpoint 目录采用白名单：只允许可复现 YAML 配置进入 Git。
+# 权重、评测报告、timeline 和其他本地产物无论扩展名为何都保持忽略。
+external_checkpoints/**
+!external_checkpoints/**/
+!external_checkpoints/**/*.yaml
+!external_checkpoints/**/*.yml
+# ---------------------------------------------------------------------------
+# Framework experiment CONFIGS are the 实验配置层 (source/config), keep tracked
+# even though **/experiments/ above ignores training-output experiment dirs.
+# ---------------------------------------------------------------------------
+!framework/experiments/
+!framework/experiments/**
+
+
+# Added by ggshield
 .cache_ggshield

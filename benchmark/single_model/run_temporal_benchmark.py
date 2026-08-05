@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""运行三个时序基线模型的详细评测和延迟评测。"""
+"""通过统一 benchmark CLI 批量评测历史时序 checkpoint。"""
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
-import re
 from datetime import datetime
 from pathlib import Path
 
@@ -15,34 +15,30 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = ROOT / "benchmark" / "single_model"
 LATEST_DIR = OUT_DIR / "latest"
-
 DEFAULT_MODELS = [
     {
         "name": "gru",
-        "repo": "temporal-gru",
-        "checkpoint": "registry/gru-v1/gru-final-20260704-150629.pt",
-        "input_dim": 20,
-        "window": 64,
+        "config": "framework/experiments/legacy-gru-v1.yaml",
+        "checkpoint": "registry/temporal/gru-v1/gru-final-20260704-150629.pt",
     },
     {
         "name": "tcn",
-        "repo": "temporal-causal-tcn",
-        "checkpoint": "registry/tcn-v1/tcn-final-20260704-160652.pt",
-        "input_dim": 20,
-        "window": 64,
+        "config": "framework/experiments/legacy-causal-tcn-v1.yaml",
+        "checkpoint": "registry/temporal/causal-tcn-v1/tcn-final-20260704-160652.pt",
     },
     {
         "name": "transformer",
-        "repo": "temporal-transformer",
-        "checkpoint": "registry/transformer-v1/transformer-final-20260704-161653.pt",
-        "input_dim": 20,
-        "window": 64,
+        "config": "framework/experiments/legacy-causal-transformer-v1.yaml",
+        "checkpoint": (
+            "registry/temporal/causal-transformer-v1/"
+            "transformer-final-20260704-161653.pt"
+        ),
     },
 ]
 
 
 def build_run_id(version: str | None) -> str:
-    """生成用于归档 benchmark summary 的版本化运行编号。"""
+    """生成稳定归档编号。"""
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     if not version:
@@ -51,71 +47,58 @@ def build_run_id(version: str | None) -> str:
     return f"{slug or 'version'}-{timestamp}"
 
 
-def run_json(cmd: list[str], cwd: Path) -> tuple[dict | None, str, int]:
-    """运行 benchmark 子进程，并从 stdout 中解析第一个 JSON 对象。
-
-    返回可解析的 JSON、用于排查问题的合并日志，以及进程退出码。子进程可能会
-    加载 checkpoint 或使用 CUDA。
-    """
-
-    proc = subprocess.run(cmd, cwd=cwd, text=True, capture_output=True)
-    text = proc.stdout.strip()
-    data = None
-    if text:
-        start = text.find("{")
-        end = text.rfind("}")
-        if start >= 0 and end >= start:
-            try:
-                data = json.loads(text[start : end + 1])
-            except json.JSONDecodeError:
-                data = None
-    return data, proc.stdout + proc.stderr, proc.returncode
-
-
 def benchmark_model(item: dict) -> dict:
-    """对一个时序模型运行详细评测和延迟测量。"""
+    """调用统一 eval CLI；模型加载和推理只发生在 framework Pipeline。"""
 
-    repo = ROOT / item["repo"]
-    eval_cmd = [
+    invocation_id = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    output_dir = LATEST_DIR / item["name"] / invocation_id
+    command = [
         sys.executable,
-        str(ROOT / "tools" / "eval_temporal_detailed.py"),
-        "--repo",
-        ".",
-        "--model",
-        item["name"],
-        "--checkpoint",
-        item["checkpoint"],
+        "-m",
+        "benchmark.cli.eval",
+        "--config",
+        str(ROOT / item["config"]),
+        "--ckpt",
+        str(ROOT / item["checkpoint"]),
+        "--out-dir",
+        str(output_dir),
     ]
-    latency_cmd = [
-        sys.executable,
-        str(ROOT / "tools" / "measure_temporal_latency.py"),
-        "--repo",
-        ".",
-        "--model",
-        item["name"],
-        "--checkpoint",
-        item["checkpoint"],
-        "--window",
-        str(item["window"]),
-        "--input-dim",
-        str(item["input_dim"]),
-    ]
-
-    eval_data, eval_log, eval_code = run_json(eval_cmd, repo)
-    latency_data, latency_log, latency_code = run_json(latency_cmd, repo)
+    proc = subprocess.run(command, cwd=ROOT, text=True, capture_output=True)
+    evaluations = sorted(
+        output_dir.glob("*.evaluation.json"),
+        key=lambda path: path.stat().st_mtime,
+    )
+    evaluation_path = evaluations[-1] if evaluations else None
+    evaluation = (
+        json.loads(evaluation_path.read_text(encoding="utf-8"))
+        if evaluation_path is not None
+        else None
+    )
     return {
         **item,
-        "eval": eval_data,
-        "latency": latency_data,
-        "eval_exit_code": eval_code,
-        "latency_exit_code": latency_code,
-        "eval_log_tail": eval_log[-2000:],
-        "latency_log_tail": latency_log[-2000:],
+        "evaluation": evaluation,
+        "evaluation_path": (
+            str(evaluation_path.relative_to(ROOT)) if evaluation_path is not None else None
+        ),
+        "exit_code": proc.returncode,
+        "log_tail": (proc.stdout + proc.stderr)[-3000:],
     }
 
 
+def _metric(item: dict, name: str) -> str:
+    """从 EvaluationResult v2 读取一个三态指标。"""
+
+    metric = (
+        ((item.get("evaluation") or {}).get("metrics") or {}).get("summary") or {}
+    ).get(name, {})
+    if metric.get("state") != "computed":
+        return metric.get("state", "MISSING")
+    value = metric.get("value")
+    return f"{float(value):.2f}" if isinstance(value, (int, float)) else str(value)
+
+
 def write_summary(results: list[dict], version: str | None) -> tuple[Path, Path]:
-    """将时序单模型 benchmark 汇总写成 JSON 和 Markdown。"""
+    """汇总统一 EvaluationResult，不再解析历史 stdout。"""
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     LATEST_DIR.mkdir(parents=True, exist_ok=True)
@@ -128,59 +111,51 @@ def write_summary(results: list[dict], version: str | None) -> tuple[Path, Path]
         "run_id": run_id,
         "models": results,
     }
-    json_text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
     latest_json = LATEST_DIR / "temporal_summary.json"
     archive_json = archive_dir / f"temporal_summary_{run_id}.json"
-    latest_json.write_text(json_text, encoding="utf-8")
-    archive_json.write_text(json_text, encoding="utf-8")
+    text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+    latest_json.write_text(text, encoding="utf-8")
+    archive_json.write_text(text, encoding="utf-8")
 
     lines = [
         "# 时序单模型 Benchmark 汇总",
         "",
         f"- 版本：`{version or run_id}`",
-        f"- 归档编号：`{run_id}`",
+        "- 模型训练与推理：`framework`",
+        "- 指标与结果：`benchmark`",
         "",
-        "| 模型 | checkpoint | Idle Recall | Long Recall | Short Recall | 延迟 | 状态 |",
-        "| --- | --- | ---: | ---: | ---: | ---: | --- |",
+        "| 模型 | Accuracy | Edit | F1@0.5 | 结果 | 状态 |",
+        "| --- | ---: | ---: | ---: | --- | --- |",
     ]
     for item in results:
-        recalls = (item.get("eval") or {}).get("per_class_recall", {})
-        latency = item.get("latency") or {}
-        latency_value = latency.get("mean_ms") or latency.get("avg_ms") or latency.get("single_tick_latency_ms")
-        status = "OK" if item["eval_exit_code"] == 0 and item["latency_exit_code"] == 0 else "CHECK"
         lines.append(
-            "| {name} | `{ckpt}` | {idle} | {long} | {short} | {latency} | {status} |".format(
-                name=item["name"],
-                ckpt=item["checkpoint"],
-                idle=f"{recalls.get('Idle', 0) * 100:.2f}%" if "Idle" in recalls else "待测",
-                long=f"{recalls.get('Long_Brushing', 0) * 100:.2f}%" if "Long_Brushing" in recalls else "待测",
-                short=f"{recalls.get('Short_Brushing', 0) * 100:.2f}%" if "Short_Brushing" in recalls else "待测",
-                latency=f"{float(latency_value):.3f} ms" if latency_value is not None else "待测",
-                status=status,
-            )
+            f"| {item['name']} | {_metric(item, 'acc')} | {_metric(item, 'edit')} | "
+            f"{_metric(item, 'f1@0.5')} | `{item.get('evaluation_path') or '未生成'}` | "
+            f"{'OK' if item['exit_code'] == 0 else 'CHECK'} |"
         )
-    md_text = "\n".join(lines) + "\n"
     latest_md = LATEST_DIR / "temporal_summary.md"
     archive_md = archive_dir / f"temporal_summary_{run_id}.md"
-    latest_md.write_text(md_text, encoding="utf-8")
-    archive_md.write_text(md_text, encoding="utf-8")
+    markdown = "\n".join(lines) + "\n"
+    latest_md.write_text(markdown, encoding="utf-8")
+    archive_md.write_text(markdown, encoding="utf-8")
     return latest_md, archive_md
 
 
 def main() -> int:
-    """解析命令行参数，运行选定的时序 benchmark，并返回整体状态。"""
+    """运行所选历史模型并写统一摘要。"""
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", choices=[m["name"] for m in DEFAULT_MODELS], help="只跑一个模型")
-    parser.add_argument("--version", help="为本次 benchmark summary 指定版本名，例如 temporal-v2")
+    parser.add_argument("--model", choices=[item["name"] for item in DEFAULT_MODELS])
+    parser.add_argument("--version")
     args = parser.parse_args()
-
-    selected = [m for m in DEFAULT_MODELS if not args.model or m["name"] == args.model]
+    selected = [
+        item for item in DEFAULT_MODELS if not args.model or item["name"] == args.model
+    ]
     results = [benchmark_model(item) for item in selected]
     latest_md, archive_md = write_summary(results, args.version)
     print(f"已写入 {latest_md}")
     print(f"已归档 {archive_md}")
-    return 0 if all(r["eval_exit_code"] == 0 and r["latency_exit_code"] == 0 for r in results) else 2
+    return 0 if all(item["exit_code"] == 0 for item in results) else 2
 
 
 if __name__ == "__main__":

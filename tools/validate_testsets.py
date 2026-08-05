@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from benchmark.core.testsets import (  # noqa: E402
+from framework.cleansight_eval.core.catalog import (  # noqa: E402
     DEFAULT_CATALOG,
     get_testset,
     load_testsets,
@@ -77,10 +77,12 @@ def main() -> int:
             pass
         output[testset_id] = {
             "ok": not errors,
+            "dataset": spec.dataset,
             "family": spec.family,
             "dataset_version": spec.dataset_version,
             "split": spec.split,
             "purpose": spec.purpose,
+            "split_overlap_policy": spec.split_overlap_policy,
             "fingerprint": fingerprint,
             "errors": errors,
         }
@@ -97,6 +99,7 @@ def main() -> int:
     else:
         for testset_id, item in output.items():
             print(f"[{'OK' if item['ok'] else 'FAIL'}] {testset_id}")
+            print(f"  split_overlap_policy: {item['split_overlap_policy']}")
             if item["fingerprint"]:
                 print(f"  fingerprint: {item['fingerprint']}")
             for error in item["errors"]:

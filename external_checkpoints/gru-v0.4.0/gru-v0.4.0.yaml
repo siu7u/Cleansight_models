@@ -1,0 +1,44 @@
+# 外部 GRU v0.4.0 的探索性评测配置。
+# 已从 TorchScript 参数确认网络规模；48 维特征映射、类别顺序和训练窗口仍需由提供方确认。
+
+schema_version: 1
+pipeline: sliding_window_temporal
+
+model:
+  type: gru
+  input_dim: 48
+  num_classes: 6
+  hidden: 64
+  num_layers: 3
+  allow_missing_meta: true
+
+data:
+  # 48维数据尚未登记到 benchmark catalog；补齐 feature mapping 后替换此本地占位目录。
+  name: external-gru-v0.4.0
+  root: data-48d
+  split_train: train
+  split_val: val
+  split_eval: test
+
+feature_schema:
+  dim: 48
+  # 不得用于正式结果；确认48维通道布局后替换为已登记的 feature mapping 版本。
+  version: external-gru-v0.4.0-unverified
+
+augmentation:
+  target_mask:
+    enabled: false
+    strategy: frame_dropout
+    targets: []
+    probability: 0.0
+
+evaluation:
+  mode: exploratory
+  visualize: true
+
+train:
+  epochs: 20
+  lr: 0.001
+  batch_size: 32
+  # 暂沿用参照实验窗口；必须与该 checkpoint 的训练窗口核对。
+  window: 16

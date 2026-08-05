@@ -1,0 +1,33 @@
+# ROI 图像分类（特征融合）实验配置。
+# 对小目标/稀有类（YOLO 无法达到 P/R>0.3 的类）做 ROI 区域多标签分类。
+# 训练数据自动从 YOLO 分组数据集的 GT 框裁剪；checkpoint 带绑定 meta。
+# 正式 testset 登记暂缓：先以 exploratory 模式使用，淘汰类确定后再钉定口径。
+
+schema_version: 1
+pipeline: roi_classification
+
+model:
+  type: feature_fusion   # 分类流水线模型 key
+  backbone: resnet50     # resnet18/34/50, efficientnet-b0/b1/b2, mobilenet-v3-small
+  roi_size: 224          # ROI 裁剪后 resize 尺寸
+  freeze_backbone: false
+  hidden_dim: 256
+  dropout: 0.3
+
+data:
+  name: fusion_small_eliminated
+  # 从哪个 YOLO 分组数据集裁剪 ROI（替换为实际淘汰类所在组）
+  group_dir: datasets/cleansight-yolo/group2_small
+  # 目标类别（由 benchmark.cli.analyze 的淘汰决策给出，替换为实际淘汰类）
+  classes: [air_gun, brush_tip_out]
+  neg_ratio: 1.0         # 负样本比例(相对正样本)
+  val_split: 0.2
+
+evaluation:
+  mode: exploratory      # 正式 testset 契约待淘汰类确定后登记
+  save_predictions: false
+
+train:
+  epochs: 80
+  batch_size: 32
+  lr: 0.001
