@@ -7,8 +7,8 @@
 >
 > ```bash
 > python tools/team_env.py --setup-venv   # 1. 装环境
-> python tools/team_dataset.py --preset all  # 2. 下载数据
-> python tools/team_train.py --model yolo11s --group group1_large  # 3. 训练
+> python -m framework.cleansight_eval.cli.dataset --preset all  # 2. 下载数据
+> python -m framework.cleansight_eval.cli.train --model yolo11s --group group1_large  # 3. 训练
 > ```
 
 本仓库负责 CleanSight 模型的训练、离线评估、benchmark、checkpoint 契约和交付清单，覆盖
