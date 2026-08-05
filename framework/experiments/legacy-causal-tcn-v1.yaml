@@ -1,0 +1,33 @@
+# 历史 Causal TCN v1 checkpoint 的统一 framework 兼容配置。
+schema_version: 1
+pipeline: sliding_window_temporal
+
+model:
+  type: legacy_causal_tcn_v1
+  input_dim: 20
+  num_classes: 3
+  hidden_dims: [64, 64, 64]
+  allow_missing_meta: true
+
+data:
+  dataset_ref: temporal.endo-project-v1
+  split_train: train
+  split_eval: test
+
+feature_schema:
+  dim: 20
+  version: legacy-20d-v1
+  class_order: [Idle, Long_Brushing, Short_Brushing]
+  layout: legacy-endo-project-20d
+  normalization: none
+
+evaluation:
+  mode: exploratory
+  visualize: true
+  measure_latency: true
+
+train:
+  epochs: 20
+  lr: 0.001
+  batch_size: 32
+  window: 64

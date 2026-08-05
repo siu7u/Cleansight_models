@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cleansight.local/schemas/prediction-artifact-v1.schema.json",
+  "title": "CleanSight Prediction Artifact v1",
+  "type": "object",
+  "required": ["schema_version", "task_type", "prediction_format", "labels", "items"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "task_type": {"enum": ["temporal", "detection"]},
+    "prediction_format": {"enum": ["frame_labels", "class_confidence_xywhn"]},
+    "labels": {"type": ["array", "object"]},
+    "items": {"type": "object", "minProperties": 1},
+    "inference": {"type": "object"},
+    "split": {"type": "string"}
+  },
+  "additionalProperties": true
+}

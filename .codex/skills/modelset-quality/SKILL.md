@@ -173,6 +173,29 @@ Each released model version should include:
 
 Changing dataset, feature mapping, class list, or checkpoint requires a new version.
 
+## YAML Configuration Documentation
+
+The repository-root `usage/YAML_CONFIG.md` is the mandatory documentation index for every
+Git-tracked `*.yaml` and `*.yml` file. It documents configuration ownership and
+behavior; it must not duplicate operational configuration or become a second source
+of truth.
+
+Whenever a tracked YAML file is added, modified, moved, renamed, or deleted:
+
+- update `usage/YAML_CONFIG.md` in the same change
+- keep the per-file inventory exact and provide a working link to the canonical file
+- document the file's main content, consumer or owner, purpose, important defaults or
+  invariants, and relevant runtime impact
+- update field descriptions when a schema, default, constraint, or consumer changes,
+  even if the YAML path is unchanged
+- do not copy operational YAML files into `usage/`
+- keep ignored or generated YAML out of the per-file inventory, and document its
+  category and canonical tracked source when relevant
+
+Before finishing YAML-related work, compare the documentation with
+`git ls-files '*.yaml' '*.yml'`. An unlisted tracked YAML file, a stale entry, or a
+broken link means the change is incomplete.
+
 ## Backend Integration Rules
 
 Before claiming a model is integrated into `CleanSightBackend`, verify:
@@ -191,6 +214,10 @@ Treat the model repo as the asset and benchmark source. Treat `CleanSightBackend
 ## Git Hygiene
 
 Before preparing a commit, check status and keep generated artifacts intentional.
+
+本仓库的 Git commit message 默认使用中文描述。若采用 Conventional Commits，允许保留
+`feat`、`fix`、`refactor` 等英文 type 和英文 scope，但冒号后的提交主题必须使用中文；除非
+用户明确要求其他语言。提交前应确认 message 准确概括本次实际暂存内容。
 
 Do not commit unless explicitly intended:
 

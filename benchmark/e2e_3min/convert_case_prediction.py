@@ -17,7 +17,7 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_EXPORT_DIR = ROOT / "yolo-detection" / "pipeline" / "raw" / "exports"
+DEFAULT_EXPORT_DIR = ROOT / "datasets" / "raw" / "label-studio"
 DEFAULT_CASE_DIR = ROOT / "benchmark" / "e2e_3min" / "cases"
 DEFAULT_OUTPUT_DIR = ROOT / "benchmark" / "e2e_3min" / "outputs"
 DEFAULT_REQUIRED_ACTIONS = ["Long_Brushing", "Short_Brushing"]

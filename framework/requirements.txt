@@ -1,0 +1,24 @@
+# cleansight_eval 框架依赖（当前测试环境 Python 3.10）
+# 版本为本机已验证的已知可用值（下界即可，不强锁）。
+#
+# 分组说明：
+#   核心    —— 框架层 + 时序纵（gru/mstcn，windowed_causal/full_sequence）必需
+#   检测    —— 只有跑 YOLO 检测纵才需要；纯时序/纯测试可不装（体积大，含 opencv 等）
+#   可选    —— 训练进度条，缺失自动降级为无进度条（temporal/orchestration.py 有 try/except）
+#   开发    —— 跑 tests/ 才需要
+
+# ---- 核心 ----
+numpy>=1.26,<2
+torch>=2.8
+PyYAML>=6.0
+pytorch-tcn>=1.2,<2
+
+# ---- 检测纵（YOLO；可选，仅 task: detection 需要）----
+ultralytics>=8.3
+
+# ---- 可选 ----
+tqdm>=4.66
+matplotlib>=3.8
+
+# ---- 开发/测试 ----
+pytest>=8.0

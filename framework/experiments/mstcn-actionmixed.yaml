@@ -1,0 +1,33 @@
+# MS-TCN 全序列时序参照实验（消费真实 cleansight-ActionMixed 数据集）。
+# 全序列流水线：一次看到完整序列、逐帧监督、逐帧 argmax 推理；离线不测延迟（标 N/A）。
+# 与 GRU/YOLO 共用同一 train/eval 入口，只出事实信封、不判达标。
+
+schema_version: 1
+pipeline: full_sequence_temporal
+
+model:
+  type: mstcn            # 双向非因果，只能进全序列流水线（滑窗会因 causal=False 拒绝）
+  input_dim: 40          # 复用 40 维特征：8 检测类 × [presence, cx, cy, w, h]
+  num_classes: 6         # idle/air_injection/flush/long_brush_insert/long_brush_withdraw/short_brush_cleaning
+  hidden: 32             # MS-TCN 简化 baseline 默认
+
+data:
+  dataset_ref: temporal.actionmixed-v2
+  split_train: train
+  split_val: val
+  split_eval: test
+
+feature_schema:
+  dim: 40
+  version: actionmixed-bbox-8cls-v1
+  # 布局同 GRU 实验：每 5 维一类，顺序同 frames/data.yaml，每类 [presence, cx, cy, w, h]。
+
+evaluation:
+  mode: formal
+  visualize: true
+
+train:
+  epochs: 20
+  lr: 0.002              # 对齐 changhai baseline
+  grad_clip: 5.0         # 可选：梯度裁剪（对齐 baseline）
+  # 全序列以 batch_size=1 逐条喂入（变长序列），无需在此指定 batch_size/window。

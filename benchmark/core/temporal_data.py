@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-from benchmark.core.testsets import TestsetSpec, read_split_items, resolve_path
+from framework.cleansight_eval.core.catalog import TestsetSpec, read_split_items, resolve_path
 
 
 @dataclass(frozen=True)

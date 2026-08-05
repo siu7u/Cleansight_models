@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from model_manager.history import (
+from tools.card_history import (
     append_card_record,
     append_evaluation_record,
     append_training_record,

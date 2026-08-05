@@ -1,0 +1,153 @@
+# 外部时序 checkpoint 探索性评测模板。
+#
+# 使用方法：
+#   1. 新建 external_checkpoints/<model-id>/；
+#   2. 将 checkpoint 和本文件副本放进该目录，并改成相同主文件名；
+#   3. 替换所有已启用字段中的 REPLACE_WITH_* / 0 占位值，删除不属于该模型的可选参数；
+#   4. 从仓库根目录执行 usage/TEST_COMMANDS.md 中的统一评测命令。
+#
+# 注释标记：
+#   [选择] 只能从列出的方案中选择一个；复制所选值，不要把说明文字写入配置。
+#   [确认] 不能由文件名可靠推断，必须查 checkpoint metadata、原训练 YAML/代码或询问提供者。
+#   [自动] 使用 catalog 后由框架填写或校验，不要再维护一份重复值。
+#
+# 重要边界：YAML 只能描述已经注册的网络和 feature recipe。若 model.type 未在
+# framework/cleansight_eval/temporal/models/__init__.py 注册，或 feature_schema.version
+# 没有对应 extractor，需要先补代码，不能通过猜测 YAML 直接加载。
+
+schema_version: 1
+
+# [选择 1/2] Pipeline 必须与原训练/推理语义一致：
+#   full_sequence_temporal
+#     - 离线输入 [1,T,F]，输出逐帧 logits [1,T,C]；
+#     - 适用于使用完整上下文的 ASFormer、BiGRU、BiLSTM、MS-TCN、Transformer。
+#   sliding_window_temporal
+#     - 因果输入 [1,window,F]，逐窗取末帧预测；
+#     - 只接受模型注册项 causal=true，window 必须与训练时一致。
+# [确认] 双向层/未来帧注意力通常选择 full_sequence_temporal；固定历史窗口、在线逐帧输出
+# 通常选择 sliding_window_temporal。不能仅根据 checkpoint 文件名判断。
+pipeline: REPLACE_WITH_full_sequence_temporal_OR_sliding_window_temporal
+
+model:
+  # [选择] 当前已注册 type：
+  #   gru                  -> 因果 GRU，通常配 sliding_window_temporal
+  #   mstcn                -> 简化 MS-TCN，配 full_sequence_temporal
+  #   mstcn2               -> 多 stage MS-TCN++，配 full_sequence_temporal
+  #   transformer          -> Transformer Encoder，配 full_sequence_temporal
+  #   clean_asformer       -> CLEAN ASFormer，配 full_sequence_temporal
+  #   clean_bigru          -> CLEAN 双向 GRU，配 full_sequence_temporal
+  #   clean_mstcn_bilstm   -> CLEAN BiLSTM+MS-TCN，配 full_sequence_temporal
+  # 完整真源：framework/cleansight_eval/temporal/models/__init__.py。
+  # [确认] 名称相似不代表 state_dict 兼容；未注册结构必须先实现并注册。
+  type: REPLACE_WITH_REGISTERED_MODEL_TYPE
+  input_dim: 0       # [确认] checkpoint feature_dim / 首层输入维度 / 原训练配置三者应一致
+  num_classes: 0     # [确认] checkpoint class_names 数量 / 输出层维度 / 原训练配置三者应一致
+
+  # [选择] 只取消注释所选 model.type 构造函数实际使用的参数；值必须来自训练配置或
+  # state_dict shape，下面的数字只是格式示例，不是外部 checkpoint 的通用默认值。
+  # hidden: 64
+  # num_layers: 3
+  # dropout: 0.15
+  # nhead: 4
+  # d_model: 64
+  # dim_feedforward: 128
+  # max_len: 2048
+  # num_stages: 4
+  # lstm_layers: 2
+  # tcn_layers: 6
+  # refine_stages: 2
+
+  # [选择]
+  #   false -> 有可信 <checkpoint>.meta.json，或准备进行 formal 评测；
+  #   true  -> 外部权重没有可信 metadata，只做 exploratory。
+  # 加载仍然是 strict=True，参数键或 tensor shape 不匹配会立即失败。
+  allow_missing_meta: true
+
+data:
+  # [选择 A/B] 数据身份配置，两种方案不要混用。
+  #
+  # A. 已登记数据集（正式评测优先）：
+  #    取消下一行注释，并删除本段已启用的 name 和 root。
+  #    [自动] name、root、feature mapping、维度和 split manifest 由 catalog 解析/校验。
+  #    可选 dataset_ref 见 framework/testsets.yaml，例如 temporal.actionmixed-v2。
+  # dataset_ref: REPLACE_WITH_CATALOG_DATASET_ID
+  #
+  # B. 未登记或临时数据集（模板当前启用）：
+  #    name 是进入结果报告的稳定身份，建议包含数据集名和版本，例如
+  #    actionmixed-external-v2；它不决定读取路径。
+  #    root 才决定实际读取位置；相对路径按“复制后的 YAML 所在目录”解析。
+  name: REPLACE_WITH_DATASET_NAME_AND_VERSION
+  root: REPLACE_WITH_DATASET_ROOT
+
+  # [确认] split 名必须对应 root 下 labels/<split> 与 frames/<split>；使用 catalog 时必须
+  # 对应 framework/testsets.yaml 已登记的 split。
+  split_train: train
+  split_val: val
+  split_eval: test
+
+  # [确认] 必须填写生成训练特征时的采样 FPS；它会参与 CLEAN v2 的速度特征计算。
+  # 原视频 FPS、抽帧后 FPS 和模型训练 FPS 可能不同，不能仅从视频属性推断。
+  fps: 0
+
+feature_schema:
+  # [选择] 当前仓库可直接构造的常用 version -> dim：
+  #   actionmixed-bbox-8cls-v1                                      -> 40
+  #   clean_bbox_v2_top1_impute                                     -> 113
+  #   clean_bbox_v2_top1_impute+business_priors                     -> 121
+  #   clean_bbox_v2_top1_impute+center_window+business_priors       -> 249
+  # [确认] 必须与训练 recipe、列顺序及 checkpoint 内嵌 feature_version 完全一致；
+  # 相同 dim 不代表特征语义兼容，不能临时编造 version 绕过契约。
+  version: REPLACE_WITH_REGISTERED_FEATURE_MAPPING_VERSION
+  # 必须同时匹配 model.input_dim、extractor 输出和 checkpoint feature_dim。
+  dim: 0
+
+  # [确认] 顺序是 checkpoint 输出第 0..C-1 个 logit 的类别顺序，不一定等于数据集
+  # labels/data.yaml 的 action ID 顺序；优先复制 checkpoint class_names 或原训练配置。
+  class_order:
+    - idle
+    - long_brush_insert
+    - long_brush_withdraw
+    - short_brush_cleaning
+    - flush
+    - air_injection
+
+  # layout 是供溯源和人工检查的列布局说明，不会把一种 feature version 转成另一种。
+  # 已有示例：
+  #   actionmixed-bbox-8cls-v1 -> actionmixed-bbox-8cls
+  #   CLEAN 113/121D           -> backend-clean-bbox-v2
+  #   CLEAN 249D               -> backend-clean-bbox-v2-centered-window
+  layout: REPLACE_WITH_FEATURE_LAYOUT
+
+  # [选择]
+  #   none                -> 原训练输入未做归一化；
+  #   checkpoint-zscore  -> checkpoint 内嵌 normalizer_mean/std，模型支持注入。
+  # [确认] 本字段记录契约；只写 checkpoint-zscore 不会凭空产生均值/方差。若训练使用了
+  # 其它预处理，必须先实现对应适配，不能只增加一个字符串。
+  normalization: REPLACE_WITH_NORMALIZATION
+
+  # [选择性启用] 只有 CLEAN bbox recipe 且输入是无 confidence 的五列 YOLO 标注时才使用。
+  # 这会改变真实 YOLO 推理输入语义，因此只允许 exploratory 对比。
+  # detection_confidence_default: 1.0
+
+evaluation:
+  # [选择]
+  #   exploratory -> 允许无 metadata 的外部权重或直接 root，只用于探索性比较；
+  #   formal      -> 要求可信 metadata、catalog testset、fingerprint，且
+  #                  model.allow_missing_meta 必须为 false。
+  mode: exploratory
+  visualize: true
+  viz_per_page: 6
+
+  # [选择性启用] 使用 dataset_ref 时 testset 可由 dataset_ref + split_eval 推导；显式填写
+  # testset_id 会作为一致性断言。直接 root 不能凭此字段变成 formal 数据。
+  # testset_id: REPLACE_WITH_REGISTERED_TESTSET_ID
+
+# 当前时序 Pipeline 的配置契约要求 train 段，即使本文件只用于 eval 也要保留。
+# 这些值不会在 eval 命令中启动训练。
+train:
+  epochs: 0
+  lr: 0
+  batch_size: 0
+  # [选择性启用] 只有 sliding_window_temporal 必须填写；必须来自原训练配置，不能根据
+  # 序列长度或首层权重推断。
+  # window: 16

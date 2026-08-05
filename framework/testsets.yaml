@@ -1,0 +1,132 @@
+schema_version: 2
+root: ..
+
+# 数据集级公共契约：类别、特征和数据根目录只维护一次。
+# split_overlap_policy: error  # 同一源视频不能跨 split
+# split_overlap_policy: frame  # 允许同源视频，但具体帧不能重合
+# split_overlap_policy: allow  # 完全不检查跨 split 重叠
+
+datasets:
+  temporal.actionmixed-v2:
+    family: temporal
+    format: actionmixed_bbox
+    dataset_version: cleansight-actionmixed-v2
+    revision: b3cf7487f6f6fd6e5be404f8e72b24f82ebb73b4
+    data_root: datasets/cleansight-ActionMixed
+    feature_mapping: actionmixed-bbox-8cls-v1
+    input_dim: 40
+    labels: [idle, air_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    split_overlap_policy: frame
+
+  temporal.endo-project-v1:
+    family: temporal
+    dataset_version: endo-project-v1
+    data_root: datasets/endo-project-v1
+    feature_mapping: legacy-20d-v1
+    input_dim: 20
+    labels: [Idle, Long_Brushing, Short_Brushing]
+
+  yolo.group1_large-v1:
+    family: yolo
+    dataset_version: cleansight-yolo-v1
+    manifest: datasets/cleansight-yolo/group1_large/data.yaml
+    feature_mapping: yolo-bbox-group1-v1
+    input_dim: 3
+    labels: [hand, scope_control_body, scope_mid_section]
+    split_overlap_policy: frame
+
+  yolo.group2_small-v1:
+    family: yolo
+    dataset_version: cleansight-yolo-v1
+    manifest: datasets/cleansight-yolo/group2_small/data.yaml
+    feature_mapping: yolo-bbox-group2-v2
+    input_dim: 5
+    labels: [syringe, air_gun, scope_distal_end, short_brush, brush_tip_out]
+    split_overlap_policy: frame
+
+  e2e.clean-example-v1:
+    family: e2e
+    dataset_version: clean-e2e-example-v1
+    manifest: benchmark/e2e_3min/cases/example.yaml
+    feature_mapping: action-timeline-v1
+    input_dim: null
+    labels: [Long_Brushing, Short_Brushing]
+
+# Split 级定义：只保留集合身份、样本清单和评测用途。
+testsets:
+  temporal.actionmixed-v2.train:
+    dataset: temporal.actionmixed-v2
+    split: train
+    manifest: benchmark/manifests/actionmixed/train.txt
+    purpose: training_only
+
+  temporal.actionmixed-v2.val:
+    dataset: temporal.actionmixed-v2
+    split: val
+    manifest: benchmark/manifests/actionmixed/val.txt
+    purpose: validation_only
+
+  temporal.actionmixed-v2.test:
+    dataset: temporal.actionmixed-v2
+    split: test
+    manifest: benchmark/manifests/actionmixed/test.txt
+    purpose: development_benchmark_frame_disjoint
+
+  temporal.endo-project-v1.train:
+    dataset: temporal.endo-project-v1
+    split: train
+    manifest: datasets/endo-project-v1/splits/train.split1.bundle
+    purpose: training_only
+    expected_items:
+      - export9
+      - export14
+      - export4
+      - export13
+      - export18
+      - export3
+      - export5
+      - export8
+      - export15-480P
+      - export20
+      - export7-480p
+      - export19
+      - export10
+      - export2
+      - export11
+      - export6
+
+  temporal.endo-project-v1.test:
+    dataset: temporal.endo-project-v1
+    split: test
+    manifest: datasets/endo-project-v1/splits/test.split1.bundle
+    purpose: locked_holdout_benchmark
+    expected_items:
+      - export16-480P
+      - export17
+      - export1
+      - export12
+
+  yolo.group1_large.test:
+    dataset: yolo.group1_large-v1
+    split: test
+    purpose: development_benchmark_frame_disjoint
+
+  yolo.group1_large.val:
+    dataset: yolo.group1_large-v1
+    split: val
+    purpose: validation_only
+
+  yolo.group2_small.test:
+    dataset: yolo.group2_small-v1
+    split: test
+    purpose: development_benchmark_frame_disjoint
+
+  yolo.group2_small.val:
+    dataset: yolo.group2_small-v1
+    split: val
+    purpose: validation_only
+
+  e2e.clean-example.smoke:
+    dataset: e2e.clean-example-v1
+    split: smoke
+    purpose: schema_smoke_only

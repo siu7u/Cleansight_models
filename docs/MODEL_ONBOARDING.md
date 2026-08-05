@@ -1,0 +1,170 @@
+# 新模型接入参考手册
+
+> 面向：要给评估框架加一个新模型的人。
+> 覆盖多条流水线：**单帧检测** / **全序列时序** / **历史滑窗时序** / **ROI 图像分类**。
+> 结论先行：模型退化为**可替换的纯组件**，流水线固定；接新模型 = 加一个网络 + 注册一行（时序/分类），
+> 或只写配置（YOLO）。
+
+---
+
+## 0. 调度（多条流水线共用）
+
+配置 YAML 里 `pipeline` 一个 key 决定调度，`model.type` 选具体模型：
+
+| key | 选择什么 | 注册表 |
+|-----|---------|--------|
+| `pipeline` | 多条流水线之一 | `core/registry.py` `_PIPELINES` |
+| `model.type` | 具体模型 | 时序：`temporal/models/__init__.py` `_MODELS`；检测：`detection/yolo.py` `_ADAPTERS`；分类：`classification/model.py` |
+
+训练入口 `framework/.../cli/train.py`（优化实验用 `cli/sweep.py`）和评测入口
+`benchmark/cli/eval.py`（逐类分析用 `benchmark/cli/analyze.py`）都通过 framework
+`get_pipeline(cfg["pipeline"])` 取得同一实现。各流水线统一提供 `predict()`，产出不含指标口径的
+`PredictionOutput`；benchmark CLI 再调用 evaluator 生成 `EvaluationResult`、artifact 和报告。
+接入新流水线时需要实现训练（若支持）和 `predict()`，同时在 benchmark 侧注册对应 evaluator；
+pipeline 不实现正式 `evaluate()`。
+
+**关键认知**：监督/loss 语义属于**流水线**，不属于模型。全序列一律逐帧 CE、滑窗一律末帧 CE +
+因果平滑。所以模型只需提供网络结构；同一种 `nn.Module`（如 GRU）可以在两条时序流水线中分别
+训练，但一个 checkpoint 的训练与评估仍必须属于同一条流水线。
+
+**依赖方向**：`benchmark → framework` 单向。数据契约（`framework/testsets.yaml` →
+`core/catalog.py`）与指标原语（`core/metrics.py`）归 framework，benchmark 消费它们。
+
+---
+
+# 一、时序模型（GRU / MS-TCN / …）
+
+## 1.1 差异点集中在哪几个环节
+
+跑一遍训练/评估，**只有"网络结构"随模型变**，其余全共享：
+
+| 环节 | 变还是共享 | 位置 |
+|------|-----------|------|
+| 数据加载 / 特征化 | **共享** | `temporal/data.py:load_split` |
+| 网络结构 | **模型变** | `temporal/models/<name>.py`（纯 `nn.Module`） |
+| 训练前归一化（可选） | 模型可选提供 | 模型的 `fit_normalization(features)` 方法 |
+| 训练配方（可选，深监督等） | 模型可选提供 | 模型的 `compute_loss(x, y, criterion)` 方法（仅全序列调用） |
+| **loss 监督粒度**（末帧 vs 逐帧） | **流水线决定** | `sliding_window_pipeline` / `full_sequence_pipeline` |
+| 切窗 / 组 dataset / 评估循环 / 平滑 | **流水线决定** | 同上两个流水线文件 |
+| 是否测延迟 | **流水线决定** | 滑窗测、全序列 N/A |
+| 训练主循环 / 优化器 / 梯度裁剪 | **共享**（各流水线内） | 两个流水线的 `train` |
+| 指标评估 / 延迟汇总 | **共享** | `benchmark/evaluators/temporal.py`；数值真源为 `framework/cleansight_eval/core/metrics.py` |
+| checkpoint 读写 | **共享** | framework `core/checkpoint.py` |
+| EvaluationResult / 评测完整性 | **共享** | benchmark `core/result.py`、`core/integrity.py` |
+
+参照四个现成实现：
+- **GRU**（因果）：无归一化；可用于**两条**时序流水线。
+- **MS-TCN**（非因果）：`fit_normalization` 用训练集拟合 z-score 写入 buffer；只能用于**全序列**。
+- **MS-TCN++**（`mstcn2`，非因果）：在 MS-TCN 基础上另实现 `compute_loss`（多 stage 深监督 +
+  T-MSE），把训练配方随架构走；`forward` 仍守 `[B,T,F]->[B,T,C]`，只能用于**全序列**。
+- **Transformer**（非因果）：标准 Encoder + 位置编码，输入输出同为逐帧序列，只能用于**全序列**。
+
+## 1.2 新接入一个时序模型：要实现什么
+
+### A. 新建 `temporal/models/<你的名字>.py`
+
+只写一个纯 `nn.Module`：输入 `[B, T, F]`、输出逐帧 logits `[B, T, C]`。**不写任何监督/喂入
+逻辑**——那些是流水线的事。
+
+```python
+import torch.nn as nn
+
+class MyNet(nn.Module):
+    def __init__(self, input_dim, num_classes, hidden=128, ...):
+        super().__init__()
+        ...
+    def forward(self, x):        # x:[B,T,F] -> [B,T,C]
+        ...
+
+    # 可选钩子（duck-type，有则调、无则退化，不写基类）：
+    # 1) 模型若需输入归一化，实现此方法，训练前按训练集统计写 buffer
+    def fit_normalization(self, features): ...
+    # 2) 模型若自持训练配方（多 stage 深监督 / T-MSE 等），实现此方法（仅全序列流水线调用）；
+    #    流水线仍把类别加权 CE 作为 criterion 传入，缺此方法则退化为单前向逐帧 CE
+    def compute_loss(self, x, y, criterion): ...
+```
+
+### B. 注册：`temporal/models/__init__.py` 的 `_MODELS`
+
+```python
+def _build_mynet(cfg):
+    return MyNet(input_dim=cfg["input_dim"], num_classes=cfg["num_classes"], hidden=cfg.get("hidden", 128))
+
+_MODELS = {
+    ...,
+    "mynet": {"build": _build_mynet, "causal": True},   # causal=True 才允许进滑窗流水线
+}
+```
+
+- **因果**（只看历史+当前，可流式）→ `causal: True`，两条时序流水线都能用。
+- **非因果**（看全序列）→ `causal: False`，只能进 `full_sequence_temporal`；滑窗流水线会拒绝。
+
+### C. 写配置 YAML
+
+```yaml
+schema_version: 1
+pipeline: sliding_window_temporal   # 或 full_sequence_temporal
+model:
+  type: mynet
+  input_dim: 40
+  num_classes: 6
+  hidden: 128                       # 你的自定义超参
+train: { epochs: 20, lr: 1.0e-3, batch_size: 32, window: 64 }   # 全序列不需要 batch_size/window
+data: { dataset_ref: temporal.actionmixed-v2, split_train: train, split_val: val, split_eval: test }
+feature_schema: { dim: 40, version: actionmixed-bbox-8cls-v1 }
+evaluation: { mode: formal }
+```
+
+**不用改**：两个流水线文件、`data.py`、`metrics.py`、CLI、`core/*`。
+
+---
+
+# 二、YOLO（单帧检测）
+
+检测流水线目前**只接 YOLO**。`YoloAdapter`（[yolo.py](../framework/cleansight_eval/detection/yolo.py)）
+已封好 ultralytics 的训练/验证，并**兼任 data loader**（从 `data.yaml` 自持读图、组 batch）。
+
+**结论：新增一个 YOLO 模型 = 只写一份配置 YAML，零代码。** 换的只是预训练权重和超参，
+`model.type` 始终是 `yolo`，同一个 adapter 复用。
+
+```yaml
+schema_version: 1
+pipeline: detection
+model:
+  type: yolo                 # 固定 yolo
+  weights: yolo11s.pt        # 换这里：yolo11n/s/m/l.pt，或自定义结构 .yaml
+  imgsz: 640
+train: { epochs: 100, batch: 16, patience: 20 }
+data:
+  data_yaml: /path/data.yaml # cleansight-yolo-pipeline 产出的标准数据集
+  name: mydataset            # 产物/run 命名
+  eval_split: val
+evaluation:
+  mode: exploratory          # 外部权重；正式归档改为 formal 并提供绑定 metadata
+  testset_id: yolo.group1_large.val
+  save_predictions: true
+```
+
+- `weights` 传 `.pt` 走微调；传结构 `.yaml` 走从头训。二者都由 ultralytics `YOLO(weights)` 直接消费。
+- 入口与时序完全一致（从仓库根目录执行）：
+  `python -m framework.cleansight_eval.cli.train --config framework/experiments/xxx.yaml`，以及对应
+  `cli.eval --ckpt ...`。
+
+**要改代码的情况**（暂不做）：接 YOLO 之外的检测器（Faster R-CNN 等）才需要新写一个 adapter 类
+并在 `detection/yolo.py` 的 `_ADAPTERS` 注册——需要时再说。
+
+---
+
+# 三、多条流水线对照速查
+
+| | 全序列时序 | 滑窗时序 | YOLO 检测 | ROI 分类（特征融合） |
+|--|----------|---------|-----------|---------------------|
+| `pipeline` | `full_sequence_temporal` | `sliding_window_temporal` | `detection` | `roi_classification` |
+| 新增模型改动 | 加 `nn.Module` + 注册一行 | 同左（须 `causal: True`） | 只写配置 | 选 backbone + 写配置 |
+| 监督口径 | 逐帧 CE | 末帧 CE + 因果平滑 | ultralytics 自持 | 多标签 BCE |
+| data loader | `data.py` 统一（40 维特征序列） | 同左 | adapter 自持（读 data.yaml） | `classification/data.py`（ROI 裁剪） |
+| 模型前向基准 | N/A | 单窗 forward 实测 | N/A | N/A |
+| 共享出口 | EvaluationResult v2 / prediction artifact / checkpoint report / matrix | 同左 | 同左 |
+
+> 设计意图：模型只管网络结构，监督与推理由流水线拥有；时序与检测两域数据格式不同、故意不
+> 强行统一。接时序新模型走 `models/` 注册，接 YOLO 只调配置。

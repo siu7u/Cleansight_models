@@ -1,0 +1,45 @@
+# GRU 滑窗时序参照实验（消费真实 cleansight-ActionMixed 数据集）。
+# 历史滑窗流水线：训练与评估都逐窗喂入、末帧监督、因果平滑推理，并测单 tick 延迟。
+# 数据按 features 契约（bbox→40维）读入，用数据集内建的 train/val/test 目录切分。
+
+schema_version: 1
+pipeline: sliding_window_temporal
+
+model:
+  type: gru              # 因果模型，可用于滑窗；规模由本段超参表达
+  input_dim: 40          # 8 检测类 × [presence, cx, cy, w, h]
+  num_classes: 6         # labels/data.yaml: idle/air_injection/flush/long_brush_insert/long_brush_withdraw/short_brush_cleaning
+  hidden: 128
+  num_layers: 3
+
+data:
+  dataset_ref: temporal.actionmixed-v2  # 根目录、类别、mapping 和 manifest 由 benchmark catalog 解析
+  split_train: train                    # manifest 决定实际训练序列
+  split_val: val                        # 训练期选择 best.pt，不占用 test
+  split_eval: test                      # 正式评估 split
+
+feature_schema:
+  dim: 40
+  version: actionmixed-bbox-8cls-v1
+  # mask_targets: [syringe]  # 可选：按 frames/data.yaml 名称或类别 ID 遮罩对应 5 维
+  # 布局：每 5 维一类，顺序同 frames/data.yaml（hand, scope_control_body, scope_mid_section,
+  # scope_distal_end, syringe, air_gun, short_brush, brush_tip_out），每类 [presence, cx, cy, w, h]。
+
+# 训练期随机目标遮罩；默认关闭，不影响当前参照实验结果。启用后 probability 表示每个指定
+# 目标在每个采样帧独立清零 5 维特征的概率，val/test 始终保持干净输入。
+augmentation:
+  target_mask:
+    enabled: false
+    strategy: frame_dropout
+    targets: [scope_distal_end, syringe, air_gun]
+    probability: 0.2
+
+evaluation:
+  mode: formal
+  visualize: true
+
+train:
+  epochs: 20
+  lr: 0.001
+  batch_size: 32
+  window: 16          # 必须 ≤ 最短视频的采样帧数（本数据集最短约 35 帧）

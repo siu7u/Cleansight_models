@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cleansight.local/schemas/evaluation-result-v2.schema.json",
+  "title": "CleanSight EvaluationResult v2",
+  "type": "object",
+  "required": ["schema_version", "result_type", "run", "model", "testset", "inference", "metrics", "performance", "limits", "artifacts", "integrity"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "result_type": {"enum": ["model_evaluation", "benchmark_evaluation"]},
+    "run": {"type": "object"},
+    "model": {"type": ["object", "null"]},
+    "pipeline": {"type": "string"},
+    "testset": {"type": "object"},
+    "feature_schema": {"type": "object"},
+    "inference": {"type": "object"},
+    "metrics": {
+      "type": "object",
+      "required": ["summary", "details"],
+      "properties": {"summary": {"type": "object"}, "details": {"type": "object"}}
+    },
+    "performance": {"type": "object"},
+    "limits": {"type": "object"},
+    "artifacts": {"type": "object"},
+    "integrity": {"type": "object"}
+  },
+  "additionalProperties": true
+}

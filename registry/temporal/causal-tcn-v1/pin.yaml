@@ -1,0 +1,28 @@
+model:
+  name: legacy_causal_tcn_v1
+  version: v1
+  checkpoint: tcn-final-20260704-160652.pt
+  checkpoint_sha256: 4778fde2cd5a9e8c57f034b2ac9093b26d727230aaf2cafb66f4e5a178da854e
+
+dataset:
+  view_b: endo-project-v1
+  path: datasets/endo-project-v1
+  source: legacy MS-TCN2 Endo_Project
+
+detection:
+  yolo_version: yolo-v1
+  registry_path: registry/detection
+  feature_dim: 20
+
+feature_mapping:
+  version: legacy-20d-v1
+  implementation: framework/cleansight_eval/temporal/data.py
+
+runtime:
+  online_causal: true
+  receptive_field_frames: 64
+  inference_mode: sliding_window_temporal
+  output_labels:
+    - Idle
+    - Long_Brushing
+    - Short_Brushing

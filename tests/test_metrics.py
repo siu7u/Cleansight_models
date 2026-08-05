@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from benchmark.core.metrics import (
+from framework.cleansight_eval.core.metrics import (
     Interval,
     classification_metrics,
     interval_iou,
@@ -36,6 +36,18 @@ class IntervalMetricTests(unittest.TestCase):
         )
         self.assertEqual((matched.tp, matched.fp, matched.fn), (0, 1, 1))
 
+    def test_global_greedy_matching_does_not_lose_a_valid_pair_by_prediction_order(self) -> None:
+        truths = [Interval("brush", 0, 10), Interval("brush", 8, 18)]
+        predictions = [Interval("brush", 0, 18), Interval("brush", 0, 7)]
+
+        matched = match_intervals(predictions, truths, 0.5)
+
+        self.assertEqual((matched.tp, matched.fp, matched.fn), (2, 0, 0))
+        self.assertEqual(
+            {(item.prediction_index, item.truth_index) for item in matched.matches},
+            {(0, 1), (1, 0)},
+        )
+
     def test_empty_timeline_is_explicit_perfect_absence(self) -> None:
         matched = match_intervals([], [], 0.5).as_metrics()
         self.assertEqual(matched["f1"], 1.0)
@@ -60,6 +72,34 @@ class TemporalMetricTests(unittest.TestCase):
         self.assertEqual(details["tp"], 2)
         self.assertEqual(details["f1"], 1.0)
 
+    def test_all_wrong_segments_count_fp_and_fn(self) -> None:
+        result = temporal_metrics(
+            {"a": [1, 1, 1]},
+            {"a": [2, 2, 2]},
+            labels=[0, 1, 2],
+            thresholds=(0.5,),
+        )
+        details = result["segment"]["details_at_iou"]["0.50"]
+        self.assertEqual((details["tp"], details["fp"], details["fn"]), (0, 1, 1))
+        self.assertEqual(details["precision"], 0.0)
+        self.assertEqual(details["recall"], 0.0)
+        self.assertEqual(details["f1"], 0.0)
+
+    def test_empty_prediction_and_truth_is_perfect_absence(self) -> None:
+        result = temporal_metrics(
+            {"a": []},
+            {"a": []},
+            labels=[0, 1],
+            thresholds=(0.5,),
+        )
+        self.assertEqual(result["frame"]["num_frames"], 0)
+        self.assertIsNone(result["frame"]["accuracy"])
+        self.assertEqual(result["segment"]["details_at_iou"]["0.50"]["f1"], 1.0)
+
+    def test_missing_item_is_rejected_before_metric_aggregation(self) -> None:
+        with self.assertRaisesRegex(ValueError, "missing_pred"):
+            temporal_metrics({"a": [1]}, {"a": [1], "b": [1]}, labels=[1])
+
     def test_warmup_and_invalid_predictions_are_excluded(self) -> None:
         result = temporal_metrics(
             {"a": [-1, -1, 1, 1]},
@@ -81,6 +121,11 @@ class TemporalMetricTests(unittest.TestCase):
         details = result["details_at_iou"]["0.50"]
         self.assertEqual((details["tp"], details["fp"], details["fn"]), (1, 1, 0))
         self.assertAlmostEqual(result["f1_at_iou"]["0.50"], 2 / 3)
+        self.assertEqual(
+            result["metric_spec"]["matching"],
+            "label-aware one-to-one global-greedy maximum IoU",
+        )
+        self.assertEqual(result["metric_spec"]["version"], "interval-matching-v2")
 
 
 if __name__ == "__main__":
