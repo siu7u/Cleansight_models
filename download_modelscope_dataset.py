@@ -59,9 +59,19 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--preset",
-        choices=sorted(DATASET_PRESETS),
+        choices=sorted(DATASET_PRESETS) + ["all"],
         default=DEFAULT_PRESET,
-        help=f"预置数据源（默认 {DEFAULT_PRESET}）",
+        help=f"预置数据源（默认 {DEFAULT_PRESET}）；all = 训练所需的全部数据集（yolo + actionmixed）",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="不下载，只校验已下载数据是否就绪（缺失时给出下载命令并返回非零）。",
+    )
+    parser.add_argument(
+        "--list-presets",
+        action="store_true",
+        help="打印全部预置数据源与目标位置，不执行下载。",
     )
     parser.add_argument(
         "--dataset",
@@ -282,18 +292,88 @@ def print_yolo_usage(output: Path) -> None:
     print(f"      -S data.data_yaml={data_yamls[0]}")
 
 
+def list_presets() -> None:
+    """打印全部预置数据源与目标位置。"""
+
+    print("可用预置数据源：")
+    print()
+    for key, preset in sorted(DATASET_PRESETS.items()):
+        print(f"  {key:<12} {preset['description']}")
+        print(f"              → {preset['output']}")
+    print()
+    print("  all          依次下载训练所需的全部数据集（yolo + actionmixed）")
+    print()
+    print("示例：")
+    print("  python download_modelscope_dataset.py --preset all")
+    print("  python download_modelscope_dataset.py --check")
+
+
+def check_data(repo_root: Path) -> int:
+    """校验已下载数据是否就绪，缺失时给出下载命令；返回缺失数。"""
+
+    required = [
+        ("yolo", Path("datasets/cleansight-yolo/group1_large/data.yaml"),
+         "python download_modelscope_dataset.py --preset yolo"),
+        ("yolo", Path("datasets/cleansight-yolo/group2_small/data.yaml"),
+         "python download_modelscope_dataset.py --preset yolo"),
+        ("actionmixed", Path("datasets/cleansight-ActionMixed/labels/data.yaml"),
+         "python download_modelscope_dataset.py --preset actionmixed"),
+        ("actionmixed", Path("datasets/cleansight-ActionMixed/frames/data.yaml"),
+         "python download_modelscope_dataset.py --preset actionmixed"),
+    ]
+    missing = []
+    print("数据就绪检查：")
+    for key, rel, cmd in required:
+        path = repo_root / rel
+        ok = path.is_file()
+        print(f"  [{'✅' if ok else '❌'}] {rel}")
+        if not ok:
+            missing.append((key, cmd))
+    print()
+    if missing:
+        keys = sorted({key for key, _ in missing})
+        print(f"缺失 {len(missing)} 项（涉及数据集: {', '.join(keys)}）。请下载：")
+        for key, cmd in sorted(set(missing)):
+            print(f"  {cmd}")
+    else:
+        print("全部就绪 ✅")
+    return len(missing)
+
+
 def main() -> None:
     args = parse_args()
     repo_root = Path(__file__).resolve().parent
     load_env(repo_root / ".env")
 
-    preset = DATASET_PRESETS[args.preset]
+    if args.list_presets:
+        list_presets()
+        return
+
+    if args.check:
+        missing = check_data(repo_root)
+        if missing:
+            raise SystemExit(f"有 {missing} 项数据缺失（见上方下载命令）")
+        return
+
+    if args.preset == "all":
+        for key in ("yolo", "actionmixed"):
+            _download_one(args, repo_root, key)
+        print()
+        print("全部数据集下载完成。可运行校验：python download_modelscope_dataset.py --check")
+        return
+
+    _download_one(args, repo_root, args.preset)
+
+
+def _download_one(args, repo_root: Path, preset_key: str) -> None:
+    """下载单个 preset 并打印对应使用提示。"""
+
+    preset = DATASET_PRESETS[preset_key]
     dataset_id = dataset_id_from_value(args.dataset) if args.dataset else preset["dataset"]
     output = Path(args.output or preset["output"]).expanduser()
     if not output.is_absolute():
         output = repo_root / output
 
-    # 确保 git-lfs 可用
     ensure_git_lfs()
 
     clone_url = build_clone_url(dataset_id)
@@ -304,7 +384,7 @@ def main() -> None:
 
     git_clone(clone_url, output, args.branch, args.depth, args.skip_lfs)
 
-    if args.preset == "yolo":
+    if preset_key == "yolo":
         print_yolo_usage(output)
     else:
         print_temporal_usage(output)

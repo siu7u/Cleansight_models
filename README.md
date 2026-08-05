@@ -1,7 +1,18 @@
 # CleanSight 模型集
 
+> ## 🚀 组员请看这里
+>
+> **📖 [模型训练快速指南（TEAM_GUIDE）](docs/TEAM_GUIDE.md)** —— clone 后 5 分钟跑通第一个训练：
+> 装环境 → 下载数据 → 训练，一条命令一个模型。
+>
+> ```bash
+> python tools/team_env.py --setup-venv   # 1. 装环境
+> python tools/team_dataset.py --preset all  # 2. 下载数据
+> python tools/team_train.py --model yolo11s --group group1_large  # 3. 训练
+> ```
+
 本仓库负责 CleanSight 模型的训练、离线评估、benchmark、checkpoint 契约和交付清单，覆盖
-YOLO 单帧检测与 GRU / MS-TCN / MS-TCN++ / Transformer 时序模型。
+YOLO 单帧检测与 GRU / MS-TCN / MS-TCN++ / Transformer 时序模型，以及 ROI 图像分类（特征融合）。
 
 线上视频流、推理服务、告警以及真实 pipeline/端到端延迟由相邻的 [`CleanSightBackend`](https://github.com/Jiadezhende/CleanSightBackend) 负责；
 本仓库只产出模型与评估事实，不自动决定发布或上线。
