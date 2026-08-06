@@ -90,11 +90,19 @@ strong（0.829/0.460/0.491）、mosaic_off（0.827/0.526/0.484）、mild（0.827
 | mild | 0.5727 | 0.5899 |
 | 训练耗时/预设 | ~75m | ~37m |
 
-### 5.4 group2_small（未完成，已中断）
+### 5.4 group2_small（部分完成）
 
-group2_small（5 类，严重不均衡：brush_tip_out 仅 116 实例 / short_brush 279）的
-yolo11s 增强对比**因本机 12 点关机而中断**（仅跑了个开头，无 val 结果）。
-数据与脚本均已就绪，重启后可继续。
+group2_small（5 类，严重不均衡：brush_tip_out 仅 116 实例 / short_brush 279）。
+yolo11s @ 8 epoch @ 480：
+
+| 预设 | mAP50 | mAP50-95 | Precision | Recall | 状态 |
+|---|---|---|---|---|---|
+| **default** | **0.1840** | **0.0491** | **0.6150** | **0.1754** | ✅ 完成 |
+| strong | — | — | — | — | 被关机中断 |
+
+**关键结论**：group2_small 纯 YOLO 检测 Recall 仅 0.175（小目标/稀有类在 480 下基本检不出），
+印证 `docs/YOLO_OPTIMIZATION.md` 的判断——此类应从 YOLO 淘汰、转 ROI 图像特征融合
+（`roi_classification` 流水线），而非继续调增强参数。
 
 ## 6. 恢复指引（重启后）
 
