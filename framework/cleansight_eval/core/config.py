@@ -55,6 +55,11 @@ KNOWN_SECTION_KEYS = {
     "train": {
         "epochs", "lr", "batch", "batch_size", "patience", "window", "grad_clip",
         "weight_decay", "resume",
+        # ultralytics 检测增强/调度超参（与 detection/sweep.py 预设词汇一致；
+        # 由 YoloAdapter 整体转发给 model.train）
+        "hsv_h", "hsv_s", "hsv_v", "degrees", "translate", "scale", "shear",
+        "perspective", "flipud", "fliplr", "mosaic", "mixup", "copy_paste",
+        "erasing", "cos_lr", "label_smoothing", "close_mosaic", "freeze",
     },
 }
 

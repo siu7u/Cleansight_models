@@ -38,17 +38,21 @@ class YoloAdapter:
         model = YOLO(str(weights))
         # project 必须传绝对路径：ultralytics 对相对 project 不照单全收，会把它拼到
         # 自身 settings 的 runs_dir（默认 runs/detect）下，导致产物落到预期之外的目录。
-        model.train(
-            data=str(data_yaml),
-            epochs=train_cfg.get("epochs", 100),
-            imgsz=imgsz,
-            batch=train_cfg.get("batch", 16),
-            patience=train_cfg.get("patience", 20),
-            device=_ul_device(device),
-            project=str(Path(project).resolve()),
-            name=str(name),
-            exist_ok=True,
+        # train_cfg 里的增强/调度超参（hsv_*、mixup、copy_paste、cos_lr、
+        # label_smoothing、close_mosaic、freeze 等）原本被白名单丢弃，现整体转发，
+        # 使 sweep/实验配置的 augment 预设真正生效；固定参数由本方法覆盖。
+        train_kwargs = dict(train_cfg)
+        train_kwargs.update(
+            {
+                "data": str(data_yaml),
+                "imgsz": imgsz,
+                "device": _ul_device(device),
+                "project": str(Path(project).resolve()),
+                "name": str(name),
+                "exist_ok": True,
+            }
         )
+        model.train(**train_kwargs)
         # best.pt 路径以 ultralytics 实际落盘为准（trainer.best），不手工拼，免受
         # 其 save_dir 解析规则影响。
         best = Path(model.trainer.best)
