@@ -26,7 +26,7 @@
 | **时序域** | `cleansight_eval/temporal/` | 两条时序流水线、数据/feature adapter、模型、训练循环和推理后处理 |
 | **检测域** | `cleansight_eval/detection/` | 单帧检测流水线、唯一 Ultralytics 适配器、优化实验编排 `sweep`、数据集裁剪 `data_tools` |
 | **分类域** | `cleansight_eval/classification/` | ROI 图像分类流水线（特征融合）：模型、ROI 数据集、训练/预测 |
-| CLI | `cleansight_eval/cli/` | `train` + `sweep`；评测与矩阵入口位于 `benchmark/cli/`（另含 `analyze`） |
+| CLI | `cleansight_eval/cli/` | `train`（含 `--model` 别名）+ `sweep` + `dataset` + `manual`（后台训练/进度/恢复/日志）；评测与矩阵入口位于 `benchmark/cli/`（另含 `analyze`） |
 | 实验配置层 | `experiments/` | 流水线 + 模型类型/规模 + 数据 + 特征 + 训练参数 |
 
 > **依赖方向（强制执行）**：`benchmark → framework` 单向。framework **不 import benchmark**；
