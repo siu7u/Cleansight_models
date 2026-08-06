@@ -41,6 +41,16 @@ python -m framework.cleansight_eval.cli.train --model mstcn    # MS-TCN
 python -m framework.cleansight_eval.cli.train --model feature_fusion -S data.classes=air_gun  # ROI 特征融合
 ```
 
+手动训练生命周期（后台启动/进度/恢复/日志/评测，framework CLI）：
+
+```bash
+python -m framework.cleansight_eval.cli.manual start --model yolo11s --group group1_large --bg
+python -m framework.cleansight_eval.cli.manual status
+python -m framework.cleansight_eval.cli.manual resume      # 中断后从 last.pt 恢复
+python -m framework.cleansight_eval.cli.manual eval        # 评测最新 best.pt
+python -m framework.cleansight_eval.cli.manual logs -f     # 跟踪训练日志
+```
+
 数据下载与校验（framework 数据契约层 CLI）：
 
 ```bash
