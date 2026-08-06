@@ -107,8 +107,12 @@ def main(argv=None) -> str:
         raise SystemExit("--config 与 --model 只能二选一")
 
     overrides = _parse_overrides(args.overrides)
+    # resume 语义：ultralytics 的 resume 只接受 True（从 self.ckpt_path 续训），
+    # 因此 resume 时必须把 model.weights 指向 last.pt，并传 train.resume=True。
+    resume_ckpt = None
     if args.resume:
-        overrides.append(("train.resume", args.resume))
+        resume_ckpt = str(args.resume)
+        overrides.append(("train.resume", True))
 
     if args.model:
         config_path = _resolve_model_config(args)
@@ -120,6 +124,9 @@ def main(argv=None) -> str:
         if info.get("group"):
             alias_overrides.append(("data.name", info["group"]))
         print(f"[train] 模型: {args.model}  配置: {config_path}")
+        if resume_ckpt:
+            alias_overrides.append(("model.weights", resume_ckpt))
+            print(f"[train] resume: 从 {resume_ckpt} 续训")
         if alias_overrides or overrides:
             print(f"[train] 覆盖: 别名{alias_overrides} + 用户{overrides}")
         cfg = apply_overrides(load_config(config_path), alias_overrides + overrides)
@@ -127,6 +134,9 @@ def main(argv=None) -> str:
         if not args.config:
             raise SystemExit("请指定 --config <yaml> 或 --model <别名>（--list-models 查看）")
         cfg = apply_overrides(load_config(args.config), overrides)
+        if resume_ckpt:
+            # --config 模式 resume：把 model.weights 指向 last.pt 再 train.resume=True
+            cfg = apply_overrides(cfg, [("model.weights", resume_ckpt)])
 
     from ..core.environment import pick_device
     from ..core.registry import get_pipeline
