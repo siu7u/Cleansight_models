@@ -1,0 +1,25 @@
+# YOLO small-tool detector evaluation config.
+
+schema_version: 1
+pipeline: detection
+
+model:
+  type: yolo
+  weights: yolo11n.pt
+  imgsz: 640
+  allow_missing_meta: true
+
+data:
+  name: group2_small
+  data_yaml: ../../datasets/cleansight-yolo/group2_small/data.yaml
+  eval_split: test
+
+evaluation:
+  mode: exploratory
+  testset_id: yolo.group2_small.val
+  save_predictions: true
+
+train:
+  epochs: 100
+  batch: 16
+  patience: 20
