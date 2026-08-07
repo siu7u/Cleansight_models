@@ -1,0 +1,26 @@
+# 队友模型评测配置：yolo11s-large-gl（group1_large，strong+cos 全量训练）
+# 原始配置来自 modelscope_upload/yolo11s-large-gl/yolo11s-group1-large-strong-cos.yaml，
+# 修正 data_yaml 为本地路径、eval_split 为 test（正式评测口径）。
+
+schema_version: 1
+pipeline: detection
+
+model:
+  type: yolo
+  weights: yolo11s.pt
+  imgsz: 640
+  allow_missing_meta: true
+
+data:
+  name: group1_large
+  data_yaml: ../../datasets/cleansight-yolo/group1_large/data.yaml
+  eval_split: test
+
+evaluation:
+  mode: exploratory
+  testset_id: yolo.group1_large.test
+  save_predictions: true
+  conf: 0.001
+  iou: 0.7
+  max_det: 300
+  agnostic_nms: false
