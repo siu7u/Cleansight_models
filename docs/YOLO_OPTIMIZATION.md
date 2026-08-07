@@ -67,14 +67,54 @@ python -m benchmark.cli.analyze \
   生成裁剪数据集 `datasets/cleansight-yolo/<group>_kept/`（过滤淘汰类 labels、重映射 class id）。
 - 报告写入 `runs/small_analysis/analysis_<group>_<ts>.json|md`，含多 conf 扫描表。
 
-## 3. 裁剪后重训（可选）
+## 3. 逐类最优策略（2026-08 增强对比实测）
+
+数据来源：`EXPERIMENTS/per_class_report.md`（逐类明细）与 `EXPERIMENTS/class_strategy.md`
+（策略分析，`tools/analyze_class_strategy.py` 生成）。实验口径：2,000 图子集、
+yolo11s/yolo11n × default/strong/mosaic_off/mild，8 epoch @ 480。
+推荐逻辑：mAP50 主指标；差距 <0.005 时看 P/R 平衡与训练成本；mAP50<0.05 视为检不出。
+
+### group1_large（big）逐类最优
+
+| 类别 | 最优策略 | mAP50 | P / R | 备选 |
+|---|---|---|---|---|
+| hand | **yolo11s-default** | 0.860 | 0.835 / 0.875 | yolo11s-strong(0.850) |
+| scope_control_body | **yolo11s-default** | 0.617 | 0.593 / 0.604 | yolo11n-default(0.609) |
+| scope_mid_section | **yolo11n-default** | 0.501 | 0.752 / 0.330 | yolo11s-mosaic_off(0.473) |
+
+→ big 组统一推荐 **default 增强**（3 类中 2 类最优、1 类次优）；
+追求速度/部署体积用 yolo11n-default（省一半训练时间）。
+
+### group2_small（small）逐类最优
+
+| 类别 | 最优策略 | mAP50 | P / R | 说明 |
+|---|---|---|---|---|
+| syringe | **yolo11s-strong** | 0.483 | 0.568 / 0.457 | default 次之(0.451) |
+| air_gun | **yolo11s-mild** | 0.350 | 0.652 / 0.347 | 三方案打平；strong 下 P=0.877 最高（低误报场景可选） |
+| scope_distal_end | **yolo11s-mosaic_off** | 0.180 | 0.426 / 0.164 | 整体偏低，考虑 1280+P2 |
+| short_brush | ❌ 检不出 | ≈0.001 | R≈0 | 淘汰 → ROI 特征融合 |
+| brush_tip_out | ❌ 检不出 | 0.000 | R=0 | 淘汰 → ROI 特征融合 |
+
+→ small 组**无统一增强答案**（每类最优不同），且整体 mAP50 仅 0.18 上下：
+增强只能"矬子里拔将军"，瓶颈在分辨率/模型能力。`short_brush`、`brush_tip_out`
+在所有增强下 mAP50≈0，**确认淘汰，走 roi_classification**。
+
+### 落地建议
+
+```text
+big 组正式训练： yolo11s-default @ 640（或 yolo11n-default，快一倍）
+small 组：       保留 syringe / air_gun / scope_distal_end（各自最佳增强），
+                 short_brush + brush_tip_out 转 roi_classification 分类器
+```
+
+## 4. 裁剪后重训（可选）
 
 ```bash
 # 用裁剪数据集重训（保留类）
 python -m framework.cleansight_eval.cli.sweep --group group2_small_kept --preset small_s_1280_p2
 ```
 
-## 4. 淘汰类走 ROI 特征融合（roi_classification）
+## 5. 淘汰类走 ROI 特征融合（roi_classification）
 
 编辑 `framework/experiments/roi-fusion.yaml`，把 `data.classes` 换成 analyze 输出的淘汰类
 （如 `[air_gun, brush_tip_out]`），然后：
@@ -89,7 +129,7 @@ python -m benchmark.cli.eval --config framework/experiments/roi-fusion.yaml --ck
 - checkpoint 带绑定 meta（classes/backbone/input_size），formal 评估前无需人工补填。
 - 当前以 `evaluation.mode: exploratory` 使用；淘汰类最终确定后再登记正式 testset。
 
-## 5. 对比与验收
+## 6. 对比与验收
 
 ```bash
 # 汇总所有评估结果（三态矩阵）
@@ -99,7 +139,7 @@ python -m benchmark.cli.matrix --runs runs
 python tools/validate_testsets.py --catalog framework/testsets.yaml --json
 ```
 
-## 6. 硬件与预算建议
+## 7. 硬件与预算建议
 
 - RTX 4090：完整流水线约 3~4 天（早停生效）；可先跑 `large_baseline + large_s`（5~8 小时）
   看趋势再决定。
@@ -108,7 +148,7 @@ python tools/validate_testsets.py --catalog framework/testsets.yaml --json
 - 不要用 CPU 跑全量（一个 150 epoch 实验约 37 天）。
 - 想更快：`epochs` 降到 100、`patience` 降到 15；多卡时并行跑多个预设。
 
-## 7. 相关文件
+## 8. 相关文件
 
 | 能力 | 位置 |
 |---|---|
