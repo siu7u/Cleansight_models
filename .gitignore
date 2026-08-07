@@ -165,3 +165,9 @@ external_checkpoints/**
 !EXPERIMENTS/
 !EXPERIMENTS/**
 EXPERIMENTS/best_weights/
+
+# ---------------------------------------------------------------------------
+# 权重永不入库（EXPERIMENTS/best_weights 为分享目录，仅本地存在）
+# ---------------------------------------------------------------------------
+EXPERIMENTS/best_weights/**
+EXPERIMENTS/*.pt
