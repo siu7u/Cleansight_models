@@ -60,3 +60,32 @@
 ## 2026-08-07 13:37:51 状态同步
 - 实验日志: 6 条
 - 见 STATE.json 详情
+
+## 2026-08-07 17:39:10 状态同步
+- 实验日志: 7 条
+- 见 STATE.json 详情
+
+## 2026-08-07 · group2_small × yolo11s 全部 4 预设完成
+
+日志：runs/aug_g2_yolo11s.log（default）+ runs/aug_g2_yolo11s_rest.log（strong/mosaic_off/mild）
+结果：runs/aug_compare_group2_small_yolo11s_20260807-173516.json
+
+| 预设 | mAP50 | mAP50-95 | P | R |
+|---|---|---|---|---|
+| strong | 0.1878 | 0.0551 | 0.5801 | 0.1730 |
+| default | 0.1840 | 0.0491 | 0.6150 | 0.1754 |
+| mosaic_off | 0.1720 | 0.0475 | 0.6770 | 0.1791 |
+| mild | 0.1083 | 0.0380 | 0.2069 | 0.1152 |
+
+逐类 mAP50（strong 为例）：syringe 0.483 / air_gun 0.345 / scope_distal_end 0.108 /
+short_brush 0.002 / **brush_tip_out 0.000**。
+
+**结论**：
+1. 4 预设 mAP50 全部 0.11~0.19、R ~0.17 —— 纯 YOLO @480 检不动小目标，与增强无关。
+2. **brush_tip_out（0.000）与 short_brush（0.002）达到淘汰标准（<0.3）**，应转 ROI 特征融合。
+3. 与 g1 相反，g2 上 mild 最差（syringe 0.053）——小目标需更强增强，但救不了根本瓶颈。
+4. 建议：用 benchmark.cli.analyze 出淘汰决策 → roi-fusion.yaml 训练分类器，或试 1280+P2。
+
+## 2026-08-07 17:40:46 状态同步
+- 实验日志: 7 条
+- 见 STATE.json 详情

@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-07T13:37:24",
+  "updated_at": "2026-08-07T17:40:39",
   "repo": "/mnt/e/曦源/Cleansight_models",
   "experiments": [
     {
@@ -39,33 +39,8 @@
       "log": "runs/aug_g1_yolo11s_win.log",
       "group": "group1",
       "model": "yolo11s",
-      "presets_done": 4,
-      "vals": [
-        {
-          "map50": 0.6431,
-          "map50_95": 0.2358,
-          "precision": 0.7134,
-          "recall": 0.602
-        },
-        {
-          "map50": 0.5204,
-          "map50_95": 0.1893,
-          "precision": 0.6196,
-          "recall": 0.584
-        },
-        {
-          "map50": 0.5726,
-          "map50_95": 0.205,
-          "precision": 0.5489,
-          "recall": 0.6046
-        },
-        {
-          "map50": 0.5727,
-          "map50_95": 0.2169,
-          "precision": 0.6994,
-          "recall": 0.5549
-        }
-      ],
+      "presets_done": 0,
+      "vals": [],
       "running": false
     },
     {
@@ -87,8 +62,27 @@
       "log": "runs/aug_g2_yolo11s_rest.log",
       "group": "group2",
       "model": "yolo11s",
-      "presets_done": 0,
-      "vals": [],
+      "presets_done": 3,
+      "vals": [
+        {
+          "map50": 0.1878,
+          "map50_95": 0.0551,
+          "precision": 0.5801,
+          "recall": 0.173
+        },
+        {
+          "map50": 0.172,
+          "map50_95": 0.0475,
+          "precision": 0.677,
+          "recall": 0.1791
+        },
+        {
+          "map50": 0.1083,
+          "map50_95": 0.038,
+          "precision": 0.2069,
+          "recall": 0.1152
+        }
+      ],
       "running": true
     },
     {
@@ -97,6 +91,10 @@
     },
     {
       "result_json": "runs/aug_compare_group1_large_yolo11s_20260806-192102.json",
+      "note": "完整结果见 report_aug_results.py"
+    },
+    {
+      "result_json": "runs/aug_compare_group2_small_yolo11s_20260807-173516.json",
       "note": "完整结果见 report_aug_results.py"
     }
   ],
