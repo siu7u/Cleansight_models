@@ -12,8 +12,17 @@
 | mild | 0.5727 | 0.5899 | 仅翻转+微缩放 |
 | strong | 0.5204 | 0.5933 | mixup 0.15 + 重 HSV（大模型伤害大） |
 
-**group2_small（5 类，yolo11s）**：default mAP50=**0.1840**（R 仅 0.175）——
-纯 YOLO 检不动小目标/稀有类，应转 ROI 特征融合（`roi_classification`）。
+**group2_small（5 类，yolo11s，4 预设全部完成）**：
+
+| 预设 | mAP50 | P | R |
+|---|---|---|---|
+| strong | 0.1878 | 0.5801 | 0.1730 |
+| default | 0.1840 | 0.6150 | 0.1754 |
+| mosaic_off | 0.1720 | 0.6770 | 0.1791 |
+| mild | 0.1083 | 0.2069 | 0.1152 |
+
+逐类（strong 为例）：syringe 0.483 / air_gun 0.345 / scope_distal_end 0.108 /
+short_brush 0.002 / **brush_tip_out 0.000** → 后两类达淘汰标准（<0.3），转 ROI 特征融合。
 
 ## 核心结论
 
