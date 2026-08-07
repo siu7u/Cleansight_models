@@ -160,3 +160,8 @@ external_checkpoints/**
 
 # Added by ggshield
 .cache_ggshield
+
+# CleanSight 增强实验记录（区别于被忽略的训练输出目录 experiments/）
+!EXPERIMENTS/
+!EXPERIMENTS/**
+EXPERIMENTS/best_weights/

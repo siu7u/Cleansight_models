@@ -1,0 +1,105 @@
+{
+  "updated_at": "2026-08-07T13:37:24",
+  "repo": "/mnt/e/曦源/Cleansight_models",
+  "experiments": [
+    {
+      "log": "runs/aug_g1_yolo11n.log",
+      "group": "group1",
+      "model": "yolo11n",
+      "presets_done": 4,
+      "vals": [
+        {
+          "map50": 0.6395,
+          "map50_95": 0.2411,
+          "precision": 0.7083,
+          "recall": 0.6326
+        },
+        {
+          "map50": 0.5933,
+          "map50_95": 0.2064,
+          "precision": 0.6158,
+          "recall": 0.625
+        },
+        {
+          "map50": 0.6122,
+          "map50_95": 0.2274,
+          "precision": 0.6934,
+          "recall": 0.5963
+        },
+        {
+          "map50": 0.5899,
+          "map50_95": 0.2318,
+          "precision": 0.718,
+          "recall": 0.5547
+        }
+      ],
+      "running": false
+    },
+    {
+      "log": "runs/aug_g1_yolo11s_win.log",
+      "group": "group1",
+      "model": "yolo11s",
+      "presets_done": 4,
+      "vals": [
+        {
+          "map50": 0.6431,
+          "map50_95": 0.2358,
+          "precision": 0.7134,
+          "recall": 0.602
+        },
+        {
+          "map50": 0.5204,
+          "map50_95": 0.1893,
+          "precision": 0.6196,
+          "recall": 0.584
+        },
+        {
+          "map50": 0.5726,
+          "map50_95": 0.205,
+          "precision": 0.5489,
+          "recall": 0.6046
+        },
+        {
+          "map50": 0.5727,
+          "map50_95": 0.2169,
+          "precision": 0.6994,
+          "recall": 0.5549
+        }
+      ],
+      "running": false
+    },
+    {
+      "log": "runs/aug_g2_yolo11s.log",
+      "group": "group2",
+      "model": "yolo11s",
+      "presets_done": 1,
+      "vals": [
+        {
+          "map50": 0.184,
+          "map50_95": 0.0491,
+          "precision": 0.615,
+          "recall": 0.1754
+        }
+      ],
+      "running": false
+    },
+    {
+      "log": "runs/aug_g2_yolo11s_rest.log",
+      "group": "group2",
+      "model": "yolo11s",
+      "presets_done": 0,
+      "vals": [],
+      "running": true
+    },
+    {
+      "result_json": "runs/aug_compare_group1_large_yolo11n_20260806-215642.json",
+      "note": "完整结果见 report_aug_results.py"
+    },
+    {
+      "result_json": "runs/aug_compare_group1_large_yolo11s_20260806-192102.json",
+      "note": "完整结果见 report_aug_results.py"
+    }
+  ],
+  "running": [],
+  "notes": []
+}
