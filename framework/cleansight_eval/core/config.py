@@ -25,6 +25,20 @@ ALLOWED_TOP_KEYS = {
     "evaluation", "train", "_config_provenance",
 }
 
+# YOLO 检测训练超参词汇：与 ultralytics 的 model.train() 训练参数一一对应。
+# 登记后 train 段可以表达这些超参（core 校验放行），由 detection/yolo.py 透传给
+# ultralytics；白名单外的键不会被转发，避免拼写错误被静默吞掉。
+YOLO_TRAIN_HPARAMS = frozenset({
+    "optimizer", "lr0", "lrf", "momentum", "weight_decay", "nbs",
+    "warmup_epochs", "warmup_momentum", "warmup_bias_lr", "cos_lr",
+    "box", "cls", "dfl", "label_smoothing", "dropout",
+    "freeze", "close_mosaic", "fraction", "multi_scale", "amp", "cache",
+    "workers", "seed", "deterministic", "single_cls", "rect",
+    "hsv_h", "hsv_s", "hsv_v", "degrees", "translate", "scale", "shear",
+    "perspective", "flipud", "fliplr", "bgr", "mosaic", "mixup", "cutmix",
+    "copy_paste", "copy_paste_mode", "auto_augment", "erasing",
+})
+
 # 已注册模型和流水线共同支持的配置词汇。新增模型参数时需在这里显式登记，拼写错误因而
 # 不会被静默忽略。更具体的必填/互斥规则仍由 Pipeline.validate_config 负责。
 KNOWN_SECTION_KEYS = {
@@ -55,7 +69,7 @@ KNOWN_SECTION_KEYS = {
     "train": {
         "epochs", "lr", "batch", "batch_size", "patience", "window", "grad_clip",
         "weight_decay", "resume",
-    },
+    } | YOLO_TRAIN_HPARAMS,
 }
 
 PIPELINE_DEFAULTS = {

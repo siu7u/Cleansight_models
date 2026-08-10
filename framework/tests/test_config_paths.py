@@ -150,3 +150,24 @@ def test_target_mask_augmentation_is_a_registered_config_section(tmp_path):
 
     assert cfg["augmentation"]["target_mask"]["targets"] == ["syringe"]
     assert cfg["augmentation"]["target_mask"]["probability"] == 0.2
+
+
+def test_yolo_train_hparams_are_registered_config_parameters(tmp_path):
+    # YOLO 训练超参（cos_lr/增强等）已登记进 train 段词汇：YAML 可以表达且不被
+    # 通用校验拒绝，由 detection/yolo.py 透传给 ultralytics。
+    cfg_path = tmp_path / "yolo-train.yaml"
+    cfg_path.write_text(
+        "schema_version: 1\npipeline: detection\n"
+        "model:\n  type: yolo\n  weights: yolo11n.pt\n"
+        "data:\n  data_yaml: data.yaml\n"
+        "train:\n  epochs: 10\n  cos_lr: true\n  close_mosaic: 5\n"
+        "  label_smoothing: 0.1\n  mixup: 0.15\n",
+        encoding="utf-8",
+    )
+
+    cfg = load_config(cfg_path)
+
+    assert cfg["train"]["cos_lr"] is True
+    assert cfg["train"]["close_mosaic"] == 5
+    assert cfg["train"]["label_smoothing"] == 0.1
+    assert cfg["train"]["mixup"] == 0.15
