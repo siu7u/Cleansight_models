@@ -42,11 +42,10 @@ class YoloAdapter:
         训练默认关闭 ultralytics 在线检查（``YOLO_OFFLINE=true``）：PyPI 更新检查在
         弱网下会在训练开始前长时间挂起；用户可用 ``YOLO_OFFLINE=false`` 显式恢复。
         """
-        from ultralytics import YOLO
-
         # ONLINE 是 ultralytics import 时计算的模块常量，因此必须在 import 之前设置；
         # setdefault 尊重用户显式设置的环境变量。
         os.environ.setdefault("YOLO_OFFLINE", "true")
+        from ultralytics import YOLO
 
         model = YOLO(str(weights))
         # epochs/batch/patience 由下方显式传参，其余登记的 YOLO 超参走白名单透传。
