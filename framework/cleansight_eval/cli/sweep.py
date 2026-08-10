@@ -4,6 +4,8 @@
     python -m framework.cleansight_eval.cli.sweep --group group1_large --preset large_baseline large_s
     python -m framework.cleansight_eval.cli.sweep --group group1_large --grid models resolutions --dry-run
     python -m framework.cleansight_eval.cli.sweep --group group2_small --preset small_s_1280_p2 --device 0
+    python -m framework.cleansight_eval.cli.sweep --group group1_large \
+        --preset large_s large_s_960 large_m_960 --smoke
 """
 
 from __future__ import annotations
@@ -27,12 +29,17 @@ def parse_args(argv=None):
     p.add_argument("--preset", nargs="*", help="预设名(可多个), 如 large_baseline large_s")
     p.add_argument("--grid", nargs="*", help="grid search 维度: models, resolutions, augments; 或 all")
     p.add_argument("--dry-run", action="store_true", help="仅打印计划，不执行训练")
+    p.add_argument("--smoke", action="store_true",
+                   help="快速探针：截断 epochs/patience + fraction 子采样，结果仅用于方向对比")
     p.add_argument("--device", default="auto", help="auto / cpu / cuda:0 等")
     return p.parse_args(argv)
 
 
 def main(argv=None) -> int:
     args = parse_args(argv)
+
+    if args.smoke:
+        print("⚠️ SMOKE 探针模式：截断训练 + 数据子采样，结果仅用于预设方向对比，不代表正式指标。")
 
     experiments = []
     if args.preset:
@@ -44,11 +51,15 @@ def main(argv=None) -> int:
 
     all_results = []
     for preset_name, cfg in experiments:
-        all_results.append(run_experiment(args.group, preset_name, cfg, dry_run=args.dry_run))
+        all_results.append(run_experiment(args.group, preset_name, cfg,
+                                          dry_run=args.dry_run, smoke=args.smoke,
+                                          device=args.device))
 
     if args.grid:
         grid_dims = args.grid if args.grid != ["all"] else ["models", "resolutions", "augments"]
-        all_results.extend(run_grid(args.group, grid_dims, dry_run=args.dry_run))
+        all_results.extend(run_grid(args.group, grid_dims,
+                                    dry_run=args.dry_run, smoke=args.smoke,
+                                    device=args.device))
 
     if not all_results:
         print("[ERROR] 请指定 --preset 或 --grid", file=sys.stderr)
