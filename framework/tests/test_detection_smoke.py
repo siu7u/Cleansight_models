@@ -4,6 +4,7 @@
 core 矩阵收纳。ultralytics 不可用（重依赖），故 monkeypatch adapter。
 """
 
+import os
 import sys
 from types import SimpleNamespace
 
@@ -129,6 +130,100 @@ def test_yolo_adapter_counts_checkpoint_parameters_before_validation_fusion(monk
     )
 
     assert result["num_params"] == 11
+
+
+class _RecordingYOLO:
+    """记录 model.train 超参的假 ultralytics YOLO，用于验证白名单透传。"""
+
+    def __init__(self, _weights):
+        self.trainer = SimpleNamespace(best="best.pt")
+        self.model = _ParameterContainer(11)
+        self.names = {0: "hand"}
+        self.train_calls = []
+
+    def train(self, **kwargs):
+        self.train_calls.append(kwargs)
+
+
+def test_yolo_adapter_forwards_registered_train_hparams(monkeypatch):
+    fake_yolo = _RecordingYOLO("yolo11n.pt")
+    monkeypatch.setitem(sys.modules, "ultralytics", SimpleNamespace(YOLO=lambda _w: fake_yolo))
+
+    YoloAdapter().train(
+        weights="yolo11n.pt",
+        data_yaml="fake.yaml",
+        train_cfg={
+            "epochs": 50,
+            "batch": 8,
+            "patience": 20,
+            "cos_lr": True,
+            "label_smoothing": 0.1,
+            "close_mosaic": 5,
+            "freeze": 10,
+            "mosaic": 1.0,
+            "mixup": 0.15,
+            "hsv_h": 0.02,
+            "typo_key": 1,  # 白名单外 → 不转发
+        },
+        imgsz=640,
+        device=torch.device("cpu"),
+        project="/tmp/proj",
+        name="t",
+    )
+
+    kwargs = fake_yolo.train_calls[0]
+    # 显式参数仍正确
+    assert kwargs["epochs"] == 50 and kwargs["batch"] == 8 and kwargs["patience"] == 20
+    assert kwargs["imgsz"] == 640 and kwargs["device"] == "cpu"
+    assert kwargs["name"] == "t" and kwargs["exist_ok"] is True
+    # 登记的 YOLO 超参真正透传给 ultralytics
+    assert kwargs["cos_lr"] is True
+    assert kwargs["label_smoothing"] == 0.1
+    assert kwargs["close_mosaic"] == 5
+    assert kwargs["freeze"] == 10
+    assert kwargs["mosaic"] == 1.0
+    assert kwargs["mixup"] == 0.15
+    assert kwargs["hsv_h"] == 0.02
+    # 白名单外的键不转发
+    assert "typo_key" not in kwargs
+
+
+def test_train_defaults_offline_update_check(monkeypatch):
+    fake_yolo = _RecordingYOLO("yolo11n.pt")
+    monkeypatch.setitem(sys.modules, "ultralytics", SimpleNamespace(YOLO=lambda _w: fake_yolo))
+    monkeypatch.delenv("YOLO_OFFLINE", raising=False)
+
+    YoloAdapter().train(
+        weights="yolo11n.pt",
+        data_yaml="fake.yaml",
+        train_cfg={"epochs": 1},
+        imgsz=640,
+        device=torch.device("cpu"),
+        project="/tmp/proj",
+        name="t",
+    )
+
+    # 默认关闭 ultralytics 在线检查，避免弱网下 PyPI 更新检查挂起训练
+    assert os.environ.get("YOLO_OFFLINE") == "true"
+
+
+def test_train_respects_explicit_offline_override(monkeypatch):
+    fake_yolo = _RecordingYOLO("yolo11n.pt")
+    monkeypatch.setitem(sys.modules, "ultralytics", SimpleNamespace(YOLO=lambda _w: fake_yolo))
+    monkeypatch.setenv("YOLO_OFFLINE", "false")
+
+    YoloAdapter().train(
+        weights="yolo11n.pt",
+        data_yaml="fake.yaml",
+        train_cfg={"epochs": 1},
+        imgsz=640,
+        device=torch.device("cpu"),
+        project="/tmp/proj",
+        name="t",
+    )
+
+    # setdefault 语义：用户显式设置的值不被覆盖
+    assert os.environ.get("YOLO_OFFLINE") == "false"
 
 
 def test_evaluate_produces_wellformed_envelope(tmp_path, monkeypatch):
