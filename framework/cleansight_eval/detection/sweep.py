@@ -69,7 +69,8 @@ PRESETS: Dict[str, dict] = {
         "model": "yolo11s.pt",
         "imgsz": 960,
         "epochs": 150,
-        "batch": 12,
+        # 8GB 显存（RTX 4060）按分辨率等比收缩 batch：12×(640/960)^2≈5.3，取 6。
+        "batch": 6,
         "patience": 30,
         "augment": "strong",
     },
@@ -87,7 +88,8 @@ PRESETS: Dict[str, dict] = {
         "model": "yolo11m.pt",
         "imgsz": 960,
         "epochs": 200,
-        "batch": 8,
+        # 8GB 显存（RTX 4060）：yolo11m 权重与激活更重，batch 取 4。
+        "batch": 4,
         "patience": 40,
         "augment": "strong",
         "cos_lr": True,
@@ -309,6 +311,8 @@ def run_experiment(
         from ..core.environment import pick_device
 
         device = pick_device()
+    # 记录实际使用的设备（auto 解析后的结果），供报告“使用的方法”章节引用。
+    result_device = str(device)
 
     # data.yaml 的 path 相对 cwd 解析，切到分组目录执行。
     os.chdir(group_dir)
@@ -320,6 +324,7 @@ def run_experiment(
         "cfg": cfg,
         "timestamp": datetime.now().isoformat(),
         "smoke": smoke,
+        "device": result_device,
     }
 
     adapter = get_adapter("yolo")
@@ -557,6 +562,37 @@ def save_report(results: List[dict], group: str) -> Tuple[Path, Path]:
         for cls_name, pc in r["val"].get("per_class", {}).items():
             lines.append(f"| {cls_name} | {pc.get('precision', 0):.4f} | "
                          f"{pc.get('recall', 0):.4f} | {pc.get('map50', 0):.4f} |")
+
+    # 报告末尾的“使用的方法”清单：每个实验的方法要点 + 通用运行说明，
+    # 保证读者无需翻 args.yaml 就能复现方法。
+    lines += [
+        f"",
+        f"## 使用的方法（methods used）",
+        f"",
+        f"数据: 数据集 {group}（datasets/cleansight-yolo/{group}），train/val 划分见 data.yaml；"
+        f"SMOKE 探针按 fraction={SMOKE_FRACTION} 子采样训练数据，仅用于方向对比。",
+        f"",
+        f"| 实验 | 模型 | imgsz | batch | epochs(计划) | 增强 | cos_lr | label_smoothing | freeze | 设备 |",
+        f"|------|------|------:|------:|-------------:|------|:------:|----------------:|:------:|:----:|",
+    ]
+    for r in results:
+        cfg = r.get("cfg", {})
+        name = r.get("name", "?")
+        if r.get("dry_run"):
+            continue
+        status = "❌失败 " if "error" in r else ""
+        lines.append(
+            f"| {status}{name} | {cfg.get('model','?')} | {cfg.get('imgsz','?')} | "
+            f"{cfg.get('batch','?')} | {cfg.get('epochs','?')} | {cfg.get('augment','?')} | "
+            f"{cfg.get('cos_lr', False)} | {cfg.get('label_smoothing', 0.0)} | "
+            f"{cfg.get('freeze', '-')} | {r.get('device','?')} |"
+        )
+    lines += [
+        f"",
+        f"运行说明: smoke 实验 epochs 截断为 {SMOKE_EPOCHS}、patience={SMOKE_PATIENCE}、"
+        f"训练数据 fraction={SMOKE_FRACTION}；val 在 val split 上以 conf=0.001、iou=0.7、"
+        f"max_det=300 计算。权重与结果曲线位于 runs/cleansight-yolo/ 下对应 run 目录。",
+    ]
 
     md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"\n报告已保存: {json_path}")
