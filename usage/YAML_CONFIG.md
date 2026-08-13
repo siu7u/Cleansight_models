@@ -10,9 +10,9 @@
 - 字段、默认值、约束、读取方或运行影响变化时，即使文件路径不变，也要更新对应说明。
 - 被 `.gitignore` 排除的构建、训练和打包产物不纳入逐文件清单，统一在文末说明。
 
-当前共登记 29 个 YAML，其中包含 4 个与本地外部 checkpoint 配套的探索性配置、3 个历史
-时序 checkpoint 的 framework 兼容实验和 1 个组员
-接入外部时序权重时使用的模板。
+当前共登记 32 个 YAML，其中包含 4 个与本地外部 checkpoint 配套的探索性配置、3 个历史
+时序 checkpoint 的 framework 兼容实验、1 个组员接入外部时序权重时使用的模板和 1 个
+YOLO 自动标注配置。
 
 ## 1. Framework 实验配置
 
@@ -49,6 +49,9 @@ Pipeline 校验并执行。
 | [`framework/experiments/transformer-actionmixed.yaml`](../framework/experiments/transformer-actionmixed.yaml) | Transformer 的表示维度、head、layer、FFN 和最大长度 | 使用完整上下文的非因果全序列实验。 |
 | [`framework/experiments/yolo-clean-large.yaml`](../framework/experiments/yolo-clean-large.yaml) | group1 大目标、YOLO11n、640 输入和 val testset | 大目标检测训练及探索性评估。 |
 | [`framework/experiments/yolo-clean-small.yaml`](../framework/experiments/yolo-clean-small.yaml) | group2 小目标、YOLO11n、640 输入和 val testset | 小目标检测训练及探索性评估，重点观察逐类召回。 |
+| [`framework/experiments/roi-fusion.yaml`](../framework/experiments/roi-fusion.yaml) | ROI 分类流水线（`feature_fusion`）、hidden_dim 等网络参数 | 小目标/稀有类的 ROI 特征融合替代方案实验。 |
+| [`framework/experiments/yolo11s-large-gl-eval.yaml`](../framework/experiments/yolo11s-large-gl-eval.yaml) | 队友 YOLO11s 大目标模型、group1_large test split、本地化 data_yaml | 队友模型在锁定 test split 上的正式评测配置。 |
+| [`framework/experiments/yolo11s-small-zyh-eval.yaml`](../framework/experiments/yolo11s-small-zyh-eval.yaml) | 队友 YOLO11s 小目标模型、group2_small test split、本地化 data_yaml | 队友模型在锁定 test split 上的正式评测配置。 |
 
 ## 2. Benchmark 数据集和 split
 
@@ -121,7 +124,7 @@ legacy YAML 是冻结快照，不再接收新字段或成为数据/模型真源�
 
 ## 7. 生成或本地 YAML
 
-以下文件受 `.gitignore` 排除，不进入上面的 29 文件清单：
+以下文件受 `.gitignore` 排除，不进入上面的 32 文件清单：
 
 - `datasets/cleansight-yolo/**/data.yaml`：本地 YOLO 数据挂载及生成的 Ultralytics 清单；framework
   experiment 和 testset catalog 只引用该统一路径。
@@ -132,6 +135,19 @@ legacy YAML 是冻结快照，不再接收新字段或成为数据/模型真源�
 - `cleansight-yolo-pipeline-main/**/*.yaml`：本地兼容镜像，不是当前 framework/benchmark 真源。
 
 若生成文件以后转为受 Git 跟踪的稳定契约，必须将其加入本文档的逐文件清单。
+
+## 8. YOLO 自动标注配置
+
+[`framework/experiments/auto-annotate.yaml`](../framework/experiments/auto-annotate.yaml) 由
+`framework.cleansight_eval.cli.annotate` 读取，用于把已训练 YOLO checkpoint 的逐帧检测
+序列化为 legacy 时序标注 JSON（与 Label Studio 导出同构，可被历史 `lab.py` 消费）。
+
+| 字段 | 内容与功能 |
+|---|---|
+| `checkpoints` | 参与标注的 checkpoint 列表；每项含权重 `path`（相对仓库根）和 `class_map`（本地类别 id → 全局类名，id 必须存在于权重 names 中）。 |
+| `imgsz` / `conf` | 推理输入尺寸与置信度阈值，可被 CLI 参数覆盖。 |
+| `top_k` | 每类别轨迹（slot）数；`hand` 默认 2 条，其他类别 1 条，与 clean_bbox_v2 的 slot 语义一致。 |
+| `out_dir` | 标注 JSON 输出目录（`outputs/` 下，默认被 Git 忽略），可被 CLI `--out` 覆盖。 |
 
 ## 更新检查
 
