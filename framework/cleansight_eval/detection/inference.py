@@ -6,14 +6,24 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 
-def load_predictor(ckpt_path: str, imgsz: int = 640):
-    """加载 YOLO 模型，返回 ``(model, names_dict)``。"""
+def load_predictor(ckpt_path: str, imgsz: int = 640, runs_dir: str | None = None):
+    """加载 YOLO 模型，返回 ``(model, names_dict)``。
+
+    ``runs_dir`` 非空时把 ultralytics 中间产物目录（``ultralytics.cfg.RUNS_DIR``）
+    重定向到该目录；ultralytics 8.3 的默认 runs 目录可能落在只读或无关位置
+    （如按安装位置推断的 git 仓库根）。不传则保持 ultralytics 默认行为。
+    """
 
     from ultralytics import YOLO
 
+    if runs_dir is not None:
+        import ultralytics.cfg as ucfg
+
+        ucfg.RUNS_DIR = Path(runs_dir)
     model = YOLO(str(ckpt_path))
     names = {int(k): v for k, v in dict(model.names).items()}
     return model, names

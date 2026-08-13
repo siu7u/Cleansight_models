@@ -1,0 +1,28 @@
+# YOLO 自动标注配置（cli.annotate 读取）。
+#
+# 用已训练 YOLO checkpoint 对视频逐帧检测，产出 legacy 时序标注 JSON
+# （与 Label Studio 导出同构，可被历史 lab.py::load_data_json 消费）。
+# class_map 把每个 checkpoint 的本地类别 id 映射到全局类名；本地 id 必须
+# 存在于权重 names 中，否则 CLI 报错。short_brush / brush_tip_out 目前
+# 没有对应 legacy 权重，需要时在 checkpoints 中追加覆盖它们的模型。
+
+checkpoints:
+  - path: legacy/yolo-detection/pipeline/versioned_weights/yolo-large-v3/best.pt
+    class_map:
+      0: hand
+      1: scope_control_body
+      2: scope_mid_section
+  - path: legacy/yolo-detection/pipeline/versioned_weights/yolo-small-v3/best.pt
+    class_map:
+      0: syringe
+      1: air_gun
+      2: scope_distal_end
+
+imgsz: 640
+conf: 0.25
+
+# 每类别轨迹数（slot 数）：hand 双实例，其他类别 1 条。
+top_k:
+  hand: 2
+
+out_dir: outputs/auto_annotations
