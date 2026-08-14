@@ -52,7 +52,7 @@ def parse_args(argv=None):
     p = argparse.ArgumentParser(description="YOLO 自动标注（→ legacy 时序标注 JSON）")
     p.add_argument("--videos", required=True, help="视频文件或包含视频的目录")
     p.add_argument("--config", required=True, help="自动标注配置 YAML（checkpoints/imgsz/conf/top_k/out_dir）")
-    p.add_argument("--out", default=None, help="输出目录（默认取配置 out_dir，缺省为 outputs/auto_annotations）")
+    p.add_argument("--out", default=None, help="输出目录（默认取配置 out_dir，缺省为 outputs/annotations）")
     p.add_argument("--runs-dir", default=None, help="ultralytics 中间产物目录（默认 outputs/ultralytics_runs，Git 忽略）")
     p.add_argument("--conf", type=float, default=None, help="检测置信度阈值（覆盖配置）")
     p.add_argument("--imgsz", type=int, default=None, help="推理输入尺寸（覆盖配置）")
@@ -80,7 +80,7 @@ def main(argv=None) -> int:
         specs.append({"path": ckpt_path, "class_map": spec["class_map"]})
 
     videos = _expand_videos(args.videos)
-    out_dir = Path(args.out or config.get("out_dir") or "outputs/auto_annotations")
+    out_dir = Path(args.out or config.get("out_dir") or "outputs/annotations")
     if not out_dir.is_absolute():
         out_dir = REPO_ROOT / out_dir
     runs_dir = Path(args.runs_dir or "outputs/ultralytics_runs")

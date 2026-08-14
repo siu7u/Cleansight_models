@@ -25,4 +25,4 @@ conf: 0.25
 top_k:
   hand: 2
 
-out_dir: outputs/auto_annotations
+out_dir: outputs/annotations
