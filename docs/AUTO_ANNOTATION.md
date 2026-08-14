@@ -7,7 +7,7 @@
 
 ```
 新视频 (mp4)
-  │  python -m framework.cleansight_eval.cli.annotate \
+  │  python -m framework.cleansight_eval.cli.annotate run \
   │      --videos <视频或目录> --config framework/experiments/auto-annotate.yaml
   ▼
 outputs/annotations/<视频名>.json   ← legacy 标注 JSON（每视频一个）
@@ -24,23 +24,23 @@ outputs/annotations/<视频名>.json   ← legacy 标注 JSON（每视频一个�
 
 ```bash
 # 单视频
-python -m framework.cleansight_eval.cli.annotate \
+python -m framework.cleansight_eval.cli.annotate run \
     --videos path/to/video.mp4 --config framework/experiments/auto-annotate.yaml
 
 # 目录内全部视频
-python -m framework.cleansight_eval.cli.annotate \
+python -m framework.cleansight_eval.cli.annotate run \
     --videos path/to/videos/ --config framework/experiments/auto-annotate.yaml
 
 # 覆盖阈值 / 输出目录 / smoke 探针
-python -m framework.cleansight_eval.cli.annotate --videos ... --config ... \
+python -m framework.cleansight_eval.cli.annotate run --videos ... --config ... \
     --conf 0.3 --out outputs/annotations_smoke --max-frames 30
 
 # 帧采样加速（每 4 帧推理一次，中间帧沿用最近结果，推理成本降 4 倍）
-python -m framework.cleansight_eval.cli.annotate --videos ... --config ... \
+python -m framework.cleansight_eval.cli.annotate run --videos ... --config ... \
     --frame-stride 4
 
 # ByteTrack 实例跟踪（轨迹按实例 id 组织，帧间实例连续）
-python -m framework.cleansight_eval.cli.annotate --videos ... --config ... \
+python -m framework.cleansight_eval.cli.annotate run --videos ... --config ... \
     --track
 
 # 断点续跑（跳过已存在产出的视频）
@@ -79,6 +79,39 @@ git 仓库根（如 `CleanSightBackend/runs`），本工具统一重定向，避
 | `--resume` | 跳过已存在产出的视频，批量中断后可续跑。 |
 
 配置说明见 `framework/experiments/auto-annotate.yaml`（登记于 `usage/YAML_CONFIG.md` §8）。
+
+## 完整工作流（视频 → 时序模型训练）
+
+```bash
+# ① 自动标注：目录内全部视频（帧采样加速 + 断点续跑）
+python -m framework.cleansight_eval.cli.annotate run \
+    --videos legacy/yolo-detection/pipeline/raw/videos/ \
+    --config framework/experiments/auto-annotate.yaml \
+    --frame-stride 4 --resume
+
+# ② 转换：自动检测 + 人工动作标签 → 训练数据（train/val 各跑一次）
+python -m framework.cleansight_eval.cli.annotate convert \
+    --annotations outputs/annotations \
+    --labels-export legacy/yolo-detection/pipeline/raw/exports/project-10-at-2026-07-07-19-32.json \
+    --out datasets/cleansight-ActionMixed-auto --split train
+python -m framework.cleansight_eval.cli.annotate convert \
+    --annotations outputs/annotations \
+    --labels-export legacy/yolo-detection/pipeline/raw/exports/project-10-at-2026-07-07-19-32.json \
+    --out datasets/cleansight-ActionMixed-auto --split val
+
+# ③ 训练（smoke 配置；正式训练请扩展数据并登记 testsets.yaml）
+python -m framework.cleansight_eval.cli.train \
+    --config framework/experiments/mstcn-autoannotate-smoke.yaml
+
+# ④ 评测
+python -m benchmark.cli.eval \
+    --config framework/experiments/mstcn-autoannotate-smoke.yaml \
+    --ckpt runs/autoannotate-smoke/mstcn-*/checkpoints/best.pt
+```
+
+> 注意：① 只产出检测标注；动作标签必须来自人工标注（② 的 `--labels-export`
+> 提供 timelinelabels）。convert 会把同一视频在人工导出中的动作标签与自动检测合并，
+> 并自动做 LS 标注帧率 → 视频真实帧率的帧号换算。
 
 ## 输出格式（对齐 legacy）
 
