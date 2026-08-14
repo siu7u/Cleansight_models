@@ -34,11 +34,33 @@ python -m framework.cleansight_eval.cli.annotate \
 # 覆盖阈值 / 输出目录 / smoke 探针
 python -m framework.cleansight_eval.cli.annotate --videos ... --config ... \
     --conf 0.3 --out outputs/annotations_smoke --max-frames 30
+
+# 帧采样加速（每 4 帧推理一次，中间帧沿用最近结果，推理成本降 4 倍）
+python -m framework.cleansight_eval.cli.annotate --videos ... --config ... \
+    --frame-stride 4
+
+# ByteTrack 实例跟踪（轨迹按实例 id 组织，帧间实例连续）
+python -m framework.cleansight_eval.cli.annotate --videos ... --config ... \
+    --track
+
+# 断点续跑（跳过已存在产出的视频）
+python -m framework.cleansight_eval.cli.annotate --videos ... --config ... \
+    --resume
 ```
 
 `--runs-dir` 控制 ultralytics 中间产物目录（默认 `outputs/ultralytics_runs`，
 仓库内且被 Git 忽略）；ultralytics 8.3 默认可能把中间产物写到按安装位置推断的
 git 仓库根（如 `CleanSightBackend/runs`），本工具统一重定向，避免污染其他项目。
+
+优化参数（均可写入配置 YAML）：
+
+| 参数 | 说明 |
+|---|---|
+| `frame_stride` | 每 N 帧推理一次，中间帧沿用最近推理结果；30fps 视频建议 4（等效 7.5fps，与训练采样率一致）。实测 120 帧 CPU 推理 10.1s → 1.6s。 |
+| `batch_size` | 批量推理帧数（默认 16），GPU 利用率更高。 |
+| `track` | 启用 ByteTrack 实例跟踪，轨迹按 `(类别, 实例 id)` 组织，替代 top-K 伪轨迹。 |
+| `conf` | 标量或 `{类别: 阈值}` 字典（按最低阈值推理、逐类过滤，小目标类别可放宽）。 |
+| `--resume` | 跳过已存在产出的视频，批量中断后可续跑。 |
 
 配置说明见 `framework/experiments/auto-annotate.yaml`（登记于 `usage/YAML_CONFIG.md` §8）。
 
@@ -73,7 +95,7 @@ git 仓库根（如 `CleanSightBackend/runs`），本工具统一重定向，避
 
 | 决策 | 约定 | 理由 |
 |---|---|---|
-| 轨迹划分 | 每类别按框面积取 top-K：`hand` 2 条、其他 1 条（`top_k` 可配置） | YOLO 无实例跟踪；与 `clean_bbox_v2` 的 slot 语义一致 |
+| 轨迹划分 | 默认每类别按框面积取 top-K（`hand` 2 条、其他 1 条）；`track=true` 时按 ByteTrack 实例 id 组织真实轨迹 | top-K 与 `clean_bbox_v2` 的 slot 语义一致；跟踪后帧间实例连续，轨迹更真实 |
 | sequence 密度 | 全帧写入，覆盖 `[1, framesCount]` | legacy `interpolate_sequence` 要求轨迹等长，全帧无损 |
 | 缺席帧 | `enabled=false` + 外推上一有效框坐标（从未出现则全 0） | 与人工标注"离场点"语义一致；`lsexport.build_segments` 正确截断 |
 | 坐标 | YOLO 归一化中心点 → 左上角百分比，裁剪到 [0,100] | 与 Label Studio 导出同口径 |
@@ -88,8 +110,9 @@ git 仓库根（如 `CleanSightBackend/runs`），本工具统一重定向，避
   `short_brush`、`brush_tip_out`（时序 40 维特征的第 7/8 类）和 `long_brush`（CLEAN
   recipe 目标）目前没有对应 legacy 权重；需要时在 `checkpoints` 中追加覆盖这些类别的
   模型（代码由配置驱动，无需改动）。
-- **实例不关联**：同一类别多目标按每帧面积排序取 top-K，帧间不跟踪实例；轨迹序号
-  语义与 `clean_bbox_v2` 的 slot 一致（slot0=最大框）。
+- **实例关联**：未启用 `track` 时同一类别多目标按每帧面积排序取 top-K，帧间不跟踪
+  实例（slot0=最大框，与 `clean_bbox_v2` 一致）；启用 `track` 后由 ByteTrack 维护
+  实例 id，目标消失重现会换新 id（轨迹拆段，符合 legacy 多轨迹语义）。
 - **质量门**：自动标注质量取决于 YOLO checkpoint 与置信度阈值；大规模并入训练集前
   建议抽样与人工标注对照（检出率 / IoU）。
 

@@ -19,10 +19,28 @@ checkpoints:
       2: scope_distal_end
 
 imgsz: 640
+
+# 置信度阈值：标量全局生效；也可按类别给不同阈值（小目标类别放宽），
+# 推理时按最低阈值检测、逐类过滤。
 conf: 0.25
+# conf:
+#   hand: 0.25
+#   syringe: 0.1
+#   scope_distal_end: 0.15
 
 # 每类别轨迹数（slot 数）：hand 双实例，其他类别 1 条。
+# 仅 --track 未启用时生效；启用 ByteTrack 后按实例 id 组织真实轨迹。
 top_k:
   hand: 2
+
+# 帧采样：每 N 帧推理一次，中间帧沿用最近推理结果（推理成本降 N 倍）。
+# 建议 30fps 视频用 4（等效 7.5fps 采样，与训练数据采样率一致）。
+frame_stride: 1
+
+# 批量推理帧数（GPU 利用率更高）。
+batch_size: 16
+
+# ByteTrack 实例跟踪：轨迹按 (类别, 实例 id) 组织，帧间实例连续。
+track: false
 
 out_dir: outputs/annotations

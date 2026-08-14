@@ -45,6 +45,51 @@ def predict_frame(model, frame_bgr, *, imgsz: int, conf: float) -> list[dict]:
     ]
 
 
+def predict_frames(
+    model,
+    frames_bgr: list,
+    *,
+    imgsz: int,
+    conf: float,
+    track: bool = False,
+) -> list[list[dict]]:
+    """对一帧列表批量推理（GPU 利用率更高），返回与输入对齐的检测列表。
+
+    ``track=True`` 时启用 ByteTrack 实例跟踪（ultralytics ``model.track``，
+    连续调用保持跨帧 ID），每项检测额外含 ``"track_id"``（未跟踪到时为 None）。
+    """
+
+    kwargs: dict = dict(imgsz=imgsz, conf=conf, verbose=False)
+    if track:
+        kwargs["persist"] = True
+        results = model.track(frames_bgr, **kwargs)
+    else:
+        results = model(frames_bgr, **kwargs)
+    if not results:
+        return [[] for _ in frames_bgr]
+    outputs: list[list[dict]] = []
+    for r in results:
+        if r.boxes is None:
+            outputs.append([])
+            continue
+        boxes_xywhn = r.boxes.xywhn.cpu().tolist()
+        classes = r.boxes.cls.cpu().tolist()
+        confs = r.boxes.conf.cpu().tolist()
+        track_ids = r.boxes.id.cpu().tolist() if r.boxes.id is not None else [None] * len(classes)
+        outputs.append(
+            [
+                {
+                    "class_id": int(cls),
+                    "confidence": float(c),
+                    "xywhn": xywhn,
+                    "track_id": int(tid) if tid is not None else None,
+                }
+                for cls, c, xywhn, tid in zip(classes, confs, boxes_xywhn, track_ids)
+            ]
+        )
+    return outputs
+
+
 def predict_media(
     model,
     frame_iterator,
