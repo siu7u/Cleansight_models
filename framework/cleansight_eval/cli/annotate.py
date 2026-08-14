@@ -54,9 +54,13 @@ def parse_args(argv=None):
     p.add_argument("--config", required=True, help="自动标注配置 YAML（checkpoints/imgsz/conf/top_k/out_dir）")
     p.add_argument("--out", default=None, help="输出目录（默认取配置 out_dir，缺省为 outputs/annotations）")
     p.add_argument("--runs-dir", default=None, help="ultralytics 中间产物目录（默认 outputs/ultralytics_runs，Git 忽略）")
-    p.add_argument("--conf", type=float, default=None, help="检测置信度阈值（覆盖配置）")
+    p.add_argument("--conf", type=float, default=None, help="全局检测置信度阈值（覆盖配置；配置可写类别级 {类别: 阈值}）")
     p.add_argument("--imgsz", type=int, default=None, help="推理输入尺寸（覆盖配置）")
     p.add_argument("--max-frames", type=int, default=None, help="每视频最多推理帧数（smoke 探针）")
+    p.add_argument("--frame-stride", type=int, default=None, help="每 N 帧推理一次，中间帧沿用最近结果（推理成本降 N 倍）")
+    p.add_argument("--batch-size", type=int, default=None, help="批量推理帧数（默认 16，GPU 利用率更高）")
+    p.add_argument("--track", action="store_true", help="启用 ByteTrack 实例跟踪（轨迹按实例 id 组织）")
+    p.add_argument("--resume", action="store_true", help="跳过已存在产出的视频（断点续跑）")
     return p.parse_args(argv)
 
 
@@ -92,10 +96,14 @@ def main(argv=None) -> int:
         specs,
         out_dir,
         imgsz=args.imgsz or int(config.get("imgsz", 640)),
-        conf=args.conf if args.conf is not None else float(config.get("conf", 0.25)),
+        conf=args.conf if args.conf is not None else config.get("conf", 0.25),
         top_k=config.get("top_k") or None,
         max_frames=args.max_frames,
         runs_dir=runs_dir,
+        frame_stride=args.frame_stride or int(config.get("frame_stride", 1)),
+        track=args.track or bool(config.get("track", False)),
+        batch_size=args.batch_size or int(config.get("batch_size", 16)),
+        resume=args.resume,
     )
     print(f"[annotate] 完成：{len(outputs)} 个 JSON 写入 {out_dir}")
     return 0

@@ -145,8 +145,10 @@ legacy YAML 是冻结快照，不再接收新字段或成为数据/模型真源�
 | 字段 | 内容与功能 |
 |---|---|
 | `checkpoints` | 参与标注的 checkpoint 列表；每项含权重 `path`（相对仓库根）和 `class_map`（本地类别 id → 全局类名，id 必须存在于权重 names 中）。 |
-| `imgsz` / `conf` | 推理输入尺寸与置信度阈值，可被 CLI 参数覆盖。 |
-| `top_k` | 每类别轨迹（slot）数；`hand` 默认 2 条，其他类别 1 条，与 clean_bbox_v2 的 slot 语义一致。 |
+| `imgsz` / `conf` | 推理输入尺寸与置信度阈值；`conf` 可为标量或 `{类别: 阈值}` 字典（按最低阈值推理、逐类过滤），可被 CLI 参数覆盖。 |
+| `top_k` | 每类别轨迹（slot）数；`hand` 默认 2 条，其他类别 1 条，与 clean_bbox_v2 的 slot 语义一致；`track` 启用后不生效。 |
+| `frame_stride` / `batch_size` | 每 N 帧推理一次（中间帧沿用最近结果）与批量推理帧数；帧采样可显著降低推理成本。 |
+| `track` | 是否启用 ByteTrack 实例跟踪（轨迹按 `(类别, 实例 id)` 组织）。 |
 | `out_dir` | 标注 JSON 输出目录（默认 `outputs/annotations`，`outputs/` 整体被 Git 忽略），可被 CLI `--out` 覆盖。 |
 
 ## 更新检查

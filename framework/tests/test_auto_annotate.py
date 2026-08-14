@@ -5,6 +5,7 @@
 - 产出 JSON 与 legacy Label Studio 导出逐字段同构
 - 产出 JSON 可被历史 ``legacy/temporal-transformer/lab.py::load_data_json``
   直接解析出 ``[T, N*5]`` 特征（核心验收：作为时序训练输入的可行性）
+- 优化项：批量推理、帧采样复用、类别级置信度、ByteTrack 轨迹、断点续跑
 - 真实视频 + 真实 legacy 权重的全链路 smoke（ultralytics 可用时）
 """
 
@@ -12,10 +13,12 @@ import importlib.util
 import json
 from pathlib import Path
 
+import cv2
 import numpy as np
 import pytest
 
 from cleansight_eval.detection import auto_annotate
+from cleansight_eval.detection import inference
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -203,3 +206,151 @@ class TestRunAutoAnnotateSmoke:
             total = results[0]["value"]["framesCount"]
             assert features.shape == (total, len(results) * 5)
             assert len(truths) == total
+
+    @pytest.mark.skipif(
+        not (REPO_ROOT / "legacy/yolo-detection/pipeline/versioned_weights/yolo-large-v3/best.pt").is_file(),
+        reason="缺少 legacy 权重",
+    )
+    def test_smoke_with_tracking_and_stride(self, tmp_path, _ultralytics_output_dir):
+        """真实视频 + ByteTrack 跟踪 + 帧采样 + 批量的全链路。"""
+
+        pytest.importorskip("ultralytics")
+        video = REPO_ROOT / "legacy/yolo-detection/pipeline/raw/videos"
+        videos = sorted(video.glob("*.mp4"))
+        if not videos:
+            pytest.skip("缺少真实测试视频")
+        ckpt = REPO_ROOT / "legacy/yolo-detection/pipeline/versioned_weights/yolo-large-v3/best.pt"
+        outputs = auto_annotate.run_auto_annotate(
+            [videos[0]],
+            [{"path": ckpt, "class_map": {0: "hand", 1: "scope_control_body", 2: "scope_mid_section"}}],
+            tmp_path,
+            imgsz=640,
+            conf={"hand": 0.2, "scope_control_body": 0.15, "scope_mid_section": 0.15},
+            max_frames=40,
+            frame_stride=2,
+            track=True,
+            batch_size=8,
+        )
+        assert len(outputs) == 1
+        task = json.loads(outputs[0].read_text(encoding="utf-8"))
+        results = task[0]["annotations"][0]["result"]
+        assert all(r["type"] == "videorectangle" for r in results)
+
+
+class TestDetectVideoOptimizations:
+    """批量推理 / 帧采样 / 类别级置信度的行为验证（mock 推理，不依赖 ultralytics）。"""
+
+    @staticmethod
+    def _make_video(tmp_path, frames: int = 6) -> Path:
+        path = tmp_path / "demo.mp4"
+        writer = cv2.VideoWriter(
+            str(path), cv2.VideoWriter_fourcc(*"mp4v"), 10.0, (64, 64)
+        )
+        for _ in range(frames):
+            writer.write(np.zeros((64, 64, 3), dtype=np.uint8))
+        writer.release()
+        return path
+
+    @staticmethod
+    def _fake_detections(frames):
+        return [
+            [{"class_id": 0, "confidence": 0.9, "xywhn": [0.5, 0.5, 0.1, 0.1]}]
+            for _ in frames
+        ]
+
+    def test_frame_stride_reuses_last_result(self, tmp_path, monkeypatch):
+        video = self._make_video(tmp_path, frames=6)
+        calls: list[int] = []
+
+        def fake_predict_frames(model, frames, *, imgsz, conf, track):
+            calls.append(len(frames))
+            return self._fake_detections(frames)
+
+        monkeypatch.setattr(inference, "predict_frames", fake_predict_frames)
+        _total, _fps, detections = auto_annotate.detect_video(
+            video, [(object(), {0: "hand"})], imgsz=640, conf=0.25,
+            frame_stride=2, batch_size=4,
+        )
+        # 6 帧：推理帧 0/2/4 共 3 帧（一个 batch），复用帧 1/3/5
+        assert sum(calls) == 3
+        assert len(detections) == 6
+        for index in (1, 3, 5):
+            assert detections[index] == detections[index - 1]  # 复用最近推理帧结果
+
+    def test_batch_flush_counts(self, tmp_path, monkeypatch):
+        video = self._make_video(tmp_path, frames=5)
+
+        def fake_predict_frames(model, frames, *, imgsz, conf, track):
+            return self._fake_detections(frames)
+
+        monkeypatch.setattr(inference, "predict_frames", fake_predict_frames)
+        _total, _fps, detections = auto_annotate.detect_video(
+            video, [(object(), {0: "hand"})], imgsz=640, conf=0.25, batch_size=2,
+        )
+        assert len(detections) == 5
+        assert all(detections[index] == detections[0] for index in range(5))
+
+    def test_class_conf_filtering(self, tmp_path, monkeypatch):
+        video = self._make_video(tmp_path, frames=2)
+
+        def fake_predict_frames(model, frames, *, imgsz, conf, track):
+            return [
+                [
+                    {"class_id": 0, "confidence": 0.9, "xywhn": [0.5] * 4},  # hand，通过
+                    {"class_id": 1, "confidence": 0.3, "xywhn": [0.5] * 4},  # syringe，低于阈值
+                ]
+                for _ in frames
+            ]
+
+        monkeypatch.setattr(inference, "predict_frames", fake_predict_frames)
+        _total, _fps, detections = auto_annotate.detect_video(
+            video, [(object(), {0: "hand", 1: "syringe"})], imgsz=640,
+            conf={"hand": 0.5, "syringe": 0.6}, batch_size=4,
+        )
+        assert len(detections[0]) == 1
+        assert detections[0][0]["class"] == "hand"
+
+    def test_track_sequences_grouped_by_instance(self):
+        frame_detections = [
+            [
+                {"class": "hand", "confidence": 0.9, "xywhn": [0.5] * 4, "track_id": 1},
+                {"class": "hand", "confidence": 0.8, "xywhn": [0.3] * 4, "track_id": 2},
+            ],
+            [{"class": "hand", "confidence": 0.85, "xywhn": [0.52] * 4, "track_id": 1}],
+            [],
+        ]
+        tracks = auto_annotate.build_track_sequences(
+            frame_detections, frames_count=3, fps=10.0, track=True
+        )
+        # 按 (类别, 实例 id) 分组 → 两条 hand 轨迹，id 顺序确定
+        assert sorted(name for name, _sequence in tracks) == ["hand", "hand"]
+        id1, id2 = tracks  # 排序后 (hand,1) 在前
+        assert id1[1][0]["enabled"] is True and id1[1][1]["enabled"] is True
+        assert id1[1][2]["enabled"] is False  # 帧 2 缺席，外推
+        assert id2[1][0]["enabled"] is True
+        assert id2[1][1]["enabled"] is False
+        assert id2[1][2]["enabled"] is False
+
+    def test_resume_skips_existing(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            auto_annotate.inference, "load_predictor", lambda *a, **k: (object(), {0: "hand"})
+        )
+        detect_calls = {"count": 0}
+
+        def fake_detect(*_a, **_k):
+            detect_calls["count"] += 1
+            detection = {"class": "hand", "confidence": 0.9, "xywhn": [0.5, 0.5, 0.1, 0.1]}
+            return (3, 10.0, [[detection]] * 3)
+
+        monkeypatch.setattr(auto_annotate, "detect_video", fake_detect)
+        video = tmp_path / "demo.mp4"
+        video.write_bytes(b"fake-video")
+        ckpt = tmp_path / "fake.pt"
+        ckpt.write_bytes(b"fake-ckpt")
+        out_dir = tmp_path / "out"
+        specs = [{"path": ckpt, "class_map": {0: "hand"}}]
+
+        auto_annotate.run_auto_annotate([video], specs, out_dir)
+        auto_annotate.run_auto_annotate([video], specs, out_dir, resume=True)
+        assert detect_calls["count"] == 1  # resume 时第二次跳过推理
+        assert len(list(out_dir.glob("*.json"))) == 1
