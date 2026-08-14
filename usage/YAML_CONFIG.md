@@ -10,7 +10,7 @@
 - 字段、默认值、约束、读取方或运行影响变化时，即使文件路径不变，也要更新对应说明。
 - 被 `.gitignore` 排除的构建、训练和打包产物不纳入逐文件清单，统一在文末说明。
 
-当前共登记 32 个 YAML，其中包含 4 个与本地外部 checkpoint 配套的探索性配置、3 个历史
+当前共登记 33 个 YAML，其中包含 4 个与本地外部 checkpoint 配套的探索性配置、3 个历史
 时序 checkpoint 的 framework 兼容实验、1 个组员接入外部时序权重时使用的模板和 1 个
 YOLO 自动标注配置。
 
@@ -52,6 +52,7 @@ Pipeline 校验并执行。
 | [`framework/experiments/roi-fusion.yaml`](../framework/experiments/roi-fusion.yaml) | ROI 分类流水线（`feature_fusion`）、hidden_dim 等网络参数 | 小目标/稀有类的 ROI 特征融合替代方案实验。 |
 | [`framework/experiments/yolo11s-large-gl-eval.yaml`](../framework/experiments/yolo11s-large-gl-eval.yaml) | 队友 YOLO11s 大目标模型、group1_large test split、本地化 data_yaml | 队友模型在锁定 test split 上的正式评测配置。 |
 | [`framework/experiments/yolo11s-small-zyh-eval.yaml`](../framework/experiments/yolo11s-small-zyh-eval.yaml) | 队友 YOLO11s 小目标模型、group2_small test split、本地化 data_yaml | 队友模型在锁定 test split 上的正式评测配置。 |
+| [`framework/experiments/mstcn-autoannotate-smoke.yaml`](../framework/experiments/mstcn-autoannotate-smoke.yaml) | MS-TCN、40 维输入、6 类、10 epoch、`data.root` 指向自动标注转换数据 | 验证 YOLO 自动标注 → 时序训练全链路的 smoke 实验；数据未登记 dataset_ref，只允许 exploratory。 |
 
 ## 2. Benchmark 数据集和 split
 

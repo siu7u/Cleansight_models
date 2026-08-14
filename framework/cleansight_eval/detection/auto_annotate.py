@@ -19,6 +19,10 @@ JSON（``legacy/yolo-detection/pipeline/raw/exports/*.json`` 的 videorectangle
 - 帧号从 1 开始，``time=(frame-1)/fps``；``duration=framesCount/fps``。
 - 动作标签（timelinelabels）由 YOLO 无法产出，result 中不包含。
 
+本模块还提供 ``convert_annotations``：把自动标注 JSON + 人工 Label Studio
+导出（timelinelabels 动作标签）合并成 framework 时序训练数据布局
+（``labels/<split>/`` + ``frames/<split>/``），供 ``temporal/data.py`` 直接消费。
+
 模型执行只发生在 framework 检测域：ultralytics 的加载与逐帧推理复用
 ``detection/inference.py``，本模块不直接 import ultralytics。
 """
@@ -29,11 +33,34 @@ import json
 from pathlib import Path
 
 import cv2
+import yaml
 
 from . import inference
 
 # 默认每类别轨迹数（slot 数）；hand 双实例与 clean_bbox_v2 的 hand slots 一致。
 DEFAULT_TOP_K: dict[str, int] = {"hand": 2}
+
+# 时序训练数据布局的类别表（与 temporal.actionmixed-v2 / testsets.yaml 一致）。
+DETECTION_CLASSES = [
+    "hand",
+    "scope_control_body",
+    "scope_mid_section",
+    "scope_distal_end",
+    "syringe",
+    "air_gun",
+    "short_brush",
+    "brush_tip_out",
+]
+ACTION_CLASSES = [
+    "idle",
+    "air_injection",
+    "flush",
+    "long_brush_insert",
+    "long_brush_withdraw",
+    "short_brush_cleaning",
+]
+# 标签抽样帧率（与真实 ActionMixed 训练数据一致）。
+TARGET_LABEL_FPS = 7.5
 
 
 def _ls_box(xywhn) -> tuple[float, float, float, float]:
@@ -386,5 +413,170 @@ def run_auto_annotate(
         print(
             f"[auto-annotate] {video.name}: {total} 帧 @ {fps:.2f} fps, "
             f"{len(tracks)} 条轨迹 → {output.relative_to(out_dir.parent)}"
+        )
+    return outputs
+
+
+# ── 标注 → 时序训练数据布局（convert）──────────────────────────────
+
+
+def _load_manual_labels(labels_export: Path) -> dict[str, dict]:
+    """读人工 Label Studio 导出，按视频文件名索引 timelinelabels 与帧率信息。
+
+    返回 ``{视频文件名: {"ls_fps": float, "ranges": [(start, end, 动作名), ...]}}``；
+    ``ls_fps`` 由 videorectangle 的 ``framesCount/duration`` 推导（LS 标注端帧率）。
+    """
+
+    tasks = json.loads(labels_export.read_text(encoding="utf-8"))
+    by_video: dict[str, dict] = {}
+    for task in tasks:
+        video_name = Path(task.get("data", {}).get("video", "")).name
+        if not video_name:
+            continue
+        ranges: list[tuple[int, int, str]] = []
+        ls_fps = None
+        for ann in task.get("annotations", []):
+            for result in ann.get("result", []):
+                value = result.get("value", {})
+                if result.get("type") == "videorectangle":
+                    frames_count = value.get("framesCount")
+                    duration = value.get("duration")
+                    if frames_count and duration:
+                        ls_fps = frames_count / duration
+                elif result.get("type") == "timelinelabels":
+                    label = value.get("timelinelabels", [""])[0]
+                    for span in value.get("ranges", []):
+                        ranges.append((int(span["start"]), int(span["end"]), label))
+        by_video[video_name] = {"ls_fps": ls_fps, "ranges": ranges}
+    return by_video
+
+
+def _action_at(ranges: list[tuple[int, int, str]], frame: int) -> str:
+    """帧号（真实解码帧号）命中的动作名；未命中返回 idle。"""
+
+    for start, end, action in ranges:
+        if start <= frame <= end:
+            return action
+    return "idle"
+
+
+def convert_annotations(
+    annotation_dir: Path,
+    labels_export: Path,
+    out_root: Path,
+    *,
+    split: str = "train",
+) -> list[Path]:
+    """自动标注 JSON + 人工 LS 导出 → 时序训练数据布局。
+
+    产出（与 ``temporal/data.py`` 消费契约一致）：
+    - ``labels/<split>/<video>.mp4.txt``：抽样帧 ``"frame_id action_id"``
+      （1-based 真实解码帧号，按 ~7.5fps 抽样；动作标签来自人工
+      timelinelabels，经 LS 帧率 → 真实帧率换算，未命中区间为 idle）
+    - ``frames/<split>/<video>.mp4-<f:06d>.txt``：逐帧 bbox
+      ``"class_id cx cy w h"``（8 类全局顺序，5 列兼容 40 维 v1 特征）
+    - ``labels/data.yaml`` 与 ``frames/data.yaml``：类别映射
+
+    每个自动标注 JSON 必须能在人工导出中找到同名视频（用于动作标签与
+    LS 帧率），否则报错。返回产出文件列表。
+    """
+
+    annotation_dir = Path(annotation_dir)
+    out_root = Path(out_root)
+    manual = _load_manual_labels(Path(labels_export))
+    labels_dir = out_root / "labels" / split
+    frames_dir = out_root / "frames" / split
+    labels_dir.mkdir(parents=True, exist_ok=True)
+    frames_dir.mkdir(parents=True, exist_ok=True)
+
+    class_to_id = {name: cid for cid, name in enumerate(DETECTION_CLASSES)}
+    action_to_id = {name: aid for aid, name in enumerate(ACTION_CLASSES)}
+
+    outputs: list[Path] = []
+    for json_path in sorted(annotation_dir.glob("*.json")):
+        task = json.loads(json_path.read_text(encoding="utf-8"))[0]
+        video_name = task["data"]["video"]
+        manual_info = manual.get(video_name)
+        if manual_info is None:
+            raise ValueError(
+                f"{video_name} 在人工导出 {labels_export.name} 中无对应 task（无法获取动作标签）"
+            )
+        ls_fps = manual_info["ls_fps"]
+        if not ls_fps:
+            raise ValueError(f"{video_name} 人工标注缺少 framesCount/duration（无法换算帧号）")
+        frames_count = task["annotations"][0]["result"][0]["value"]["framesCount"]
+        duration = task["annotations"][0]["result"][0]["value"].get("duration")
+        real_fps = frames_count / duration if duration else ls_fps
+        # LS 标注帧号 → 真实解码帧号：ls = real × (ls_fps / real_fps)
+        scale = ls_fps / real_fps
+        real_ranges = [
+            (max(1, round(start / scale)), min(frames_count, round(end / scale)), action)
+            for start, end, action in manual_info["ranges"]
+        ]
+        stride = max(1, round(real_fps / TARGET_LABEL_FPS))
+        label_frames = list(range(1, frames_count + 1, stride))
+
+        # sequence 按帧序排列（frame 1..framesCount），建 帧号 → [(类名, 有效检测)] 索引
+        sequences: dict[int, list[tuple[str, dict]]] = {}
+        for result in task["annotations"][0]["result"]:
+            if result.get("type") != "videorectangle":
+                continue
+            class_name = result["value"]["labels"][0]
+            for entry in result["value"]["sequence"]:
+                if entry.get("enabled"):
+                    sequences.setdefault(int(entry["frame"]), []).append((class_name, entry))
+
+        label_lines: list[str] = []
+        for frame in label_frames:
+            action = _action_at(real_ranges, frame)
+            label_lines.append(f"{frame} {action_to_id[action]}")
+        label_path = labels_dir / f"{video_name}.txt"
+        label_path.write_text("\n".join(label_lines) + "\n", encoding="utf-8")
+        outputs.append(label_path)
+
+        for frame in label_frames:
+            lines = []
+            for class_name, entry in sequences.get(frame, []):
+                class_id = class_to_id.get(class_name)
+                if class_id is None:
+                    continue  # 自动标注未覆盖类别（short_brush 等）该帧恒零
+                x, y, width, height = (
+                    entry["x"],
+                    entry["y"],
+                    entry["width"],
+                    entry["height"],
+                )
+                # 左上角百分比 → YOLO 归一化中心点（与 lsexport.to_yolo 同口径）
+                cx = (x + width / 2.0) / 100.0
+                cy = (y + height / 2.0) / 100.0
+                nw = width / 100.0
+                nh = height / 100.0
+                lines.append(f"{class_id} {cx:.6f} {cy:.6f} {nw:.6f} {nh:.6f}\n")
+            frame_path = frames_dir / f"{video_name}-{frame:06d}.txt"
+            frame_path.write_text("".join(lines), encoding="utf-8")
+
+        print(
+            f"[convert] {video_name}: {len(label_frames)} 个标签帧（stride={stride}, "
+            f"LS {ls_fps:.1f}fps → 真实 {real_fps:.1f}fps）→ {split}/"
+        )
+
+    # 类别映射（首次生成；已有文件不覆盖，避免与登记数据冲突）
+    labels_yaml = out_root / "labels" / "data.yaml"
+    if not labels_yaml.is_file():
+        labels_yaml.write_text(
+            yaml.safe_dump(
+                {"nc": len(ACTION_CLASSES), "names": {i: n for i, n in enumerate(ACTION_CLASSES)}},
+                allow_unicode=True,
+            ),
+            encoding="utf-8",
+        )
+    frames_yaml = out_root / "frames" / "data.yaml"
+    if not frames_yaml.is_file():
+        frames_yaml.write_text(
+            yaml.safe_dump(
+                {"nc": len(DETECTION_CLASSES), "names": {i: n for i, n in enumerate(DETECTION_CLASSES)}},
+                allow_unicode=True,
+            ),
+            encoding="utf-8",
         )
     return outputs

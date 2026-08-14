@@ -1,0 +1,34 @@
+# 自动标注数据 MS-TCN smoke 训练（验证 YOLO 自动标注 → 时序训练全链路）。
+# 数据来自 annotate convert 生成的 datasets/cleansight-ActionMixed-auto：
+# 检测特征由 YOLO 自动标注产生（仅覆盖 6 类，short_brush/brush_tip_out 恒零），
+# 动作标签来自人工 Label Studio timelinelabels。未登记 dataset_ref，
+# 只允许 exploratory 评测；smoke 用途，不代表正式 benchmark。
+
+schema_version: 1
+pipeline: full_sequence_temporal
+
+model:
+  type: mstcn            # 双向非因果，只能进全序列流水线
+  input_dim: 40          # 8 检测类 × [presence, cx, cy, w, h]
+  num_classes: 6         # idle/air_injection/flush/long_brush_insert/long_brush_withdraw/short_brush_cleaning
+  hidden: 32
+
+data:
+  root: ../../datasets/cleansight-ActionMixed-auto
+  split_train: train
+  split_val: val
+  split_eval: train
+
+feature_schema:
+  dim: 40
+  version: actionmixed-bbox-8cls-v1
+  # 布局同 GRU 实验：每 5 维一类，顺序同 frames/data.yaml。
+
+evaluation:
+  mode: exploratory      # 未登记 dataset_ref，不能伪装正式结果
+  visualize: false
+
+train:
+  epochs: 10             # smoke：验证链路
+  lr: 0.002
+  grad_clip: 5.0
