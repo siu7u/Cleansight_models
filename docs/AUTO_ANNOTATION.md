@@ -10,7 +10,7 @@
   │  python -m framework.cleansight_eval.cli.annotate \
   │      --videos <视频或目录> --config framework/experiments/auto-annotate.yaml
   ▼
-outputs/auto_annotations/<视频名>.json   ← legacy 标注 JSON（每视频一个）
+outputs/annotations/<视频名>.json   ← legacy 标注 JSON（每视频一个）
   │  可被历史代码直接消费：
   │    legacy/temporal-transformer/lab.py::load_data_json  → [T, N*5] 特征
   │    legacy/yolo-detection/pipeline/utils/lsexport.py    → YOLO 训练集
@@ -33,7 +33,7 @@ python -m framework.cleansight_eval.cli.annotate \
 
 # 覆盖阈值 / 输出目录 / smoke 探针
 python -m framework.cleansight_eval.cli.annotate --videos ... --config ... \
-    --conf 0.3 --out outputs/auto_annotations_smoke --max-frames 30
+    --conf 0.3 --out outputs/annotations_smoke --max-frames 30
 ```
 
 `--runs-dir` 控制 ultralytics 中间产物目录（默认 `outputs/ultralytics_runs`，
