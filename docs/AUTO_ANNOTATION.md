@@ -44,9 +44,25 @@ python -m framework.cleansight_eval.cli.annotate --videos ... --config ... \
     --track
 
 # 断点续跑（跳过已存在产出的视频）
-python -m framework.cleansight_eval.cli.annotate --videos ... --config ... \
+python -m framework.cleansight_eval.cli.annotate run --videos ... --config ... \
     --resume
+
+# convert：标注 JSON + 人工动作标签 → 时序训练数据布局
+# （检测来自自动标注，动作标签来自人工 Label Studio timelinelabels，
+#  帧号自动做 LS 帧率 → 真实帧率换算）
+python -m framework.cleansight_eval.cli.annotate convert \
+    --annotations outputs/annotations \
+    --labels-export legacy/yolo-detection/pipeline/raw/exports/project-10-at-2026-07-07-19-32.json \
+    --out datasets/cleansight-ActionMixed-auto --split train
 ```
+
+convert 产出（与 `temporal/data.py` 消费契约一致）：
+- `labels/<split>/<video>.mp4.txt`：抽样帧 `"frame_id action_id"`（1-based 真实帧号，~7.5fps）
+- `frames/<split>/<video>.mp4-<f:06d>.txt`：逐帧 bbox（5 列，兼容 40 维 v1 特征）
+- `labels/data.yaml` + `frames/data.yaml`：类别映射（6 类动作 / 8 类检测）
+
+转换后的数据可直接用 `framework/experiments/mstcn-autoannotate-smoke.yaml` 训练
+（smoke 验证全链路：自动标注 → 训练 → 评测，实测 10 epoch 跑通）。
 
 `--runs-dir` 控制 ultralytics 中间产物目录（默认 `outputs/ultralytics_runs`，
 仓库内且被 Git 忽略）；ultralytics 8.3 默认可能把中间产物写到按安装位置推断的

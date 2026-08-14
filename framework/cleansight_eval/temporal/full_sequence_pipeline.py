@@ -228,7 +228,7 @@ class FullSequenceTemporalPipeline(Pipeline):
             )
             train_loader = DataLoader(train_ds, batch_size=1, shuffle=True)
 
-            weights = compute_class_weights(train_loader)
+            weights = compute_class_weights(train_loader, num_classes=model_cfg["num_classes"])
             criterion = nn.CrossEntropyLoss(
                 weight=torch.tensor([weights[i] for i in sorted(weights)], dtype=torch.float32).to(device)
             )

@@ -46,8 +46,12 @@ def causal_decision(last, pending, stable, count, num_classes: int | None = None
     return pending, stable, count
 
 
-def compute_class_weights(dataloader) -> dict:
-    """按类别频率倒数计算并归一化的损失权重（迁移自 util.compute_class_weights）。"""
+def compute_class_weights(dataloader, num_classes: int | None = None) -> dict:
+    """按类别频率倒数计算并归一化的损失权重（迁移自 util.compute_class_weights）。
+
+    ``num_classes`` 非空时补全未出现类别（权重 0），避免缺类数据构造
+    CrossEntropyLoss 时类别数不匹配。
+    """
 
     counter = Counter()
     for _, y in dataloader:
@@ -56,4 +60,8 @@ def compute_class_weights(dataloader) -> dict:
     total = sum(counter.values())
     weights = {cls: total / count for cls, count in counter.items()}
     max_w = max(weights.values())
-    return {k: v / max_w for k, v in weights.items()}
+    normalized = {k: v / max_w for k, v in weights.items()}
+    if num_classes is not None:
+        for cls in range(num_classes):
+            normalized.setdefault(cls, 0.0)
+    return normalized
