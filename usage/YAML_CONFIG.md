@@ -107,6 +107,9 @@ revision、train/val/eval split fingerprint 以及动作/检测映射摘要，re
 | [`registry/temporal/gru-v1/pin.yaml`](../registry/temporal/gru-v1/pin.yaml) | 固定 GRU v1 checkpoint、legacy-20d 输入、64 帧窗口和三类输出契约。 |
 | [`registry/temporal/causal-tcn-v1/pin.yaml`](../registry/temporal/causal-tcn-v1/pin.yaml) | 固定 Causal TCN v1 checkpoint、数据、特征和在线契约。 |
 | [`registry/temporal/causal-transformer-v1/pin.yaml`](../registry/temporal/causal-transformer-v1/pin.yaml) | 固定旧因果 Transformer v1 checkpoint、结构和运行契约。 |
+| [`registry/temporal/auto-mstcn-v1/pin.yaml`](../registry/temporal/auto-mstcn-v1/pin.yaml) | 固定 auto 数据通道 MS-TCN v1：checkpoint、40 维 v1 特征、6 类输出、数据集 revision 636e6372。 |
+| [`registry/temporal/auto-gru-v1/pin.yaml`](../registry/temporal/auto-gru-v1/pin.yaml) | 固定 auto 数据通道 GRU v1：checkpoint、40 维 v1 特征、16 帧窗口、6 类输出、数据集 revision 636e6372。 |
+| [`registry/temporal/auto-transformer-v1/pin.yaml`](../registry/temporal/auto-transformer-v1/pin.yaml) | 固定 auto 数据通道 Transformer v1：checkpoint、40 维 v1 特征、max_len 2560、6 类输出、数据集 revision 636e6372。 |
 
 ## 5. Legacy YOLO 快照配置
 
