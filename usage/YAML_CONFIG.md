@@ -53,6 +53,9 @@ Pipeline 校验并执行。
 | [`framework/experiments/yolo11s-large-gl-eval.yaml`](../framework/experiments/yolo11s-large-gl-eval.yaml) | 队友 YOLO11s 大目标模型、group1_large test split、本地化 data_yaml | 队友模型在锁定 test split 上的正式评测配置。 |
 | [`framework/experiments/yolo11s-small-zyh-eval.yaml`](../framework/experiments/yolo11s-small-zyh-eval.yaml) | 队友 YOLO11s 小目标模型、group2_small test split、本地化 data_yaml | 队友模型在锁定 test split 上的正式评测配置。 |
 | [`framework/experiments/mstcn-autoannotate-smoke.yaml`](../framework/experiments/mstcn-autoannotate-smoke.yaml) | MS-TCN、40 维输入、6 类、10 epoch、`data.root` 指向自动标注转换数据 | 验证 YOLO 自动标注 → 时序训练全链路的 smoke 实验；数据未登记 dataset_ref，只允许 exploratory。 |
+| [`framework/experiments/mstcn-actionmixed-auto.yaml`](../framework/experiments/mstcn-actionmixed-auto.yaml) | MS-TCN、40 维输入、6 类、30 epoch、`dataset_ref: temporal.actionmixed-auto-v1`（自动标注特征数据） | 自动标注数据上 MS-TCN 全序列正式训练；与 smoke 的区别是登记数据集、formal 评估。 |
+| [`framework/experiments/gru-actionmixed-auto.yaml`](../framework/experiments/gru-actionmixed-auto.yaml) | GRU、40 维输入、6 类、16 帧窗口、`dataset_ref: temporal.actionmixed-auto-v1` | 自动标注数据上 GRU 滑窗正式训练；与历史 gru-actionmixed.yaml（人工标注）同超参，用于对照自动标注特征代价。 |
+| [`framework/experiments/transformer-actionmixed-auto.yaml`](../framework/experiments/transformer-actionmixed-auto.yaml) | Transformer、40 维输入、6 类、`max_len: 2560`（覆盖 auto 数据最长约 2080 帧序列）、`dataset_ref: temporal.actionmixed-auto-v1` | 自动标注数据上 Transformer 全序列正式训练；与历史 transformer-actionmixed.yaml 同结构，max_len 上调以容纳更长序列。 |
 
 ## 2. Benchmark 数据集和 split
 
@@ -68,7 +71,9 @@ Pipeline 校验并执行。
 | `testsets` | split 身份、manifest、用途和可选预期样本。 |
 | `purpose` | 区分训练、训练期验证、开发 benchmark、锁定 holdout 和 schema smoke。 |
 
-当前内容登记 ActionMixed 时序 train/val/test、旧 Endo Project train/test、两组 YOLO val/test 和
+当前内容登记 ActionMixed 时序 train/val/test（`temporal.actionmixed-v2`，人工标注）、
+自动标注数据通道 `temporal.actionmixed-auto-v1`（YOLO 检测框 + 人工动作标签，11 个视频
+train/val/test，与 v2 并存）、旧 Endo Project train/test、两组 YOLO val/test 和
 一个端到端 smoke case。评估时据此记录数据集版本、split、重叠策略和 fingerprint。
 
 ActionMixed v2 的 manifest 是训练与评测 loader 的唯一样本真源，并必须与对应

@@ -18,6 +18,19 @@ datasets:
     labels: [idle, air_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
     split_overlap_policy: frame
 
+  # 自动标注数据通道（YOLO 推理检测框 + 人工动作标签），与手动标注 actionmixed-v2 并存。
+  # 检测特征仅覆盖 6 类（short_brush/brush_tip_out 恒零），40 维 v1 布局兼容。
+  temporal.actionmixed-auto-v1:
+    family: temporal
+    format: actionmixed_bbox
+    dataset_version: cleansight-actionmixed-auto-v1
+    revision: 636e6372d2714a72ba7f168daa77c84487364d5d9643167fa77fa9a6c5310e0a
+    data_root: datasets/cleansight-ActionMixed-auto
+    feature_mapping: actionmixed-bbox-8cls-v1
+    input_dim: 40
+    labels: [idle, air_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    split_overlap_policy: frame
+
   temporal.endo-project-v1:
     family: temporal
     dataset_version: endo-project-v1
@@ -70,6 +83,24 @@ testsets:
     dataset: temporal.actionmixed-v2
     split: test
     manifest: benchmark/manifests/actionmixed/test.txt
+    purpose: development_benchmark_frame_disjoint
+
+  temporal.actionmixed-auto-v1.train:
+    dataset: temporal.actionmixed-auto-v1
+    split: train
+    manifest: benchmark/manifests/actionmixed-auto/train.txt
+    purpose: training_only
+
+  temporal.actionmixed-auto-v1.val:
+    dataset: temporal.actionmixed-auto-v1
+    split: val
+    manifest: benchmark/manifests/actionmixed-auto/val.txt
+    purpose: validation_only
+
+  temporal.actionmixed-auto-v1.test:
+    dataset: temporal.actionmixed-auto-v1
+    split: test
+    manifest: benchmark/manifests/actionmixed-auto/test.txt
     purpose: development_benchmark_frame_disjoint
 
   temporal.endo-project-v1.train:
