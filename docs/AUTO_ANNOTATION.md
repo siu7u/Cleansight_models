@@ -35,7 +35,11 @@ python -m framework.cleansight_eval.cli.annotate run \
 
 # 目录内全部视频
 python -m framework.cleansight_eval.cli.annotate run \
-    --videos path/to/videos/ --config framework/experiments/auto-annotate.yaml
+    --videos legacy/yolo-detection/pipeline/raw/videos/ --config framework/experiments/auto-annotate.yaml
+
+# 不传 --videos：默认从配置 videos 读取（路径相对仓库根）
+python -m framework.cleansight_eval.cli.annotate run \
+    --config framework/experiments/auto-annotate.yaml
 
 # 覆盖阈值 / 输出目录 / smoke 探针
 python -m framework.cleansight_eval.cli.annotate run --videos ... --config ... \
