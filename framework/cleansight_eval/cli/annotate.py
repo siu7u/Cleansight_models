@@ -73,7 +73,14 @@ def _cmd_run(args) -> int:
             ckpt_path = REPO_ROOT / ckpt_path
         specs.append({"path": ckpt_path, "class_map": spec["class_map"]})
 
-    videos = _expand_videos(args.videos)
+    videos_raw = args.videos or config.get("videos")
+    if not videos_raw:
+        print("[annotate] 未指定 --videos，且配置缺少 videos（默认视频文件/目录）")
+        return 2
+    videos_path = Path(videos_raw)
+    if not videos_path.is_absolute():
+        videos_path = REPO_ROOT / videos_path
+    videos = _expand_videos(str(videos_path))
     out_dir = Path(args.out or config.get("out_dir") or "outputs/annotations")
     if not out_dir.is_absolute():
         out_dir = REPO_ROOT / out_dir
@@ -128,8 +135,8 @@ def _build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command", required=True)
 
     run_p = sub.add_parser("run", help="视频 → legacy 标注 JSON")
-    run_p.add_argument("--videos", required=True, help="视频文件或包含视频的目录")
-    run_p.add_argument("--config", required=True, help="自动标注配置 YAML（checkpoints/imgsz/conf/top_k/out_dir）")
+    run_p.add_argument("--videos", default=None, help="视频文件或包含视频的目录（缺省取配置 videos，相对仓库根）")
+    run_p.add_argument("--config", required=True, help="自动标注配置 YAML（videos/checkpoints/imgsz/conf/top_k/out_dir）")
     run_p.add_argument("--out", default=None, help="输出目录（默认取配置 out_dir，缺省为 outputs/annotations）")
     run_p.add_argument("--runs-dir", default=None, help="ultralytics 中间产物目录（默认 outputs/ultralytics_runs，Git 忽略）")
     run_p.add_argument("--conf", type=float, default=None, help="全局检测置信度阈值（覆盖配置；配置可写类别级 {类别: 阈值}）")
