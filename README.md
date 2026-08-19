@@ -477,6 +477,8 @@ checkpoint + checkpoint metadata + CARD.md + pin.yaml
 - [framework README](framework/README.md)：CLI、配置字段、resume 与扩展点。
 - [YOLO 优化工作流](docs/YOLO_OPTIMIZATION.md)：sweep / analyze / 特征融合的操作指南。
 - [YOLO 自动标注工具](docs/AUTO_ANNOTATION.md)：视频 → legacy 标注 JSON → 时序训练数据的完整使用指南（run / convert / 优化参数 / 训练链路）。
+- [YOLO 结果人工审核流程](docs/YOLO_REVIEW_FLOW.md)：YOLO 预标注 → Label Studio 人工改框+标动作 → 导出 → convert 的质量门闭环。
+- [推理链路性能测量](docs/INFERENCE_CHAIN_PERF.md)：YOLO 检测 / 特征化 / 时序推理的实测时延，支撑"预计算入数据集 vs 现场推理"决策。
 - [评估能力说明](docs/EVAL.md)：指标定义、聚合口径和完整性检查。
 - [benchmark README](benchmark/README.md)：单模型、feed-mode 和端到端 benchmark。
 - [新模型接入手册](docs/MODEL_ONBOARDING.md)：新增时序网络或检测器。
