@@ -1,15 +1,25 @@
 # YOLO 自动标注工具（auto-annotate）
 
-用已训练 YOLO checkpoint 对无标注视频逐帧检测，自动产出**与历史 Label Studio 导出同构**的
-标注 JSON（videorectangle 轨迹），作为时序模型的训练输入（检测特征侧）。
+用已训练 YOLO checkpoint 给无标注数据自动生成检测标注，两条通道共用同一份配置
+（`framework/experiments/auto-annotate.yaml` 的 checkpoints / imgsz / conf / 批量）：
+
+- **视频**（`run`）：逐帧检测产出**与历史 Label Studio 导出同构**的标注 JSON
+  （videorectangle 轨迹），作为时序模型的训练输入（检测特征侧）。
+- **图片帧序列数据集**（`run-dataset`）：对数据集图片逐帧检测，产出与 `convert`
+  同构的时序训练数据（frames/ + labels/），同样供 `temporal/data.py` 消费——
+  适用于"视频已抽帧成图片 + 已有动作标签"的数据集。
 
 > **定位：自动标注是新增数据通道，不替代手动标注训练。**
 > 手动标注数据集 `temporal.actionmixed-v2`（人工标注检测框 + 人工动作标签）及其训练
 > 能力原样保留：登记、split manifest、训练配置（`*-actionmixed.yaml`）与评测链路均不受
 > 本工具影响。自动标注数据另立数据集条目 `temporal.actionmixed-auto-v1`，两条通道并存，
 > 手动标注是正式 benchmark 的锚点，自动标注用于扩量与对照（量化自动标注特征代价）。
+>
+> **快速上手**：最小命令集见 [`AUTO_ANNOTATION_QUICKSTART.md`](AUTO_ANNOTATION_QUICKSTART.md)。
 
 ## 数据流
+
+**视频链（run → convert → 时序训练）**：
 
 ```
 新视频 (mp4)
@@ -24,6 +34,20 @@ outputs/annotations/<视频名>.json   ← legacy 标注 JSON（每视频一个�
 动作标签（timelinelabels）由人工 Label Studio timeline 标注补充
   ▼
 时序模型训练（feature = YOLO 检测标注，label = 人工动作标签）
+```
+
+**数据集链（run-dataset → 时序训练）**：
+
+```
+图片帧序列数据集（images/<split>/<序列>-<帧号:06d>.jpg + labels/<split>/<序列>.txt 动作标签）
+  │  python -m framework.cleansight_eval.cli.annotate run-dataset \
+  │      --dataset <数据集根> --config framework/experiments/auto-annotate.yaml
+  ▼
+<数据集根>/frames/<split>/<序列>-<帧号:06d>.txt   ← 逐帧 YOLO bbox（仅标签帧，8 类编号）
+  │  动作标签原样复制到 <数据集根>/labels/<split>/
+  │  temporal/data.py 直接消费（与 convert 产出同构）
+  ▼
+时序模型训练（feature = YOLO 检测标注，label = 数据集已有动作标签）
 ```
 
 ## 用法
@@ -89,6 +113,48 @@ git 仓库根（如 `CleanSightBackend/runs`），本工具统一重定向，避
 | `--resume` | 跳过已存在产出的视频，批量中断后可续跑。 |
 
 配置说明见 `framework/experiments/auto-annotate.yaml`（登记于 `usage/YAML_CONFIG.md` §8）。
+
+## 数据集自动标注（run-dataset：图片帧序列 → 时序训练数据）
+
+与 `run`（视频 → legacy JSON）互补：`run-dataset` 对**图片帧序列数据集**逐帧做
+YOLO 检测，产出与 `convert` **完全同构**的时序训练数据（`frames/` + `labels/`），
+供 `temporal/data.py` 直接消费。适用于"视频已抽帧成图片 + 数据集自带动作标签"
+的场景（如 `datasets/cleansight-ActionMixed` 的 images/ + labels/ 布局）。
+
+```
+输入（数据集根，两个目录必需）:
+  datasets/xxx/images/<split>/<序列>-<帧号:06d>.jpg   # 有序帧序列（帧号 6 位）
+  datasets/xxx/labels/<split>/<序列>.txt              # 动作标签 "frame_id action_id"
+
+输出（默认原地补写；--out 可重定向）:
+  datasets/xxx/frames/<split>/<序列>-<帧号:06d>.txt   # 逐帧 bbox，仅覆盖有动作标签的帧
+  datasets/xxx/labels/<split>/<序列>.txt              # 动作标签原样复制
+  datasets/xxx/labels/data.yaml + frames/data.yaml    # 类别映射（缺省补写）
+```
+
+```bash
+# 基本用法：数据集根（图片帧 + 动作标签）→ 时序训练数据
+python -m framework.cleansight_eval.cli.annotate run-dataset \
+    --dataset datasets/xxx --config framework/experiments/auto-annotate.yaml
+
+# 输出到独立目录 / 断点续跑 / 覆盖阈值
+python -m framework.cleansight_eval.cli.annotate run-dataset \
+    --dataset datasets/xxx --config ... \
+    --out datasets/xxx-auto --resume --conf 0.3
+```
+
+要点（与 `run` / `convert` 共用同一批 checkpoint 配置与类别级 `conf` 语义）：
+
+- 图片文件名必须带 `-<帧号:06d>` 后缀（如 `demo.mp4-000141.jpg`），序列名取前缀；
+  只对**有动作标签的帧**做检测并写出 frames（与 `convert` 的 frames/ 语义一致）。
+- 检测合并映射为全局类名后按 **8 类全局表**（`_constants.DETECTION_CLASSES`）编号，
+  类别表外的检测丢弃（与 `convert` 的 class_to_id 语义一致）。
+- **动作标签是必需输入**：时序训练需要人工动作标签，图片本身无法生成；
+  序列缺标签、标签帧无对应图片、帧号缺失都会明确报错。
+- `--resume` 跳过已产出完整 frames 的序列（及缺失的单帧），中断后可续跑。
+- `labels/`、`frames/` 的 data.yaml 缺省补写（6 类动作 / 8 类检测），已有不覆盖。
+- **质量检查**：产出后建议抽样对照检测框质量，或用 `cli.train` smoke 配置跑通
+  全链路（见下节）。
 
 ## 检查检测结果（人工检查 YOLO 检测质量）
 
@@ -160,6 +226,22 @@ python -m benchmark.cli.eval \
     --ckpt runs/autoannotate-smoke/mstcn-*/checkpoints/best.pt
 ```
 
+### 数据集链路（图片帧序列 → 时序训练）
+
+```bash
+# ① 自动标注：图片帧序列 + 动作标签 → 时序训练数据（默认原地补写 frames/）
+python -m framework.cleansight_eval.cli.annotate run-dataset \
+    --dataset datasets/xxx --config framework/experiments/auto-annotate.yaml
+
+# ② 训练（smoke 配置；labels/ + frames/ 就绪后与 convert 产物同样消费）
+python -m framework.cleansight_eval.cli.train \
+    --config framework/experiments/mstcn-autoannotate-smoke.yaml \
+    # 或把 datasets/xxx 登记进 framework/testsets.yaml 后用正式配置
+```
+
+注意：输入数据集必须自带动作标签（`labels/<split>/<序列>.txt`，"frame_id action_id"
+格式）；`--out` 重定向输出时训练配置的 `root` 需指向输出根（labels/ 已复制过去）。
+
 ### 正式训练（数据扩量并登记 testsets.yaml 后）
 
 数据集扩到多个视频后，把自动标注数据登记进 `framework/testsets.yaml`
@@ -219,6 +301,13 @@ transformer 配置的 `max_len` 已设为 2560；GRU 的 `window: 16` 需 ≤ �
 }]
 ```
 
+### run-dataset 产物（时序训练数据，与 convert 同构）
+
+`frames/<split>/<序列>-<帧号:06d>.txt`，每行 `class_id cx cy w h`（归一化中心点，
+6 位小数），class_id 为 8 类全局表（`_constants.DETECTION_CLASSES`）的下标；
+无检测的帧写出空文件。`labels/<split>/<序列>.txt` 为输入动作标签的原样复制。
+坐标口径与 `convert` 的 frames bbox 行、legacy `lsexport` 的 YOLO 输出一致。
+
 ## 设计决策
 
 | 决策 | 约定 | 理由 |
@@ -245,11 +334,16 @@ transformer 配置的 `max_len` 已设为 2560；GRU 的 `window: 16` 需 ≤ �
   建议抽样与人工标注对照（检出率 / IoU）。需要人工逐帧修正时走
   「YOLO 预标注 → Label Studio 审核 → 导出 → convert」闭环，见
   `docs/YOLO_REVIEW_FLOW.md`。
+- **数据集模式**：图片文件名必须带 `-<帧号:06d>` 后缀（帧序与时间轴一致）；只对
+  有动作标签的帧产出 frames（标签帧无对应图片会报错）；动作标签是必需输入
+  （时序训练无法由图片自动生成动作标签）；给已标注数据集重跑会覆盖 frames/
+  （可先 `--resume` 或 `--out` 输出到独立目录）。
 
 ## 验证
 
 ```bash
-# 单元测试（含 legacy lab.py 兼容性验收，不依赖 ultralytics）
+# 单元测试（legacy lab.py 兼容性、run-dataset 帧解析/标签帧对齐/8 类编号、
+# temporal load_split 消费验收、CLI 路径传递；不依赖 ultralytics）
 pytest framework/tests/test_auto_annotate.py -v
 
 # 全链路 smoke（需要 ultralytics 与 legacy 权重）
@@ -257,6 +351,15 @@ pytest framework/tests/test_auto_annotate.py -v -k smoke
 ```
 
 ## 正式训练结果（2026-08-17，三模型对比 + 同视频消融）
+
+> **数据更新（2026-08-21）**：`temporal.actionmixed-auto-v1` 数据集已换为**全部已有人工
+> 标签的 14 个视频**（原 11 → 14：train 10 / 8438 标签帧，val 2 / 1193，test 2 / 98，
+> 新增 2c635ddc / 687e3c78 / af0e7803 进 train；val/test 保持不变以维持评测可比）。
+> revision 更新为 `3b1bc00f…`（三个 split manifest 拼接内容的 sha256），manifest 与
+> `framework/testsets.yaml` 已同步，catalog 校验通过。**下方历史指标均为旧 revision
+> `636e6372…`（11 视频）的数据**。convert 同时改为：人工导出中缺失或无有效标注的视频
+> 跳过并告警（不再中断整个转换）。新数据 smoke 训练验证：MS-TCN 3 epoch val_acc 46.27
+> （`outputs/runs_auto_v1_check/mstcn-20260821-001239/`，exploratory，非正式结果）。
 
 ### 数据与流程
 

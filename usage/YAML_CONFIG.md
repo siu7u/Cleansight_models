@@ -148,18 +148,26 @@ legacy YAML 是冻结快照，不再接收新字段或成为数据/模型真源�
 ## 8. YOLO 自动标注配置
 
 [`framework/experiments/auto-annotate.yaml`](../framework/experiments/auto-annotate.yaml) 由
-`framework.cleansight_eval.cli.annotate` 读取，用于把已训练 YOLO checkpoint 的逐帧检测
-序列化为 legacy 时序标注 JSON（与 Label Studio 导出同构，可被历史 `lab.py` 消费）。
+`framework.cleansight_eval.cli.annotate` 读取，两条自动标注模式共用：`run` 子命令把已训练
+YOLO checkpoint 的逐帧检测序列化为 legacy 时序标注 JSON（与 Label Studio 导出同构，可被
+历史 `lab.py` 消费）；`run-dataset` 子命令对图片帧序列数据集（images/ + 动作标签 labels/）
+逐帧检测，产出与 `convert` 同构的时序训练数据（frames/ + labels/），供 `temporal/data.py`
+消费。
 
 | 字段 | 内容与功能 |
 |---|---|
-| `videos` | 默认视频文件或目录（相对仓库根）；CLI 未传 `--videos` 时使用，两者均缺失则明确报错。 |
+| `videos` | `run` 的默认视频文件或目录（相对仓库根）；CLI 未传 `--videos` 时使用，两者均缺失则明确报错。 |
 | `checkpoints` | 参与标注的 checkpoint 列表；每项含权重 `path`（相对仓库根）和 `class_map`（本地类别 id → 全局类名，id 必须存在于权重 names 中）。 |
 | `imgsz` / `conf` | 推理输入尺寸与置信度阈值；`conf` 可为标量或 `{类别: 阈值}` 字典（按最低阈值推理、逐类过滤），可被 CLI 参数覆盖。 |
-| `top_k` | 每类别轨迹（slot）数；`hand` 默认 2 条，其他类别 1 条，与 clean_bbox_v2 的 slot 语义一致；`track` 启用后不生效。 |
-| `frame_stride` / `batch_size` | 每 N 帧推理一次（中间帧沿用最近结果）与批量推理帧数；帧采样可显著降低推理成本。 |
-| `track` | 是否启用 ByteTrack 实例跟踪（轨迹按 `(类别, 实例 id)` 组织）。 |
-| `out_dir` | 标注 JSON 输出目录（默认 `outputs/annotations`，`outputs/` 整体被 Git 忽略），可被 CLI `--out` 覆盖。 |
+| `top_k` | `run` 的每类别轨迹（slot）数；`hand` 默认 2 条，其他类别 1 条，与 clean_bbox_v2 的 slot 语义一致；`track` 启用后不生效。 |
+| `frame_stride` / `batch_size` | 每 N 帧推理一次（中间帧沿用最近结果）与批量推理帧/图片数；帧采样可显著降低推理成本。 |
+| `track` | `run` 是否启用 ByteTrack 实例跟踪（轨迹按 `(类别, 实例 id)` 组织）。 |
+| `out_dir` | `run` 的标注 JSON 输出目录（默认 `outputs/annotations`，`outputs/` 整体被 Git 忽略），可被 CLI `--out` 覆盖。 |
+
+`run-dataset` 复用上述 checkpoints/imgsz/conf/batch_size；输入为 CLI `--dataset` 指定的
+数据集根（`images/<split>/<序列>-<帧号:06d>.jpg` 有序帧 + `labels/<split>/<序列>.txt`
+动作标签），输出默认原地补写 `frames/`（`--out` 可重定向），检测类别固定为 8 类全局表
+（`auto_annotate._constants.DETECTION_CLASSES`，与 `convert` 的 frames bbox 编号一致）。
 
 ## 更新检查
 
