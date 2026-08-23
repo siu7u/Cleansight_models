@@ -13,17 +13,24 @@ from typing import Any
 def load_predictor(ckpt_path: str, imgsz: int = 640, runs_dir: str | None = None):
     """加载 YOLO 模型，返回 ``(model, names_dict)``。
 
-    ``runs_dir`` 非空时把 ultralytics 中间产物目录（``ultralytics.cfg.RUNS_DIR``）
-    重定向到该目录；ultralytics 8.3 的默认 runs 目录可能落在只读或无关位置
-    （如按安装位置推断的 git 仓库根）。不传则保持 ultralytics 默认行为。
+    ``runs_dir`` 非空时把 ultralytics 中间产物目录重定向到该目录；兼容
+    ultralytics 8.3（``ultralytics.cfg.RUNS_DIR``）与 8.4+（runs_dir 由
+    ``settings`` 管理，``utils.RUNS_DIR`` 派生自 settings）。ultralytics 的
+    默认 runs 目录可能落在只读或无关位置（如按安装位置推断的 git 仓库根）。
+    不传则保持 ultralytics 默认行为。
     """
 
     from ultralytics import YOLO
 
     if runs_dir is not None:
         import ultralytics.cfg as ucfg
+        import ultralytics.utils as uutils
+        from ultralytics import settings
 
-        ucfg.RUNS_DIR = Path(runs_dir)
+        if hasattr(ucfg, "RUNS_DIR"):  # 8.3：cfg 模块级导出
+            ucfg.RUNS_DIR = Path(runs_dir)
+        uutils.RUNS_DIR = Path(runs_dir)  # 8.4+：模块级常量
+        settings.update({"runs_dir": str(runs_dir)})  # 8.4+：settings 为唯一真源
     model = YOLO(str(ckpt_path))
     names = {int(k): v for k, v in dict(model.names).items()}
     return model, names
