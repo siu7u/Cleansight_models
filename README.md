@@ -476,7 +476,9 @@ checkpoint + checkpoint metadata + CARD.md + pin.yaml
 - [项目流程](docs/PROJECT_FLOW.md)：数据、训练、评测与交付的流程关系。
 - [framework README](framework/README.md)：CLI、配置字段、resume 与扩展点。
 - [YOLO 优化工作流](docs/YOLO_OPTIMIZATION.md)：sweep / analyze / 特征融合的操作指南。
-- [YOLO 自动标注工具](docs/AUTO_ANNOTATION.md)：视频 → legacy 标注 JSON → 时序训练数据的完整使用指南（run / convert / 优化参数 / 训练链路）。
+- [YOLO 自动标注工具](docs/AUTO_ANNOTATION.md)：视频 → legacy 标注 JSON → 时序训练数据，以及图片帧序列数据集 → 时序训练数据（frames/ + labels/）的完整使用指南（run / run-dataset / convert / 优化参数 / 训练链路）。
+- [自动标注快速上手](docs/AUTO_ANNOTATION_QUICKSTART.md)：最小命令集，5 分钟跑通 run / run-dataset / convert 与常见报错排查。
+- [数据集构建要求（Label Studio）](docs/DATASET_BUILDING_GUIDE.md)：队友通过 Label Studio 构建/扩充训练数据的硬性契约与操作步骤（框 + 动作标签 + 导出 + 验收清单）。
 - [YOLO 结果人工审核流程](docs/YOLO_REVIEW_FLOW.md)：YOLO 预标注 → Label Studio 人工改框+标动作 → 导出 → convert 的质量门闭环。
 - [推理链路性能测量](docs/INFERENCE_CHAIN_PERF.md)：YOLO 检测 / 特征化 / 时序推理的实测时延，支撑"预计算入数据集 vs 现场推理"决策。
 - [评估能力说明](docs/EVAL.md)：指标定义、聚合口径和完整性检查。
