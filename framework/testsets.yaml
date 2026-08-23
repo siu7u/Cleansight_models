@@ -20,11 +20,13 @@ datasets:
 
   # 自动标注数据通道（YOLO 推理检测框 + 人工动作标签），与手动标注 actionmixed-v2 并存。
   # 检测特征仅覆盖 6 类（short_brush/brush_tip_out 恒零），40 维 v1 布局兼容。
+  # 2026-08-20 数据更新：换为全部已有人工标签的 14 个视频（train 10 / val 2 / test 2），
+  # revision 为三个 split manifest 拼接内容的 sha256。
   temporal.actionmixed-auto-v1:
     family: temporal
     format: actionmixed_bbox
     dataset_version: cleansight-actionmixed-auto-v1
-    revision: 636e6372d2714a72ba7f168daa77c84487364d5d9643167fa77fa9a6c5310e0a
+    revision: 3b1bc00f1de79cc464ff3fdb8ae9493e8586b453561d7481efd74747ae012399
     data_root: datasets/cleansight-ActionMixed-auto
     feature_mapping: actionmixed-bbox-8cls-v1
     input_dim: 40
