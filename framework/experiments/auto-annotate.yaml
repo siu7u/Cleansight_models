@@ -6,6 +6,12 @@
 # 存在于权重 names 中，否则 CLI 报错。short_brush / brush_tip_out 目前
 # 没有对应 legacy 权重，需要时在 checkpoints 中追加覆盖它们的模型。
 # videos 为默认视频文件或目录（CLI 未传 --videos 时使用；路径相对仓库根）。
+#
+# run-dataset 子命令（图片帧序列数据集 → 时序训练数据）复用本配置的
+# checkpoints/imgsz/conf/batch_size；输入为 CLI --dataset 指定的数据集根
+# （images/<split>/<序列>-<帧号:06d>.jpg 有序帧 + labels/<split>/<序列>.txt
+# 动作标签），输出默认原地补写 frames/（--out 可重定向），与 convert 产出
+# 同构，供 temporal/data.py 消费。
 
 videos: legacy/yolo-detection/pipeline/raw/videos
 

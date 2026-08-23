@@ -3,6 +3,9 @@
 子命令：
 - ``run``：用已训练 YOLO checkpoint 对无标注视频逐帧检测，产出 legacy 时序
   标注 JSON（与 Label Studio 导出同构，可被历史 ``lab.py`` 直接消费）。
+- ``run-dataset``：用已训练 YOLO checkpoint 对图片帧序列数据集（images/ +
+  动作标签 labels/）逐帧检测，产出与 ``convert`` 同构的时序训练数据
+  （frames/ + labels/），供 ``temporal/data.py`` 直接消费。
 - ``convert``：自动标注 JSON + 人工 Label Studio 导出（timelinelabels 动作
   标签）→ framework 时序训练数据布局（``labels/<split>/`` + ``frames/<split>/``），
   供 ``temporal/data.py`` 直接消费。
@@ -15,6 +18,10 @@
     # run：目录内全部视频 + smoke 探针
     python -m framework.cleansight_eval.cli.annotate run \
         --videos path/to/videos/ --config ... --max-frames 30
+
+    # run-dataset：图片帧序列数据集 → 时序训练数据（默认原地补写 frames/）
+    python -m framework.cleansight_eval.cli.annotate run-dataset \
+        --dataset datasets/xxx --config framework/experiments/auto-annotate.yaml
 
     # convert：标注 JSON + 人工导出 → 训练数据
     python -m framework.cleansight_eval.cli.annotate convert \
@@ -106,6 +113,50 @@ def _cmd_run(args) -> int:
     return 0
 
 
+def _cmd_run_dataset(args) -> int:
+    """run-dataset：图片帧序列数据集 → 时序训练数据（frames/ + labels/）。"""
+
+    config_path = Path(args.config)
+    if not config_path.is_file():
+        print(f"[annotate] 配置文件不存在: {config_path}")
+        return 2
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+
+    checkpoints = config.get("checkpoints")
+    if not isinstance(checkpoints, list) or not checkpoints:
+        print("[annotate] 配置缺少 checkpoints 列表（每项含 path + class_map）")
+        return 2
+    specs = []
+    for spec in checkpoints:
+        ckpt_path = Path(spec["path"])
+        if not ckpt_path.is_absolute():
+            ckpt_path = REPO_ROOT / ckpt_path
+        specs.append({"path": ckpt_path, "class_map": spec["class_map"]})
+
+    dataset_root = Path(args.dataset)
+    if not dataset_root.is_absolute():
+        dataset_root = REPO_ROOT / dataset_root
+    out_root = Path(args.out or dataset_root)
+    if not out_root.is_absolute():
+        out_root = REPO_ROOT / out_root
+    runs_dir = Path(args.runs_dir or "outputs/ultralytics_runs")
+    if not runs_dir.is_absolute():
+        runs_dir = REPO_ROOT / runs_dir
+
+    outputs = auto_annotate.run_dataset_annotate(
+        dataset_root,
+        specs,
+        out_root,
+        imgsz=args.imgsz or int(config.get("imgsz", 640)),
+        conf=args.conf if args.conf is not None else config.get("conf", 0.25),
+        batch_size=args.batch_size or int(config.get("batch_size", 16)),
+        runs_dir=runs_dir,
+        resume=args.resume,
+    )
+    print(f"[annotate] 完成：{len(outputs)} 个文件写入 {out_root}")
+    return 0
+
+
 def _cmd_convert(args) -> int:
     """convert：标注 JSON + 人工导出 → 时序训练数据布局。"""
 
@@ -131,7 +182,7 @@ def _cmd_convert(args) -> int:
 def _build_parser() -> argparse.ArgumentParser:
     """构造 run/convert 子命令解析器；参数落在同一个 namespace，handler 接收 args。"""
 
-    p = argparse.ArgumentParser(description="YOLO 自动标注（run：视频→JSON；convert：JSON→训练数据）")
+    p = argparse.ArgumentParser(description="YOLO 自动标注（run：视频→JSON；run-dataset：图片帧序列→时序训练数据；convert：JSON→训练数据）")
     sub = p.add_subparsers(dest="command", required=True)
 
     run_p = sub.add_parser("run", help="视频 → legacy 标注 JSON")
@@ -147,6 +198,17 @@ def _build_parser() -> argparse.ArgumentParser:
     run_p.add_argument("--track", action="store_true", help="启用 ByteTrack 实例跟踪（轨迹按实例 id 组织）")
     run_p.add_argument("--resume", action="store_true", help="跳过已存在产出的视频（断点续跑）")
     run_p.set_defaults(handler=_cmd_run)
+
+    dataset_p = sub.add_parser("run-dataset", help="图片帧序列数据集 → 时序训练数据（frames/ + labels/）")
+    dataset_p.add_argument("--dataset", required=True, help="数据集根目录（images/<split>/<序列>-<帧号:06d>.jpg 有序帧 + labels/<split>/<序列>.txt 动作标签）")
+    dataset_p.add_argument("--out", default=None, help="时序训练数据输出根（默认数据集根原地补写 frames/，与 cleansight-ActionMixed 布局一致）")
+    dataset_p.add_argument("--config", required=True, help="自动标注配置 YAML（checkpoints/imgsz/conf/batch_size）")
+    dataset_p.add_argument("--conf", type=float, default=None, help="全局检测置信度阈值（覆盖配置；配置可写类别级 {类别: 阈值}）")
+    dataset_p.add_argument("--imgsz", type=int, default=None, help="推理输入尺寸（覆盖配置）")
+    dataset_p.add_argument("--batch-size", type=int, default=None, help="批量推理图片数（默认 16）")
+    dataset_p.add_argument("--runs-dir", default=None, help="ultralytics 中间产物目录（默认 outputs/ultralytics_runs，Git 忽略）")
+    dataset_p.add_argument("--resume", action="store_true", help="跳过已存在产出的序列/帧（断点续跑）")
+    dataset_p.set_defaults(handler=_cmd_run_dataset)
 
     convert_p = sub.add_parser("convert", help="标注 JSON + 人工导出 → 时序训练数据")
     convert_p.add_argument("--annotations", required=True, help="自动标注 JSON 目录")
