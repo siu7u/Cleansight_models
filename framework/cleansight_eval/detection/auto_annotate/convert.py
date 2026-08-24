@@ -20,8 +20,10 @@ from ._constants import ACTION_CLASSES, DETECTION_CLASSES, TARGET_LABEL_FPS
 def _load_manual_labels(labels_export: Path) -> dict[str, dict]:
     """读人工 Label Studio 导出，按视频文件名索引 timelinelabels 与帧率信息。
 
-    返回 ``{视频文件名: {"ls_fps": float, "ranges": [(start, end, 动作名), ...]}}``；
+    返回 ``{视频文件名: {"ls_fps": float | None, "ranges": [(start, end, 动作名), ...]}}``；
     ``ls_fps`` 由 videorectangle 的 ``framesCount/duration`` 推导（LS 标注端帧率）。
+    时序数据构建不需要在 LS 上画框（目标框由 YOLO 自动标注产出），导出只有
+    timelinelabels 时 ``ls_fps`` 为 ``None``，convert 按 1:1 换算帧号并告警。
     """
 
     tasks = json.loads(labels_export.read_text(encoding="utf-8"))
@@ -74,9 +76,11 @@ def convert_annotations(
       ``"class_id cx cy w h"``（8 类全局顺序，5 列兼容 40 维 v1 特征）
     - ``labels/data.yaml`` 与 ``frames/data.yaml``：类别映射
 
-    每个自动标注 JSON 必须有可用的同名人工 task（动作标签 + LS 帧率）才能转换；
-    人工导出中缺失或没有有效标注的视频会被**跳过并告警**（不中断其余视频），
-    汇总在结尾打印。返回产出文件列表。
+    每个自动标注 JSON 必须有可用的同名人工 task（动作标签）才能转换；
+    人工导出中缺失或没有有效动作标签的视频会被**跳过并告警**（不中断其余视频），
+    汇总在结尾打印。LS 导出只有动作标签（未画框，无 ``framesCount/duration``
+    帧率锚点）时按 1:1 换算帧号并告警；有 videorectangle 时仍按 LS 帧率精确换算。
+    返回产出文件列表。
     """
 
     annotation_dir = Path(annotation_dir)
@@ -101,23 +105,32 @@ def convert_annotations(
             print(f"[convert] 跳过（人工导出中无此视频，无动作标签）: {video_name}")
             skipped.append(video_name)
             continue
-        ls_fps = manual_info["ls_fps"]
-        if not ls_fps:
-            print(
-                f"[convert] 跳过（人工标注无 framesCount/duration，无法换算帧号）: {video_name}"
-            )
+        if not manual_info["ranges"]:
+            print(f"[convert] 跳过（人工导出无动作标签）: {video_name}")
             skipped.append(video_name)
             continue
         frames_count = legacy.frames_count
         duration = legacy.duration
-        real_fps = frames_count / duration if duration else ls_fps
-        # LS 标注帧号 → 真实解码帧号：ls = real × (ls_fps / real_fps)
-        scale = ls_fps / real_fps
+        real_fps = frames_count / duration if duration else None
+        ls_fps = manual_info["ls_fps"]
+        if ls_fps:
+            # LS 标注帧号 → 真实解码帧号：ls = real × (ls_fps / real_fps)
+            scale = ls_fps / real_fps if real_fps else 1.0
+            fps_desc = f"LS {ls_fps:.1f}fps → 真实 {real_fps:.1f}fps"
+        else:
+            # 时序数据构建不要求在 LS 上画框（目标框由 YOLO 自动标注），
+            # 导出无 videorectangle 帧率锚点：按 1:1 换算（LS 帧号 = 真实帧号）并告警
+            scale = 1.0
+            fps_desc = "无 LS 帧率锚点（未画框），按 1:1 换算"
+            print(
+                f"[convert] 告警: {video_name} 人工导出无 videorectangle 帧率锚点,"
+                f" LS 帧号按 1:1 换算（假定 LS 端按视频原始帧率标注）"
+            )
         real_ranges = [
             (max(1, round(start / scale)), min(frames_count, round(end / scale)), action)
             for start, end, action in manual_info["ranges"]
         ]
-        stride = max(1, round(real_fps / TARGET_LABEL_FPS))
+        stride = max(1, round(real_fps / TARGET_LABEL_FPS)) if real_fps else 1
         label_frames = list(range(1, frames_count + 1, stride))
 
         # sequence 按帧序排列（frame 1..framesCount），建 帧号 → [(类名, 有效检测)] 索引
@@ -151,7 +164,7 @@ def convert_annotations(
 
         print(
             f"[convert] {video_name}: {len(label_frames)} 个标签帧（stride={stride}, "
-            f"LS {ls_fps:.1f}fps → 真实 {real_fps:.1f}fps）→ {split}/"
+            f"{fps_desc}）→ {split}/"
         )
 
     # 类别映射（首次生成；已有文件不覆盖，避免与登记数据冲突）

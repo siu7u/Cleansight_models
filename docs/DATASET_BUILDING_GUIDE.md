@@ -11,7 +11,7 @@
 ## 1. 整体流程
 
 ```
-① 上传视频到 Label Studio → ② 人工标注(框 + 动作 timeline)→ ③ 导出 JSON
+① 上传视频到 Label Studio → ② 人工标注动作 timeline(不画框)→ ③ 导出 JSON
         │                                                          │
         ▼                                                          ▼
   自动检测(annotate run,无需人工)                    convert(合并人工动作标签 + 自动检测框)
@@ -32,9 +32,12 @@
 
 ### 2.2 Label Studio 标注要求(每个视频必须满足)
 
-1. **至少一个 videorectangle(检测框)标注** —— 即使只画一个框:
-   - convert 依赖它提供的 `framesCount / duration` 推导 LS 标注帧率,缺了会**跳过该视频**
-   - 注意:检测框本身**不需要认真标**(会自动被 YOLO 检测覆盖),它只是帧率锚点
+1. **只需要 timelinelabels(动作标签)标注动作区间** —— **不需要画框**:
+   - 时序训练数据的目标框由 YOLO 自动标注(`annotate run` 逐帧检测)产出,
+     人工标注只负责动作阶段;
+   - convert 合并两路产物;人工导出没有检测框(无 `framesCount/duration`
+     帧率锚点)时,LS 帧号按 1:1 换算(假定 LS 端按视频原始帧率标注)并打印告警;
+     若标注时 LS 端帧率与视频真实帧率不同,请画任意一个框作为帧率锚点以获得精确换算
 2. **timelinelabels(动作标签)标注动作区间** —— 核心产出:
    - 标签名必须**精确匹配**以下 6 类(区分大小写与空格,否则 convert 报错):
      `idle` / `air_injection` / `flush` / `long_brush_insert` / `long_brush_withdraw` / `short_brush_cleaning`
@@ -47,25 +50,22 @@
 - 导出中每个视频的 `data.video` **文件名**必须与本地视频文件名一致(目录无所谓,
   convert 只取文件名匹配);参考现有导出
   `legacy/yolo-detection/pipeline/raw/exports/project-10-at-2026-07-07-19-32.json`
-- 一个视频在导出里**至少有一个非空 annotation**(空 result 或缺少
-  framesCount/duration 都会被 convert 跳过,如现有 14e6fadd 等 3 个视频)
+- 一个视频在导出里**至少有一个 timelinelabels 动作区间**(空 result 或没有
+  动作标签都会被 convert 跳过,如现有 14e6fadd 等 3 个视频)
 
 ## 3. 操作步骤(Label Studio)
 
 1. 在 Label Studio 创建/复用视频标注项目,上传视频
-2. 标注模板配置两类 result:
-   - `videorectangle`(视频框标注)
-   - `timelinelabels`(时间线标签,选项 = 上述 6 类动作名)
-3. 逐视频标注:
-   - 画任意一个框(帧率锚点)
-   - 在时间线上框选动作区间,选择动作标签;未标区间即 idle
+2. 标注模板配置 **timelinelabels**(时间线标签,选项 = 上述 6 类动作名)
+3. 逐视频标注:在时间线上框选动作区间,选择动作标签;未标区间即 idle
+   (**不需要画检测框**——目标框由 YOLO 自动标注)
 4. 全部完成后导出 JSON
 
 ## 4. 验收清单(提交前自查)
 
-- [ ] 每个视频都画了框(有 framesCount/duration)
+- [ ] 每个视频都标了动作区间(有 timelinelabels)
 - [ ] 动作标签名与 6 类完全一致(无拼写/大小写错误)
-- [ ] 导出 JSON 中每个视频有非空 annotation
+- [ ] 导出 JSON 中每个视频有动作标签
 - [ ] 视频文件名与本地一致、全局唯一
 - [ ] 用 `annotate convert` 跑通且无该视频被跳过(命令见 §5)
 
@@ -165,10 +165,10 @@ python -m framework.cleansight_eval.cli.annotate convert \
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
-| convert 跳过某视频 | 导出中无该视频 / 无 framesCount/duration / 空标注 | 回到 Label Studio 补框或补动作标注后重新导出 |
+| convert 跳过某视频 | 导出中无该视频 / 无动作标签(空 result) | 回到 Label Studio 补动作标注后重新导出 |
 | convert 报 KeyError(动作名) | 标签名不在 6 类内 | 检查拼写与大小写,重新导出 |
 | 标签帧数偏少 | 导出后视频文件被替换(帧数变化) | 保持视频文件与标注时的版本一致 |
-| 想扩训练集但不想标框 | 框是帧率锚点,不可省略 | 每个视频至少画一个框(不用精标) |
+| convert 告警"无 LS 帧率锚点,按 1:1 换算" | 标注时未画框,且 LS 端帧率与视频真实帧率不一致 | 不影响流程(按 1:1 换算);若需精确帧号换算,标注时画任意一个框即可 |
 
 ## 附录 A:图片数据集通道(run-dataset)的构建要求
 
