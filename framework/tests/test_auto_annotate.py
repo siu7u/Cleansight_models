@@ -631,6 +631,47 @@ class TestConvertSkipsUnlabeled:
         assert "跳过" in log and "b.mp4" in log and "c.mp4" in log
         assert "跳过 2 个" in log  # 结尾汇总
 
+    def test_labels_only_export_converts_with_scale_one(self, tmp_path, capsys):
+        """LS 只标动作阶段（无 videorectangle）也能转换：帧号按 1:1 并告警。"""
+        annotation_dir = tmp_path / "ann"
+        annotation_dir.mkdir()
+        self._auto_json(annotation_dir, "d.mp4", task_id=0)
+        export = tmp_path / "manual_labels_only.json"
+        export.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": 0,
+                        "data": {"video": "d.mp4"},
+                        "annotations": [
+                            {
+                                "result": [
+                                    {
+                                        "type": "timelinelabels",
+                                        "value": {
+                                            "timelinelabels": ["flush"],
+                                            "ranges": [{"start": 1, "end": 2}],
+                                        },
+                                    }
+                                ]
+                            }
+                        ],
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+        out = tmp_path / "out2"
+
+        outputs = auto_annotate.convert_annotations(annotation_dir, export, out, split="train")
+        assert len(outputs) == 1  # 无框导出也能转换
+        label_lines = (out / "labels" / "train" / "d.mp4.txt").read_text(encoding="utf-8").splitlines()
+        # 1:1 换算：3 帧真实视频（10fps → stride 1），LS 区间 [1,2] 直接映射到真实帧 1..2
+        assert label_lines == ["1 2", "2 2", "3 0"]  # flush=2，帧 3 未标区间 → idle=0
+        log = capsys.readouterr().out
+        assert "无 LS 帧率锚点" in log and "1:1 换算" in log
+        assert "d.mp4" in log
+
 
 class TestRunAutoAnnotateSmoke:
     """全链路 smoke：真实视频 + 真实 legacy 权重（ultralytics 可用时）。"""

@@ -82,8 +82,9 @@ python -m framework.cleansight_eval.cli.annotate run --videos ... --config ... \
     --resume
 
 # convert：标注 JSON + 人工动作标签 → 时序训练数据布局
-# （检测来自自动标注，动作标签来自人工 Label Studio timelinelabels，
-#  帧号自动做 LS 帧率 → 真实帧率换算）
+# （检测来自自动标注，动作标签来自人工 Label Studio timelinelabels；
+#  人工导出含 videorectangle 时自动做 LS 帧率 → 真实帧率换算，
+#  无框（未画框）时按 1:1 换算并告警）
 python -m framework.cleansight_eval.cli.annotate convert \
     --annotations outputs/annotations \
     --labels-export legacy/yolo-detection/pipeline/raw/exports/project-10-at-2026-07-07-19-32.json \
@@ -272,7 +273,8 @@ transformer 配置的 `max_len` 已设为 2560；GRU 的 `window: 16` 需 ≤ �
 
 > 注意：① 只产出检测标注；动作标签必须来自人工标注（② 的 `--labels-export`
 > 提供 timelinelabels）。convert 会把同一视频在人工导出中的动作标签与自动检测合并，
-> 并自动做 LS 标注帧率 → 视频真实帧率的帧号换算。
+> 并自动做 LS 标注帧率 → 视频真实帧率的帧号换算（人工导出未画框、无帧率锚点时
+> 按 1:1 换算并告警）。
 
 ## 输出格式（对齐 legacy）
 
