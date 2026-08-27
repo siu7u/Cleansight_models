@@ -24,6 +24,13 @@ REPORTS_DIR = REPO_ROOT / "runs" / "optimize_reports"
 
 VALID_GROUPS = ("group1_large", "group2_small")
 
+# ── SMOKE 探针默认值 ─────────────────────────────────────────
+# 探针模式只用于预设方向对比：epochs 截断、patience 收紧、fraction 子采样，
+# 结果一律标记 smoke，禁止当作正式指标引用。
+SMOKE_EPOCHS = 15      # 探针模式最大 epoch 数
+SMOKE_PATIENCE = 5     # 探针模式早停耐心
+SMOKE_FRACTION = 0.2   # 探针模式每 epoch 数据采样比例
+
 # ── 预定义预设 ──────────────────────────────────────────────
 PRESETS: Dict[str, dict] = {
     # === group1_large 预设 ===
@@ -62,7 +69,8 @@ PRESETS: Dict[str, dict] = {
         "model": "yolo11s.pt",
         "imgsz": 960,
         "epochs": 150,
-        "batch": 12,
+        # 8GB 显存（RTX 4060）按分辨率等比收缩 batch：12×(640/960)^2≈5.3，取 6。
+        "batch": 6,
         "patience": 30,
         "augment": "strong",
     },
@@ -80,7 +88,8 @@ PRESETS: Dict[str, dict] = {
         "model": "yolo11m.pt",
         "imgsz": 960,
         "epochs": 200,
-        "batch": 8,
+        # 8GB 显存（RTX 4060）：yolo11m 权重与激活更重，batch 取 4。
+        "batch": 4,
         "patience": 40,
         "augment": "strong",
         "cos_lr": True,
@@ -242,8 +251,15 @@ def run_experiment(
     preset_name: str,
     cfg: dict,
     dry_run: bool = False,
+    smoke: bool = False,
+    device: Optional[str] = None,
 ) -> dict:
-    """执行单个实验: 训练 + val 评测，返回指标 dict（复用 YoloAdapter）。"""
+    """执行单个实验: 训练 + val 评测，返回指标 dict（复用 YoloAdapter）。
+
+    smoke=True 为快速探针模式：epochs 截断到 SMOKE_EPOCHS、patience 收紧到
+    SMOKE_PATIENCE，并按 SMOKE_FRACTION 子采样数据；结果标记 smoke，只用于
+    预设方向对比，不代表正式指标。device 显式传入时优先于 cfg 里的 device 键。
+    """
 
     group_dir = DATASET_BASE / group
     data_yaml = group_dir / "data.yaml"
@@ -252,7 +268,17 @@ def run_experiment(
 
     name = build_experiment_name(preset_name, group)
     project = str(RUNS_BASE.resolve())
+    cfg = dict(cfg)
+    if smoke:
+        cfg["epochs"] = min(cfg.get("epochs", 150), SMOKE_EPOCHS)
+        cfg["patience"] = SMOKE_PATIENCE
     model_file = cfg.get("model", "yolo11n.pt")
+    # run_experiment 稍后会 chdir 到分组目录，裸权重名在那之后失效（ultralytics
+    # 找不到会转去 GitHub 下载）；仓库根目录存在同名权重时提前解析为绝对路径。
+    if not Path(model_file).is_absolute() and Path(model_file).name == model_file:
+        local_weight = REPO_ROOT / model_file
+        if local_weight.is_file():
+            model_file = str(local_weight)
     imgsz = cfg.get("imgsz", 640)
     epochs = cfg.get("epochs", 150)
     patience = cfg.get("patience", 30)
@@ -265,23 +291,28 @@ def run_experiment(
     batch = cfg.get("batch")
     if batch is None:
         batch = adjust_batch_for_imgsz(16, 640, imgsz)
-    device = cfg.get("device", "auto")
+    # 显式 device 参数（CLI --device）优先，其次 cfg（预设/测试可注入），最后 auto。
+    device = device or cfg.get("device", "auto")
 
+    smoke_tag = " [SMOKE 探针]" if smoke else ""
     print(f"\n{'='*60}")
-    print(f"实验: {name}")
+    print(f"实验: {name}{smoke_tag}")
     print(f"  group={group}  preset={preset_name}  model={model_file}")
-    print(f"  imgsz={imgsz}  epochs={epochs}  batch={batch}  patience={patience}")
+    print(f"  imgsz={imgsz}  epochs={epochs}  batch={batch}  patience={patience}"
+          + (f"  fraction={SMOKE_FRACTION}" if smoke else ""))
     print(f"  augment={augment_name}  cos_lr={cos_lr}  label_smoothing={label_smoothing}")
     print(f"  freeze={freeze}  device={device}")
     print(f"{'='*60}")
 
     if dry_run:
-        return {"name": name, "dry_run": True, "cfg": cfg}
+        return {"name": name, "dry_run": True, "cfg": cfg, "smoke": smoke}
 
     if device == "auto":
         from ..core.environment import pick_device
 
         device = pick_device()
+    # 记录实际使用的设备（auto 解析后的结果），供报告“使用的方法”章节引用。
+    result_device = str(device)
 
     # data.yaml 的 path 相对 cwd 解析，切到分组目录执行。
     os.chdir(group_dir)
@@ -292,6 +323,8 @@ def run_experiment(
         "preset": preset_name,
         "cfg": cfg,
         "timestamp": datetime.now().isoformat(),
+        "smoke": smoke,
+        "device": result_device,
     }
 
     adapter = get_adapter("yolo")
@@ -304,6 +337,8 @@ def run_experiment(
         "close_mosaic": close_mosaic,
         **augment,
     }
+    if smoke:
+        train_kwargs["fraction"] = SMOKE_FRACTION
     if freeze is not None:
         train_kwargs["freeze"] = freeze
 
@@ -359,8 +394,13 @@ def run_grid(
     dims: List[str],
     base_cfg: Optional[dict] = None,
     dry_run: bool = False,
+    smoke: bool = False,
+    device: Optional[str] = None,
 ) -> List[dict]:
-    """在指定维度上做 grid search（models / resolutions / augments）。"""
+    """在指定维度上做 grid search（models / resolutions / augments）。
+
+    smoke=True 时每个组合都按快速探针模式执行（见 ``run_experiment``）。
+    """
 
     from itertools import product
 
@@ -408,7 +448,8 @@ def run_grid(
         preset_name = "-".join(name_parts)
         print(f"  {preset_name}: model={cfg.get('model','?')} imgsz={cfg.get('imgsz','?')} "
               f"augment={cfg.get('augment','?')}")
-        r = run_experiment(group, preset_name, cfg, dry_run=dry_run)
+        r = run_experiment(group, preset_name, cfg, dry_run=dry_run, smoke=smoke,
+                           device=device)
         results.append(r)
     return results
 
@@ -430,8 +471,12 @@ def print_summary(results: List[dict]):
             print(f"{name:<40} {'-':>8} {'-':>10} {'-':>8} {'-':>8} DRY RUN")
         else:
             val = r.get("val", {})
+            status = "SMOKE" if r.get("smoke") else "OK"
             print(f"{name:<40} {val.get('map50', '-'):>8.4f} {val.get('map50_95', '-'):>10.4f} "
-                  f"{val.get('precision', '-'):>8.4f} {val.get('recall', '-'):>8.4f} OK")
+                  f"{val.get('precision', '-'):>8.4f} {val.get('recall', '-'):>8.4f} {status}")
+
+    if any(r.get("smoke") for r in results):
+        print("\n⚠️ 含 SMOKE 探针实验：截断训练 + 数据子采样，仅用于方向对比，不代表正式指标。")
 
     valid = [r for r in results if "val" in r and "error" not in r]
     if valid:
@@ -461,6 +506,11 @@ def save_report(results: List[dict], group: str) -> Tuple[Path, Path]:
         f"生成时间: {datetime.now().isoformat()}",
         f"实验数: {len(results)}",
         f"",
+    ]
+    if any(r.get("smoke") for r in results):
+        lines.append("⚠️ 含 SMOKE 探针实验：截断训练 + 数据子采样，仅用于方向对比，不代表正式指标。")
+        lines.append("")
+    lines += [
         "## 汇总",
         "",
         "| 实验 | mAP50 | mAP50-95 | Precision | Recall | 备注 |",
@@ -477,6 +527,8 @@ def save_report(results: List[dict], group: str) -> Tuple[Path, Path]:
             cfg = r.get("cfg", {})
             note = (f"model={cfg.get('model','?')} imgsz={cfg.get('imgsz','?')} "
                     f"augment={cfg.get('augment','?')}")
+            if r.get("smoke"):
+                note = "SMOKE 探针 · " + note
             lines.append(
                 f"| {name} | {val.get('map50', '-'):.4f} | {val.get('map50_95', '-'):.4f} | "
                 f"{val.get('precision', '-'):.4f} | {val.get('recall', '-'):.4f} | {note} |"
@@ -497,6 +549,10 @@ def save_report(results: List[dict], group: str) -> Tuple[Path, Path]:
             f"- augment: {cfg.get('augment', '?')}",
             f"- cos_lr: {cfg.get('cos_lr', False)}",
             f"- label_smoothing: {cfg.get('label_smoothing', 0.0)}",
+        ]
+        if r.get("smoke"):
+            lines.append(f"- smoke: true（截断训练 + 数据子采样，仅用于方向对比）")
+        lines += [
             f"",
             f"### val 指标",
             f"",
@@ -506,6 +562,37 @@ def save_report(results: List[dict], group: str) -> Tuple[Path, Path]:
         for cls_name, pc in r["val"].get("per_class", {}).items():
             lines.append(f"| {cls_name} | {pc.get('precision', 0):.4f} | "
                          f"{pc.get('recall', 0):.4f} | {pc.get('map50', 0):.4f} |")
+
+    # 报告末尾的“使用的方法”清单：每个实验的方法要点 + 通用运行说明，
+    # 保证读者无需翻 args.yaml 就能复现方法。
+    lines += [
+        f"",
+        f"## 使用的方法（methods used）",
+        f"",
+        f"数据: 数据集 {group}（datasets/cleansight-yolo/{group}），train/val 划分见 data.yaml；"
+        f"SMOKE 探针按 fraction={SMOKE_FRACTION} 子采样训练数据，仅用于方向对比。",
+        f"",
+        f"| 实验 | 模型 | imgsz | batch | epochs(计划) | 增强 | cos_lr | label_smoothing | freeze | 设备 |",
+        f"|------|------|------:|------:|-------------:|------|:------:|----------------:|:------:|:----:|",
+    ]
+    for r in results:
+        cfg = r.get("cfg", {})
+        name = r.get("name", "?")
+        if r.get("dry_run"):
+            continue
+        status = "❌失败 " if "error" in r else ""
+        lines.append(
+            f"| {status}{name} | {cfg.get('model','?')} | {cfg.get('imgsz','?')} | "
+            f"{cfg.get('batch','?')} | {cfg.get('epochs','?')} | {cfg.get('augment','?')} | "
+            f"{cfg.get('cos_lr', False)} | {cfg.get('label_smoothing', 0.0)} | "
+            f"{cfg.get('freeze', '-')} | {r.get('device','?')} |"
+        )
+    lines += [
+        f"",
+        f"运行说明: smoke 实验 epochs 截断为 {SMOKE_EPOCHS}、patience={SMOKE_PATIENCE}、"
+        f"训练数据 fraction={SMOKE_FRACTION}；val 在 val split 上以 conf=0.001、iou=0.7、"
+        f"max_det=300 计算。权重与结果曲线位于 runs/cleansight-yolo/ 下对应 run 目录。",
+    ]
 
     md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"\n报告已保存: {json_path}")

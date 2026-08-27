@@ -1,7 +1,18 @@
 # CleanSight 模型集
 
+> ## 🚀 组员请看这里
+>
+> **📖 [模型训练快速指南（TEAM_GUIDE）](docs/TEAM_GUIDE.md)** —— clone 后 5 分钟跑通第一个训练：
+> 装环境 → 下载数据 → 训练，一条命令一个模型。
+>
+> ```bash
+> python tools/team_env.py --setup-venv   # 1. 装环境
+> python -m framework.cleansight_eval.cli.dataset --preset all  # 2. 下载数据
+> python -m framework.cleansight_eval.cli.train --model yolo11s --group group1_large  # 3. 训练
+> ```
+
 本仓库负责 CleanSight 模型的训练、离线评估、benchmark、checkpoint 契约和交付清单，覆盖
-YOLO 单帧检测与 GRU / MS-TCN / MS-TCN++ / Transformer 时序模型。
+YOLO 单帧检测与 GRU / MS-TCN / MS-TCN++ / Transformer 时序模型，以及 ROI 图像分类（特征融合）。
 
 线上视频流、推理服务、告警以及真实 pipeline/端到端延迟由相邻的 [`CleanSightBackend`](https://github.com/Jiadezhende/CleanSightBackend) 负责；
 本仓库只产出模型与评估事实，不自动决定发布或上线。
@@ -465,6 +476,11 @@ checkpoint + checkpoint metadata + CARD.md + pin.yaml
 - [项目流程](docs/PROJECT_FLOW.md)：数据、训练、评测与交付的流程关系。
 - [framework README](framework/README.md)：CLI、配置字段、resume 与扩展点。
 - [YOLO 优化工作流](docs/YOLO_OPTIMIZATION.md)：sweep / analyze / 特征融合的操作指南。
+- [YOLO 自动标注工具](docs/AUTO_ANNOTATION.md)：视频 → legacy 标注 JSON → 时序训练数据，以及图片帧序列数据集 → 时序训练数据（frames/ + labels/）的完整使用指南（run / run-dataset / convert / 优化参数 / 训练链路）。
+- [自动标注快速上手](docs/AUTO_ANNOTATION_QUICKSTART.md)：最小命令集，5 分钟跑通 run / run-dataset / convert 与常见报错排查。
+- [数据集构建要求（Label Studio）](docs/DATASET_BUILDING_GUIDE.md)：队友通过 Label Studio 构建/扩充训练数据的硬性契约与操作步骤（只需标动作标签，不画框；目标框由 YOLO 自动标注），以及后续数据维护的注意事项（类别覆盖/平衡、增量扩量、版本与登记联动）。
+- [YOLO 结果人工审核流程](docs/YOLO_REVIEW_FLOW.md)：YOLO 预标注 → Label Studio 人工改框+标动作 → 导出 → convert 的质量门闭环。
+- [推理链路性能测量](docs/INFERENCE_CHAIN_PERF.md)：YOLO 检测 / 特征化 / 时序推理的实测时延，支撑"预计算入数据集 vs 现场推理"决策。
 - [评估能力说明](docs/EVAL.md)：指标定义、聚合口径和完整性检查。
 - [benchmark README](benchmark/README.md)：单模型、feed-mode 和端到端 benchmark。
 - [新模型接入手册](docs/MODEL_ONBOARDING.md)：新增时序网络或检测器。

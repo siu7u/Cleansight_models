@@ -266,8 +266,8 @@ def main():
                    help="输入视频路径 或 图片目录")
     p.add_argument("--output", default=None,
                    help="输出视频完整路径。不传则自动生成: {out_dir}/{ckpt_name}_{source_name}.mp4")
-    p.add_argument("--out-dir", default="outputs",
-                   help="默认输出目录 (默认 outputs/)")
+    p.add_argument("--out-dir", default="outputs/visualizations",
+                   help="默认输出目录 (默认 outputs/visualizations)")
     p.add_argument("--conf", type=float, default=0.001,
                    help="置信度阈值 (默认 0.001，几乎显示所有)")
     p.add_argument("--imgsz", type=int, default=640,

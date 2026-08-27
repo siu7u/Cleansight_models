@@ -43,7 +43,18 @@ class DetectionPipeline(Pipeline):
         adapter = get_adapter(model_cfg["type"])
         train_cfg = cfg.get("train", {})
 
-        run = RunContext(runs_dir, label=model_cfg["type"])
+        # resume 语义：ultralytics resume=True 从 self.ckpt_path（= model.weights）续训，
+        # 且从 ckpt 恢复原 project/name 续写原目录。framework 侧因此复用原 run 目录，
+        # 避免每次 resume 新建 runs/yolo-<新时间戳>。
+        run_id = None
+        if train_cfg.get("resume"):
+            resume_ckpt = Path(str(model_cfg.get("weights", "")))
+            # last.pt 形如 <run>/checkpoints/<group>/weights/last.pt → 向上 4 级是 run 目录
+            if resume_ckpt.is_file() and "checkpoints" in resume_ckpt.parts:
+                run_id = resume_ckpt.parents[3].name
+                print(f"[train] resume: 复用原 run 目录 runs/{run_id}")
+
+        run = RunContext(runs_dir, label=model_cfg["type"], run_id=run_id)
         run.save_config(cfg)
         run.save_env(device, seed=seed)
         run.write_status("running", stage="initializing")

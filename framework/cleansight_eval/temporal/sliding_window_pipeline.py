@@ -197,7 +197,7 @@ class SlidingWindowTemporalPipeline(Pipeline):
             train_loader = DataLoader(train_ds, batch_size=train_cfg.get("batch_size", 32), shuffle=True)
             val_datasets = [SlidingWindowDataset(val_features[i], val_truths[i], window) for i in range(len(val_features))]
 
-            weights = compute_class_weights(train_loader)
+            weights = compute_class_weights(train_loader, num_classes=model_cfg["num_classes"])
             criterion = nn.CrossEntropyLoss(
                 weight=torch.tensor([weights[i] for i in sorted(weights)], dtype=torch.float32).to(device)
             )
