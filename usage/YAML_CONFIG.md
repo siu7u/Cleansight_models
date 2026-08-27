@@ -72,8 +72,9 @@ Pipeline 校验并执行。
 | `purpose` | 区分训练、训练期验证、开发 benchmark、锁定 holdout 和 schema smoke。 |
 
 当前内容登记 ActionMixed 时序 train/val/test（`temporal.actionmixed-v2`，人工标注）、
-自动标注数据通道 `temporal.actionmixed-auto-v1`（YOLO 检测框 + 人工动作标签，11 个视频
-train/val/test，与 v2 并存）、旧 Endo Project train/test、两组 YOLO val/test 和
+自动标注数据通道 `temporal.actionmixed-auto-v2`（YOLO 检测框 + 人工动作标签，26 个视频
+train 17 / val 5 / test 4，检测源 yolo11s-g1/g2-v1，2026-08-27 线路 B 重建；历史 v1 见
+registry 各 auto pin）、旧 Endo Project train/test、两组 YOLO val/test 和
 一个端到端 smoke case。评估时据此记录数据集版本、split、重叠策略和 fingerprint。
 
 ActionMixed v2 的 manifest 是训练与评测 loader 的唯一样本真源，并必须与对应
@@ -163,6 +164,8 @@ YOLO checkpoint 的逐帧检测序列化为 legacy 时序标注 JSON（与 Label
 | `frame_stride` / `batch_size` | 每 N 帧推理一次（中间帧沿用最近结果）与批量推理帧/图片数；帧采样可显著降低推理成本。 |
 | `track` | `run` 是否启用 ByteTrack 实例跟踪（轨迹按 `(类别, 实例 id)` 组织）。 |
 | `out_dir` | `run` 的标注 JSON 输出目录（默认 `outputs/annotations`，`outputs/` 整体被 Git 忽略），可被 CLI `--out` 覆盖。 |
+
+[`framework/experiments/auto-annotate-yolo11.yaml`](../framework/experiments/auto-annotate-yolo11.yaml) 是上述 schema 的检测源变体：权重指向 `legacy/yolo-detection/pipeline/versioned_weights/yolo11s-g{1,2}-v1/best.pt`（源自本地 EXPERIMENTS default 变体，不入 Git），其中 g2 覆盖 5 类小目标（含 `short_brush`/`brush_tip_out`，这两维特征不再恒零）；`videos` 默认指向 `outputs/videos-auto26`（26 个已标注视频的硬链接暂存），`out_dir` 为 `outputs/annotations-yolo11`，与 legacy v3 产物目录 `outputs/annotations` 隔离防止混用。检测源差异按 annotation source 变更处理，背景见 `docs/TEMPORAL_DATASET_TRANSFORMATION_PLAN.md`（线路 B）。
 
 `run-dataset` 复用上述 checkpoints/imgsz/conf/batch_size；输入为 CLI `--dataset` 指定的
 数据集根（`images/<split>/<序列>-<帧号:06d>.jpg` 有序帧 + `labels/<split>/<序列>.txt`
