@@ -1,0 +1,42 @@
+model:
+  name: auto_transformer_v1
+  version: v1
+  type: transformer
+  checkpoint: runs/transformer-20260817-170535/checkpoints/best.pt
+  checkpoint_sha256: b0fa7f241200f658dfa45557d17083f36cb97d3744587e733953dbb2e8deb590
+  input_dim: 40
+  num_classes: 6
+  d_model: 64
+  nhead: 4
+  num_layers: 2
+  dim_feedforward: 128
+  dropout: 0.1
+  max_len: 2560
+
+dataset:
+  view: temporal.actionmixed-auto-v1
+  path: datasets/cleansight-ActionMixed-auto
+  revision: 636e6372d2714a72ba7f168daa77c84487364d5d9643167fa77fa9a6c5310e0a
+  source: YOLO 自动标注（11 个带人工动作标签视频）+ 人工 Label Studio timelinelabels
+
+detection:
+  yolo_checkpoints:
+    - legacy/yolo-detection/pipeline/versioned_weights/yolo-large-v3/best.pt
+    - legacy/yolo-detection/pipeline/versioned_weights/yolo-small-v3/best.pt
+  feature_dim: 40
+
+feature_mapping:
+  version: actionmixed-bbox-8cls-v1
+  implementation: framework/cleansight_eval/temporal/data.py
+
+runtime:
+  online_causal: false
+  inference_mode: full_sequence_temporal
+  window: null
+  output_labels:
+    - idle
+    - air_injection
+    - flush
+    - long_brush_insert
+    - long_brush_withdraw
+    - short_brush_cleaning

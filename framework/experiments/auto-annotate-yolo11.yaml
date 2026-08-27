@@ -1,0 +1,47 @@
+# YOLO 自动标注配置（yolo11 权重版）——auto-annotate.yaml 的检测源变体。
+#
+# 背景:本机无 legacy v3 权重(yolo-large-v3 / yolo-small-v3)。2026-08-25 起 auto
+# 通道按 docs/TEMPORAL_DATASET_TRANSFORMATION_PLAN.md 线路 B 改用本机 yolo11 实验
+# 权重重建检测标注。与 legacy v3 版的差异:
+#   - g2 权重覆盖 5 类小目标(含 short_brush / brush_tip_out),这两维特征不再恒零;
+#   - 检测源变更属于 annotation source 变更,产物换用独立 out_dir 并按数据集新版本登记。
+#
+# 权重位于 legacy/yolo-detection/pipeline/versioned_weights/(不入 Git),源自
+# EXPERIMENTS/best_weights/yolo11s-g1-default-best.pt 与 yolo11s-g2-default-best.pt
+# (default 增强变体,yolo11s)。
+
+videos: outputs/videos-auto26   # 26 个已有人工动作标注视频的硬链接暂存目录
+
+checkpoints:
+  - path: legacy/yolo-detection/pipeline/versioned_weights/yolo11s-g1-v1/best.pt
+    class_map:
+      0: hand
+      1: scope_control_body
+      2: scope_mid_section
+  - path: legacy/yolo-detection/pipeline/versioned_weights/yolo11s-g2-v1/best.pt
+    class_map:
+      0: syringe
+      1: air_gun
+      2: scope_distal_end
+      3: short_brush
+      4: brush_tip_out
+
+imgsz: 640
+
+# 置信度阈值:与 legacy v3 版保持一致,标量全局生效。
+conf: 0.25
+
+# 每类别轨迹数(slot 数):hand 双实例,其他类别 1 条(与 clean_bbox_v2 slot 语义一致)。
+top_k:
+  hand: 2
+
+# 帧采样:30fps 视频用 4,等效 7.5fps,与训练数据采样率一致。
+frame_stride: 4
+
+# 批量推理帧数(CPU 推理同样适用)。
+batch_size: 16
+
+track: false
+
+# 输出独立目录,与 legacy v3 产物(outputs/annotations)隔离,避免混用。
+out_dir: outputs/annotations-yolo11

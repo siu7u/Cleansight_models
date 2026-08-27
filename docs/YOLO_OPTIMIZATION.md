@@ -29,6 +29,11 @@ python -m framework.cleansight_eval.cli.sweep --group group1_large --preset larg
 
 # 指定设备
 python -m framework.cleansight_eval.cli.sweep --group group2_small --preset small_s_1280_p2 --device 0
+
+# 快速探针（--smoke）：截断 epochs/patience + fraction 子采样，仅用于预设方向对比
+# （结果强制标注 SMOKE，不代表正式指标）；探针选出方向后，去掉 --smoke 对赢家跑全量
+python -m framework.cleansight_eval.cli.sweep --group group1_large \
+    --preset large_s large_s_960 large_m_960 --smoke
 ```
 
 ### 可用预设

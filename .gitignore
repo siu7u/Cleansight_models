@@ -62,7 +62,10 @@ datasets/
 # ---------------------------------------------------------------------------
 # Feature stores and derived temporal datasets
 # ---------------------------------------------------------------------------
+# Endo_Project 可能是目录或指向本机数据的符号链接：目录规则带尾部斜杠，
+# 符号链接（文件模式）由不带斜杠的规则匹配，两者都忽略。
 **/data/Endo_Project/
+**/data/Endo_Project
 **/data/raw/
 **/data/processed/
 **/data/features/

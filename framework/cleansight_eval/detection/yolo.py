@@ -12,7 +12,10 @@ ultralytics/torch 为重依赖，全部在方法内部 import，使仅做数据/
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
+
+from ..core.config import YOLO_TRAIN_HPARAMS
 
 
 def _ul_device(device) -> str:
@@ -32,10 +35,25 @@ class YoloAdapter:
 
         ultralytics 自行把权重写到 ``project/name/weights/best.pt``；本方法不接管
         权重落盘，由 DetectionTask 另写 sidecar 元信息。
+
+        ``train_cfg`` 中登记的 ``YOLO_TRAIN_HPARAMS`` 超参（cos_lr、增强、freeze 等）
+        会透传给 ``model.train()``；白名单外的键不转发并告警，避免拼写错误被静默忽略。
+
+        训练默认关闭 ultralytics 在线检查（``YOLO_OFFLINE=true``）：PyPI 更新检查在
+        弱网下会在训练开始前长时间挂起；用户可用 ``YOLO_OFFLINE=false`` 显式恢复。
         """
+        # ONLINE 是 ultralytics import 时计算的模块常量，因此必须在 import 之前设置；
+        # setdefault 尊重用户显式设置的环境变量。
+        os.environ.setdefault("YOLO_OFFLINE", "true")
         from ultralytics import YOLO
 
         model = YOLO(str(weights))
+        # epochs/batch/patience 由下方显式传参，其余登记的 YOLO 超参走白名单透传。
+        hparams = {k: v for k, v in train_cfg.items() if k in YOLO_TRAIN_HPARAMS}
+        ignored = sorted(set(train_cfg) - YOLO_TRAIN_HPARAMS
+                         - {"epochs", "batch", "patience", "resume"})
+        if ignored:
+            print(f"[yolo.train] 忽略未登记的训练超参: {ignored}")
         # project 必须传绝对路径：ultralytics 对相对 project 不照单全收，会把它拼到
         # 自身 settings 的 runs_dir（默认 runs/detect）下，导致产物落到预期之外的目录。
         # train_cfg 里的增强/调度超参（hsv_*、mixup、copy_paste、cos_lr、

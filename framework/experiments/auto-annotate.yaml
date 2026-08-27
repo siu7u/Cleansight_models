@@ -1,0 +1,55 @@
+# YOLO 自动标注配置（cli.annotate 读取）。
+#
+# 用已训练 YOLO checkpoint 对视频逐帧检测，产出 legacy 时序标注 JSON
+# （与 Label Studio 导出同构，可被历史 lab.py::load_data_json 消费）。
+# class_map 把每个 checkpoint 的本地类别 id 映射到全局类名；本地 id 必须
+# 存在于权重 names 中，否则 CLI 报错。short_brush / brush_tip_out 目前
+# 没有对应 legacy 权重，需要时在 checkpoints 中追加覆盖它们的模型。
+# videos 为默认视频文件或目录（CLI 未传 --videos 时使用；路径相对仓库根）。
+#
+# run-dataset 子命令（图片帧序列数据集 → 时序训练数据）复用本配置的
+# checkpoints/imgsz/conf/batch_size；输入为 CLI --dataset 指定的数据集根
+# （images/<split>/<序列>-<帧号:06d>.jpg 有序帧 + labels/<split>/<序列>.txt
+# 动作标签），输出默认原地补写 frames/（--out 可重定向），与 convert 产出
+# 同构，供 temporal/data.py 消费。
+
+videos: legacy/yolo-detection/pipeline/raw/videos
+
+checkpoints:
+  - path: legacy/yolo-detection/pipeline/versioned_weights/yolo-large-v3/best.pt
+    class_map:
+      0: hand
+      1: scope_control_body
+      2: scope_mid_section
+  - path: legacy/yolo-detection/pipeline/versioned_weights/yolo-small-v3/best.pt
+    class_map:
+      0: syringe
+      1: air_gun
+      2: scope_distal_end
+
+imgsz: 640
+
+# 置信度阈值：标量全局生效；也可按类别给不同阈值（小目标类别放宽），
+# 推理时按最低阈值检测、逐类过滤。
+conf: 0.25
+# conf:
+#   hand: 0.25
+#   syringe: 0.1
+#   scope_distal_end: 0.15
+
+# 每类别轨迹数（slot 数）：hand 双实例，其他类别 1 条。
+# 仅 --track 未启用时生效；启用 ByteTrack 后按实例 id 组织真实轨迹。
+top_k:
+  hand: 2
+
+# 帧采样：每 N 帧推理一次，中间帧沿用最近推理结果（推理成本降 N 倍）。
+# 建议 30fps 视频用 4（等效 7.5fps 采样，与训练数据采样率一致）。
+frame_stride: 1
+
+# 批量推理帧数（GPU 利用率更高）。
+batch_size: 16
+
+# ByteTrack 实例跟踪：轨迹按 (类别, 实例 id) 组织，帧间实例连续。
+track: false
+
+out_dir: outputs/annotations

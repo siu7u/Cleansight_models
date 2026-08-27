@@ -1,6 +1,6 @@
 ---
 name: modelset-quality
-description: Use this skill when working on CleanSight model repositories, YOLO or temporal model benchmarks, model registry, pin.yaml, CARD.md, ModelScope packaging, or CleanSightBackend inference integration. It enforces model versioning, benchmark quality, input/output compatibility, and clean Git hygiene.
+description: Use when working on CleanSight model repositories, YOLO or temporal model benchmarks, model registry, pin.yaml, CARD.md, ModelScope packaging, or CleanSightBackend inference integration. Enforces model versioning, benchmark quality, input/output compatibility, and clean Git hygiene. This is the DSH port of the project's .codex modelset-quality skill; project-specific layer rules (framework/benchmark/tools placement) live in the architecture-boundaries skill.
 metadata:
   short-description: CleanSight modelset quality checks
 ---
@@ -41,6 +41,11 @@ For non-trivial tasks, define success criteria and verify them:
 - model integration: prove the intended checkpoint and mapping are actually loaded
 
 Every changed line should trace directly to the user's request or the verification needed for it.
+
+> 通用编码纪律（外科手术式改动、验证优先、分层边界）另有独立 DSH skill 覆盖：
+> `minimal-change`、`verification-first`、`architecture-boundaries`（用户级）。本项目
+> 专属的分层细则见 `architecture-boundaries` 的项目级说明。本 skill 聚焦模型/评测/注册表
+> 质量规则，不与通用纪律重复展开。
 
 ## Required Model Checks
 

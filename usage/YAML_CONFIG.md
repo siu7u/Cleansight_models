@@ -10,9 +10,9 @@
 - 字段、默认值、约束、读取方或运行影响变化时，即使文件路径不变，也要更新对应说明。
 - 被 `.gitignore` 排除的构建、训练和打包产物不纳入逐文件清单，统一在文末说明。
 
-当前共登记 29 个 YAML，其中包含 4 个与本地外部 checkpoint 配套的探索性配置、3 个历史
-时序 checkpoint 的 framework 兼容实验和 1 个组员
-接入外部时序权重时使用的模板。
+当前共登记 33 个 YAML，其中包含 4 个与本地外部 checkpoint 配套的探索性配置、3 个历史
+时序 checkpoint 的 framework 兼容实验、1 个组员接入外部时序权重时使用的模板和 1 个
+YOLO 自动标注配置。
 
 ## 1. Framework 实验配置
 
@@ -49,6 +49,13 @@ Pipeline 校验并执行。
 | [`framework/experiments/transformer-actionmixed.yaml`](../framework/experiments/transformer-actionmixed.yaml) | Transformer 的表示维度、head、layer、FFN 和最大长度 | 使用完整上下文的非因果全序列实验。 |
 | [`framework/experiments/yolo-clean-large.yaml`](../framework/experiments/yolo-clean-large.yaml) | group1 大目标、YOLO11n、640 输入和 val testset | 大目标检测训练及探索性评估。 |
 | [`framework/experiments/yolo-clean-small.yaml`](../framework/experiments/yolo-clean-small.yaml) | group2 小目标、YOLO11n、640 输入和 val testset | 小目标检测训练及探索性评估，重点观察逐类召回。 |
+| [`framework/experiments/roi-fusion.yaml`](../framework/experiments/roi-fusion.yaml) | ROI 分类流水线（`feature_fusion`）、hidden_dim 等网络参数 | 小目标/稀有类的 ROI 特征融合替代方案实验。 |
+| [`framework/experiments/yolo11s-large-gl-eval.yaml`](../framework/experiments/yolo11s-large-gl-eval.yaml) | 队友 YOLO11s 大目标模型、group1_large test split、本地化 data_yaml | 队友模型在锁定 test split 上的正式评测配置。 |
+| [`framework/experiments/yolo11s-small-zyh-eval.yaml`](../framework/experiments/yolo11s-small-zyh-eval.yaml) | 队友 YOLO11s 小目标模型、group2_small test split、本地化 data_yaml | 队友模型在锁定 test split 上的正式评测配置。 |
+| [`framework/experiments/mstcn-autoannotate-smoke.yaml`](../framework/experiments/mstcn-autoannotate-smoke.yaml) | MS-TCN、40 维输入、6 类、10 epoch、`data.root` 指向自动标注转换数据 | 验证 YOLO 自动标注 → 时序训练全链路的 smoke 实验；数据未登记 dataset_ref，只允许 exploratory。 |
+| [`framework/experiments/mstcn-actionmixed-auto.yaml`](../framework/experiments/mstcn-actionmixed-auto.yaml) | MS-TCN、40 维输入、6 类、30 epoch、`dataset_ref: temporal.actionmixed-auto-v1`（自动标注特征数据） | 自动标注数据上 MS-TCN 全序列正式训练；与 smoke 的区别是登记数据集、formal 评估。 |
+| [`framework/experiments/gru-actionmixed-auto.yaml`](../framework/experiments/gru-actionmixed-auto.yaml) | GRU、40 维输入、6 类、16 帧窗口、`dataset_ref: temporal.actionmixed-auto-v1` | 自动标注数据上 GRU 滑窗正式训练；与历史 gru-actionmixed.yaml（人工标注）同超参，用于对照自动标注特征代价。 |
+| [`framework/experiments/transformer-actionmixed-auto.yaml`](../framework/experiments/transformer-actionmixed-auto.yaml) | Transformer、40 维输入、6 类、`max_len: 2560`（覆盖 auto 数据最长约 2080 帧序列）、`dataset_ref: temporal.actionmixed-auto-v1` | 自动标注数据上 Transformer 全序列正式训练；与历史 transformer-actionmixed.yaml 同结构，max_len 上调以容纳更长序列。 |
 
 ## 2. Benchmark 数据集和 split
 
@@ -64,7 +71,10 @@ Pipeline 校验并执行。
 | `testsets` | split 身份、manifest、用途和可选预期样本。 |
 | `purpose` | 区分训练、训练期验证、开发 benchmark、锁定 holdout 和 schema smoke。 |
 
-当前内容登记 ActionMixed 时序 train/val/test、旧 Endo Project train/test、两组 YOLO val/test 和
+当前内容登记 ActionMixed 时序 train/val/test（`temporal.actionmixed-v2`，人工标注）、
+自动标注数据通道 `temporal.actionmixed-auto-v2`（YOLO 检测框 + 人工动作标签，26 个视频
+train 17 / val 5 / test 4，检测源 yolo11s-g1/g2-v1，2026-08-27 线路 B 重建；历史 v1 见
+registry 各 auto pin）、旧 Endo Project train/test、两组 YOLO val/test 和
 一个端到端 smoke case。评估时据此记录数据集版本、split、重叠策略和 fingerprint。
 
 ActionMixed v2 的 manifest 是训练与评测 loader 的唯一样本真源，并必须与对应
@@ -98,6 +108,9 @@ revision、train/val/eval split fingerprint 以及动作/检测映射摘要，re
 | [`registry/temporal/gru-v1/pin.yaml`](../registry/temporal/gru-v1/pin.yaml) | 固定 GRU v1 checkpoint、legacy-20d 输入、64 帧窗口和三类输出契约。 |
 | [`registry/temporal/causal-tcn-v1/pin.yaml`](../registry/temporal/causal-tcn-v1/pin.yaml) | 固定 Causal TCN v1 checkpoint、数据、特征和在线契约。 |
 | [`registry/temporal/causal-transformer-v1/pin.yaml`](../registry/temporal/causal-transformer-v1/pin.yaml) | 固定旧因果 Transformer v1 checkpoint、结构和运行契约。 |
+| [`registry/temporal/auto-mstcn-v1/pin.yaml`](../registry/temporal/auto-mstcn-v1/pin.yaml) | 固定 auto 数据通道 MS-TCN v1：checkpoint、40 维 v1 特征、6 类输出、数据集 revision 636e6372。 |
+| [`registry/temporal/auto-gru-v1/pin.yaml`](../registry/temporal/auto-gru-v1/pin.yaml) | 固定 auto 数据通道 GRU v1：checkpoint、40 维 v1 特征、16 帧窗口、6 类输出、数据集 revision 636e6372。 |
+| [`registry/temporal/auto-transformer-v1/pin.yaml`](../registry/temporal/auto-transformer-v1/pin.yaml) | 固定 auto 数据通道 Transformer v1：checkpoint、40 维 v1 特征、max_len 2560、6 类输出、数据集 revision 636e6372。 |
 
 ## 5. Legacy YOLO 快照配置
 
@@ -121,7 +134,7 @@ legacy YAML 是冻结快照，不再接收新字段或成为数据/模型真源�
 
 ## 7. 生成或本地 YAML
 
-以下文件受 `.gitignore` 排除，不进入上面的 29 文件清单：
+以下文件受 `.gitignore` 排除，不进入上面的 32 文件清单：
 
 - `datasets/cleansight-yolo/**/data.yaml`：本地 YOLO 数据挂载及生成的 Ultralytics 清单；framework
   experiment 和 testset catalog 只引用该统一路径。
@@ -132,6 +145,32 @@ legacy YAML 是冻结快照，不再接收新字段或成为数据/模型真源�
 - `cleansight-yolo-pipeline-main/**/*.yaml`：本地兼容镜像，不是当前 framework/benchmark 真源。
 
 若生成文件以后转为受 Git 跟踪的稳定契约，必须将其加入本文档的逐文件清单。
+
+## 8. YOLO 自动标注配置
+
+[`framework/experiments/auto-annotate.yaml`](../framework/experiments/auto-annotate.yaml) 由
+`framework.cleansight_eval.cli.annotate` 读取，两条自动标注模式共用：`run` 子命令把已训练
+YOLO checkpoint 的逐帧检测序列化为 legacy 时序标注 JSON（与 Label Studio 导出同构，可被
+历史 `lab.py` 消费）；`run-dataset` 子命令对图片帧序列数据集（images/ + 动作标签 labels/）
+逐帧检测，产出与 `convert` 同构的时序训练数据（frames/ + labels/），供 `temporal/data.py`
+消费。
+
+| 字段 | 内容与功能 |
+|---|---|
+| `videos` | `run` 的默认视频文件或目录（相对仓库根）；CLI 未传 `--videos` 时使用，两者均缺失则明确报错。 |
+| `checkpoints` | 参与标注的 checkpoint 列表；每项含权重 `path`（相对仓库根）和 `class_map`（本地类别 id → 全局类名，id 必须存在于权重 names 中）。 |
+| `imgsz` / `conf` | 推理输入尺寸与置信度阈值；`conf` 可为标量或 `{类别: 阈值}` 字典（按最低阈值推理、逐类过滤），可被 CLI 参数覆盖。 |
+| `top_k` | `run` 的每类别轨迹（slot）数；`hand` 默认 2 条，其他类别 1 条，与 clean_bbox_v2 的 slot 语义一致；`track` 启用后不生效。 |
+| `frame_stride` / `batch_size` | 每 N 帧推理一次（中间帧沿用最近结果）与批量推理帧/图片数；帧采样可显著降低推理成本。 |
+| `track` | `run` 是否启用 ByteTrack 实例跟踪（轨迹按 `(类别, 实例 id)` 组织）。 |
+| `out_dir` | `run` 的标注 JSON 输出目录（默认 `outputs/annotations`，`outputs/` 整体被 Git 忽略），可被 CLI `--out` 覆盖。 |
+
+[`framework/experiments/auto-annotate-yolo11.yaml`](../framework/experiments/auto-annotate-yolo11.yaml) 是上述 schema 的检测源变体：权重指向 `legacy/yolo-detection/pipeline/versioned_weights/yolo11s-g{1,2}-v1/best.pt`（源自本地 EXPERIMENTS default 变体，不入 Git），其中 g2 覆盖 5 类小目标（含 `short_brush`/`brush_tip_out`，这两维特征不再恒零）；`videos` 默认指向 `outputs/videos-auto26`（26 个已标注视频的硬链接暂存），`out_dir` 为 `outputs/annotations-yolo11`，与 legacy v3 产物目录 `outputs/annotations` 隔离防止混用。检测源差异按 annotation source 变更处理，背景见 `docs/TEMPORAL_DATASET_TRANSFORMATION_PLAN.md`（线路 B）。
+
+`run-dataset` 复用上述 checkpoints/imgsz/conf/batch_size；输入为 CLI `--dataset` 指定的
+数据集根（`images/<split>/<序列>-<帧号:06d>.jpg` 有序帧 + `labels/<split>/<序列>.txt`
+动作标签），输出默认原地补写 `frames/`（`--out` 可重定向），检测类别固定为 8 类全局表
+（`auto_annotate._constants.DETECTION_CLASSES`，与 `convert` 的 frames bbox 编号一致）。
 
 ## 更新检查
 
