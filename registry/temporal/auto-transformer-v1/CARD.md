@@ -10,6 +10,13 @@
 - 特征映射版本：`actionmixed-bbox-8cls-v1`（40 维，8 检测类 × 5）
 - 标签：idle / air_injection / flush / long_brush_insert / long_brush_withdraw / short_brush_cleaning
 
+> **数据版本补注（2026-08-25）**：本模型训练/评测于 2026-08-17，所用 auto 通道数据为当时的旧版
+> （CARD 记录 revision `9dd8fb79…`；`pin.yaml` 钉定为 11 视频版 revision `636e6372…`，
+> 两者差异源于数据在训练后被更新过）。catalog `framework/testsets.yaml` 当前已更新为 14 视频
+> 版（revision `3b1bc00f…`，2026-08-20）。**本卡全部指标仅在旧数据版本上有效，与新数据集上的
+> 任何结果不可直接对比**；重训后的 v2 计划见 `docs/TEMPORAL_DATASET_TRANSFORMATION_PLAN.md`。
+
+
 ## 上线门禁
 
 - 因果性：否（全序列离线推理）
