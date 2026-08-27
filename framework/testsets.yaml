@@ -19,14 +19,17 @@ datasets:
     split_overlap_policy: frame
 
   # 自动标注数据通道（YOLO 推理检测框 + 人工动作标签），与手动标注 actionmixed-v2 并存。
-  # 检测特征仅覆盖 6 类（short_brush/brush_tip_out 恒零），40 维 v1 布局兼容。
-  # 2026-08-20 数据更新：换为全部已有人工标签的 14 个视频（train 10 / val 2 / test 2），
+  # 2026-08-27 线路 B 重建（v2）：检测源换为 yolo11s-g1-v1/yolo11s-g2-v1（g2 覆盖 5 类
+  # 小目标，short_brush/brush_tip_out 特征不再恒零，40 维 v1 布局兼容）；26 个已标注视频
+  # 按类别均衡整体重划（train 17 / val 5 / test 4，决策 A），旧 v1 指标不可比。
+  # 背景：docs/TEMPORAL_DATASET_TRANSFORMATION_PLAN.md；质检状态：
+  # dataset 仓库 raw-from Label Studio/EXPORT_NOTES.md（3 个候选未质检，剔改走 manifest 流程）。
   # revision 为三个 split manifest 拼接内容的 sha256。
-  temporal.actionmixed-auto-v1:
+  temporal.actionmixed-auto-v2:
     family: temporal
     format: actionmixed_bbox
-    dataset_version: cleansight-actionmixed-auto-v1
-    revision: 3b1bc00f1de79cc464ff3fdb8ae9493e8586b453561d7481efd74747ae012399
+    dataset_version: cleansight-actionmixed-auto-v2
+    revision: c65f26b893b7c3576c5103e5b6d44409c60de2bfaeadf3d98a48586e0dfbebc1
     data_root: datasets/cleansight-ActionMixed-auto
     feature_mapping: actionmixed-bbox-8cls-v1
     input_dim: 40
@@ -87,20 +90,20 @@ testsets:
     manifest: benchmark/manifests/actionmixed/test.txt
     purpose: development_benchmark_frame_disjoint
 
-  temporal.actionmixed-auto-v1.train:
-    dataset: temporal.actionmixed-auto-v1
+  temporal.actionmixed-auto-v2.train:
+    dataset: temporal.actionmixed-auto-v2
     split: train
     manifest: benchmark/manifests/actionmixed-auto/train.txt
     purpose: training_only
 
-  temporal.actionmixed-auto-v1.val:
-    dataset: temporal.actionmixed-auto-v1
+  temporal.actionmixed-auto-v2.val:
+    dataset: temporal.actionmixed-auto-v2
     split: val
     manifest: benchmark/manifests/actionmixed-auto/val.txt
     purpose: validation_only
 
-  temporal.actionmixed-auto-v1.test:
-    dataset: temporal.actionmixed-auto-v1
+  temporal.actionmixed-auto-v2.test:
+    dataset: temporal.actionmixed-auto-v2
     split: test
     manifest: benchmark/manifests/actionmixed-auto/test.txt
     purpose: development_benchmark_frame_disjoint
