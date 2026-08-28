@@ -174,3 +174,6 @@ EXPERIMENTS/best_weights/
 # ---------------------------------------------------------------------------
 EXPERIMENTS/best_weights/**
 EXPERIMENTS/*.pt
+
+docs/.obsidian/
+
