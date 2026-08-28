@@ -1,10 +1,10 @@
 # MS-TCN 全序列正式训练配置（自动标注特征数据 cleansight-ActionMixed-auto）。
 # 数据来自 annotate convert 生成的 datasets/cleansight-ActionMixed-auto：
-# 检测特征由 YOLO 自动标注产生（仅覆盖 6 类，short_brush/brush_tip_out 恒零），
+# 检测特征由 YOLO 自动标注产生（yolo11s-g1-v1/yolo11s-g2-v1，8 类全非零），
 # 动作标签来自人工 Label Studio timelinelabels。
 # 与 smoke 配置（mstcn-autoannotate-smoke.yaml）的区别：登记 dataset_ref、
 # evaluation.mode=formal（正式评估）、epochs 扩到 30。
-# 注意：数据集登记 temporal.actionmixed-auto-v2 及 train/val/test manifest
+# 注意：数据集登记 temporal.actionmixed-auto-v3 及 train/val/test manifest
 # 随数据扩量一起落地（见 docs/AUTO_ANNOTATION.md 完整工作流）。
 
 schema_version: 1
@@ -13,11 +13,11 @@ pipeline: full_sequence_temporal
 model:
   type: mstcn            # 双向非因果，只能进全序列流水线
   input_dim: 40          # 8 检测类 × [presence, cx, cy, w, h]
-  num_classes: 6         # idle/air_injection/flush/long_brush_insert/long_brush_withdraw/short_brush_cleaning
+  num_classes: 6         # idle/water_injection/flush/long_brush_insert/long_brush_withdraw/short_brush_cleaning
   hidden: 32
 
 data:
-  dataset_ref: temporal.actionmixed-auto-v2  # 根目录、类别、mapping 和 manifest 由 benchmark catalog 解析
+  dataset_ref: temporal.actionmixed-auto-v3  # 根目录、类别、mapping 和 manifest 由 benchmark catalog 解析
   split_train: train
   split_val: val
   split_eval: test

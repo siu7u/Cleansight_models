@@ -29,6 +29,11 @@ REQUIRED_FILES: dict[str, list[Path]] = {
         Path("datasets/cleansight-ActionMixed/labels/data.yaml"),
         Path("datasets/cleansight-ActionMixed/frames/data.yaml"),
     ],
+    "actionmixed-auto": [
+        Path("datasets/cleansight-ActionMixed-auto/labels/data.yaml"),
+        Path("datasets/cleansight-ActionMixed-auto/frames/data.yaml"),
+        Path("datasets/cleansight-ActionMixed-auto/task_ids.yaml"),
+    ],
 }
 
 DATASET_PRESETS: dict[str, dict] = {
@@ -36,6 +41,11 @@ DATASET_PRESETS: dict[str, dict] = {
         "dataset": "lhh010/cleansight-ActionMixed",
         "output": Path("datasets/cleansight-ActionMixed"),
         "description": "已打包的 ActionMixed 检测/时序样本",
+    },
+    "actionmixed-auto": {
+        "dataset": "lhh010/cleansight-ActionMixed-auto",
+        "output": Path("datasets/cleansight-ActionMixed-auto"),
+        "description": "自动标注 ActionMixed 时序样本（YOLO 检测框 + 人工动作标签，v3）",
     },
     "raw": {
         "dataset": "lhh010/cleansight-raw",

@@ -134,6 +134,13 @@ python -m framework.cleansight_eval.cli.annotate convert \
 - `validate_testsets.py`：auto-v2 三 split 全部 OK（fingerprint 已生成）；仅存的 5 个 FAIL 为本机未挂载的历史数据集（手动 v2 / endo），非本次回归
 - catalog/实验配置/YAML_CONFIG 已同步升 v2；3 个未质检候选已按方案 a 合入（37c53d37→val、f4b10ad8/3b2dcda0→train），质检不通过时走 manifest 剔除流程
 
+### 6.4 执行结果（2026-08-28，v3 已完成）
+
+- 数据集 `temporal.actionmixed-auto-v3`：数据源换为 project-16 导出（18 个 2026-08 新录视频），train 13 / val 3 / test 2，test 锚定团队指定 task#195/#199，revision `b7edb874…`（README 展示前缀）
+- 动作标签随 LS 更名 `air_injection → water_injection`（id 位置不变）；检测源仍为 yolo11s-g1/g2-v1，8 类全非零；仓库根附 `task_ids.yaml` 溯源（split → 视频 → project-16 task id）
+- 六类覆盖（标签帧 12,959）：test 仅 idle/lb_insert/lb_withdraw（锚定任务所致，已如实记录）；water 全库仅 2 视频（#201 train 194 帧、#207 val 17 帧）
+- `validate_testsets.py`：auto-v3 三 split 全部 OK；catalog/实验配置/YAML_CONFIG 已同步升 v3；v3 数据已从 ModelScope 同步到本地 `datasets/cleansight-ActionMixed-auto`（旧本地副本备份为 `-v1-backup`）
+
 ---
 
 ## 7. Phase 3 — 模型侧联动（本轮暂缓，决策 D）

@@ -19,21 +19,21 @@ datasets:
     split_overlap_policy: frame
 
   # 自动标注数据通道（YOLO 推理检测框 + 人工动作标签），与手动标注 actionmixed-v2 并存。
-  # 2026-08-27 线路 B 重建（v2）：检测源换为 yolo11s-g1-v1/yolo11s-g2-v1（g2 覆盖 5 类
-  # 小目标，short_brush/brush_tip_out 特征不再恒零，40 维 v1 布局兼容）；26 个已标注视频
-  # 按类别均衡整体重划（train 17 / val 5 / test 4，决策 A），旧 v1 指标不可比。
-  # 背景：docs/TEMPORAL_DATASET_TRANSFORMATION_PLAN.md；质检状态：
-  # dataset 仓库 raw-from Label Studio/EXPORT_NOTES.md（3 个候选未质检，剔改走 manifest 流程）。
-  # revision 为三个 split manifest 拼接内容的 sha256。
-  temporal.actionmixed-auto-v2:
+  # 2026-08-28 升 v3：数据源换为 Label Studio project-16 导出（18 个 2026-08 新录视频，
+  # train 13 / val 3 / test 2，test 锚定团队指定 task#195/#199）；动作标签随 LS 更名
+  # air_injection → water_injection（id 位置不变）；检测源仍为 yolo11s-g1-v1/yolo11s-g2-v1
+  # （8 类全非零）；附 task_ids.yaml 溯源。旧 v2 指标不可比，v2 数据备份于本地 -v2-backup。
+  # 背景：docs/TEMPORAL_DATASET_TRANSFORMATION_PLAN.md；revision 为三个 split manifest
+  # 拼接内容的 sha256（b7edb874… 为 README 展示前缀）。
+  temporal.actionmixed-auto-v3:
     family: temporal
     format: actionmixed_bbox
-    dataset_version: cleansight-actionmixed-auto-v2
-    revision: c65f26b893b7c3576c5103e5b6d44409c60de2bfaeadf3d98a48586e0dfbebc1
+    dataset_version: cleansight-actionmixed-auto-v3
+    revision: b7edb8749b0794bf7513ada250897e59eccb0ac0bea00287574e8f22b2f218d3
     data_root: datasets/cleansight-ActionMixed-auto
     feature_mapping: actionmixed-bbox-8cls-v1
     input_dim: 40
-    labels: [idle, air_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
     split_overlap_policy: frame
 
   temporal.endo-project-v1:
@@ -90,20 +90,20 @@ testsets:
     manifest: benchmark/manifests/actionmixed/test.txt
     purpose: development_benchmark_frame_disjoint
 
-  temporal.actionmixed-auto-v2.train:
-    dataset: temporal.actionmixed-auto-v2
+  temporal.actionmixed-auto-v3.train:
+    dataset: temporal.actionmixed-auto-v3
     split: train
     manifest: benchmark/manifests/actionmixed-auto/train.txt
     purpose: training_only
 
-  temporal.actionmixed-auto-v2.val:
-    dataset: temporal.actionmixed-auto-v2
+  temporal.actionmixed-auto-v3.val:
+    dataset: temporal.actionmixed-auto-v3
     split: val
     manifest: benchmark/manifests/actionmixed-auto/val.txt
     purpose: validation_only
 
-  temporal.actionmixed-auto-v2.test:
-    dataset: temporal.actionmixed-auto-v2
+  temporal.actionmixed-auto-v3.test:
+    dataset: temporal.actionmixed-auto-v3
     split: test
     manifest: benchmark/manifests/actionmixed-auto/test.txt
     purpose: development_benchmark_frame_disjoint

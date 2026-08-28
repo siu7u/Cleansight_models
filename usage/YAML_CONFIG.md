@@ -53,9 +53,9 @@ Pipeline 校验并执行。
 | [`framework/experiments/yolo11s-large-gl-eval.yaml`](../framework/experiments/yolo11s-large-gl-eval.yaml) | 队友 YOLO11s 大目标模型、group1_large test split、本地化 data_yaml | 队友模型在锁定 test split 上的正式评测配置。 |
 | [`framework/experiments/yolo11s-small-zyh-eval.yaml`](../framework/experiments/yolo11s-small-zyh-eval.yaml) | 队友 YOLO11s 小目标模型、group2_small test split、本地化 data_yaml | 队友模型在锁定 test split 上的正式评测配置。 |
 | [`framework/experiments/mstcn-autoannotate-smoke.yaml`](../framework/experiments/mstcn-autoannotate-smoke.yaml) | MS-TCN、40 维输入、6 类、10 epoch、`data.root` 指向自动标注转换数据 | 验证 YOLO 自动标注 → 时序训练全链路的 smoke 实验；数据未登记 dataset_ref，只允许 exploratory。 |
-| [`framework/experiments/mstcn-actionmixed-auto.yaml`](../framework/experiments/mstcn-actionmixed-auto.yaml) | MS-TCN、40 维输入、6 类、30 epoch、`dataset_ref: temporal.actionmixed-auto-v1`（自动标注特征数据） | 自动标注数据上 MS-TCN 全序列正式训练；与 smoke 的区别是登记数据集、formal 评估。 |
-| [`framework/experiments/gru-actionmixed-auto.yaml`](../framework/experiments/gru-actionmixed-auto.yaml) | GRU、40 维输入、6 类、16 帧窗口、`dataset_ref: temporal.actionmixed-auto-v1` | 自动标注数据上 GRU 滑窗正式训练；与历史 gru-actionmixed.yaml（人工标注）同超参，用于对照自动标注特征代价。 |
-| [`framework/experiments/transformer-actionmixed-auto.yaml`](../framework/experiments/transformer-actionmixed-auto.yaml) | Transformer、40 维输入、6 类、`max_len: 2560`（覆盖 auto 数据最长约 2080 帧序列）、`dataset_ref: temporal.actionmixed-auto-v1` | 自动标注数据上 Transformer 全序列正式训练；与历史 transformer-actionmixed.yaml 同结构，max_len 上调以容纳更长序列。 |
+| [`framework/experiments/mstcn-actionmixed-auto.yaml`](../framework/experiments/mstcn-actionmixed-auto.yaml) | MS-TCN、40 维输入、6 类、30 epoch、`dataset_ref: temporal.actionmixed-auto-v3`（自动标注特征数据） | 自动标注数据上 MS-TCN 全序列正式训练；与 smoke 的区别是登记数据集、formal 评估。 |
+| [`framework/experiments/gru-actionmixed-auto.yaml`](../framework/experiments/gru-actionmixed-auto.yaml) | GRU、40 维输入、6 类、16 帧窗口、`dataset_ref: temporal.actionmixed-auto-v3` | 自动标注数据上 GRU 滑窗正式训练；与历史 gru-actionmixed.yaml（人工标注）同超参，用于对照自动标注特征代价。 |
+| [`framework/experiments/transformer-actionmixed-auto.yaml`](../framework/experiments/transformer-actionmixed-auto.yaml) | Transformer、40 维输入、6 类、`max_len: 2560`（v3 最长序列约 1635 帧，保留余量）、`dataset_ref: temporal.actionmixed-auto-v3` | 自动标注数据上 Transformer 全序列正式训练；与历史 transformer-actionmixed.yaml 同结构，max_len 上调以容纳更长序列。 |
 
 ## 2. Benchmark 数据集和 split
 
@@ -66,18 +66,19 @@ Pipeline 校验并执行。
 |---|---|
 | `schema_version` / `root` | 定义清单版本和相对路径解析根。 |
 | `datasets` | 数据集级公共事实：family、版本、数据根或 manifest、feature mapping、维度和 labels。 |
-| `revision` | 外部数据仓库的固定 revision；ActionMixed v2 当前钉定为完整 9,532 帧数据对应的 Git commit。 |
+| `revision` | 外部数据仓库的固定 revision；自动通道 v3 钉定为三个 split manifest 拼接内容的 sha256（`b7edb874…`），对应 18 视频、12,959 抽样帧。 |
 | `split_overlap_policy` | `error` 禁止同源跨 split；`frame` 允许同源但禁止具体帧重合；`allow` 关闭重叠门禁。 |
 | `testsets` | split 身份、manifest、用途和可选预期样本。 |
 | `purpose` | 区分训练、训练期验证、开发 benchmark、锁定 holdout 和 schema smoke。 |
 
 当前内容登记 ActionMixed 时序 train/val/test（`temporal.actionmixed-v2`，人工标注）、
-自动标注数据通道 `temporal.actionmixed-auto-v2`（YOLO 检测框 + 人工动作标签，26 个视频
-train 17 / val 5 / test 4，检测源 yolo11s-g1/g2-v1，2026-08-27 线路 B 重建；历史 v1 见
-registry 各 auto pin）、旧 Endo Project train/test、两组 YOLO val/test 和
+自动标注数据通道 `temporal.actionmixed-auto-v3`（YOLO 检测框 + 人工动作标签，18 个
+project-16 视频，train 13 / val 3 / test 2，test 锚定 task#195/#199，动作标签随 LS 更名
+air_injection → water_injection；检测源 yolo11s-g1/g2-v1，8 类全非零，2026-08-28 升 v3；
+旧 v2 见各 auto pin 与本地 -v2-backup）、旧 Endo Project train/test、两组 YOLO val/test 和
 一个端到端 smoke case。评估时据此记录数据集版本、split、重叠策略和 fingerprint。
 
-ActionMixed v2 的 manifest 是训练与评测 loader 的唯一样本真源，并必须与对应
+ActionMixed 各版本的 manifest 是训练与评测 loader 的唯一样本真源，并必须与对应
 `labels/<split>` 目录严格一致。fingerprint 同时覆盖 manifest、动作标签、类别映射和逐帧 bbox
 文本；新增样本、改动作标签或改检测框都会产生新 fingerprint。训练 checkpoint 记录数据集版本、
 revision、train/val/eval split fingerprint 以及动作/检测映射摘要，resume 时 train fingerprint
