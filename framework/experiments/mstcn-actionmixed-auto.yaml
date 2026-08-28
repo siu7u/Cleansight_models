@@ -4,7 +4,7 @@
 # 动作标签来自人工 Label Studio timelinelabels。
 # 与 smoke 配置（mstcn-autoannotate-smoke.yaml）的区别：登记 dataset_ref、
 # evaluation.mode=formal（正式评估）、epochs 扩到 30。
-# 注意：数据集登记 temporal.actionmixed-auto-v2 及 train/val/test manifest
+# 注意：数据集登记 temporal.actionmixed-auto-v3 及 train/val/test manifest
 # 随数据扩量一起落地（见 docs/AUTO_ANNOTATION.md 完整工作流）。
 
 schema_version: 1
@@ -17,7 +17,7 @@ model:
   hidden: 32
 
 data:
-  dataset_ref: temporal.actionmixed-auto-v2  # 根目录、类别、mapping 和 manifest 由 benchmark catalog 解析
+  dataset_ref: temporal.actionmixed-auto-v3  # 根目录、类别、mapping 和 manifest 由 benchmark catalog 解析
   split_train: train
   split_val: val
   split_eval: test

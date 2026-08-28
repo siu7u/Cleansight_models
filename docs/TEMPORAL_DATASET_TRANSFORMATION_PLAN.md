@@ -183,12 +183,12 @@ python -m framework.cleansight_eval.cli.annotate convert \
 
 ## 10. 决策记录（已定）
 
-| #   | 决策                       | 结论                                                          |
-| --- | ------------------------ | ----------------------------------------------------------- |
-| A   | val 修复方式                 | **整体重划**——数据量小、重训快；接受旧 val/test 指标不可比并留痕                     |
-| B   | 旧手动通道                    | **不再接收新视频，代码保留**（冻结不删除，保证历史可复现）                          |
-| C   | auto 上 ModelScope 时机     | **Phase 2 定稿后一次性上传首版；上传执行前需负责人确认**                       |
-| D   | Phase 3 本轮是否执行           | **暂不执行**，优先数据侧，后续轮次补上；v1 pin 漂移先以 CARD 注记过渡                |
+| #   | 决策                   | 结论                                          |
+| --- | -------------------- | ------------------------------------------- |
+| A   | val 修复方式             | **整体重划**——数据量小、重训快；接受旧 val/test 指标不可比并留痕    |
+| B   | 旧手动通道                | **不再接收新视频，代码保留**（冻结不删除，保证历史可复现）             |
+| C   | auto 上 ModelScope 时机 | **Phase 2 定稿后一次性上传首版；上传执行前需负责人确认**          |
+| D   | Phase 3 本轮是否执行       | **暂不执行**，优先数据侧，后续轮次补上；v1 pin 漂移先以 CARD 注记过渡 |
 
 ## 11. 线路 B 执行记录（2026-08-25）
 
@@ -201,6 +201,19 @@ python -m framework.cleansight_eval.cli.annotate convert \
 - **检测完成（2026-08-27）**：26/26 JSON 产出至 `outputs/annotations-yolo11`，终检通过——无空轨迹视频，hand×2 全局一致，8 类全覆盖（hand 52 / control_body 26 / mid_section 26 / short_brush 18 / syringe 18 / distal_end 18 / air_gun 15 / brush_tip_out 5），帧覆盖与视频长度一致
 - 质检状态基线：见 `E:\曦源\dataset\raw-from Label Studio\EXPORT_NOTES.md`
 - 暂存记录：`687e3c78`（在库但无动作标注）已暂存至 `outputs/stash-pending-videos/`（仅本地，不外发；处置与流程见 EXPORT_NOTES.md 第四节）
+
+## 11A. v3 重建（2026-08-28，project-16 数据源切换）
+
+应团队变更要求完成 v3 重建，关键变更：
+
+- **数据源切换**：LS project-16（18 个 8 月新录视频，task#192-211），旧 project-10 的 26 个视频不在新导出内；v2 产物备份于 `datasets/cleansight-ActionMixed-auto-v2-backup`
+- **标签与 LS 同步**：`air_injection` 更名 `water_injection`（action id 位置 1 不变）；`_constants.py::ACTION_CLASSES` 已同步
+- **task id 溯源**：数据集根新增 `task_ids.yaml`（split → 视频 → LS task id 映射）
+- **test 锚定**：按团队指定 = LS task#195（5b181b9b）/ #199（1b2c95ff）；注意 test 仅含 insert/withdraw 两类，water/flush/sbc 不在 test 中
+- **split**：train 13（9142 帧，六类齐）/ val 3（1926 帧，五类齐；water 仅 17 帧——全库仅 2 个 water 视频所致，152453e5#207 在 val、39da2635#201 在 train）
+- **revision**：`b7edb874…`；catalog/experiments/YAML_CONFIG 已升 v3；validate 全绿
+- **检测**：18/18 yolo11 双模型完成（outputs/annotations-yolo11 追加 18 份 JSON）
+- **ModelScope**：`lhh010/cleansight-ActionMixed-auto` 仓库已建，上传脚本已备（`dataset/cleansight-pipeline/actionmixed/upload_auto.py`），**执行前需负责人确认**
 
 ## 12. 附录：命令速查
 

@@ -72,9 +72,10 @@ Pipeline 校验并执行。
 | `purpose` | 区分训练、训练期验证、开发 benchmark、锁定 holdout 和 schema smoke。 |
 
 当前内容登记 ActionMixed 时序 train/val/test（`temporal.actionmixed-v2`，人工标注）、
-自动标注数据通道 `temporal.actionmixed-auto-v2`（YOLO 检测框 + 人工动作标签，26 个视频
-train 17 / val 5 / test 4，检测源 yolo11s-g1/g2-v1，2026-08-27 线路 B 重建；历史 v1 见
-registry 各 auto pin）、旧 Endo Project train/test、两组 YOLO val/test 和
+自动标注数据通道 `temporal.actionmixed-auto-v3`（YOLO 检测框 + 人工动作标签，LS project-16
+18 个视频 train 13 / val 3 / test 2，标签与 LS 同步 air→water_injection，检测源
+yolo11s-g1/g2-v1，task id 见数据集根 task_ids.yaml，2026-08-28 重建；v2 备份于
+datasets/cleansight-ActionMixed-auto-v2-backup）、旧 Endo Project train/test、两组 YOLO val/test 和
 一个端到端 smoke case。评估时据此记录数据集版本、split、重叠策略和 fingerprint。
 
 ActionMixed v2 的 manifest 是训练与评测 loader 的唯一样本真源，并必须与对应

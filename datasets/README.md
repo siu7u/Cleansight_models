@@ -10,6 +10,9 @@
   旧 `datasets/yolo/`（3 类旧版）已删除。
 - `datasets/cleansight-ActionMixed/`：时序 ActionMixed 数据集（`labels/data.yaml` + `frames/data.yaml`；
   `framework/testsets.yaml` 的 `temporal.actionmixed-v2` 引用）。
+- `datasets/cleansight-ActionMixed-auto/`：自动标注流水线时序数据集（v3，LS project-16 源；
+  `temporal.actionmixed-auto-v3` 引用；ModelScope `lhh010/cleansight-ActionMixed-auto`，
+  `--preset actionmixed-auto` 下载；含 `task_ids.yaml` 溯源，无图片）。
 - `datasets/cleansight-ActionSequence/`：ActionSequence 数据集（按动作类分目录，各带 `data.yaml`）。
 - `datasets/raw/label-studio/`：可选的 Label Studio 原始导出，不得提交。
 

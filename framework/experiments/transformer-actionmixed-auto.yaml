@@ -5,7 +5,7 @@
 # 与历史 transformer-actionmixed.yaml（人工标注数据）同结构，唯一差异：
 # max_len 从 2048 提到 2560 —— auto 数据最长视频 a2ade960（277.4s @30fps）
 # 按 7.5fps 抽样后序列约 2080 帧，超过 2048 会触发模型报错。
-# 注意：数据集登记 temporal.actionmixed-auto-v2 及 train/val/test manifest
+# 注意：数据集登记 temporal.actionmixed-auto-v3 及 train/val/test manifest
 # 随数据扩量一起落地（见 docs/AUTO_ANNOTATION.md 完整工作流）。
 
 schema_version: 1
@@ -23,7 +23,7 @@ model:
   max_len: 2560          # 覆盖 auto 数据最长序列（约 2080 帧）
 
 data:
-  dataset_ref: temporal.actionmixed-auto-v2  # 根目录、类别、mapping 和 manifest 由 benchmark catalog 解析
+  dataset_ref: temporal.actionmixed-auto-v3  # 根目录、类别、mapping 和 manifest 由 benchmark catalog 解析
   split_train: train
   split_val: val
   split_eval: test

@@ -29,6 +29,11 @@ REQUIRED_FILES: dict[str, list[Path]] = {
         Path("datasets/cleansight-ActionMixed/labels/data.yaml"),
         Path("datasets/cleansight-ActionMixed/frames/data.yaml"),
     ],
+    "actionmixed-auto": [
+        Path("datasets/cleansight-ActionMixed-auto/labels/data.yaml"),
+        Path("datasets/cleansight-ActionMixed-auto/frames/data.yaml"),
+        Path("datasets/cleansight-ActionMixed-auto/task_ids.yaml"),
+    ],
 }
 
 DATASET_PRESETS: dict[str, dict] = {
@@ -46,6 +51,11 @@ DATASET_PRESETS: dict[str, dict] = {
         "dataset": "lhh010/cleansight-yolo",
         "output": Path("datasets/cleansight-yolo"),
         "description": "标准 YOLO 格式分组数据集（group1_large + group2_small，含 train/val/test）",
+    },
+    "actionmixed-auto": {
+        "dataset": "lhh010/cleansight-ActionMixed-auto",
+        "output": Path("datasets/cleansight-ActionMixed-auto"),
+        "description": "自动标注流水线时序数据集（v3，LS project-16 源，labels+frames+task_ids，无图片）",
     },
 }
 

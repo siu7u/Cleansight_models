@@ -21,9 +21,11 @@ DETECTION_CLASSES = [
     "short_brush",
     "brush_tip_out",
 ]
+# 动作类别名与 Label Studio 同步(project-16 起 air_injection 更名 water_injection,
+# action id 位置不变仍为 1,旧数据集产物中的 air_injection 为历史名)。
 ACTION_CLASSES = [
     "idle",
-    "air_injection",
+    "water_injection",
     "flush",
     "long_brush_insert",
     "long_brush_withdraw",

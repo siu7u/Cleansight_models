@@ -18,7 +18,7 @@ from ..core import dataset_download as dd
 def parse_args(argv=None):
     p = argparse.ArgumentParser(description="CleanSight 数据集下载与校验")
     p.add_argument("--preset", choices=sorted(dd.DATASET_PRESETS) + ["all"], default=None,
-                   help="下载指定数据集；all = 训练所需全部（yolo + actionmixed）")
+                   help="下载指定数据集；all = 训练所需全部（yolo + actionmixed + actionmixed-auto）")
     p.add_argument("--check", action="store_true", help="校验已下载数据是否就绪")
     p.add_argument("--list-presets", action="store_true", help="列出全部数据源与目标位置")
     p.add_argument("--dataset", help="手动指定 ModelScope dataset id（覆盖 preset 的默认源）")
@@ -48,7 +48,7 @@ def main(argv=None) -> int:
         return 0
 
     if args.preset == "all":
-        for key in ("yolo", "actionmixed"):
+        for key in ("yolo", "actionmixed", "actionmixed-auto"):
             dd.download_one(key, dataset=args.dataset, output=args.output,
                             branch=args.branch, depth=args.depth, skip_lfs=args.skip_lfs)
         print("\n全部数据集下载完成。可运行校验：")
