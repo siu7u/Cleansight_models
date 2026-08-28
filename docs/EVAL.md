@@ -207,6 +207,32 @@ benchmark CLI ───────► evaluation/report/delivery manifest 落�
   滑窗和全序列评估都直接消费本次 `PredictionOutput`，逐视频对照、标注帧数与帧准确率，分页输出
   `viz/segmentation-<split>-pNN.png`（默认每页 6 个视频），不会为出图重复执行模型推理；图片路径和
   SHA-256 进入 `artifacts.visualization`。可用 `evaluation.visualize: false` 关闭。
+- **时序预测视频**（[tools/visualize_predictions.py](../tools/visualize_predictions.py)）：把评测时持久化的
+  预测产物（`runs/<run>/artifacts/*.predictions.json`）叠加到视频帧上，顶部横幅按动作色显示**当前帧预测
+  动作阶段**（Pred），下方小字显示人工真值（GT，不符时标注 MISMATCH），可选叠加 YOLO 检测框；同样不重复
+  执行模型推理。用法：
+
+  ```bash
+  python tools/visualize_predictions.py \
+      --artifact runs/mstcn-20260817-165320/artifacts/full_sequence_temporal-mstcn-20260817-165622.predictions.json \
+      --dataset datasets/cleansight-ActionMixed \
+      --images datasets/cleansight-ActionMixed/images/test \
+      --out-dir outputs/visualizations
+  ```
+- **单命令可用性检测**（[tools/predict_timeline.py](../tools/predict_timeline.py)）：不需要先跑评测，
+  直接 `.pt + 数据集 → 动作段时间线 + 带状图 + 叠加预测视频` 三样产物。模型配置从
+  `<ckpt>.meta.json` sidecar 自动读取，推理走 framework 流水线公开接口；时间线把连续同类
+  预测帧合并成段（stdout + `timeline_<序列>.json`，段起止为真实帧号），用于快速判断某个
+  checkpoint 对某段视频的结果是否可用：
+
+  ```bash
+  python tools/predict_timeline.py \
+      --ckpt runs/mstcn-20260817-165320/checkpoints/best.pt \
+      --dataset datasets/cleansight-ActionMixed \
+      --sequence a2ade960-clip_....mp4 \
+      --images datasets/cleansight-ActionMixed/images/test \
+      --out-dir outputs/visualizations/pred_check
+  ```
 - **checkpoint 报告**（[benchmark/core/report.py](../benchmark/core/report.py)）：每个 `.pt` 旁写
   `<checkpoint>.eval.md`，并向同目录唯一的 `EVALUATION_REPORT.md` 追加版本记录。
 - **稳定交付清单**：每次评估写 `*.delivery.manifest.json`，列出 checkpoint、metadata、evaluation、

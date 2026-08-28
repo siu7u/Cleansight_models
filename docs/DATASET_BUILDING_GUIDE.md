@@ -155,10 +155,18 @@ python -m framework.cleansight_eval.cli.annotate convert \
 ### 6.5 交付前自查(扩充场景)
 
 - [ ] convert 结尾无"跳过"告警
+- [ ] 自动标注质量报告无"漏检/类别缺失"告警
+      (`python tools/quality_report.py --auto outputs/annotations --manual <人工导出.json> --out ...`),
+      并记录各检测类 presence recall/precision 供后续对比
 - [ ] 统计过 train/val/test 类别分布:train 六类齐全;val/test 缺类或单类要显式说明
-      (参考 `python` 统计脚本或让对接人出分布表)
+      (`python tools/dataset_stats.py --dataset datasets/cleansight-ActionMixed-auto \
+       --manifest-dir benchmark/manifests/actionmixed-auto --json <报告路径>`),
+      分布表随数据变更重新生成并留档对照
 - [ ] 抽样画框预览,检测质量肉眼过关
       (`python tools/visualize_annotations.py --json ... --video ... --output ...`)
+- [ ] 持久化训练数据预览核对（框位置/类别/动作标签与人工标注一致）
+      (`python tools/visualize_dataset.py --dataset ... --sequence ... --images ... --output ...`),
+      运行无"缺 bbox 文件"告警
 - [ ] 新视频序列长度符合消费约束(GRU 的 `window: 16` 要求序列 ≥ 16 个采样帧)
 
 ## 7. 常见问题

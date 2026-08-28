@@ -162,6 +162,31 @@ python -m framework.cleansight_eval.cli.annotate run-dataset \
 `annotate run` 产出 JSON 后、进入 convert/训练前，建议先人工检查检测质量
 （大规模并入训练集前的质量门，见「已知限制」）。
 
+### 质量层面：自动标注 vs 人工导出对照报告（推荐）
+
+用 `tools/quality_report.py` 把自动标注 JSON 与同一批视频的人工 Label Studio
+导出逐帧对照，产出**检出率 / IoU / conf / 覆盖率**量化报告（纯读产物，不推理），
+并给出两类健康检查告警：
+
+- **presence 漏检**：人工有目标（enabled）的帧里自动标出不足 90% → 特征
+  presence 通道失真，禁止并入数据集
+- **类别完全缺失**：人工有标注但自动产物完全没有该类别 → 检查类别覆盖缺口
+  （当前 `short_brush` / `brush_tip_out` 无检测权重，会稳定触发此类告警）
+
+```bash
+python tools/quality_report.py \
+    --auto outputs/annotations \
+    --manual legacy/yolo-detection/pipeline/raw/exports/project-10-at-2026-07-07-19-32.json \
+    --out outputs/quality/auto-v1-quality.json
+```
+
+关注点（2026-08-27 实测汇总口径，供参考）：
+- **presence recall**：hand 0.95 / scope_control_body 0.64 / scope_distal_end 0.09 /
+  syringe 0.12 —— 小目标类别漏检严重，与 group2_small mAP 0.343 一致
+- **presence precision**：hand 仅 0.16 —— 自动框大量误检（36680 自动帧 vs
+  6154 人工帧），并入数据集前应结合 conf 阈值收紧或人工修正
+- 平均 IoU 0.64-0.75（匹配框）—— 框几何可接受，主要问题在存在性
+
 ### 数字层面：JSON 检查
 
 ```bash
@@ -197,6 +222,36 @@ python tools/visualize_annotations.py --json ... --video ... --output ... \
 - 调 `conf` 阈值或类别级阈值（`auto-annotate.yaml`）
 - 补覆盖缺失类别的 YOLO 权重
 - 或走人工修正闭环（`docs/YOLO_REVIEW_FLOW.md`）
+
+## 训练数据可视化（持久化数据集产物预览）
+
+上面是检查**中间产物**（run 产出的 JSON）；convert / run-dataset **持久化进数据集**
+之后（frames/ + labels/，时序模型实际消费的布局），可用 `tools/visualize_dataset.py`
+把持久化产物直接画回帧图做最终核对：框位置、类别、动作阶段标签、帧号，
+**全程只读数据集产物，不加载模型、不做动态推理**（与数据集链"不每次动态推理"
+原则一致）。
+
+```bash
+# 图片帧源（run-dataset 通道：--images 指向源数据集的图片帧目录）
+python tools/visualize_dataset.py \
+    --dataset datasets/cleansight-ActionMixed-auto --split train \
+    --sequence 05ba4406-clip_....mp4 \
+    --images datasets/cleansight-ActionMixed/images/train \
+    --output outputs/visualizations/<序列>_dataset_preview.mp4
+
+# 视频源（数据集未持久化帧图时，按真实帧号抽取；--sequence 可省略，取 split 第一个序列）
+python tools/visualize_dataset.py --dataset datasets/cleansight-ActionMixed-auto \
+    --split train \
+    --video legacy/yolo-detection/pipeline/raw/videos/<视频名>.mp4 \
+    --output outputs/visualizations/<序列>_dataset_preview.mp4
+
+# 只处理前 100 个标签帧（长序列快速预览）
+python tools/visualize_dataset.py --dataset ... --sequence ... --images ... \
+    --output ... --max-frames 100
+```
+
+判据：检测框类别与位置、左上角动作标签是否与人工标注一致；缺失 bbox 文件的帧
+只画动作标签并告警（正常帧不应出现，出现说明 convert/run-dataset 有遗漏）。
 
 ## 完整工作流（视频 → 时序模型训练）
 
