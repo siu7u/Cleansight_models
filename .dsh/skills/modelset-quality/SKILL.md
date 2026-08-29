@@ -13,6 +13,20 @@ Use this skill for work under `Cleansight_models` and for model assets that will
 
 Before changing code, benchmark scripts, configs, registry files, or docs, inspect the current repo state and preserve existing conventions.
 
+## Python 环境（必用后端 venv）
+
+需要调用 Python 环境时，一律使用 CleanSightBackend 的 venv，**不要自行创建**虚拟环境（不新建 venv/conda 环境、不在 `tmp/` 下自建 `venv-*` 来跑本仓库代码）：
+
+```bash
+source /home/caizh/programming/python_code/CleanSightBackend/.venv/bin/activate
+```
+
+等价地，可直接调用 `/home/caizh/programming/python_code/CleanSightBackend/.venv/bin/python`（如 `python -m framework.cleansight_eval.cli.train ...`）。
+
+- 所有训练/评测/数据脚本、`python -m framework.cleansight_eval.*` 命令均在该 venv 下执行；
+- 若该 venv 缺少依赖，先确认 backend 侧的安装方式或向用户说明，而不是自建环境；
+- 系统 python（pyenv/conda base）缺少 numpy/torch 等依赖时，不得用其运行本项目代码。
+
 ## General Coding Discipline
 
 Bias toward caution over speed, especially for model, benchmark, registry, and backend-integration changes.
