@@ -27,6 +27,11 @@ source /home/caizh/programming/python_code/CleanSightBackend/.venv/bin/activate
 - 若该 venv 缺少依赖，先确认 backend 侧的安装方式或向用户说明，而不是自建环境；
 - 系统 python（pyenv/conda base）缺少 numpy/torch 等依赖时，不得用其运行本项目代码。
 
+**GPU 说明**：该 venv 的 torch 是 CUDA 构建（如 `2.8.0+cu128`），用户在交互终端使用时可正常
+GPU 训练。但自动化/沙箱 shell 可能没有 GPU 透传（`/dev/nvidia*` 不存在、NVML 初始化失败、
+`torch.cuda.is_available()=False`），此时**不代表 venv 不支持 GPU**，不要据此报告"环境仅 CPU"；
+需要 GPU 训练时由用户在交互终端执行。
+
 ## General Coding Discipline
 
 Bias toward caution over speed, especially for model, benchmark, registry, and backend-integration changes.
