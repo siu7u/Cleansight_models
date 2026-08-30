@@ -17,6 +17,17 @@ YOLO 单帧检测与 GRU / MS-TCN / MS-TCN++ / Transformer 时序模型，以及
 线上视频流、推理服务、告警以及真实 pipeline/端到端延迟由相邻的 [`CleanSightBackend`](https://github.com/Jiadezhende/CleanSightBackend) 负责；
 本仓库只产出模型与评估事实，不自动决定发布或上线。
 
+## 本分支 YOLO 优化交接
+
+`feat/yolo-optimize` 上的个人实验内容按“训练 → 单帧后处理 → tracking → BoT-SORT 调参 → 性能评测”整理在：
+
+- [个人实验总索引](experiments/README.md)
+- [YOLO 优化时间线](experiments/yolo/README.md)
+- [2026-08-28 handoff](docs/YOLO_HANDOFF_UPDATE_20260828.md)
+
+`experiments/` 是新增的交接文档树；现有 framework、benchmark、registry 和 legacy 基础内容保持原结构。
+本地 `runs/`、`datasets/`、权重和视频仍被忽略，不会随 Git 自动交付，详见各实验 README 的产物清单。
+
 ## 职责划分
 
 | 模块 | 职责 |
@@ -86,6 +97,7 @@ Cleansight_models/
 │   └── e2e_3min/                      # 3 分钟业务场景评估
 ├── schemas/                           # 对外 JSON Schema，不含指标实现
 ├── usage/                             # YAML 配置索引和测试命令行教程
+├── experiments/                       # 本分支个人实验的时间线与复现文档
 ├── tools/                             # testset/CARD 等非模型执行工具
 ├── registry/                          # 模型版本元数据、报告与已登记权重
 ├── datasets/                          # 本地数据入口（内容默认忽略）
@@ -476,6 +488,7 @@ checkpoint + checkpoint metadata + CARD.md + pin.yaml
 - [项目流程](docs/PROJECT_FLOW.md)：数据、训练、评测与交付的流程关系。
 - [framework README](framework/README.md)：CLI、配置字段、resume 与扩展点。
 - [YOLO 优化工作流](docs/YOLO_OPTIMIZATION.md)：sweep / analyze / 特征融合的操作指南。
+- [YOLO 个人实验交接](experiments/yolo/README.md)：训练、后处理、tracking、延迟和 ROI backbone 的逐次记录。
 - [评估能力说明](docs/EVAL.md)：指标定义、聚合口径和完整性检查。
 - [benchmark README](benchmark/README.md)：单模型、feed-mode 和端到端 benchmark。
 - [新模型接入手册](docs/MODEL_ONBOARDING.md)：新增时序网络或检测器。

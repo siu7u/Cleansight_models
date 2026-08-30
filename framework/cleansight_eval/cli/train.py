@@ -33,6 +33,7 @@ def parse_args(argv=None):
     p.add_argument("--list-models", action="store_true", help="列出所有可训练模型别名")
     p.add_argument("--force", action="store_true", help="--model 模式跳过数据就绪检查")
     p.add_argument("--runs-dir", default="runs", help="运行输出根目录")
+    p.add_argument("--run-id", default=None, help="显式指定 run 目录名，例如 yolo11s-ft768-lowlr-lowaug")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--resume", help="从完整训练 checkpoint（通常是 checkpoints/last.pt）恢复")
     p.add_argument(
@@ -144,7 +145,7 @@ def main(argv=None) -> str:
     device = pick_device()
     pipeline = get_pipeline(cfg["pipeline"])
     pipeline.validate_config(cfg)  # 流水线专属校验（core 不再代劳）
-    return pipeline.train(cfg, runs_dir=args.runs_dir, seed=args.seed, device=device)
+    return pipeline.train(cfg, runs_dir=args.runs_dir, seed=args.seed, device=device, run_id=args.run_id)
 
 
 if __name__ == "__main__":

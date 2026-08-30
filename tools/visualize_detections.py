@@ -26,11 +26,16 @@ CLI 编排与可视化。
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 from typing import Any
 
 import cv2
 import numpy as np
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from framework.cleansight_eval.detection.inference import load_predictor, predict_frame
 
@@ -120,6 +125,7 @@ def run_on_video(
     imgsz: int,
     names: dict[int, str],
     fps: int,
+    max_frames: int,
 ) -> None:
     """对视频逐帧推理并写入带标注的输出视频。"""
     cap = cv2.VideoCapture(source)
@@ -135,6 +141,8 @@ def run_on_video(
     print(f"输入: {source}")
     print(f"分辨率: {width}x{height}, FPS: {in_fps:.1f}, 总帧数: {total_frames}")
     print(f"输出: {output} @ {out_fps} FPS")
+    if max_frames and max_frames > 0:
+        print(f"最多处理: {max_frames} 帧")
 
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = cv2.VideoWriter(output, fourcc, out_fps, (width, height))
@@ -149,6 +157,8 @@ def run_on_video(
         annotated = draw_boxes(frame, detections, names, conf)
         writer.write(annotated)
         frame_idx += 1
+        if max_frames and max_frames > 0 and frame_idx >= max_frames:
+            break
 
         if frame_idx % 100 == 0:
             det_count = len(detections)
@@ -309,6 +319,7 @@ def main():
         run_on_video(
             model, args.source, output_path,
             conf=args.conf, imgsz=args.imgsz, names=names, fps=args.fps,
+            max_frames=args.max_frames,
         )
     else:
         run_on_images(

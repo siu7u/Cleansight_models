@@ -11,6 +11,8 @@ artifact 和报告全部由 benchmark 负责。
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from ..core.checkpoint import load_meta, write_meta
 from ..core.environment import now_stamp, set_seed
 from ..core.execution import PredictionOutput, format_params
@@ -37,7 +39,7 @@ class DetectionPipeline(Pipeline):
         if "data_yaml" not in data:
             raise ValueError("检测流水线 data 段需包含 data_yaml（指向 YOLO 数据集的 data.yaml）")
 
-    def train(self, cfg: dict, runs_dir: str, seed: int, device) -> str:
+    def train(self, cfg: dict, runs_dir: str, seed: int, device, run_id: str | None = None) -> str:
         set_seed(seed)
         model_cfg = cfg["model"]
         adapter = get_adapter(model_cfg["type"])

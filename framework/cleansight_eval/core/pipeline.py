@@ -23,7 +23,7 @@ class Pipeline(ABC):
         """校验当前流水线需要的配置，不修改配置内容。"""
 
     @abstractmethod
-    def train(self, cfg: dict, runs_dir: str, seed: int, device) -> str:
+    def train(self, cfg: dict, runs_dir: str, seed: int, device, run_id: str | None = None) -> str:
         """执行流水线自己的训练流程，返回可供评估使用的 checkpoint 路径。"""
 
     @abstractmethod

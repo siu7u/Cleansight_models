@@ -46,7 +46,7 @@ class ClassificationPipeline(Pipeline):
             base = Path(__file__).resolve().parents[3] / base
         return base
 
-    def train(self, cfg: dict, runs_dir: str, seed: int, device) -> str:
+    def train(self, cfg: dict, runs_dir: str, seed: int, device, run_id: str | None = None) -> str:
         set_seed(seed)
         model_cfg = cfg["model"]
         data_cfg = cfg["data"]
@@ -56,7 +56,7 @@ class ClassificationPipeline(Pipeline):
         if not group_dir.is_absolute():
             group_dir = Path(__file__).resolve().parents[3] / group_dir
 
-        run = RunContext(runs_dir, label="classification")
+        run = RunContext(runs_dir, label="classification", run_id=run_id)
         run.save_config(cfg)
         run.save_env(device, seed=seed)
         run.write_status("running", stage="initializing")

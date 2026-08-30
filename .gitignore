@@ -160,6 +160,10 @@ external_checkpoints/**
 !framework/experiments/
 !framework/experiments/**
 
+# Personal handoff documentation (not generated training artifacts).
+!/experiments/
+!/experiments/**
+
 
 # Added by ggshield
 .cache_ggshield

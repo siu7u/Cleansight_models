@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import re
 import traceback
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,11 @@ class RunContext:
             self.run_id = candidate.name
             self.dir = candidate
         else:
+            if not re.fullmatch(r"[A-Za-z0-9._-]+", run_id):
+                raise ValueError(
+                    "run_id must be a plain directory name containing only letters, "
+                    "numbers, dot, underscore, or hyphen"
+                )
             self.run_id = run_id
             self.dir = root / self.run_id
         self.dir.mkdir(parents=True, exist_ok=True)

@@ -145,12 +145,12 @@ class SlidingWindowTemporalPipeline(Pipeline):
         resolve_mask_target_ids(data, cfg.get("feature_schema"))
         resolve_target_mask_augmentation(data, cfg.get("augmentation"))
 
-    def train(self, cfg: dict, runs_dir: str, seed: int, device) -> str:
+    def train(self, cfg: dict, runs_dir: str, seed: int, device, run_id: str | None = None) -> str:
         train_cfg = cfg["train"]
         model_cfg = cfg["model"]
         window = train_cfg.get("window", 64)
 
-        run = RunContext(runs_dir, label=model_cfg["type"])
+        run = RunContext(runs_dir, label=model_cfg["type"], run_id=run_id)
         run.save_config(cfg)
         run.save_env(device, seed=seed)
         run.write_status("running", stage="initializing")

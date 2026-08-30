@@ -30,6 +30,11 @@ def test_run_status_records_exception(tmp_path):
     assert "traceback" in failed["error"]
 
 
+def test_run_context_rejects_path_like_run_id(tmp_path):
+    with pytest.raises(ValueError):
+        RunContext(tmp_path, label="yolo", run_id="../outside")
+
+
 @pytest.mark.parametrize("value,expected", [(1.0, True), (float("nan"), False), (float("inf"), False)])
 def test_loss_finite_guard(value, expected):
     assert _loss_is_finite(torch.tensor(value)) is expected
