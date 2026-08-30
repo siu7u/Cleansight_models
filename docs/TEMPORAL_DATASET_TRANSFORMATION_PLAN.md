@@ -215,6 +215,12 @@ python -m framework.cleansight_eval.cli.annotate convert \
 - **检测**：18/18 yolo11 双模型完成（outputs/annotations-yolo11 追加 18 份 JSON）
 - **ModelScope**：`lhh010/cleansight-ActionMixed-auto` 仓库已建，上传脚本已备（`dataset/cleansight-pipeline/actionmixed/upload_auto.py`），**执行前需负责人确认**
 
+## 11B. v3 质审更新（2026-08-30）
+
+- task#195/199/211 审核通过，标注无变化；**task#204 审核修正 4 段 sbc 区间**，已过滤式重建（sbc 39→48 帧），标签文件已同步 ModelScope，manifest/revision 不变（split 未动）
+- 新导出发现 **task#203**（f809e944，water_injection 177 帧）未审，暂不入库，待 QC
+- 质审台账：dataset 仓库 raw-from Label Studio/EXPORT_NOTES.md 第六节
+
 ## 12. 附录：命令速查
 
 见 `docs/DATASET_BUILDING_GUIDE.md` §5–§6 与本方案 §5.3、§6.2。常用校验：
