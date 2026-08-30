@@ -221,6 +221,21 @@ python -m framework.cleansight_eval.cli.annotate convert \
 - 新导出发现 **task#203**（f809e944，water_injection 177 帧）未审，暂不入库，待 QC
 - 质审台账：dataset 仓库 raw-from Label Studio/EXPORT_NOTES.md 第六节
 
+## 11C. 数据开发优先级参考（2026-08-30 引入）
+
+依据 `dataset/docs/BENCHMARK_SEGMENTATION.md`（benchmark 等价类划分）的优先级框架，指导后续数据采集与扩量方向：
+
+**采集优先级（对数据侧的含义）**
+- **P0（缺口类/对抗序列，需真实采集，增强造不出）**：对抗-可见性序列（器具在场未操作 / 多器具同框仅一件在用）、insert vs withdraw 对比段、模糊渐变边界、罕见转移对、段内遮挡/手离场
+- **P1**：超短/超长段、动作重复/缺失 phase、无停顿衔接、长 idle、异机位
+- **P2/已饱和（作对照基线，无需扩量）**：**flush、long_brush_insert**
+- 类别缺口口径与 v3 现状对照：文档标注 air(现 water)_injection/sbc 为 P0 缺口是 benchmark test 策展视角；**维护人 2026-08-30 决定：water_injection 扩量优先级调低**，task#203(f809e944) 暂缓入库，sbc 仍按缺口对待
+
+**对 split/评测纪律的启示（v3 已符合）**
+- test 源级整条隔离（v3:视频级 split，无跨 split）✓
+- test 整段保留不截散帧（v3:整视频入库）✓
+- 后续 Phase 3 重训时，评测报告建议按文档 §7 做 EC 切片指标（对抗-可见性子集 vs 普通子集 F1 衰减等）
+
 ## 12. 附录：命令速查
 
 见 `docs/DATASET_BUILDING_GUIDE.md` §5–§6 与本方案 §5.3、§6.2。常用校验：
