@@ -23,6 +23,11 @@
 ROI 契约（version=actionmixed-roi-grid-v1，见 ``features/roi_bbox.py``）：同样按 8 类
 顺序，每类把画面按 2×3 网格划分成 6 个区域，输出 6×3=18 维 ``[presence, count,
 max_area]``，拼成 144 维；该类其他语义（mask_targets、空帧全零、因果逐帧）与 bbox 契约一致。
+
+手部契约（version=actionmixed-bbox-hand-8cls-v1，见 ``features/hand_bbox.py``）：只编码
+中心落在"面积最大 hand 框扩张 1.5 倍"区域内的框，坐标相对该区域归一化，维度仍为
+8×5=40；无 hand 框时全零。"全局+手部"契约（version=actionmixed-bbox-global-hand-8cls-v1）
+为两者拼接，8×5×2=80 维，左半 40 维为全局编码、右半 40 维为手部编码。
 """
 
 from __future__ import annotations
@@ -35,8 +40,11 @@ import yaml
 
 from .features import (
     CLEAN_FEATURE_DIMS,
+    GLOBAL_HAND_BBOX_VERSION,
+    HAND_BBOX_VERSION,
     ROI_FEATURE_VERSION,
     build_clean_bbox_features,
+    build_hand_frame_features,
     build_roi_frame_features,
 )
 
@@ -434,6 +442,8 @@ def load_split(
         id2name = {index: name for index, name in enumerate(class_order)}
     mask_target_ids = resolve_mask_target_ids(data_cfg, feature_schema)
     roi_recipe = feature_version == ROI_FEATURE_VERSION
+    hand_recipe = feature_version == HAND_BBOX_VERSION
+    global_hand_recipe = feature_version == GLOBAL_HAND_BBOX_VERSION
     clean_recipe = feature_version in CLEAN_FEATURE_DIMS
     detection_mapping = load_detection_mapping(data_cfg) if clean_recipe else None
     fps = float(data_cfg.get("fps", 7.5))
@@ -468,6 +478,25 @@ def load_split(
             feats = np.stack(
                 [
                     build_roi_frame_features(path, mask_target_ids=mask_target_ids)
+                    for path in frame_paths
+                ]
+            ).astype(np.float32)
+        elif hand_recipe:
+            feats = np.stack(
+                [
+                    build_hand_frame_features(path, mask_target_ids=mask_target_ids)
+                    for path in frame_paths
+                ]
+            ).astype(np.float32)
+        elif global_hand_recipe:
+            feats = np.stack(
+                [
+                    np.concatenate(
+                        [
+                            featurize_frame_bbox(path, mask_target_ids=mask_target_ids),
+                            build_hand_frame_features(path, mask_target_ids=mask_target_ids),
+                        ]
+                    )
                     for path in frame_paths
                 ]
             ).astype(np.float32)

@@ -507,11 +507,15 @@ def _validate_temporal(spec: TestsetSpec) -> list[str]:
                             f"ROI 检测类别数×区域×通道={expected} "
                             f"与 input_dim={spec.input_dim} 不一致"
                         )
-            elif detection_count * 5 != spec.input_dim:
-                errors.append(
-                    f"ActionMixed 检测类别数×5={detection_count * 5} "
-                    f"与 input_dim={spec.input_dim} 不一致"
-                )
+            else:
+                blocks = spec.raw.get("feature_blocks", 1)  # 每类特征块数（全局+手部双通道=2）
+                if not isinstance(blocks, int) or blocks <= 0:
+                    errors.append("feature_blocks 必须为正整数")
+                elif detection_count * 5 * blocks != spec.input_dim:
+                    errors.append(
+                        f"ActionMixed 检测类别数×5×块数={detection_count * 5 * blocks} "
+                        f"与 input_dim={spec.input_dim} 不一致"
+                    )
 
         missing_bbox: list[str] = []
         for name in items:

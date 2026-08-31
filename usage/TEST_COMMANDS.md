@@ -246,6 +246,14 @@ python -m framework.cleansight_eval.cli.train --config framework/experiments/tra
 python -m framework.cleansight_eval.cli.train --config framework/experiments/gru-actionmixed-auto-roi.yaml -S train.epochs=1
 ```
 
+特征提取范围横向对比（bbox 编码固定，整个画面 vs 仅手部周围 vs 全局+手部，同超参）：
+
+```bash
+python -m framework.cleansight_eval.cli.train --config framework/experiments/gru-actionmixed-auto.yaml            # 整个画面 40 维（基线）
+python -m framework.cleansight_eval.cli.train --config framework/experiments/gru-actionmixed-auto-hand.yaml        # 仅手部周围 40 维
+python -m framework.cleansight_eval.cli.train --config framework/experiments/gru-actionmixed-auto-global-hand.yaml  # 全局+手部 80 维
+```
+
 ## 5. 查看评测输出
 
 一次评测通常生成：

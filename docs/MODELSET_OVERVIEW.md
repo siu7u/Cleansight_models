@@ -78,6 +78,8 @@ export MPLCONFIGDIR=/tmp/matplotlib
 | ROI 分类（特征融合） | `framework/experiments/roi-fusion.yaml` | `roi_classification` |
 | GRU | `framework/experiments/gru-actionmixed.yaml` | `sliding_window_temporal` |
 | GRU（ROI 空间特征） | `framework/experiments/gru-actionmixed-auto-roi.yaml` | `sliding_window_temporal` |
+| GRU（手部区域特征） | `framework/experiments/gru-actionmixed-auto-hand.yaml` | `sliding_window_temporal` |
+| GRU（全局+手部） | `framework/experiments/gru-actionmixed-auto-global-hand.yaml` | `sliding_window_temporal` |
 | MS-TCN | `framework/experiments/mstcn-actionmixed.yaml` | `full_sequence_temporal` |
 | MS-TCN（ROI 空间特征） | `framework/experiments/mstcn-actionmixed-auto-roi.yaml` | `full_sequence_temporal` |
 | MS-TCN++ | `framework/experiments/mstcn2-actionmixed.yaml` | `full_sequence_temporal` |

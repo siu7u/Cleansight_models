@@ -1,0 +1,40 @@
+# GRU 滑窗正式训练配置（全局+手部双通道特征，自动标注数据 cleansight-ActionMixed-auto）。
+# 与 gru-actionmixed-auto.yaml（整个画面 40 维）同模型同超参，仅特征契约不同：
+# feature_mapping=actionmixed-bbox-global-hand-8cls-v1 = 全局 40 维（actionmixed-bbox-
+# 8cls-v1）与手部 40 维（actionmixed-bbox-hand-8cls-v1）拼接，8×5×2=80 维；
+# 左半为整个画面编码，右半为手部区域编码（recipe 见 features/hand_bbox.py）。
+# 数据集登记 temporal.actionmixed-auto-global-hand-v1；用于与"整个画面"和
+# "仅手部周围"策略横向对比。
+
+schema_version: 1
+pipeline: sliding_window_temporal
+
+model:
+  type: gru              # 因果模型，可用于滑窗；规模由本段超参表达
+  input_dim: 80          # 全局 40 维 + 手部 40 维
+  num_classes: 6         # idle/water_injection/flush/long_brush_insert/long_brush_withdraw/short_brush_cleaning
+  hidden: 128
+  num_layers: 3
+
+data:
+  dataset_ref: temporal.actionmixed-auto-global-hand-v1  # 根目录、类别、mapping 和 manifest 由 benchmark catalog 解析
+  split_train: train
+  split_val: val
+  split_eval: test
+
+feature_schema:
+  dim: 80
+  version: actionmixed-bbox-global-hand-8cls-v1
+  # 每 10 维一类（前 5 维全局 + 后 5 维手部），类顺序同 frames/data.yaml：
+  # hand, scope_control_body, scope_mid_section, scope_distal_end,
+  # syringe, air_gun, short_brush, brush_tip_out。
+
+evaluation:
+  mode: formal
+  visualize: true
+
+train:
+  epochs: 20
+  lr: 0.001
+  batch_size: 32
+  window: 16          # 必须 ≤ 最短视频的采样帧数（auto v3 数据最短约 195 帧）

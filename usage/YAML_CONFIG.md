@@ -59,6 +59,8 @@ Pipeline 校验并执行。
 | [`framework/experiments/gru-actionmixed-auto-roi.yaml`](../framework/experiments/gru-actionmixed-auto-roi.yaml) | GRU、144 维 ROI 空间特征（`actionmixed-roi-grid-v1`：2×3 网格，每 (检测类,区域) 统计 [presence,count,max_area]，8 类 × 6 区域 × 3 通道）、16 帧窗口、`dataset_ref: temporal.actionmixed-auto-roi-v1` | 与 gru-actionmixed-auto.yaml（40 维 bbox 契约）同模型同超参，仅特征契约不同；用于对照"空间分区信息"对动作识别的影响。 |
 | [`framework/experiments/mstcn-actionmixed-auto-roi.yaml`](../framework/experiments/mstcn-actionmixed-auto-roi.yaml) | MS-TCN、144 维 ROI 空间特征、30 epoch、`dataset_ref: temporal.actionmixed-auto-roi-v1` | 自动标注数据上 MS-TCN 全序列正式训练（ROI 特征变体，对照 mstcn-actionmixed-auto.yaml）。 |
 | [`framework/experiments/transformer-actionmixed-auto-roi.yaml`](../framework/experiments/transformer-actionmixed-auto-roi.yaml) | Transformer、144 维 ROI 空间特征、`max_len: 2560`、`dataset_ref: temporal.actionmixed-auto-roi-v1` | 自动标注数据上 Transformer 全序列正式训练（ROI 特征变体，对照 transformer-actionmixed-auto.yaml）。 |
+| [`framework/experiments/gru-actionmixed-auto-hand.yaml`](../framework/experiments/gru-actionmixed-auto-hand.yaml) | GRU、40 维手部区域特征（`actionmixed-bbox-hand-8cls-v1`：只编码面积最大 hand 框扩张 1.5 倍区域内的框，坐标相对区域归一化）、16 帧窗口、`dataset_ref: temporal.actionmixed-auto-hand-v1` | 与 gru-actionmixed-auto.yaml 同模型同超参，仅特征提取范围不同（整个画面 vs 仅手部周围）。 |
+| [`framework/experiments/gru-actionmixed-auto-global-hand.yaml`](../framework/experiments/gru-actionmixed-auto-global-hand.yaml) | GRU、80 维全局+手部双通道（`actionmixed-bbox-global-hand-8cls-v1` = 全局 40 维与手部 40 维拼接）、16 帧窗口、`dataset_ref: temporal.actionmixed-auto-global-hand-v1` | "两个都提取"策略：与"整个画面"/"仅手部"两路横向对比。 |
 
 ## 2. Benchmark 数据集和 split
 
@@ -81,8 +83,13 @@ air_injection → water_injection；检测源 yolo11s-g1/g2-v1，8 类全非零�
 旧 v2 见各 auto pin 与本地 -v2-backup）、同一份原始数据的 ROI 空间特征版
 `temporal.actionmixed-auto-roi-v1`（feature_mapping `actionmixed-roi-grid-v1`，
 `feature_layout: {rows: 2, cols: 3, channels: 3}`，144 维；revision 与 v3 相同，
-dataset_version 独立以便对照训练）、旧 Endo Project train/test、两组 YOLO val/test 和
-一个端到端 smoke case。评估时据此记录数据集版本、split、重叠策略和 fingerprint。
+dataset_version 独立以便对照训练）、同一份原始数据的两种空间范围特征版：
+手部区域版 `temporal.actionmixed-auto-hand-v1`（`actionmixed-bbox-hand-8cls-v1`，
+40 维，只编码 hand 框扩张区域内的框）与全局+手部版
+`temporal.actionmixed-auto-global-hand-v1`（`actionmixed-bbox-global-hand-8cls-v1`，
+`feature_blocks: 2`，80 维 = 全局 40 + 手部 40 拼接）、旧 Endo Project train/test、
+两组 YOLO val/test 和一个端到端 smoke case。评估时据此记录数据集版本、split、重叠策略和
+fingerprint。
 
 ActionMixed 各版本的 manifest 是训练与评测 loader 的唯一样本真源，并必须与对应
 `labels/<split>` 目录严格一致。fingerprint 同时覆盖 manifest、动作标签、类别映射和逐帧 bbox

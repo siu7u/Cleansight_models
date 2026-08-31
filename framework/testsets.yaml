@@ -54,6 +54,34 @@ datasets:
     labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
     split_overlap_policy: frame
 
+  # 手部区域特征版（同一份原始数据）：feature_mapping=actionmixed-bbox-hand-8cls-v1
+  # 只编码中心落在"面积最大 hand 框扩张 1.5 倍"区域内的框（坐标相对该区域归一化），
+  # 仍为 8×5=40 维；无 hand 框时全零（见 features/hand_bbox.py）。
+  temporal.actionmixed-auto-hand-v1:
+    family: temporal
+    format: actionmixed_bbox
+    dataset_version: cleansight-actionmixed-auto-hand-v1
+    revision: b7edb8749b0794bf7513ada250897e59eccb0ac0bea00287574e8f22b2f218d3
+    data_root: datasets/cleansight-ActionMixed-auto
+    feature_mapping: actionmixed-bbox-hand-8cls-v1
+    input_dim: 40
+    labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    split_overlap_policy: frame
+
+  # "全局+手部"双通道版：feature_mapping=actionmixed-bbox-global-hand-8cls-v1 为
+  # 全局 40 维与手部 40 维拼接（80 维，feature_blocks=2 声明每类 10 维块）。
+  temporal.actionmixed-auto-global-hand-v1:
+    family: temporal
+    format: actionmixed_bbox
+    dataset_version: cleansight-actionmixed-auto-global-hand-v1
+    revision: b7edb8749b0794bf7513ada250897e59eccb0ac0bea00287574e8f22b2f218d3
+    data_root: datasets/cleansight-ActionMixed-auto
+    feature_mapping: actionmixed-bbox-global-hand-8cls-v1
+    feature_blocks: 2
+    input_dim: 80
+    labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    split_overlap_policy: frame
+
   temporal.endo-project-v1:
     family: temporal
     dataset_version: endo-project-v1
@@ -140,6 +168,42 @@ testsets:
 
   temporal.actionmixed-auto-roi-v1.test:
     dataset: temporal.actionmixed-auto-roi-v1
+    split: test
+    manifest: benchmark/manifests/actionmixed-auto/test.txt
+    purpose: development_benchmark_frame_disjoint
+
+  temporal.actionmixed-auto-hand-v1.train:
+    dataset: temporal.actionmixed-auto-hand-v1
+    split: train
+    manifest: benchmark/manifests/actionmixed-auto/train.txt
+    purpose: training_only
+
+  temporal.actionmixed-auto-hand-v1.val:
+    dataset: temporal.actionmixed-auto-hand-v1
+    split: val
+    manifest: benchmark/manifests/actionmixed-auto/val.txt
+    purpose: validation_only
+
+  temporal.actionmixed-auto-hand-v1.test:
+    dataset: temporal.actionmixed-auto-hand-v1
+    split: test
+    manifest: benchmark/manifests/actionmixed-auto/test.txt
+    purpose: development_benchmark_frame_disjoint
+
+  temporal.actionmixed-auto-global-hand-v1.train:
+    dataset: temporal.actionmixed-auto-global-hand-v1
+    split: train
+    manifest: benchmark/manifests/actionmixed-auto/train.txt
+    purpose: training_only
+
+  temporal.actionmixed-auto-global-hand-v1.val:
+    dataset: temporal.actionmixed-auto-global-hand-v1
+    split: val
+    manifest: benchmark/manifests/actionmixed-auto/val.txt
+    purpose: validation_only
+
+  temporal.actionmixed-auto-global-hand-v1.test:
+    dataset: temporal.actionmixed-auto-global-hand-v1
     split: test
     manifest: benchmark/manifests/actionmixed-auto/test.txt
     purpose: development_benchmark_frame_disjoint
