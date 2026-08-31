@@ -56,6 +56,9 @@ Pipeline 校验并执行。
 | [`framework/experiments/mstcn-actionmixed-auto.yaml`](../framework/experiments/mstcn-actionmixed-auto.yaml) | MS-TCN、40 维输入、6 类、30 epoch、`dataset_ref: temporal.actionmixed-auto-v3`（自动标注特征数据） | 自动标注数据上 MS-TCN 全序列正式训练；与 smoke 的区别是登记数据集、formal 评估。 |
 | [`framework/experiments/gru-actionmixed-auto.yaml`](../framework/experiments/gru-actionmixed-auto.yaml) | GRU、40 维输入、6 类、16 帧窗口、`dataset_ref: temporal.actionmixed-auto-v3` | 自动标注数据上 GRU 滑窗正式训练；与历史 gru-actionmixed.yaml（人工标注）同超参，用于对照自动标注特征代价。 |
 | [`framework/experiments/transformer-actionmixed-auto.yaml`](../framework/experiments/transformer-actionmixed-auto.yaml) | Transformer、40 维输入、6 类、`max_len: 2560`（v3 最长序列约 1635 帧，保留余量）、`dataset_ref: temporal.actionmixed-auto-v3` | 自动标注数据上 Transformer 全序列正式训练；与历史 transformer-actionmixed.yaml 同结构，max_len 上调以容纳更长序列。 |
+| [`framework/experiments/gru-actionmixed-auto-roi.yaml`](../framework/experiments/gru-actionmixed-auto-roi.yaml) | GRU、144 维 ROI 空间特征（`actionmixed-roi-grid-v1`：2×3 网格，每 (检测类,区域) 统计 [presence,count,max_area]，8 类 × 6 区域 × 3 通道）、16 帧窗口、`dataset_ref: temporal.actionmixed-auto-roi-v1` | 与 gru-actionmixed-auto.yaml（40 维 bbox 契约）同模型同超参，仅特征契约不同；用于对照"空间分区信息"对动作识别的影响。 |
+| [`framework/experiments/mstcn-actionmixed-auto-roi.yaml`](../framework/experiments/mstcn-actionmixed-auto-roi.yaml) | MS-TCN、144 维 ROI 空间特征、30 epoch、`dataset_ref: temporal.actionmixed-auto-roi-v1` | 自动标注数据上 MS-TCN 全序列正式训练（ROI 特征变体，对照 mstcn-actionmixed-auto.yaml）。 |
+| [`framework/experiments/transformer-actionmixed-auto-roi.yaml`](../framework/experiments/transformer-actionmixed-auto-roi.yaml) | Transformer、144 维 ROI 空间特征、`max_len: 2560`、`dataset_ref: temporal.actionmixed-auto-roi-v1` | 自动标注数据上 Transformer 全序列正式训练（ROI 特征变体，对照 transformer-actionmixed-auto.yaml）。 |
 
 ## 2. Benchmark 数据集和 split
 
@@ -75,7 +78,10 @@ Pipeline 校验并执行。
 自动标注数据通道 `temporal.actionmixed-auto-v3`（YOLO 检测框 + 人工动作标签，18 个
 project-16 视频，train 13 / val 3 / test 2，test 锚定 task#195/#199，动作标签随 LS 更名
 air_injection → water_injection；检测源 yolo11s-g1/g2-v1，8 类全非零，2026-08-28 升 v3；
-旧 v2 见各 auto pin 与本地 -v2-backup）、旧 Endo Project train/test、两组 YOLO val/test 和
+旧 v2 见各 auto pin 与本地 -v2-backup）、同一份原始数据的 ROI 空间特征版
+`temporal.actionmixed-auto-roi-v1`（feature_mapping `actionmixed-roi-grid-v1`，
+`feature_layout: {rows: 2, cols: 3, channels: 3}`，144 维；revision 与 v3 相同，
+dataset_version 独立以便对照训练）、旧 Endo Project train/test、两组 YOLO val/test 和
 一个端到端 smoke case。评估时据此记录数据集版本、split、重叠策略和 fingerprint。
 
 ActionMixed 各版本的 manifest 是训练与评测 loader 的唯一样本真源，并必须与对应

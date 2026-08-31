@@ -77,12 +77,20 @@ export MPLCONFIGDIR=/tmp/matplotlib
 | YOLO small | `framework/experiments/yolo-clean-small.yaml` | `detection` |
 | ROI 分类（特征融合） | `framework/experiments/roi-fusion.yaml` | `roi_classification` |
 | GRU | `framework/experiments/gru-actionmixed.yaml` | `sliding_window_temporal` |
+| GRU（ROI 空间特征） | `framework/experiments/gru-actionmixed-auto-roi.yaml` | `sliding_window_temporal` |
 | MS-TCN | `framework/experiments/mstcn-actionmixed.yaml` | `full_sequence_temporal` |
+| MS-TCN（ROI 空间特征） | `framework/experiments/mstcn-actionmixed-auto-roi.yaml` | `full_sequence_temporal` |
 | MS-TCN++ | `framework/experiments/mstcn2-actionmixed.yaml` | `full_sequence_temporal` |
 | Transformer | `framework/experiments/transformer-actionmixed.yaml` | `full_sequence_temporal` |
+| Transformer（ROI 空间特征） | `framework/experiments/transformer-actionmixed-auto-roi.yaml` | `full_sequence_temporal` |
 | 历史 GRU v1 | `framework/experiments/legacy-gru-v1.yaml` | `sliding_window_temporal` |
 | 历史 Causal TCN v1 | `framework/experiments/legacy-causal-tcn-v1.yaml` | `sliding_window_temporal` |
 | 历史 Causal Transformer v1 | `framework/experiments/legacy-causal-transformer-v1.yaml` | `sliding_window_temporal` |
+
+ROI 空间特征变体（`-roi` 后缀）与对应 40 维 bbox 基线同模型同超参，仅特征契约不同：
+`actionmixed-roi-grid-v1` 把画面按 2×3 网格分区，每 (检测类, 区域) 统计
+[presence, count, max_area] 共 144 维（recipe 见 `framework/cleansight_eval/temporal/features/roi_bbox.py`），
+用于对照"空间分区信息"对动作识别的影响。
 
 ## 5. 训练
 

@@ -18,7 +18,11 @@
 特征口径（features 契约，version=actionmixed-bbox-8cls-v1）：按 8 类顺序，每类取该帧内
 **面积最大的一个框** 编码 ``[presence, cx, cy, w, h]``，缺席则全零；拼成 8×5=40 维。
 空 bbox 文件（无检测）→ 全零 40 维。可通过 ``feature_schema.mask_targets`` 指定检测目标
-名称或类别 ID，将对应类别的 5 维特征清零；遮罩不改变输入维度和类别顺序。
+名称或类别 ID，将对应类别的特征块清零；遮罩不改变输入维度和类别顺序。
+
+ROI 契约（version=actionmixed-roi-grid-v1，见 ``features/roi_bbox.py``）：同样按 8 类
+顺序，每类把画面按 2×3 网格划分成 6 个区域，输出 6×3=18 维 ``[presence, count,
+max_area]``，拼成 144 维；该类其他语义（mask_targets、空帧全零、因果逐帧）与 bbox 契约一致。
 """
 
 from __future__ import annotations
@@ -29,7 +33,12 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from .features import CLEAN_FEATURE_DIMS, build_clean_bbox_features
+from .features import (
+    CLEAN_FEATURE_DIMS,
+    ROI_FEATURE_VERSION,
+    build_clean_bbox_features,
+    build_roi_frame_features,
+)
 
 N_DET_CLASSES = 8  # frames/data.yaml 的检测类数（每类 5 维）
 FEATURE_DIM = N_DET_CLASSES * 5  # = 40
@@ -131,7 +140,8 @@ def resolve_target_mask_augmentation(data_cfg: dict, augmentation: dict | None) 
     """校验并解析 train-only 目标随机遮罩配置。
 
     当前只支持 ``frame_dropout``：对每个指定目标、每个采样帧独立按 ``probability``
-    将对应的 5 维 ``[presence, cx, cy, w, h]`` 清零。返回值仅供运行时使用，不写入配置。
+    将对应的类别特征块（bbox 契约 5 维 / ROI 契约 18 维）清零。返回值仅供运行时使用，
+    不写入配置。
     """
 
     if augmentation is None:
@@ -185,28 +195,37 @@ def apply_target_mask_augmentation(
     *,
     seed: int,
 ) -> list[np.ndarray]:
-    """对训练集 ``[T, 40]`` 特征应用可复现的逐帧目标随机遮罩。
+    """对训练集 ``[T, F]`` 特征应用可复现的逐帧目标随机遮罩。
 
-    同一 seed、相同视频顺序和相同配置产生相同遮罩；该函数不应由 val/test 数据路径调用。
-    未启用或概率为零时原样返回输入列表。
+    每个指定目标按其类别特征块清零（bbox 契约 5 维 / ROI 契约 18 维）；块宽由
+    特征维与检测类别数推导。同一 seed、相同视频顺序和相同配置产生相同遮罩；
+    该函数不应由 val/test 数据路径调用。未启用或概率为零时原样返回输入列表。
     """
 
     spec = resolve_target_mask_augmentation(data_cfg, augmentation)
     if spec is None or not spec["enabled"] or spec["probability"] == 0.0:
         return features
 
+    detection_mapping = load_detection_mapping(data_cfg)
+    n_det_classes = len(detection_mapping)
     rng = np.random.default_rng(seed)
     augmented: list[np.ndarray] = []
     for sequence in features:
         masked = sequence.copy()
+        block = masked.shape[1] // n_det_classes  # 每类特征块宽（bbox 契约 5 / ROI 契约 18）
+        if block * n_det_classes != masked.shape[1]:
+            raise ValueError(
+                f"目标随机遮罩需要特征维是检测类数 {n_det_classes} 的整数倍，"
+                f"实际 {masked.shape[1]}"
+            )
         for target_id in sorted(spec["target_ids"]):
-            if masked.ndim != 2 or masked.shape[1] < (target_id + 1) * 5:
+            if masked.ndim != 2 or masked.shape[1] < (target_id + 1) * block:
                 raise ValueError(
-                    f"目标 ID={target_id} 的 5 维切片超出特征形状 {tuple(masked.shape)}"
+                    f"目标 ID={target_id} 的 {block} 维切片超出特征形状 {tuple(masked.shape)}"
                 )
             dropped = rng.random(masked.shape[0]) < spec["probability"]
-            start = target_id * 5
-            masked[dropped, start : start + 5] = 0.0
+            start = target_id * block
+            masked[dropped, start : start + block] = 0.0
         augmented.append(masked)
     return augmented
 
@@ -374,7 +393,8 @@ def load_split(
     features_list[i] 形如 ``[T_i, F]``（float32），truths_list[i] 形如 ``[T_i]``（int64），
     索引与 ``labels/<split>/`` 下的视频对齐（同 ``split_video_names`` 的顺序）。若给了
     ``window``，跳过 ``T < window`` 的过短序列（窗口喂入 SlidingWindowDataset 无法开窗）并告警。
-    ``feature_schema.mask_targets`` 可按 ``frames/data.yaml`` 的目标名或 ID 遮罩整组 5 维特征。
+    ``feature_schema.mask_targets`` 可按 ``frames/data.yaml`` 的目标名或 ID 遮罩整组特征块
+    （bbox 契约 5 维 / ROI 契约 18 维）。
     ``max_videos`` / ``max_frames`` 仅用于显式 smoke 评测限制，训练调用不传这两个参数。
     """
     feature_version = (feature_schema or {}).get("version", "actionmixed-bbox-8cls-v1")
@@ -413,6 +433,7 @@ def load_split(
         }
         id2name = {index: name for index, name in enumerate(class_order)}
     mask_target_ids = resolve_mask_target_ids(data_cfg, feature_schema)
+    roi_recipe = feature_version == ROI_FEATURE_VERSION
     clean_recipe = feature_version in CLEAN_FEATURE_DIMS
     detection_mapping = load_detection_mapping(data_cfg) if clean_recipe else None
     fps = float(data_cfg.get("fps", 7.5))
@@ -443,6 +464,13 @@ def load_split(
                 raise ValueError(
                     f"CLEAN feature recipe 返回版本 {actual_version!r}，期望 {feature_version!r}"
                 )
+        elif roi_recipe:
+            feats = np.stack(
+                [
+                    build_roi_frame_features(path, mask_target_ids=mask_target_ids)
+                    for path in frame_paths
+                ]
+            ).astype(np.float32)
         else:
             feats = np.stack(
                 [

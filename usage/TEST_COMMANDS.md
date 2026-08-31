@@ -236,6 +236,16 @@ python -m benchmark.cli.eval --config framework/experiments/roi-fusion.yaml --ck
 
 完整工作流见 [`docs/YOLO_OPTIMIZATION.md`](../docs/YOLO_OPTIMIZATION.md)。
 
+时序模型 + ROI 空间特征（`actionmixed-roi-grid-v1`，144 维；与 40 维 bbox 基线同超参对照）：
+
+```bash
+python -m framework.cleansight_eval.cli.train --config framework/experiments/gru-actionmixed-auto-roi.yaml
+python -m framework.cleansight_eval.cli.train --config framework/experiments/mstcn-actionmixed-auto-roi.yaml
+python -m framework.cleansight_eval.cli.train --config framework/experiments/transformer-actionmixed-auto-roi.yaml
+# 冒烟（1 epoch，验证数据链路）：
+python -m framework.cleansight_eval.cli.train --config framework/experiments/gru-actionmixed-auto-roi.yaml -S train.epochs=1
+```
+
 ## 5. 查看评测输出
 
 一次评测通常生成：

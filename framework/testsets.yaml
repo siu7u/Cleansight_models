@@ -36,6 +36,24 @@ datasets:
     labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
     split_overlap_policy: frame
 
+  # ROI 空间特征版（同一份原始数据、不同的特征契约）：feature_mapping=
+  # actionmixed-roi-grid-v1 把画面按 2×3 网格分区，对每 (检测类, 区域) 统计
+  # [presence, count, max_area]，8 类 × 6 区域 × 3 通道 = 144 维（recipe 见
+  # framework/cleansight_eval/temporal/features/roi_bbox.py）。revision 与 v3 相同
+  # （原始数据未变），dataset_version 独立以便与 40 维基线对照训练；feature_layout
+  # 与 feature_mapping 一起构成 catalog 侧对该契约的声明，必须与 recipe 实现一致。
+  temporal.actionmixed-auto-roi-v1:
+    family: temporal
+    format: actionmixed_bbox
+    dataset_version: cleansight-actionmixed-auto-roi-v1
+    revision: b7edb8749b0794bf7513ada250897e59eccb0ac0bea00287574e8f22b2f218d3
+    data_root: datasets/cleansight-ActionMixed-auto
+    feature_mapping: actionmixed-roi-grid-v1
+    feature_layout: {rows: 2, cols: 3, channels: 3}
+    input_dim: 144
+    labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    split_overlap_policy: frame
+
   temporal.endo-project-v1:
     family: temporal
     dataset_version: endo-project-v1
@@ -104,6 +122,24 @@ testsets:
 
   temporal.actionmixed-auto-v3.test:
     dataset: temporal.actionmixed-auto-v3
+    split: test
+    manifest: benchmark/manifests/actionmixed-auto/test.txt
+    purpose: development_benchmark_frame_disjoint
+
+  temporal.actionmixed-auto-roi-v1.train:
+    dataset: temporal.actionmixed-auto-roi-v1
+    split: train
+    manifest: benchmark/manifests/actionmixed-auto/train.txt
+    purpose: training_only
+
+  temporal.actionmixed-auto-roi-v1.val:
+    dataset: temporal.actionmixed-auto-roi-v1
+    split: val
+    manifest: benchmark/manifests/actionmixed-auto/val.txt
+    purpose: validation_only
+
+  temporal.actionmixed-auto-roi-v1.test:
+    dataset: temporal.actionmixed-auto-roi-v1
     split: test
     manifest: benchmark/manifests/actionmixed-auto/test.txt
     purpose: development_benchmark_frame_disjoint

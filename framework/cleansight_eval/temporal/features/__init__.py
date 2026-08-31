@@ -5,6 +5,15 @@ from .clean_bbox_v2 import (
     build_clean_bbox_features,
     clean_feature_names,
 )
+from .roi_bbox import (
+    ROI_CHANNELS,
+    ROI_FEATURE_DIM,
+    ROI_FEATURE_VERSION,
+    ROI_GRID_COLS,
+    ROI_GRID_ROWS,
+    ROI_N_REGIONS,
+    build_roi_frame_features,
+)
 
 
 def feature_names_for_version(version: str) -> list[str] | None:
@@ -17,7 +26,14 @@ def feature_names_for_version(version: str) -> list[str] | None:
 
 __all__ = [
     "CLEAN_FEATURE_DIMS",
+    "ROI_CHANNELS",
+    "ROI_FEATURE_DIM",
+    "ROI_FEATURE_VERSION",
+    "ROI_GRID_COLS",
+    "ROI_GRID_ROWS",
+    "ROI_N_REGIONS",
     "build_clean_bbox_features",
+    "build_roi_frame_features",
     "clean_feature_names",
     "feature_names_for_version",
 ]
