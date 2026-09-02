@@ -482,6 +482,7 @@ checkpoint + checkpoint metadata + CARD.md + pin.yaml
 - [YOLO 结果人工审核流程](docs/YOLO_REVIEW_FLOW.md)：YOLO 预标注 → Label Studio 人工改框+标动作 → 导出 → convert 的质量门闭环。
 - [推理链路性能测量](docs/INFERENCE_CHAIN_PERF.md)：YOLO 检测 / 特征化 / 时序推理的实测时延，支撑"预计算入数据集 vs 现场推理"决策。
 - [评估能力说明](docs/EVAL.md)：指标定义、聚合口径、完整性检查与预测可视化（带状图 / 预测动作阶段视频 / 单命令时间线检测）。
+- [特征提取方案索引](docs/features/README.md)：可用 feature mapping 的语义、维度、代码/登记/配置定位与实测结论，新增方案照检查清单执行。
 - [benchmark README](benchmark/README.md)：单模型、feed-mode 和端到端 benchmark。
 - [新模型接入手册](docs/MODEL_ONBOARDING.md)：新增时序网络或检测器。
 - [实现状态](docs/TRAIN_EVAL_IMPLEMENTATION_STATUS.md)：当前能力与剩余事项。
