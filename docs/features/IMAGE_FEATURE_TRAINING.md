@@ -2,7 +2,11 @@
 
 > **状态标记**：本文档是**流程说明与规划框架**，不是已实现能力的清单。截至 2026-09，
 > 仓库内与"图像（像素级）"相关的训练只有独立的 ROI 图像分类流水线（`roi_classification`，
-> 尚未正式训练）；**像素级特征作为时序模型输入尚无实现**。文中每节都标注了现状与缺口。
+> 尚未正式训练）；**像素级特征作为时序模型输入（形态 B）已落地第一步**：整帧 embedding
+> 离线预计算工具（`temporal/features/extract_embeddings.py`）已在手动通道 actionmixed-v2
+> 上冒烟验证（图文对齐确认，9,532 张帧图）；队友图像管线工具已移植到
+> `tools/compare_roi_backbones_for_tracking.py` 等（参考实现）。形态 B 的训练侧
+> （embedding 契约登记 + load_split 图像分支）尚未实现。
 
 ## 1. 术语界定：仓库中"图像特征"的两种形态
 
@@ -59,8 +63,16 @@
 
 | 策略 | 做法 | 优点 | 代价 |
 |---|---|---|---|
-| **离线预计算 embedding**（推荐） | 训练/评估前批量跑 CNN，逐帧 embedding 存为特征文件（如 npy/npz），随数据集登记 | 训练快、可复用、与 v3"无图分发"哲学一致；后续特征契约沿用现有 catalog 体系 | 数据集变大；embedding 契约变化要升版本重算 |
+| **离线预计算 embedding**（推荐，**已落地工具**） | 训练/评估前批量跑 CNN，逐帧 embedding 存为特征文件（如 npy/npz），随数据集登记 | 训练快、可复用、与 v3"无图分发"哲学一致；后续特征契约沿用现有 catalog 体系 | 数据集变大；embedding 契约变化要升版本重算 |
 | **在线提取** | 训练时读帧 → CNN → embedding | 可做图像级数据增强 | 图像需随数据分发（体积大）；训练慢；**部署端必须复刻同一图像管线** |
+
+离线预计算工具：`python -m framework.cleansight_eval.temporal.features.extract_embeddings
+--root <数据集> --splits train,val,test --backbone resnet18 --out-dir <产物根>`。
+产物 `<out>/<split>/<video>.mp4.npy`（`[T, feat_dim]`，与标签行一一对齐）+ `meta.json`
+（backbone/输入尺寸/预处理/缺图记录）；缺图帧补零不静默错位。已支持的 backbone：
+resnet18/34/50、mobilenet_v3_small、efficientnet_b0（与 `classification/model.py`
+同权重口径）。**测试床**：手动通道 `cleansight-ActionMixed/images/`（9,532 帧，
+帧号与标签严格对齐）——v3 无图，机制先在手动通道验证，v3 抽帧后再复用同一工具。
 
 ### 4.3 recipe 实现
 
