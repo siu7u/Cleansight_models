@@ -39,7 +39,12 @@ python -m framework.cleansight_eval.temporal.features.extract_embeddings \
   （backbone/输入尺寸/ImageNet 预处理/缺图记录）
 - 语义：因果（只看当前帧）、确定性（eval+no_grad）、缺图帧补零不静默错位（有单测保护）
 - backbone：resnet18/34/50、mobilenet_v3_small、efficientnet_b0（与 classification 同权重口径）
-- 已在手动通道 actionmixed-v2 **冒烟验证**（9,532 帧图文严格对齐，CPU 提取 [20,512] 通过）
+- 已在手动通道 actionmixed-v2 **全量验证**（2026-09-03）：train 14/val 11/test 7 共 9,532 帧
+  图文严格对齐、缺图 0、CPU 提取约 40s；产物
+  `datasets/cleansight-ActionMixed/embeddings/mobilenet_v3_small-v1/`
+  （`[T, 576]`/视频 + meta.json，首份真实图像特征产物，供 E1 机制验证）
+- backbone 权重就位：resnet18/34/50 + mobilenet_v3_small + efficientnet_b0 已入
+  torch 默认缓存（`~/.cache/torch/hub/checkpoints/`），离线可用
 
 ### 3.2 已移植：队友图像管线参考（tools/，提交 7ec3b99）
 
