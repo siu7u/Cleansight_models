@@ -94,6 +94,11 @@ python -m framework.cleansight_eval.temporal.features.extract_embeddings \
 | 评估 | formal testset、**多 seed 取中位数**、段级指标（edit/F1@0.1~0.5 + 逐类）为准 | acc 在 65%+ idle 数据上具欺骗性 |
 | 复跑入口 | `python tools/run_strategy_matrix.py --strategies roi-grid-144 --seeds 42,7,2026` | 一键工具（43f15ef） |
 
+**执行记录（2026-09-03）**：健康配方已固化为 `gru-actionmixed-auto-roi.yaml` 默认值
+（dropout=0.2 / wd=1e-4 / patience=4 / best_metric=val_f1_0.5，提交后可直接运行无需 -S）；
+正式训练 3 seed 跑通（`runs/formal_roi/`），结果与多 seed 矩阵轮一致（确定性复现）：
+**中位 edit 28.35 / F1@0.1 31.8 / F1@0.25 22.7，三 seed 零坍缩**。
+
 ## 4. 候选增强实验：bbox 系 + 图像通道（形态 B，E 系列）
 
 ### 4.1 融合设计（回应 D1/D2/D3）

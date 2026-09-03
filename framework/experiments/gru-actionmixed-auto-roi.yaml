@@ -1,10 +1,12 @@
 # GRU 滑窗正式训练配置（ROI 空间特征，自动标注数据 cleansight-ActionMixed-auto）。
-# 与 gru-actionmixed-auto.yaml（40 维 bbox 契约）同模型同超参，仅特征契约不同：
-# feature_mapping=actionmixed-roi-grid-v1 把画面按 2×3 网格分为 6 个区域，对每
-# (检测类, 区域) 统计 [presence, count, max_area]，8 类 × 6 区域 × 3 通道 = 144 维
+# ⚠️ 本文档是【正式训练方案】配置（见 docs/features/IMAGE_FEATURE_TRAINING.md §3.4）：
+# 健康配方（weight_decay/dropout/patience/段级 best 指标）已固化为默认值——
+# 直接运行即可，不需要 -S 覆盖；坍缩诊断与配方依据见 FEATURE_STRATEGY_COMPARE.md。
+# feature_mapping=actionmixed-roi-grid-v1：2×3 网格，每 (检测类,区域) 统计
+# [presence, count, max_area]，8 类 × 6 区域 × 3 通道 = 144 维
 # （recipe 见 framework/cleansight_eval/temporal/features/roi_bbox.py）。
 # 数据集登记 temporal.actionmixed-auto-roi-v1（同一份原始数据，独立特征契约，
-# revision 与 v3 相同）；用于与 40 维基线对照"空间分区信息"对动作识别的影响。
+# revision 与 v3 相同）；正式训练建议多 seed（42/7/2026）取中位数评估。
 
 schema_version: 1
 pipeline: sliding_window_temporal
@@ -15,6 +17,7 @@ model:
   num_classes: 6         # idle/water_injection/flush/long_brush_insert/long_brush_withdraw/short_brush_cleaning
   hidden: 128
   num_layers: 3
+  dropout: 0.2           # 层间 dropout（坍缩诊断的配方修复，0059eb9）
 
 data:
   dataset_ref: temporal.actionmixed-auto-roi-v1  # 根目录、类别、mapping 和 manifest 由 benchmark catalog 解析
@@ -38,3 +41,6 @@ train:
   lr: 0.001
   batch_size: 32
   window: 16          # 必须 ≤ 最短视频的采样帧数（auto v3 数据最短约 195 帧）
+  weight_decay: 0.0001   # 健康配方（下同，见文档 §3.4）
+  patience: 4            # 按 val_loss 早停
+  best_metric: val_f1_0.5  # 段级指标选 best.pt（val_acc 会偏爱 idle 坍缩解）
