@@ -25,6 +25,10 @@ datasets:
   # （8 类全非零）；附 task_ids.yaml 溯源。旧 v2 指标不可比，v2 数据备份于本地 -v2-backup。
   # 背景：docs/TEMPORAL_DATASET_TRANSFORMATION_PLAN.md；revision 为三个 split manifest
   # 拼接内容的 sha256（b7edb874… 为 README 展示前缀）。
+  # 2026-09-03 同步 ModelScope HEAD（cd585c5）：train task#204（67aa31ca…）审核后修正
+  # sbc 标注（39→48 帧，10 帧 idle→sbc + 1 帧 sbc→idle）；仅 train 标签变化，manifest
+  # 不变故 revision 不变，train split 内容指纹已更新（旧 checkpoint 的 resume 会按指纹
+  # 拒绝——符合设计）；旧标签备份于数据目录 labels_backup_task204fix/。
   temporal.actionmixed-auto-v3:
     family: temporal
     format: actionmixed_bbox
