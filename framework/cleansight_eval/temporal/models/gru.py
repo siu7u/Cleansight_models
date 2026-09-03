@@ -13,9 +13,14 @@ import torch.nn as nn
 
 
 class GRUClassifier(nn.Module):
-    """因果 GRU 时序分类器，输出逐帧动作 logits。"""
+    """因果 GRU 时序分类器，输出逐帧动作 logits。
 
-    def __init__(self, input_dim, num_classes, hidden=128, num_layers=3):
+    ``dropout`` 仅作用于 num_layers > 1 时的层间（PyTorch 约定），单层时静默置零；
+    默认 0 保持与历史 checkpoint 行为一致，配置 ``model.dropout`` 可开启（配方修复
+    推荐 0.2~0.3，缓解小数据过拟合坍缩）。
+    """
+
+    def __init__(self, input_dim, num_classes, hidden=128, num_layers=3, dropout=0.0):
         super().__init__()
         self.rnn = nn.GRU(
             input_size=input_dim,
@@ -23,6 +28,7 @@ class GRUClassifier(nn.Module):
             num_layers=num_layers,
             batch_first=True,
             bidirectional=False,
+            dropout=dropout if num_layers > 1 else 0.0,
         )
         self.head = nn.Linear(hidden, num_classes)
 

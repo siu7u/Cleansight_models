@@ -90,7 +90,10 @@
   到唯一跨视频稳定的 idle；val_acc 选择机制（多数类友好）再放大退化解。
 - **修复**：5 epoch + weight_decay=1e-4 让模型停留在概念学习期（val_loss 不再从 epoch 1
   单调飙升），坍缩解除、段级指标大幅回升。
-- **遗留**：单 seed、best.pt 仍按 val_acc 选择、GRU 无 dropout、无早停——见"下一步建议"。
+- **遗留（已修复 2026-09-03）**：best.pt 按 val_acc 选择、GRU 无 dropout、无早停——
+  三项已在代码层落地（`train.best_metric` 可选 val_acc/val_edit/val_f1_0.5、
+  `gru.py` 支持 model.dropout、`train.patience` 按 val_loss 早停，默认均向后兼容；
+  另类别权重归一化后截断至 [0.1, 5.0]）。单 seed 问题待多 seed 复跑。
 
 ## 下一步建议
 

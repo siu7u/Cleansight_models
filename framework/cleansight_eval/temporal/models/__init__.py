@@ -25,6 +25,7 @@ def _build_gru(cfg: dict) -> nn.Module:
         num_classes=cfg["num_classes"],
         hidden=cfg.get("hidden", 128),
         num_layers=cfg.get("num_layers", 3),
+        dropout=float(cfg.get("dropout", 0.0)),
     )
 
 
