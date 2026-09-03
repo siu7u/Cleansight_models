@@ -80,6 +80,8 @@ Pipeline 校验并执行。
 自动标注数据通道 `temporal.actionmixed-auto-v3`（YOLO 检测框 + 人工动作标签，18 个
 project-16 视频，train 13 / val 3 / test 2，test 锚定 task#195/#199，动作标签随 LS 更名
 air_injection → water_injection；检测源 yolo11s-g1/g2-v1，8 类全非零，2026-08-28 升 v3；
+2026-09-03 同步 ModelScope HEAD 的 task#204 sbc 标注修正——仅 train 标签变化
+（详见 testsets.yaml 注释与 docs/TEMPORAL_DATASET_TRANSFORMATION_PLAN.md 6.5）；
 旧 v2 见各 auto pin 与本地 -v2-backup）、同一份原始数据的 ROI 空间特征版
 `temporal.actionmixed-auto-roi-v1`（feature_mapping `actionmixed-roi-grid-v1`，
 `feature_layout: {rows: 2, cols: 3, channels: 3}`，144 维；revision 与 v3 相同，

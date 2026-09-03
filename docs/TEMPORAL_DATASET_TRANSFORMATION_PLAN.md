@@ -141,6 +141,14 @@ python -m framework.cleansight_eval.cli.annotate convert \
 - 六类覆盖（标签帧 12,959）：test 仅 idle/lb_insert/lb_withdraw（锚定任务所致，已如实记录）；water 全库仅 2 视频（#201 train 194 帧、#207 val 17 帧）
 - `validate_testsets.py`：auto-v3 三 split 全部 OK；catalog/实验配置/YAML_CONFIG 已同步升 v3；v3 数据已从 ModelScope 同步到本地 `datasets/cleansight-ActionMixed-auto`（旧本地副本备份为 `-v1-backup`）
 
+### 6.5 执行结果（2026-09-03，task#204 标注修正）
+
+- 背景：train task#204（`67aa31ca…`）经人工审核后修正 short_brush_cleaning 标注
+- 变更：11 帧（10 帧 idle→sbc + 1 帧 sbc→idle），sbc 39→48 帧；**仅该 train 视频标签变化**，val/test 与 frames/ 全部不变
+- 同步：ModelScope HEAD `cd585c5` 已同步进本地正式数据目录（旧标签备份于 `labels_backup_task204fix/`）；`-lhh` 克隆目录保留作后续同步源
+- 登记影响：manifest 未变 → revision `b7edb874…` 不变；train split 内容指纹更新 → 旧 checkpoint resume 按指纹自动拒绝（防混训，符合设计）；此前 val/test 上的评估结果不受影响
+- 门禁：`validate_testsets.py` 全绿（22 testset）
+
 ---
 
 ## 7. Phase 3 — 模型侧联动（本轮暂缓，决策 D）
