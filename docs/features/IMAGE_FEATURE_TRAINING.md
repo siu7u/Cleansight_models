@@ -1,118 +1,142 @@
-# 图像特征训练接入流程说明
+# 图像特征训练流程（IMAGE_FEATURE_TRAINING）
 
-> **状态标记**：本文档是**流程说明与规划框架**，不是已实现能力的清单。截至 2026-09，
-> 仓库内与"图像（像素级）"相关的训练只有独立的 ROI 图像分类流水线（`roi_classification`，
-> 尚未正式训练）；**像素级特征作为时序模型输入（形态 B）已落地第一步**：整帧 embedding
-> 离线预计算工具（`temporal/features/extract_embeddings.py`）已在手动通道 actionmixed-v2
-> 上冒烟验证（图文对齐确认，9,532 张帧图）；队友图像管线工具已移植到
-> `tools/compare_roi_backbones_for_tracking.py` 等（参考实现）。形态 B 的训练侧
-> （embedding 契约登记 + load_split 图像分支）尚未实现。
+> **状态（2026-09-03）**：图像特征训练是本周（团队 2026-09 群聊）主线实验方向——"实验确定
+> 图像特征的提取方案"。本文档是这一方向的**训练流程总纲**：目标与决策 → 现状盘点 →
+> 当前主流程 → 图像通道接入实验矩阵 → 前置阻塞 → 执行清单。
+>
+> 相关文档：[特征提取方案索引](README.md)（已实现契约）、
+> [`FEATURE_STRATEGY_COMPARE.md`](../FEATURE_STRATEGY_COMPARE.md)（bbox 系对照结论与坍缩分析）。
 
-## 1. 术语界定：仓库中"图像特征"的两种形态
+## 1. 目标与决策记录（2026-09 团队讨论结论）
 
-| 形态 | 定义 | 现状 |
+| 决策 | 内容 | 落点 |
 |---|---|---|
-| **A. 独立图像分类** | 对 ROI 图像块做多标签分类（`roi_classification` / `feature_fusion`），输出独立预测，**不进入时序输入** | 代码齐备（pipeline/配置/数据裁剪/评估器），**从未正式训练**，exploratory 占位 |
-| **B. 像素特征进时序** | 每帧 CNN embedding（或 ROI embedding）作为时序模型输入的一部分（`[B,T,F]` 中的像素派生通道） | **无实现、无数据支持、无文档流程**——本文档主体 |
+| D1 | **图像信息加入 bbox 特征**（多模态融合），不做"纯图像"时序模型（纯图像受画面干扰因素影响大、难训出） | 本文档第 4 节实验矩阵 E1/E2 |
+| D2 | 图像特征用**现成预训练 backbone**（先冻结权重），**不训练第二套视觉模型**（与 YOLO 功能重叠，且小数据训不动） | 冻结 + 轻量投影头（§4.3） |
+| D3 | 前置 CNN **零训练**——全链路只调时序（+投影）一套参数，不调两套 | §4.3 |
+| D4 | 开 action-test 采集**长短毛刷刷洗**测试数据（补 v3 test 缺失的 sb_clean 覆盖） | §5.2 |
+| D5 | 本周交付物 = 实验确定的图像特征提取方案（含对照证据） | 本文档 §6 验收 |
 
-区分关键：A 的"图像分类"与 B 的"图像**特征**"是两条不同的训练链路，不要混用术语。
+## 2. 术语界定：两种"图像"形态（避免混用）
 
-## 2. 共同前提：图像数据源（当前最大的阻塞点）
-
-**v3 auto 数据集没有图片**（实测目录结构仅 `labels/` + `frames/` + `task_ids.yaml`）——
-而我们现有的全部 bbox 系特征实验（40/80/144 维）都基于 v3。接图像特征前必须先回答"图从哪来"：
-
-| 候选图像源 | 状态 | 对齐要求 |
+| 形态 | 定义 | 现状（2026-09-03） |
 |---|---|---|
-| 原始 project-16 视频抽帧 | 视频在录制方/队友处，仓库无 | v3 `frames/` 帧号 = 原始视频 **stride-4 抽样帧号** → 抽帧后逐帧对齐即可挂到现有 manifest |
-| 手动通道 `cleansight-ActionMixed/images/`（606MB） | 仓库本地有 | 与 v3 **不同源不同视频**——只能做手动通道（actionmixed-v2）实验，**禁止与 v3 混合** |
-| YOLO 数据集 `cleansight-yolo/images/` | 仓库本地有 | 检测帧与 v3 时序帧号不对齐，仅可做检测侧实验 |
+| **A. 独立图像分类** | ROI 图像块多标签分类（`roi_classification`/`feature_fusion`），独立预测，不进时序输入 | 代码齐备，从未正式训练（exploratory 占位）——**不在本周主线内** |
+| **B. 像素特征进时序** | 每帧 CNN embedding 作为时序输入 `[B,T,F]` 的像素派生通道 | **提取工具已落地**（§3.1），训练侧接入未实现（§4 主线） |
 
-**决策记录要求**：选定图像源后，需要登记新的数据集条目（data_root/images 目录）、帧对齐校验
-（每帧文件名 ↔ manifest 帧号一一对应）与 revision——沿用 catalog 契约体系，不能绕过。
+## 3. 现状盘点：已就绪的积木
 
-## 3. 形态 A：ROI 图像分类（roi_classification）正式化流程
+### 3.1 已落地：整帧 embedding 离线预计算工具
 
-现状：`roi-fusion.yaml`（exploratory）+ 数据自动裁剪（`classification/data.py` 从 YOLO GT 框
-裁 ROI + 随机背景负样本）+ 评估器已注册；**从未跑过正式训练**。
+`framework/cleansight_eval/temporal/features/extract_embeddings.py`（提交 7ec3b99）：
 
-正式化步骤：
+```bash
+python -m framework.cleansight_eval.temporal.features.extract_embeddings \
+  --root <数据集> --splits train,val,test --backbone resnet18 --out-dir <产物根>
+```
 
-1. 确定淘汰类清单：`python -m benchmark.cli.analyze --config yolo-clean-small.yaml --ckpt <best.pt>`
-   （YOLO 逐类 P/R < 0.3 的类，参考 `docs/YOLO_OPTIMIZATION.md` §4）
-2. 填 `roi-fusion.yaml` 的 `data.classes`（实际淘汰类）与 `data.group_dir`
-3. 冒烟训练：`cli.train --config framework/experiments/roi-fusion.yaml -S train.epochs=1`；
-   数据裁剪自动构建并缓存到 `runs/feature_fusion/datasets/`
-4. 探索性评估：`benchmark.cli.eval --config roi-fusion.yaml --ckpt <best.pt>`
-5. 淘汰类与口径稳定后**登记正式 testset**（以裁剪数据集的固定划分为 manifest）→
-   `evaluation.mode: formal` 重训重评
-6. 按 modelset-quality 规则登记 registry（CARD.md + pin.yaml + 评测报告）
+- 产物：`<out>/<split>/<video>.mp4.npy`（`[T, feat_dim]`，与标签行一一对齐）+ `meta.json`
+  （backbone/输入尺寸/ImageNet 预处理/缺图记录）
+- 语义：因果（只看当前帧）、确定性（eval+no_grad）、缺图帧补零不静默错位（有单测保护）
+- backbone：resnet18/34/50、mobilenet_v3_small、efficientnet_b0（与 classification 同权重口径）
+- 已在手动通道 actionmixed-v2 **冒烟验证**（9,532 帧图文严格对齐，CPU 提取 [20,512] 通过）
 
-## 4. 形态 B：像素特征进时序训练（规划流程）
+### 3.2 已移植：队友图像管线参考（tools/，提交 7ec3b99）
 
-在 [`README.md`](./README.md) 第 3 节"新增方案检查清单"（9 步，针对 bbox 文本派生特征）基础上，
-图像特征多出以下步骤与决策点：
+| 工具 | 用途 | 可复用件 |
+|---|---|---|
+| `tools/compare_roi_backbones_for_tracking.py` | ROI backbone 对比（ReID） | `imread_unicode` / `crop_detection`（框裁剪+padding+resize）/ `build_backbone`（5 种）/ batch 推理 / fp16 / 计时 |
+| `tools/benchmark_gpu_roi_track_latency.py` | GPU 吞吐/显存实测 | 实测参考：ResNet18 1092 ROI/s、MobileNet 133 MiB（RTX 4060） |
+| `tools/evaluate_labelstudio_trackers.py` 等 | LS 帧图/GT 加载 | 帧路径解析 |
 
-### 4.1 图像源与帧对齐（新增前置步骤，阻塞一切）
+> 注意：队友工具面向 **tracker ReID**（per-检测框 embedding），不是时序动作输入——**中间件可复用，任务语义需自建**。
 
-- 选定图像源（见第 2 节）→ 抽帧/对齐工具 → 产出与 train/val/test manifest **一一对应**的帧文件
-- 校验：每个 manifest 视频的每个标签帧号都必须存在对应帧文件（镜像 `validate_testsets.py` 的
-  bbox 逐帧检查逻辑）
+### 3.3 已就绪：bbox 系主线（图像通道的对照基准）
 
-### 4.2 特征提取策略决策（形态 B 的核心分叉）
+- bbox 系四策略（40/40 手/80 双通道/144 ROI 网格）健康配方代码已落地（dropout/best 指标可选/
+  早停/权重截断，提交 0059eb9），一键多 seed 矩阵工具 `tools/run_strategy_matrix.py`（43f15ef）
+- **多 seed 结论**：ROI 网格 144 为唯一三 seed 全不坍缩且中位段级指标领先的策略
+  （中位 F1@0.1 31.8），作为图像通道实验的融合底座（详见 FEATURE_STRATEGY_COMPARE.md）
 
-| 策略 | 做法 | 优点 | 代价 |
-|---|---|---|---|
-| **离线预计算 embedding**（推荐，**已落地工具**） | 训练/评估前批量跑 CNN，逐帧 embedding 存为特征文件（如 npy/npz），随数据集登记 | 训练快、可复用、与 v3"无图分发"哲学一致；后续特征契约沿用现有 catalog 体系 | 数据集变大；embedding 契约变化要升版本重算 |
-| **在线提取** | 训练时读帧 → CNN → embedding | 可做图像级数据增强 | 图像需随数据分发（体积大）；训练慢；**部署端必须复刻同一图像管线** |
+## 4. 形态 B 训练流程（本周主线：bbox 系 + 图像通道）
 
-离线预计算工具：`python -m framework.cleansight_eval.temporal.features.extract_embeddings
---root <数据集> --splits train,val,test --backbone resnet18 --out-dir <产物根>`。
-产物 `<out>/<split>/<video>.mp4.npy`（`[T, feat_dim]`，与标签行一一对齐）+ `meta.json`
-（backbone/输入尺寸/预处理/缺图记录）；缺图帧补零不静默错位。已支持的 backbone：
-resnet18/34/50、mobilenet_v3_small、efficientnet_b0（与 `classification/model.py`
-同权重口径）。**测试床**：手动通道 `cleansight-ActionMixed/images/`（9,532 帧，
-帧号与标签严格对齐）——v3 无图，机制先在手动通道验证，v3 抽帧后再复用同一工具。
+### 4.1 融合设计（回应 D1/D2/D3）
 
-### 4.3 recipe 实现
+```
+bbox 特征通道（ROI 网格 144 或基线 40）—— 位置/数量/类别（"哪里有什么"）
+        +
+图像外观通道：预训练 backbone（冻结）→ 每帧 embedding → 轻量线性投影头（~百~千参数）
+        ↓ 拼接（feature_blocks 机制已支持多块声明）→ 时序模型（GRU/MS-TCN…）
+```
 
-- 新建 `framework/cleansight_eval/temporal/features/image_*.py`：帧加载 → 预处理 →
-  backbone 前向（可复用 `classification/model.py` 的 `BACKBONE_CONFIGS` 与构建逻辑）→ embedding
-- 因果性红线：帧级 CNN 只允许看当前帧（单帧无状态 → 因果 ✓）；**禁止用未来帧或跨帧聚合**
-- 归一化与预处理（如 ImageNet mean/std）必须写进 feature mapping 契约与版本说明
-- 确定性：推理路径禁随机（随机增强只允许出现在训练期且要可复现）
+- **backbone 冻结零训练**（D2/D3）：与 YOLO 角色一致，全链路唯一可训练参数 = 时序模型 + 投影头
+- **投影头**：给冻结特征一个领域适配的机会（队友实测：纯冻结 embedding 对下游提升很小，
+  "考虑在领域数据上微调"——投影头即最小化的领域适配）；若投影头也学不出增益，才下"图像通道无用"结论
+- 因果红线：帧级 CNN 只看当前帧；禁止未来帧/跨帧聚合；推理路径禁随机
+- 归一化/预处理（ImageNet mean/std）必须进 feature mapping 契约与版本
 
-### 4.4 与 bbox 特征的关系（决策点，先对照后融合）
+### 4.2 实验矩阵（E0 已有，E1~E3 待跑；全部走健康配方 + 多 seed）
 
-建议顺序：① 先单独训练"纯图像特征"时序模型，与现有 40 维 bbox 基线对照（证明图像通道本身
-有效）→ ② 再拼接到 bbox 特征做多模态输入（`feature_blocks` 机制已支持多块声明）→ ③ 根据结果
-决定是否保留。不要一步到位做双流模型。
+| 实验 | 特征组合 | 对照问题 |
+|---|---|---|
+| **E0（已完成）** | bbox 系四策略（矩阵中位数基准） | 参照系：ROI 网格 F1@0.1 中位 31.8 |
+| **E1** | E0 底座 + 整帧 embedding（resnet18 冻结 512 维 → 投影） | 全局外观有无增益 |
+| **E2** | E0 底座 + 检测框 ROI 外观聚合（crop_detection 现成） | 干扰过滤后外观有无增益 |
+| **E3** | backbone 消融（DINOv2/mobilenet） | 表征质量 vs 成本 |
 
-### 4.5 登记、配置、测试、门禁、对照
+- 统一验收：段级指标（edit / F1@0.1~0.5 / 逐类），**禁止只报 acc**；与 E0 底座做消融
+- 统一配方：wd=1e-4 + dropout=0.2 + patience + 段级 best 指标 + **多 seed 取中位数**
 
-沿用现有 9 步清单的第 3~9 步（testsets 登记 / catalog 校验 / 配置 / 单测 / validate 门禁 /
-正式对照 / 文档同步），差异点：
-- 图像数据条目的 manifest 换为帧文件清单或沿用原 manifest + 帧对齐校验
-- 单元测试需覆盖：帧缺失、图像解码失败、embedding 维度、确定性（同帧两次提取同值）
+### 4.3 落地步骤（E1 起）
 
-### 4.6 部署影响（重大架构决策，需提前知会）
+1. **图像源就绪**（§5，阻塞项）
+2. 批量提取 embedding（extract_embeddings，GPU 上跑全量）→ 产物目录
+3. 登记：embedding 产物作为新数据集契约（testsets.yaml 条目 + feature 声明；
+   或按"embedding 目录 + 原 manifest"镜像登记），帧对齐校验进 validate 逻辑
+4. `load_split` 增图像契约分支（按视频读 npy，路径可参照 legacy-20d 的 npy 加载方式）
+5. 新 recipe/契约常量（维度=bbox_dim + feat_dim，投影在模型层做）
+6. 训练配置（E1~E3 各一）+ 一键矩阵扩展策略表
+7. 单测（帧缺失/解码失败/维度/确定性）+ validate 门禁
+8. 结论写入本文档与 FEATURE_STRATEGY_COMPARE.md
 
-CleanSightBackend 目前消费的是**检测框文本派生特征**（推理时只需 YOLO 检测结果，无像素管线）。
-形态 B 一旦上线，后端需要新增"像素 → CNN embedding"推理管线（读帧/解码/预处理/backbone），
-并保证与训练期提取口径一致。**这一条不成立则形态 B 只能停留在离线评测。**
+### 4.4 部署影响（重大架构决策，提前知会）
 
-## 5. 收益验证纪律（来自既有实验的教训）
+CleanSightBackend 现消费检测框文本派生特征（推理无像素管线）。形态 B 上线需后端新增
+"像素 → CNN embedding"管线并与训练期提取口径一致——**不成立则形态 B 只停留在离线评测**。
 
-- 队友 ROI 实测：通用预训练 ROI embedding 对下游提升很小（tracker IDF1 0.4755→0.4806），
-  结论"若用于动作模型，必须按动作指标重新评估"——**图像特征接入后必须用 Frame-F1 /
-  Segment-F1 对照，禁止只报 acc**（acc 在 65%+ idle 数据上具有欺骗性，见坍缩分析）
-- 训练配方必须健康（短训/正则/早停），否则对照结论被过拟合污染（详见
-  [`FEATURE_STRATEGY_COMPARE.md`](../FEATURE_STRATEGY_COMPARE.md) 的坍缩分析）
+## 5. 前置条件与阻塞
 
-## 6. 执行顺序建议
+### 5.1 v3 数据无图（核心阻塞）
 
-1. 决策图像源（需要原始视频或确认用手动通道）——**卡点，先解决**
-2. 写抽帧/对齐工具 + 校验脚本
-3. 按 4.2 选离线预计算 → 4.3 recipe → 4.5 登记链路
-4. 按 4.4 先做"纯图像 vs bbox 基线"单路对照
-5. 有效再谈拼接与部署（4.6）
+v3 auto 仅 `labels/` + `frames/` + `task_ids.yaml`。图像源候选（按优先级）：
+
+| 候选 | 状态 | 备注 |
+|---|---|---|
+| **LS project-16 下载 18 个原始视频 → stride-4 抽帧** | 凭证在位（.env LS_HOST/TOKEN；上一会话已下载过 task#209 视频），`task_ids.yaml` 提供 task#192~211 完整映射 | 与 v3 manifest 天然对齐；数 GB 下载 + ~1.5~3GB jpg，需网络与存储 |
+| **action-test 新视频**（D4） | 待采集 | 走 annotate 时**保留抽帧图**，图像通道从新数据直接可用（v3 同法重建） |
+| 手动通道 `cleansight-ActionMixed/images/` | 本地有（606MB） | **与 v3 不同源，禁止混用**；仅作机制测试床（已用于工具冒烟） |
+| YOLO 数据集 images | 本地有 | 帧号不对齐，仅检测侧实验 |
+
+### 5.2 数据缺口（D4 背景）
+
+v3 test 只有 idle/long_brush_insert/withdraw 三类——**sb_clean 零覆盖**、water 全库 2 视频。
+action-test 的长短毛刷刷洗数据到齐后：`annotate run` → `convert` → 重划 manifest → 重算
+revision → validate → 升数据集版本（链路全部现成）。
+
+## 6. 验收与执行顺序
+
+1. **卡点先解**：图像源决策（LS 下载 or action-test 视频路径）
+2. 抽帧/对齐工具 + 校验（若走 LS 下载）
+3. GPU 全量提取 embedding → 产物登记
+4. E1（bbox 底座 + 整帧图像）对照 → 有增益再 E2/E3；无增益按证据收尾
+5. 结论 = "本周任务：实验确定图像特征提取方案"的交付（含消融证据、多 seed、段级指标）
+
+## 7. 验证纪律（历史教训，必须遵守）
+
+- **预期管理**：队友实测通用预训练 embedding 对下游提升很小（tracker IDF1 0.4755→0.4806）——
+  图像通道收益必须按动作指标验证，禁止预设"有图就更好"
+- **坍缩教训**：小数据 + 加权 CE 存在"全 idle 自信输出"低损失吸引子，seed 决定掉进哪个谷——
+  所有对照必须多 seed 取中位数，段级指标为主
+- **配方健康**：wd + dropout + 早停 + 段级 best 指标（0059eb9 已落地），旧配方结论作废
+- **检测契约化**：v3 frames/ 生成时的检测 conf/IoU 阈值未记录——图像/bbox 特征实验前
+  应固定并记录（队友推荐 conf 0.25/IoU 0.55 参考）
