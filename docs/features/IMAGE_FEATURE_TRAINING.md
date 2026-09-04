@@ -48,10 +48,12 @@ python -m framework.cleansight_eval.temporal.features.extract_embeddings \
   （backbone/输入尺寸/ImageNet 预处理/缺图记录）
 - 语义：因果（只看当前帧）、确定性（eval+no_grad）、缺图帧补零不静默错位（有单测保护）
 - backbone：resnet18/34/50、mobilenet_v3_small、efficientnet_b0（与 classification 同权重口径）
-- 已在手动通道 actionmixed-v2 **全量验证**（2026-09-03）：train 14/val 11/test 7 共 9,532 帧
-  图文严格对齐、缺图 0、CPU 提取约 40s；产物
-  `datasets/cleansight-ActionMixed/embeddings/mobilenet_v3_small-v1/`
-  （`[T, 576]`/视频 + meta.json，首份真实图像特征产物，供 E1 机制验证）
+- 工具链路已通过**全量对齐机制验证**（2026-09-03：9,532 帧图文严格对齐、缺图 0、
+  CPU 提取约 40s，单测保护在案）
+- **正式产物以最新数据集（`datasets/cleansight-ActionMixed-auto-lhh`）为目标**：该数据集
+  按设计不含像素（见 §5.1 核心阻塞），待像素源（LS project-16 下载抽帧 / action-test 采集
+  保留帧图）就绪后，在 -lhh 视频上重跑全量提取、对齐校验并登记为新数据契约；此前的机制
+  验证产物仅留作链路调试，不进入该数据集契约
 - backbone 权重就位：resnet18/34/50 + mobilenet_v3_small + efficientnet_b0 已入
   torch 默认缓存（`~/.cache/torch/hub/checkpoints/`），离线可用
 
@@ -80,6 +82,13 @@ python -m framework.cleansight_eval.temporal.features.extract_embeddings \
 
 （完整逐 seed 表见 FEATURE_STRATEGY_COMPARE.md 第三轮；"坍缩"= 预测退化为全 idle。）
 
+> **设备与数据根注（重要）**：上表为 2026-09-03 **CPU** 轮（自动化会话无 GPU）。2026-09-04
+> 在 GPU（RTX 4060 Laptop / cuDNN 91002 / fp32，数据根 `datasets/cleansight-ActionMixed-auto-lhh`）
+> 对 roi-grid-144 复跑（`runs/formal_roi_20260905/`）：三 seed 零坍缩不变，但逐 seed 漂移显著
+> ——seed 42 提升（F1@0.1 33.3→44.9）、seed 7/2026 回落（28.6→19.1、31.8→19.5），中位
+> edit/F1@0.1/F1@0.25 = 23.59/19.51/14.63。**设备差异大于单轮噪声：正式数字必须锚定设备口径，
+> 跨设备比较只能定性**；GPU 全策略矩阵待跑后统一更新本表。
+
 ### 3.4 正式训练方案（2026-09-03 定稿，依据 §3.3 证据）
 
 > **结论先行**：正式训练采用 **ROI 网格 144 维 + 健康配方**；图像通道（§4 E 系列）只在
@@ -94,10 +103,15 @@ python -m framework.cleansight_eval.temporal.features.extract_embeddings \
 | 评估 | formal testset、**多 seed 取中位数**、段级指标（edit/F1@0.1~0.5 + 逐类）为准 | acc 在 65%+ idle 数据上具欺骗性 |
 | 复跑入口 | `python tools/run_strategy_matrix.py --strategies roi-grid-144 --seeds 42,7,2026` | 一键工具（43f15ef） |
 
-**执行记录（2026-09-03）**：健康配方已固化为 `gru-actionmixed-auto-roi.yaml` 默认值
-（dropout=0.2 / wd=1e-4 / patience=4 / best_metric=val_f1_0.5，提交后可直接运行无需 -S）；
-正式训练 3 seed 跑通（`runs/formal_roi/`），结果与多 seed 矩阵轮一致（确定性复现）：
-**中位 edit 28.35 / F1@0.1 31.8 / F1@0.25 22.7，三 seed 零坍缩**。
+**执行记录**：
+
+- **2026-09-03（CPU 轮，`runs/formal_roi/`）**：健康配方已固化为 `gru-actionmixed-auto-roi.yaml`
+  默认值（dropout=0.2 / wd=1e-4 / patience=4 / best_metric=val_f1_0.5，提交后可直接运行无需 -S）；
+  正式训练 3 seed 跑通，与多 seed 矩阵轮一致（CPU 环境内确定性复现）：**中位 edit 28.35 /
+  F1@0.1 31.8 / F1@0.25 22.7，三 seed 零坍缩**。
+- **2026-09-04（GPU 轮，`runs/formal_roi_20260905/`，数据根 `-lhh`，RTX 4060 Laptop）**：
+  roi-grid-144 复跑，三 seed 零坍缩，中位 edit 23.59 / F1@0.1 19.51 / F1@0.25 14.63
+  （seed 42 升、seed 7/2026 降，见 §3.3 设备注）——正式基线数字待 GPU 全策略矩阵后定版。
 
 ## 4. 候选增强实验：bbox 系 + 图像通道（形态 B，E 系列）
 
@@ -120,7 +134,7 @@ bbox 特征通道（ROI 网格 144 或基线 40）—— 位置/数量/类别（
 
 | 实验 | 特征组合 | 对照问题 |
 |---|---|---|
-| **E0（已完成）** | bbox 系四策略（矩阵中位数基准） | 参照系：ROI 网格 F1@0.1 中位 31.8 |
+| **E0（已完成）** | bbox 系四策略（矩阵中位数基准） | 参照系：ROI 网格 F1@0.1 中位 31.8（CPU 轮；GPU 复跑 19.5，见 §3.3 设备注） |
 | **E1** | E0 底座 + 整帧 embedding（resnet18 冻结 512 维 → 投影） | 全局外观有无增益 |
 | **E2** | E0 底座 + 检测框 ROI 外观聚合（crop_detection 现成） | 干扰过滤后外观有无增益 |
 | **E3** | backbone 消融（DINOv2/mobilenet） | 表征质量 vs 成本 |
