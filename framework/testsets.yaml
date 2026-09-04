@@ -28,13 +28,14 @@ datasets:
   # 2026-09-03 同步 ModelScope HEAD（cd585c5）：train task#204（67aa31ca…）审核后修正
   # sbc 标注（39→48 帧，10 帧 idle→sbc + 1 帧 sbc→idle）；仅 train 标签变化，manifest
   # 不变故 revision 不变，train split 内容指纹已更新（旧 checkpoint 的 resume 会按指纹
-  # 拒绝——符合设计）；旧标签备份于数据目录 labels_backup_task204fix/。
+  # 拒绝——符合设计）；旧标签备份于原官方目录 datasets/cleansight-ActionMixed-auto/
+  # labels_backup_task204fix/（当前 data_root 为 -lhh 克隆目录，不含该备份）。
   temporal.actionmixed-auto-v3:
     family: temporal
     format: actionmixed_bbox
     dataset_version: cleansight-actionmixed-auto-v3
     revision: b7edb8749b0794bf7513ada250897e59eccb0ac0bea00287574e8f22b2f218d3
-    data_root: datasets/cleansight-ActionMixed-auto
+    data_root: datasets/cleansight-ActionMixed-auto-lhh
     feature_mapping: actionmixed-bbox-8cls-v1
     input_dim: 40
     labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
@@ -51,7 +52,7 @@ datasets:
     format: actionmixed_bbox
     dataset_version: cleansight-actionmixed-auto-roi-v1
     revision: b7edb8749b0794bf7513ada250897e59eccb0ac0bea00287574e8f22b2f218d3
-    data_root: datasets/cleansight-ActionMixed-auto
+    data_root: datasets/cleansight-ActionMixed-auto-lhh
     feature_mapping: actionmixed-roi-grid-v1
     feature_layout: {rows: 2, cols: 3, channels: 3}
     input_dim: 144
@@ -66,7 +67,7 @@ datasets:
     format: actionmixed_bbox
     dataset_version: cleansight-actionmixed-auto-hand-v1
     revision: b7edb8749b0794bf7513ada250897e59eccb0ac0bea00287574e8f22b2f218d3
-    data_root: datasets/cleansight-ActionMixed-auto
+    data_root: datasets/cleansight-ActionMixed-auto-lhh
     feature_mapping: actionmixed-bbox-hand-8cls-v1
     input_dim: 40
     labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
@@ -79,7 +80,7 @@ datasets:
     format: actionmixed_bbox
     dataset_version: cleansight-actionmixed-auto-global-hand-v1
     revision: b7edb8749b0794bf7513ada250897e59eccb0ac0bea00287574e8f22b2f218d3
-    data_root: datasets/cleansight-ActionMixed-auto
+    data_root: datasets/cleansight-ActionMixed-auto-lhh
     feature_mapping: actionmixed-bbox-global-hand-8cls-v1
     feature_blocks: 2
     input_dim: 80
