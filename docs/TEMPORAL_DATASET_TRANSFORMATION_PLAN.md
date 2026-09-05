@@ -221,7 +221,18 @@ python -m framework.cleansight_eval.cli.annotate convert \
 - 新导出发现 **task#203**（f809e944，water_injection 177 帧）未审，暂不入库，待 QC
 - 质审台账：dataset 仓库 raw-from Label Studio/EXPORT_NOTES.md 第六节
 
-## 11C. 数据开发优先级参考（2026-08-30 引入）
+## 11C. v3 审核更新与 val 重划（2026-09-05）
+
+依据 LS 新导出 `project-16-at-2026-09-05-07-46-8edb5c66.json`（19 task，归档于 dataset 仓库根）：
+
+- **标注审核更新入 v3**：task#196/197/198/208/209/210（196/210 多段 flush 区间修正、197 short_brush 大段拆分为 7 段、198/209 flush 区间收窄、208/210 相对 08-28 导出的修正一并落入）；labels 已重建
+- **val 重划（视频构成变化，split 比例不变）**：#202（071eb2d6，仅 sbc 183 帧小视频）val→train，#205（e8ea5bb7，flush+sbc）train→val；val = #209/#205/#207，六类齐（water 17 帧），train 13（water 194 帧含全库最大 water 源 #201）；test 锚定不变（#195/#199）
+- **版本口径**：仍为 v3（视频集合与检测侧未变），但 **train/val 视频构成与标签内容已变，重训前后的 val/test 指标与旧 v3 结果不可比**，评测报告须注明本次变更
+- **task#203**：新导出已有 water_injection 标注（148-188 等 4 段），维持 08-30 决定暂缓入库（water 扩量优先级调低），重建导出已剔除
+- **ModelScope**：变更文件已增量同步（labels 8 份 + task_ids.yaml + 移动视频 frames，远端旧位置已删）
+- validate：manifest 三件套 / labels 目录 / task_ids.yaml 一致性全绿
+
+## 11D. 数据开发优先级参考（2026-08-30 引入）
 
 依据 `dataset/docs/BENCHMARK_SEGMENTATION.md`（benchmark 等价类划分）的优先级框架，指导后续数据采集与扩量方向：
 
