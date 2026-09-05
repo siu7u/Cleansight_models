@@ -229,8 +229,15 @@ python -m framework.cleansight_eval.cli.annotate convert \
 - **val 重划（视频构成变化，split 比例不变）**：#202（071eb2d6，仅 sbc 183 帧小视频）val→train，#205（e8ea5bb7，flush+sbc）train→val；val = #209/#205/#207，六类齐（water 17 帧），train 13（water 194 帧含全库最大 water 源 #201）；test 锚定不变（#195/#199）
 - **版本口径**：仍为 v3（视频集合与检测侧未变），但 **train/val 视频构成与标签内容已变，重训前后的 val/test 指标与旧 v3 结果不可比**，评测报告须注明本次变更
 - **task#203**：新导出已有 water_injection 标注（148-188 等 4 段），维持 08-30 决定暂缓入库（water 扩量优先级调低），重建导出已剔除
-- **ModelScope**：变更文件已增量同步（labels 8 份 + task_ids.yaml + 移动视频 frames 697 份至新 split 位置；labels 旧位置 2 份已在网页端删除）。注意：ModelScope 已下线 API 删除能力（错误码 10020301011，提示到网页删除），`frames/val/071eb2d6-*`（261 份）与 `frames/train/e8ea5bb7-*`（436 份）旧位置残留待网页端批量清理；残留不影响训练加载（loader 按 manifest 清单走）
+- **ModelScope**：变更文件已增量同步（labels 8 份 + task_ids.yaml + 移动视频 frames 697 份至新 split 位置；labels 旧位置 2 份已在网页端删除）。注意：ModelScope 已下线 API 删除能力（错误码 10020301011，提示到网页删除），`frames/val/071eb2d6-*`（261 份）与 `frames/train/e8ea5bb7-*`（436 份）旧位置残留——后已改用 git 方式全部清除，见 11C+
 - validate：manifest 三件套 / labels 目录 / task_ids.yaml 一致性全绿
+
+## 11C+. test 集取消，#195/#199 并入 train/val（2026-09-05 第二次调整）
+
+- 团队决定取消 auto 通道 test 集：原 test 锚定视频 **#195（5b181b9b）→ train**、**#199（1b2c95ff）→ val**；此后 train 14 / val 4 / test 0
+- 涉及变更：manifest 三件套（test.txt 删除）、task_ids.yaml、testsets.yaml（移除 `temporal.actionmixed-auto-v3.test`）、YAML_CONFIG、数据集 labels/frames 位置移动
+- 评测口径本轮未动：三个 experiment yaml 的 `split_eval: test` 暂保留，重训前需改（建议改 val）并注明与历史 test 指标不可比
+- ModelScope 已用 git 方式同步（clone→移动→push）；API 删除已下线，git push 为替代通道
 
 ## 11D. 数据开发优先级参考（2026-08-30 引入）
 

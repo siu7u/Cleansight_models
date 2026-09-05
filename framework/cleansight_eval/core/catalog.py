@@ -691,10 +691,15 @@ def validate_catalog(catalog: Mapping[str, TestsetSpec]) -> dict[str, list[str]]
         overlap_policy = next(iter(policies))
         trains = [spec for spec in specs if spec.split == "train"]
         tests = [spec for spec in specs if spec.split == "test"]
-        if not trains or not tests:
-            message = f"temporal dataset_version={dataset_version} 必须同时登记 train 和 test"
+        # 2026-09-05 起 auto 通道取消 test 集：train 为必须项，test 变为可选
+        # （登记 test 仍执行后续帧级/样本级泄漏检查；未登记则该版本跳过泄漏检查）。
+        vals = [spec for spec in specs if spec.split == "val"]
+        if not trains or not (tests or vals):
+            message = f"temporal dataset_version={dataset_version} 必须登记 train，且至少有 test 或 val 之一"
             for spec in specs:
                 results[spec.id].append(message)
+            continue
+        if not tests:
             continue
         split_order = {"train": 0, "val": 1, "test": 2}
         ordered = sorted(specs, key=lambda item: (split_order.get(item.split, 99), item.id))

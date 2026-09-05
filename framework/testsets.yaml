@@ -102,12 +102,6 @@ testsets:
     manifest: benchmark/manifests/actionmixed-auto/val.txt
     purpose: validation_only
 
-  temporal.actionmixed-auto-v3.test:
-    dataset: temporal.actionmixed-auto-v3
-    split: test
-    manifest: benchmark/manifests/actionmixed-auto/test.txt
-    purpose: development_benchmark_frame_disjoint
-
   temporal.endo-project-v1.train:
     dataset: temporal.endo-project-v1
     split: train

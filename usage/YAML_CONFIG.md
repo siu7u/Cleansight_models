@@ -73,8 +73,9 @@ Pipeline 校验并执行。
 
 当前内容登记 ActionMixed 时序 train/val/test（`temporal.actionmixed-v2`，人工标注）、
 自动标注数据通道 `temporal.actionmixed-auto-v3`（YOLO 检测框 + 人工动作标签，LS project-16
-18 个视频 train 13 / val 3 / test 2，标签与 LS 同步 air→water_injection，检测源
-yolo11s-g1/g2-v1，task id 见数据集根 task_ids.yaml，2026-08-28 重建；v2 备份于
+18 个视频，2026-09-05 起取消 test：train 14 / val 4（原 test 的 #195→train、#199→val），
+标签与 LS 同步 air→water_injection，检测源
+yolo11s-g1/g2-v1，task id 见数据集根 task_ids.yaml，2026-08-28 重建、09-05 审核更新；v2 备份于
 datasets/cleansight-ActionMixed-auto-v2-backup）、旧 Endo Project train/test、两组 YOLO val/test 和
 一个端到端 smoke case。评估时据此记录数据集版本、split、重叠策略和 fingerprint。
 
