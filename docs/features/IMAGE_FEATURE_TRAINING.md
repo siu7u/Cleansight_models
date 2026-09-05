@@ -80,14 +80,27 @@ python -m framework.cleansight_eval.temporal.features.extract_embeddings \
 | 手部 40 | 11.8 | 5.9 | 2/3 |
 | 全局 40 | 11.8 | 5.9 | 2/3 |
 
-（完整逐 seed 表见 FEATURE_STRATEGY_COMPARE.md 第三轮；"坍缩"= 预测退化为全 idle。）
+GPU 口径（2026-09-04，RTX 4060 Laptop，数据根 `-lhh`，同配方同 seed；坍缩 = 非 idle 预测帧 0）：
 
-> **设备与数据根注（重要）**：上表为 2026-09-03 **CPU** 轮（自动化会话无 GPU）。2026-09-04
-> 在 GPU（RTX 4060 Laptop / cuDNN 91002 / fp32，数据根 `datasets/cleansight-ActionMixed-auto-lhh`）
-> 对 roi-grid-144 复跑（`runs/formal_roi_20260905/`）：三 seed 零坍缩不变，但逐 seed 漂移显著
+| 策略 | 中位 F1@0.1 | 中位 F1@0.25 | 坍缩 seed 数 |
+|---|---:|---:|---:|
+| **ROI 网格 144** | **19.5** | **14.6** | 0/3 |
+| 全局 40 | 20.0 | 15.0 | 0/3 |
+| 全局+手部 80 | 11.8 | 5.9 | 1/3 |
+| 手部 40 | 11.8 | 5.9 | 3/3 |
+
+（完整逐 seed 表见 FEATURE_STRATEGY_COMPARE.md 第三/四轮；"坍缩"= 预测退化为全 idle。）
+
+> **设备与数据根注（重要）**：上表 CPU 行对应 2026-09-03 **CPU** 轮（自动化会话无 GPU），
+> GPU 行为 2026-09-04 GPU 轮。
+> 2026-09-04 在 GPU（RTX 4060 Laptop / cuDNN 91002 / fp32，数据根 `datasets/cleansight-ActionMixed-auto-lhh`）
+> 复跑 roi-grid-144（`runs/formal_roi_20260905/`）：三 seed 零坍缩不变，但逐 seed 漂移显著
 > ——seed 42 提升（F1@0.1 33.3→44.9）、seed 7/2026 回落（28.6→19.1、31.8→19.5），中位
-> edit/F1@0.1/F1@0.25 = 23.59/19.51/14.63。**设备差异大于单轮噪声：正式数字必须锚定设备口径，
-> 跨设备比较只能定性**；GPU 全策略矩阵待跑后统一更新本表。
+> edit/F1@0.1/F1@0.25 = 23.59/19.51/14.63。同日跑完 **GPU 全策略矩阵**
+> （`runs/strategy_compare_gpu/`，4 策略 × 3 seed），中位数已并入上表 GPU 行：roi-grid-144
+> 仍是唯一跨设备三 seed 零坍缩策略；GPU 上全局 40 零坍缩且中位 F1@0.1 ≈ roi-grid，仅手部
+> 40 三 seed 全坍缩（手部 ROI 通道无增益，见 FEATURE_STRATEGY_COMPARE.md 第四轮）。
+> **设备差异大于单轮噪声：正式数字必须锚定设备口径，跨设备比较只能定性**。
 
 ### 3.4 正式训练方案（2026-09-03 定稿，依据 §3.3 证据）
 
@@ -111,7 +124,9 @@ python -m framework.cleansight_eval.temporal.features.extract_embeddings \
   F1@0.1 31.8 / F1@0.25 22.7，三 seed 零坍缩**。
 - **2026-09-04（GPU 轮，`runs/formal_roi_20260905/`，数据根 `-lhh`，RTX 4060 Laptop）**：
   roi-grid-144 复跑，三 seed 零坍缩，中位 edit 23.59 / F1@0.1 19.51 / F1@0.25 14.63
-  （seed 42 升、seed 7/2026 降，见 §3.3 设备注）——正式基线数字待 GPU 全策略矩阵后定版。
+  （seed 42 升、seed 7/2026 降，见 §3.3 设备注）。同日 GPU 全策略矩阵
+  （`runs/strategy_compare_gpu/`，4 策略 × 3 seed）跑完，GPU 口径基线数字定版为 §3.3 表
+  GPU 行（roi-grid-144 为唯一跨设备三 seed 零坍缩策略，中位指标见该表）。
 
 ## 4. 候选增强实验：bbox 系 + 图像通道（形态 B，E 系列）
 
