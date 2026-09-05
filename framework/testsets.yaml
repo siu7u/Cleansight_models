@@ -21,15 +21,17 @@ datasets:
   # 自动标注数据通道（YOLO 推理检测框 + 人工动作标签），与手动标注 actionmixed-v2 并存。
   # 2026-08-28 v3 重建：数据源切换到 LS project-16（18 个 8 月新录视频，task id 记录于
   # 数据集根 task_ids.yaml）；动作标签与 LS 同步——air_injection 更名 water_injection
-  # （action id 位置 1 不变）；test 由 LS task#195/#199 锚定（团队指定）；检测源仍为
-  # yolo11s-g1-v1/g2-v1。旧 v2（project-10 26 视频、air_injection 命名）产物备份于
-  # datasets/cleansight-ActionMixed-auto-v2-backup，指标与 v3 不可比。
-  # revision 为三个 split manifest 拼接内容的 sha256。
+  # （action id 位置 1 不变）；检测源仍为 yolo11s-g1-v1/g2-v1。旧 v2（project-10 26
+  # 视频、air_injection 命名）产物备份于 datasets/cleansight-ActionMixed-auto-v2-backup，
+  # 指标与 v3 不可比。
+  # 2026-09-05 两次调整：① task#196/197/198/208/209/210 审核标注更新 + val 重划
+  # （#202→train、#205→val）；② 取消 test 集（#195→train、#199→val），此后 train 14 / val 4。
+  # revision 为剩余 split（train+val）manifest 拼接内容的 sha256。
   temporal.actionmixed-auto-v3:
     family: temporal
     format: actionmixed_bbox
     dataset_version: cleansight-actionmixed-auto-v3
-    revision: b7edb8749b0794bf7513ada250897e59eccb0ac0bea00287574e8f22b2f218d3
+    revision: 7b039550f6daa0bddd1b2fd06460349e7e0fba22cf1eaf36501ad684819e9820
     data_root: datasets/cleansight-ActionMixed-auto
     feature_mapping: actionmixed-bbox-8cls-v1
     input_dim: 40
