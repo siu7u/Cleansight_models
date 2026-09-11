@@ -39,3 +39,26 @@ action-test 流转：采集上传 → LS 标注（仅 timeline，沿用 project-
 
 - 特征集一旦变化 → feature_mapping 升版本（按 YAML_CONFIG/注册规范），模型需重训
 - action-test 数据不与 v3 混用目录；若正式并入数据集走 manifest 三件套流程
+
+## 6. 四特征集 3-seed 矩阵结果（2026-09-12，CPU/WSL 口径）
+
+> 按 `docs/FEATURE_SCHEME_EVAL_PLAN.md` §4 执行：GRU（hidden=128, 3 层），健康配方
+>（wd=1e-4 / dropout=0.2 / patience=4 / best_metric=val_f1_0.5），数据 v3
+>（train 14 / val 4，eval split=val），seed 42/7/2026，12 run 全部完成并评估。
+> 运行目录 `runs/strategy_matrix/`；**单机 CPU/WSL exploratory 口径，未设固定 testset。**
+
+| 特征集 | median edit | median F1@0.1 | median F1@0.25 | median F1@0.5 | median frame mIoU |
+|---|---:|---:|---:|---:|---:|
+| **roi-144**（B0b 参照） | **24.83** | **24.24** | **18.18** | 2.02 | 11.35 |
+| bbox-40（B0a 基线） | 23.35 | 23.66 | 17.20 | **4.40** | **20.93** |
+| global-hand-80（S1） | 18.75 | 21.74 | 13.04 | 2.20 | 17.30 |
+| hand-40（S1 退化组） | 14.56 | 13.79 | 9.20 | 2.30 | 17.62 |
+
+结论（3-seed 中位数，val 仅 4 视频方差不小，谨慎解读）：
+
+- **ROI 网格段级指标仍最优**（edit / F1@0.1 / F1@0.25 均第一），复现了分支先行实验的排序；
+- **纯手部特征明确劣于全局 bbox**，且 global+hand 拼接（80 维）仍不敌基线——与数据侧事实一致
+  （scope 类在手部区域 presence 仅 14~16%，手部 box 通道稀释 scope 信号）；
+- 依方案判据：S1（box 锚定手部）**未通过**「同时优于 B0a 与 B0b」，ROI 网格暂胜；
+- 待跑：S2（bbox ⊕ 全帧 CNN embedding）与 S3（手部+全局视觉），手部贡献的最终判断待
+  CNN 全局特征加入后重新评估。
