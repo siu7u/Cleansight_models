@@ -19,7 +19,7 @@ data:
   dataset_ref: temporal.actionmixed-auto-roi-v1  # 根目录、类别、mapping 和 manifest 由 benchmark catalog 解析
   split_train: train
   split_val: val
-  split_eval: test
+  split_eval: val                        # 2026-09-05 起 v3 取消 test，评测与选型用 val
 
 feature_schema:
   dim: 144
