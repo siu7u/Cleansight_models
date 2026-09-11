@@ -21,6 +21,9 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CATALOG = REPO_ROOT / "framework" / "testsets.yaml"
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 SPLIT_OVERLAP_POLICIES = {"error", "frame", "allow"}
+# ROI 空间特征映射（temporal/features/roi_bbox.py）：按 feature_layout 声明校验维度，
+# 不在此重复 recipe 实现；core 层不 import 任何流水线。
+ROI_FEATURE_MAPPING_PREFIX = "actionmixed-roi-"
 
 
 @dataclass(frozen=True)
@@ -489,11 +492,30 @@ def _validate_temporal(spec: TestsetSpec) -> list[str]:
                 detection_count = len(detection_names)
             else:
                 detection_count = 0
-            if detection_count * 5 != spec.input_dim:
-                errors.append(
-                    f"ActionMixed 检测类别数×5={detection_count * 5} "
-                    f"与 input_dim={spec.input_dim} 不一致"
-                )
+            if str(spec.feature_mapping or "").startswith(ROI_FEATURE_MAPPING_PREFIX):
+                layout = spec.raw.get("feature_layout") or {}
+                rows, cols, channels = layout.get("rows"), layout.get("cols"), layout.get("channels")
+                if not all(isinstance(v, int) and v > 0 for v in (rows, cols, channels)):
+                    errors.append(
+                        f"ROI feature_mapping={spec.feature_mapping!r} 缺少 feature_layout"
+                        f"（rows/cols/channels 必须为正整数）"
+                    )
+                else:
+                    expected = detection_count * rows * cols * channels
+                    if expected != spec.input_dim:
+                        errors.append(
+                            f"ROI 检测类别数×区域×通道={expected} "
+                            f"与 input_dim={spec.input_dim} 不一致"
+                        )
+            else:
+                blocks = spec.raw.get("feature_blocks", 1)  # 每类特征块数（全局+手部双通道=2）
+                if not isinstance(blocks, int) or blocks <= 0:
+                    errors.append("feature_blocks 必须为正整数")
+                elif detection_count * 5 * blocks != spec.input_dim:
+                    errors.append(
+                        f"ActionMixed 检测类别数×5×块数={detection_count * 5 * blocks} "
+                        f"与 input_dim={spec.input_dim} 不一致"
+                    )
 
         missing_bbox: list[str] = []
         for name in items:

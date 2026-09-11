@@ -46,10 +46,23 @@ def causal_decision(last, pending, stable, count, num_classes: int | None = None
     return pending, stable, count
 
 
+# best checkpoint 可选指标（validation 字典键）。val_acc 对多数类友好、会偏爱 idle
+# 坍缩解（2026-09 诊断），段级指标（edit/F1）更能代表动作质量；滑窗/全序列共用。
+VALID_BEST_METRICS = frozenset({"val_acc", "val_edit", "val_f1_0.5"})
+
+
+# 类别权重截断区间：归一化后夹取到 [LOWER, UPPER]。
+# 诊断依据（2026-09）：idle 权重被频率倒数归一化压到 ~0.032，极端权重把优化焦点
+# 全压在小类上、加速小类"记忆化"，是训练坍缩的推手之一；截断下限保留多数类的基本
+# 梯度信号，上限防止单类权重失衡。
+CLASS_WEIGHT_CLIP = (0.1, 5.0)
+
+
 def compute_class_weights(dataloader, num_classes: int | None = None) -> dict:
     """按类别频率倒数计算并归一化的损失权重（迁移自 util.compute_class_weights）。
 
-    ``num_classes`` 非空时补全未出现类别（权重 0），避免缺类数据构造
+    归一化后按 ``CLASS_WEIGHT_CLIP`` 截断（默认 [0.1, 5.0]），避免极端多数/少数类
+    权重失衡。``num_classes`` 非空时补全未出现类别（权重 0），避免缺类数据构造
     CrossEntropyLoss 时类别数不匹配。
     """
 
@@ -60,7 +73,10 @@ def compute_class_weights(dataloader, num_classes: int | None = None) -> dict:
     total = sum(counter.values())
     weights = {cls: total / count for cls, count in counter.items()}
     max_w = max(weights.values())
-    normalized = {k: v / max_w for k, v in weights.items()}
+    lower, upper = CLASS_WEIGHT_CLIP
+    normalized = {
+        k: min(max(v / max_w, lower), upper) for k, v in weights.items()
+    }
     if num_classes is not None:
         for cls in range(num_classes):
             normalized.setdefault(cls, 0.0)

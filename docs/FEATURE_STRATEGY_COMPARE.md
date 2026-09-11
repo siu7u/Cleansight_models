@@ -1,0 +1,160 @@
+# 特征提取范围三策略横向对比（bbox 编码固定）
+
+> 实验目的：bbox 特征编码固定为每类最大框 `[presence, cx, cy, w, h]`，只改变**提取范围**，
+> 横向对比三种策略对动作识别的表现。模型为 GRU（hidden=128, 3 层）、seed 42、
+> 同一 v3 数据三 split（train 13 / val 3 / test 2），仅特征契约不同。
+>
+> **两轮结果**：第一轮 20 epoch 无正则（被过拟合坍缩污染，仅作诊断证据）；第二轮
+> 5 epoch + weight_decay=1e-4（配方健康，作为策略对比的有效基线，见文末坍缩分析）。
+>
+> **数据版本说明（2026-09-03）**：本报告所有 run 训练于 task#204 sbc 修正**之前**的 v3
+> 标签；该修正只改 train 一个视频（sbc 39→48 帧），**val/test 标签未变**——test 指标结论
+> 不受影响，train 侧学习的 sbc 差异在最终结论前由"多 seed 重跑（修正后数据）"覆盖。
+
+## 策略与特征契约
+
+| 策略 | feature_mapping | 维度 | 说明 |
+|---|---|---|---|
+| A 整个画面 | `actionmixed-bbox-8cls-v1` | 40 | 基线，全局坐标 |
+| B 仅手部周围 | `actionmixed-bbox-hand-8cls-v1` | 40 | 只编码面积最大 hand 框扩张 1.5 倍区域内的框，坐标相对区域归一化；无 hand 全零 |
+| C 全局+手部 | `actionmixed-bbox-global-hand-8cls-v1` | 80 | A 与 B 拼接 |
+
+实现：`framework/cleansight_eval/temporal/features/hand_bbox.py`；登记：
+`temporal.actionmixed-auto-hand-v1` / `temporal.actionmixed-auto-global-hand-v1`
+（revision 与 v3 相同）；配置：`framework/experiments/gru-actionmixed-auto{,-hand,-global-hand}.yaml`。
+
+## 数据侧事实（v3 val，1926 帧）
+
+- 无 hand 帧占比 4.9%（手部特征全零）；hand 类 presence 95.1%。
+- 关键差异：`scope_control_body`/`scope_mid_section` 全局 presence 84.7%/72.2%，
+  但**手部区域内只有 14.2%/15.9%**——手部策略会丢掉大部分 scope 类信号。
+- 稀有类（syringe/air_gun/brush_tip_out）手部区域内 presence ≤ 1%。
+
+## 结果（正式 test，锚定 task#195/#199；test 仅含 idle/long_brush_insert/long_brush_withdraw）
+
+### 第二轮：5 epoch + weight_decay=1e-4（配方健康，可信对比）
+
+| 策略 | dim | acc | edit | F1@0.1 | F1@0.25 | F1@0.5 | 非 idle 预测帧 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| **ROI 网格** | 144 | 36.33 | **48.48** | **53.06** | **36.73** | — | 1109 |
+| **A 整个画面** | 40 | 25.97 | 35.28 | 37.50 | 16.67 | 8.33 | 1158 |
+| C 全局+手部 | 80 | **27.87** | 32.25 | 27.27 | 22.73 | 4.55 | 1356 |
+| B 仅手部 | 40 | 26.07 | 30.09 | 29.79 | 17.02 | 12.77 | 1733 |
+
+- **ROI 网格（actionmixed-roi-grid-v1, 144 维）在健康配方下段级指标全面领先**：
+  edit 48.48 / F1@0.1 53.06，比 40 维基线高出 ~15 个点——空间分区信息确实带来增益
+  （早期 20 epoch 轮因坍缩从未跑过 ROI 网格，矩阵补齐后才暴露）。
+- 三策略均恢复非 idle 预测（第一轮全 idle 坍缩已解除）→ 配方修复验证通过。
+- 帧级 acc 全面下降（25~36%）是**健康信号**：不再"永远猜 idle"（acc 在 65%+ idle 数据上
+  是误导指标，段级 edit/F1 才是主线）。
+- 单 seed（42）结论，需多 seed 复跑确认排序。
+
+运行目录（未入库）：`tmp/try_fix/gru-20260903-{135238,135327,135413,161938}/`。
+
+### 第一轮：20 epoch 无正则（坍缩诊断证据，不作策略结论）
+
+| 策略 | dim | acc | edit | F1@0.1 | 状态 |
+|---|---:|---:|---:|---:|---|
+| C 全局+手部 | 80 | 59.76 | 16.02 | 11.11 | 全 idle 坍缩（GPU 版 edit 6.93） |
+| A 整个画面 | 40 | 50.34 | 25.97 | 23.81 | idle 主导 |
+| B 仅手部 | 40 | 48.02 | 11.47 | 11.11 | 全 idle 坍缩 |
+
+运行目录：`tmp/compare_strategies/gru-20260831-{192341,192623,192907}/`（CPU）、
+`runs/compare_strategies/gru-20260903-122653/`（GPU，C 策略）。
+
+### 训练期最佳 val（第二轮 history.csv）
+
+| 策略 | best val acc | best val edit | best val F1@0.5 |
+|---|---:|---:|---:|
+| A 整个画面 | 38.01 (ep5) | 26.49 (ep2) | 3.85 (ep4) |
+| B 仅手部 | 30.89 (ep1) | 24.15 (ep2) | 6.25 (ep2) |
+| C 全局+手部 | 42.69 (ep5) | 22.25 (ep1) | 4.59 (ep3) |
+
+## 第三轮：四策略 × 3 seed 一键矩阵（2026-09-03，健康配方 + 配方代码修复）
+
+工具：`python tools/run_strategy_matrix.py`（提交 `43f15ef`）；配方 weight_decay=1e-4 /
+dropout=0.2 / patience=4 / best_metric=val_f1_0.5（选择指标），epochs 上限 20（实际 5~9
+早停）；数据为含 task#204 修正的 v3。完整表见 `runs/strategy_compare/STRATEGY_SUMMARY.md`。
+
+| 策略 | seed | edit | F1@0.1 | F1@0.25 | 非idle帧 | | 中位数 edit / F1@0.1 / F1@0.25 |
+|---|---:|---:|---:|---:|---:|---|---:|
+| ROI 网格 144 | 7/42/2026 | 23.6/53.3/28.4 | 28.6/33.3/31.8 | 23.8/20.8/22.7 | 813/369/267 | → **28.4 / 31.8 / 22.7** |
+| 全局+手部 80 | 7/42/2026 | 18.4/18.4/6.9 | 15.8/20.0/11.8 | 10.5/15.0/5.9 | 120/288/0 | → 18.4 / 15.8 / 10.5 |
+| 手部 40 | 7/42/2026 | 25.1/6.9/6.9 | 15.8/11.8/11.8 | 10.5/5.9/5.9 | 82/0/0 | → 6.9 / 11.8 / 5.9 |
+| 全局 40 | 7/42/2026 | 36.6/9.3/6.9 | 28.6/11.4/11.8 | 14.3/5.7/5.9 | 179/8/0 | → 9.3 / 11.8 / 5.9 |
+
+> **设备注**：第三轮全部 run 为 **CPU**（2026-09-03，自动化会话无 GPU），本表中位数仅在
+> CPU 环境内可复现。GPU 全策略矩阵见下方第四轮（`runs/strategy_compare_gpu/`）。
+
+## 第四轮：GPU 全策略矩阵（2026-09-04，RTX 4060 Laptop，数据根 `-lhh`）
+
+工具与配方同第三轮（`python tools/run_strategy_matrix.py --runs-dir runs/strategy_compare_gpu`），
+四策略 × seed 42/7/2026，test 仍锚定 task#195/#199；完整逐 seed 表见
+`runs/strategy_compare_gpu/STRATEGY_SUMMARY.md`（坍缩 = 非 idle 预测帧为 0）。
+
+| 策略 | seed(7/42/2026) edit | F1@0.1 | F1@0.25 | 非idle帧 | 中位 edit / F1@0.1 / F1@0.25 |
+|---|---:|---:|---:|---:|---:|
+| ROI 网格 144 | 21.2/55.6/23.6 | 19.1/44.9/19.5 | 14.3/36.7/14.6 | 769/477/152 | → **23.6 / 19.5 / 14.6** |
+| 全局 40 | 9.3/18.4/41.3 | 16.7/20.0/27.3 | 11.1/15.0/18.2 | 63/421/236 | → 18.4 / 20.0 / 15.0 |
+| 全局+手部 80 | 6.9/18.4/16.0 | 11.8/15.8/11.1 | 5.9/10.5/5.6 | 0/121/31 | → 16.0 / 11.8 / 5.9 |
+| 手部 40 | 6.9/6.9/6.9 | 11.8/11.8/11.8 | 5.9/5.9/5.9 | 0/0/0 | → 6.9 / 11.8 / 5.9 |
+
+- **跨设备稳健性**：ROI 网格 144 仍是唯一 **CPU/GPU 均三 seed 零坍缩** 的策略；roi-grid GPU
+  中位（23.59/19.51/14.63）与 `runs/formal_roi_20260905/` 正式轮完全一致。
+- **手部 ROI 通道无增益**：仅手部 40 在 GPU 三 seed 全坍缩（非 idle 预测 0 帧）；全局+手部
+  80 仍有 1/3 坍缩 seed、中位 F1@0.1 11.8 与仅手部持平——与 CPU 轮一致（scope 类在手部
+  区域内 presence 仅 ~15%，手部策略丢掉大部分判别上下文）。
+- **GPU 口径排序与 CPU 不同**：全局 40 在 GPU 上零坍缩且中位 F1@0.1（20.0）≈ roi-grid
+  （19.5），roi-grid 仅中位 edit 领先（23.6 vs 18.4）；CPU 轮 roi-grid 全面领先（31.8 vs
+  ≤15.8）。**设备差异大于单轮噪声、逐 seed 漂移大于策略间距：跨设备只能定性比较**，
+  正式数字必须锚定设备口径、多 seed 取中位数。
+
+> **val 中间口径（2026-09-05 补充，仅作类别可见性参考，非独立测试）**：v3 test 不覆盖
+> flush / short_brush_cleaning（帧级 support=0），无法给出这两类的正式 test 指标；作为
+> 中间可见性证据，对 GPU 矩阵 12 个 best.pt 在 val（flush 147 帧 / sb_cleaning 110 帧 /
+> lb_insert 180 帧 / lb_withdraw 90 帧）上补跑帧级逐类评测（运行目录未入库：
+> `tmp/planb_val_evals/`，配置为同实验 YAML 的 `split_eval: val` 变体）。注意 best.pt 由
+> 同一 val 按 val_f1_0.5 选出，存在选择偏差，且 seed 方差大，只读趋势不读绝对值：
+> flush 帧级 recall 跨策略/seed 为 0~86%（global-40/global+hand-80 部分 seed 可达 70%+，
+> 其余 seed 为 0）；sb_cleaning recall 0~52%；long_brush_insert recall 几乎全为 0、
+> lb_withdraw 仅 global+hand-80/roi-grid 各一个 seed 达 53%——**长短毛刷与 flush 的可靠
+> 逐类结论仍需 action-test 新数据补 test 覆盖后重测**（见 IMAGE_FEATURE_TRAINING.md §5.2）。
+
+## 结论（多 seed 版，取代此前单 seed 结论）
+
+1. **seed 方差巨大**：同策略不同 seed 的段级指标可差 3~5 倍（全局 40：F1@0.1 28.6 vs 11.4），
+   部分 seed 仍坍缩到近全 idle（非 idle 预测 0~8 帧）——**单 seed 结论全部不可靠**，
+   此前所有单 seed 数字只代表一个样本；多 seed 是硬性要求。
+2. **ROI 网格（144 维）是唯一 CPU/GPU 两轮均三 seed 全部不坍缩的策略**
+   （CPU 中位 F1@0.1 31.8 / F1@0.25 22.7，其余策略 5.9~15.8；GPU 中位数见第四轮，全局 40
+   与 roi-grid 接近、仅手部全坍缩）——空间分区特征的空间冗余使其对 seed/初始化最稳健，
+   抗坍缩是跨设备成立的唯一结论；段级指标排序则锚定设备口径。
+3. **新配方（dropout/早停/段级选择）没有消除坍缩的 seed 依赖性**：bbox 系在 seed 2026
+   下仍坍缩（edit 6.93 = 全 idle 上下界）。坍缩根因（稀有类样本少 + test 分布漂移）未变，
+   配方只能缓解不能根治；ROI 网格的特征形态（区域统计天然抗单帧噪声）才是抗坍缩主因。
+4. 早停实际停在第 5~9 epoch，best 多在第 1~5 epoch——概念学习期依然很短，dropout 未显著
+   延长；进一步延长有效训练需数据扩量或更强正则/调度。
+5. 遗留：选择指标（val_f1_0.5 vs val_acc）对结果的影响未单独消融；last.pt 未对比。
+6. 推理延迟四者无实质差异（p95 ≈ 2–2.6 ms，远低于 33 ms 帧预算）——延迟不构成选型约束。
+
+## 坍缩分析与配方修复（第一轮的教训，第二轮的依据）
+
+详见对话记录与 git log `1346ec5` 后的分析；要点：
+
+- **坍缩机制**：稀有类样本少 + 类别权重极端（idle 0.032）+ 无正则 20 epoch → 稀有类被
+  "记忆化"而非"概念化"；test（task#195/#199 全新视频）分布漂移使记忆全部失活 → 输出坍缩
+  到唯一跨视频稳定的 idle；val_acc 选择机制（多数类友好）再放大退化解。
+- **修复**：5 epoch + weight_decay=1e-4 让模型停留在概念学习期（val_loss 不再从 epoch 1
+  单调飙升），坍缩解除、段级指标大幅回升。
+- **遗留（已修复 2026-09-03）**：best.pt 按 val_acc 选择、GRU 无 dropout、无早停——
+  三项已在代码层落地（`train.best_metric` 可选 val_acc/val_edit/val_f1_0.5、
+  `gru.py` 支持 model.dropout、`train.patience` 按 val_loss 早停，默认均向后兼容；
+  另类别权重归一化后截断至 [0.1, 5.0]）。单 seed 问题待多 seed 复跑。
+
+## 下一步建议
+
+- **多 seed（42/7/2026）复跑第二轮配方**：单 run 噪声大（CPU/GPU 同配置结果不同），
+  三策略 × 3 seed 取中位数后才能下最终结论。
+- 代码级配方修复：GRU 加 dropout、best checkpoint 指标可选（按段级）、早停实现。
+- 若确认 insert/withdraw 仍弱：加"区域级差分"等运动学通道（新 feature mapping 版本）。
+- 换 mstcn/transformer 全序列模型看段级表现是否改变排序。

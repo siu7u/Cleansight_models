@@ -46,10 +46,11 @@ from .data import (
 from .external import configure_external_model
 from .models import build_model, is_causal
 from .training_validation import summarize_training_metrics
-from .util import causal_decision, compute_class_weights
+from .util import VALID_BEST_METRICS, causal_decision, compute_class_weights
 
 IDLE_ID = 0
 MIN_DURATION = 25  # causal_decision 内部最小持续时长，此处仅用于语义描述
+
 
 
 class SlidingWindowDataset(Dataset):
@@ -144,6 +145,15 @@ class SlidingWindowTemporalPipeline(Pipeline):
                 raise ValueError(f"时序流水线 data 段缺少必要字段: {k}（用数据集内建目录切分）")
         resolve_mask_target_ids(data, cfg.get("feature_schema"))
         resolve_target_mask_augmentation(data, cfg.get("augmentation"))
+        train = cfg.get("train", {})
+        best_metric = train.get("best_metric", "val_acc")
+        if best_metric not in VALID_BEST_METRICS:
+            raise ValueError(
+                f"train.best_metric 必须是 {sorted(VALID_BEST_METRICS)} 之一，实际 {best_metric!r}"
+            )
+        patience = train.get("patience")
+        if patience is not None and (not isinstance(patience, int) or patience < 1):
+            raise ValueError("train.patience 必须是 ≥1 的整数（按 val_loss 早停，缺省关闭）")
 
     def train(self, cfg: dict, runs_dir: str, seed: int, device) -> str:
         train_cfg = cfg["train"]
@@ -208,7 +218,7 @@ class SlidingWindowTemporalPipeline(Pipeline):
             )
             grad_clip = train_cfg.get("grad_clip")
             start_epoch = 1
-            best_metric = {"name": "val_acc", "mode": "max", "value": None, "epoch": None}
+            best_metric = {"name": train_cfg.get("best_metric", "val_acc"), "mode": "max", "value": None, "epoch": None}
 
             if resume_path:
                 expected = {"type": model_cfg["type"], "input_dim": model_cfg["input_dim"], "num_classes": model_cfg["num_classes"]}
@@ -251,6 +261,14 @@ class SlidingWindowTemporalPipeline(Pipeline):
                 )
                 return str(best_path if best_path.exists() else last_path)
 
+            # best checkpoint 指标与早停（2026-09 配方修复：指标可配置避免 val_acc
+            # 挑中 idle 坍缩解；patience 按 val_loss 早停，val_loss 从 ep1 飙升 = 过拟合
+            # 信号，见 docs/FEATURE_STRATEGY_COMPARE.md 坍缩分析）。
+            best_metric_name = train_cfg.get("best_metric", "val_acc")
+            patience = train_cfg.get("patience")
+            no_improve_epochs = 0
+            best_val_loss = float("inf")
+
             for epoch in tqdm(range(start_epoch, epochs + 1), desc="train"):
                 current_epoch = epoch
                 epoch_start = time.perf_counter()
@@ -271,12 +289,12 @@ class SlidingWindowTemporalPipeline(Pipeline):
 
                 validation = _evaluate_sliding_window(model, val_datasets, val_id2name, criterion, device)
                 train_loss = float(np.mean(losses)) if losses else None
-                val_acc = validation["val_acc"]
-                improved = val_acc is not None and (
-                    best_metric["value"] is None or val_acc > float(best_metric["value"])
+                metric_value = validation.get(best_metric_name)
+                improved = metric_value is not None and (
+                    best_metric["value"] is None or metric_value > float(best_metric["value"])
                 )
                 if improved:
-                    best_metric.update({"value": val_acc, "epoch": epoch})
+                    best_metric.update({"value": metric_value, "epoch": epoch})
                     save_training_checkpoint(best_path, model=model, optimizer=optimizer, epoch=epoch, meta=meta, best_metric=best_metric)
                 save_training_checkpoint(last_path, model=model, optimizer=optimizer, epoch=epoch, meta=meta, best_metric=best_metric)
                 row = {
@@ -291,6 +309,17 @@ class SlidingWindowTemporalPipeline(Pipeline):
                 }
                 history.append(row)
                 run.write_status("running", stage="epoch_complete", epoch=epoch, best_metric=best_metric, last_checkpoint=str(last_path))
+
+                if patience:
+                    val_loss = validation.get("val_loss")
+                    if val_loss is not None and val_loss < best_val_loss - 1e-4:
+                        best_val_loss = val_loss
+                        no_improve_epochs = 0
+                    else:
+                        no_improve_epochs += 1
+                    if no_improve_epochs >= patience:
+                        print(f"[train] early stop: val_loss 连续 {patience} epoch 未改善（best {best_val_loss:.4f}），停在 epoch {epoch}")
+                        break
 
             curves_path, curves_error = try_plot_training_history(
                 run.history_path,

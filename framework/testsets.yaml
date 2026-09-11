@@ -38,6 +38,45 @@ datasets:
     labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
     split_overlap_policy: frame
 
+  # feature-lab 特征提取方案实验契约（docs/FEATURE_SCHEME_EVAL_PLAN.md）：与 v3 同一物理
+  # 数据与 revision，仅特征契约不同，故使用独立 dataset_version 以免泄漏检查跨契约误报。
+  # 2026-09-05 起无 test split（随 v3 取消）。
+  temporal.actionmixed-auto-roi-v1:
+    family: temporal
+    format: actionmixed_bbox
+    dataset_version: cleansight-actionmixed-auto-roi-v1
+    revision: 7b039550f6daa0bddd1b2fd06460349e7e0fba22cf1eaf36501ad684819e9820
+    data_root: datasets/cleansight-ActionMixed-auto
+    feature_mapping: actionmixed-roi-grid-v1
+    feature_layout: {rows: 2, cols: 3, channels: 3}
+    input_dim: 144
+    labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    split_overlap_policy: frame
+
+  temporal.actionmixed-auto-hand-v1:
+    family: temporal
+    format: actionmixed_bbox
+    dataset_version: cleansight-actionmixed-auto-hand-v1
+    revision: 7b039550f6daa0bddd1b2fd06460349e7e0fba22cf1eaf36501ad684819e9820
+    data_root: datasets/cleansight-ActionMixed-auto
+    feature_mapping: actionmixed-bbox-hand-8cls-v1
+    feature_blocks: 1
+    input_dim: 40
+    labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    split_overlap_policy: frame
+
+  temporal.actionmixed-auto-global-hand-v1:
+    family: temporal
+    format: actionmixed_bbox
+    dataset_version: cleansight-actionmixed-auto-global-hand-v1
+    revision: 7b039550f6daa0bddd1b2fd06460349e7e0fba22cf1eaf36501ad684819e9820
+    data_root: datasets/cleansight-ActionMixed-auto
+    feature_mapping: actionmixed-bbox-global-hand-8cls-v1
+    feature_blocks: 2
+    input_dim: 80
+    labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    split_overlap_policy: frame
+
   temporal.endo-project-v1:
     family: temporal
     dataset_version: endo-project-v1
@@ -100,6 +139,42 @@ testsets:
 
   temporal.actionmixed-auto-v3.val:
     dataset: temporal.actionmixed-auto-v3
+    split: val
+    manifest: benchmark/manifests/actionmixed-auto/val.txt
+    purpose: validation_only
+
+  temporal.actionmixed-auto-roi-v1.train:
+    dataset: temporal.actionmixed-auto-roi-v1
+    split: train
+    manifest: benchmark/manifests/actionmixed-auto/train.txt
+    purpose: training_only
+
+  temporal.actionmixed-auto-roi-v1.val:
+    dataset: temporal.actionmixed-auto-roi-v1
+    split: val
+    manifest: benchmark/manifests/actionmixed-auto/val.txt
+    purpose: validation_only
+
+  temporal.actionmixed-auto-hand-v1.train:
+    dataset: temporal.actionmixed-auto-hand-v1
+    split: train
+    manifest: benchmark/manifests/actionmixed-auto/train.txt
+    purpose: training_only
+
+  temporal.actionmixed-auto-hand-v1.val:
+    dataset: temporal.actionmixed-auto-hand-v1
+    split: val
+    manifest: benchmark/manifests/actionmixed-auto/val.txt
+    purpose: validation_only
+
+  temporal.actionmixed-auto-global-hand-v1.train:
+    dataset: temporal.actionmixed-auto-global-hand-v1
+    split: train
+    manifest: benchmark/manifests/actionmixed-auto/train.txt
+    purpose: training_only
+
+  temporal.actionmixed-auto-global-hand-v1.val:
+    dataset: temporal.actionmixed-auto-global-hand-v1
     split: val
     manifest: benchmark/manifests/actionmixed-auto/val.txt
     purpose: validation_only
