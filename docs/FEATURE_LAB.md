@@ -62,3 +62,36 @@ action-test 流转：采集上传 → LS 标注（仅 timeline，沿用 project-
 - 依方案判据：S1（box 锚定手部）**未通过**「同时优于 B0a 与 B0b」，ROI 网格暂胜；
 - 待跑：S2（bbox ⊕ 全帧 CNN embedding）与 S3（手部+全局视觉），手部贡献的最终判断待
   CNN 全局特征加入后重新评估。
+
+### 6.1 S2/S3 结果（2026-09-12 补充，CPU/WSL 口径）
+
+> 实施：18 个源视频（`outputs/videos-p16/`）按标签帧号抽帧（12959 帧，0 缺失）→
+> resnet18 逐帧 embedding → train 拟合 PCA-80（EVR=15.6%，域外特征方差分散）→
+> 与几何特征拼接。契约 `actionmixed-bbox-cnn-resnet18-v1`（120 维）/
+> `actionmixed-bbox-hand-cnn-v1`（160 维）；实施细节见
+> [`FEATURE_SCHEME_S2_S3_SPEC.md`](FEATURE_SCHEME_S2_S3_SPEC.md)。
+> **注意**：首轮因帧图路径/扩展名与 `extract_embeddings.py` 约定不符导致 embedding 全零，
+> 已作废并在链路中加入自动门禁（逐视频非零行占比 ≥99%）后重跑。
+
+| 特征集 | median edit | median F1@0.1 | median F1@0.25 | median frame mIoU |
+|---|---:|---:|---:|---:|
+| roi-144（B0b 参照） | 24.83 | **24.24** | **18.18** | 11.35 |
+| bbox-40（B0a 基线） | 23.35 | 23.66 | 17.20 | **20.93** |
+| hand+bbox+cnn-160（S3） | **25.22** | 22.92 | 12.50 | 14.63 |
+| global-hand-80（S1） | 18.75 | 21.74 | 13.04 | 17.30 |
+| bbox+cnn-120（S2） | 16.01 | 18.37 | 10.42 | 15.28 |
+| hand-40 | 14.56 | 13.79 | 9.20 | 17.62 |
+
+S2/S3 判据结论：
+
+- **S2 未通过**：edit 16.01 / F1@0.25 10.42 全面低于基线与 ROI——ImageNet resnet18 的
+  全帧外观特征在内镜域未带来增益（风险 ② 域差距应验），反而稀释几何信号；
+- **S3 未通过**：edit 25.22 单项最高（超 roi +0.39，在 seed 方差内），但 F1@0.25 12.50
+  远低于 roi 18.18，「同时优于 B0a 与 B0b」不成立；edit 上的微弱优势不足以支持 160 维
+  与 CNN 部署成本；
+- **手部通道最终判断**：S3(25.22) > S2(16.01) 说明手部几何通道在 CNN 特征加持下有正贡献，
+  但仍未越过 ROI 网格——box 锚定手部线关闭；若未来重启手部线，应改用关键点级特征
+  （MediaPipe 等）而非 hand box 区域统计；
+- **定版建议**：特征选型定格 **roi-144（actionmixed-roi-grid-v1）**——因果、无状态、
+  纯几何零部署成本，段级指标全面第一；升正式前需 GPU 多 seed 复跑（本轮为 CPU
+  exploratory 口径，val 仅 4 视频且 PCA/评估均在低算力环境）。
