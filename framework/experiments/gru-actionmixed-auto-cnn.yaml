@@ -1,0 +1,41 @@
+# GRU 滑窗正式训练配置（S2：bbox-40 ⊕ 全帧 resnet18 embedding PCA-80，见
+# docs/FEATURE_SCHEME_S2_S3_SPEC.md §2）。feature_mapping=actionmixed-bbox-cnn-resnet18-v1：
+# 每帧 = bbox 40 维 ⊕ embedding 投影 80 维 = 120 维（blocks=3）。
+# 依赖 runs/image_embeddings/actionmixed-resnet18-v1/{<split>/*.npy, pca80.npz}。
+
+schema_version: 1
+pipeline: sliding_window_temporal
+
+model:
+  type: gru              # 因果模型，可用于滑窗；规模由本段超参表达
+  input_dim: 120         # 8 检测类 × 6 区域 × [presence, count, max_area]
+  num_classes: 6         # idle/water_injection/flush/long_brush_insert/long_brush_withdraw/short_brush_cleaning
+  hidden: 128
+  num_layers: 3
+  dropout: 0.2           # 层间 dropout（坍缩诊断的配方修复，0059eb9）
+
+data:
+  dataset_ref: temporal.actionmixed-auto-cnn-v1  # 根目录、类别、mapping 和 manifest 由 benchmark catalog 解析
+  split_train: train
+  split_val: val
+  split_eval: val                        # 2026-09-05 起 v3 取消 test，评测与选型用 val
+
+feature_schema:
+  dim: 120
+  version: actionmixed-bbox-cnn-resnet18-v1
+  # 每 18 维一类（6 区域 × 3 通道，区域按行优先），类顺序同 frames/data.yaml：
+  # hand, scope_control_body, scope_mid_section, scope_distal_end,
+  # syringe, air_gun, short_brush, brush_tip_out。
+
+evaluation:
+  mode: formal
+  visualize: true
+
+train:
+  epochs: 20
+  lr: 0.001
+  batch_size: 32
+  window: 16          # 必须 ≤ 最短视频的采样帧数（auto v3 数据最短约 195 帧）
+  weight_decay: 0.0001   # 健康配方（下同，见文档 §3.4）
+  patience: 4            # 按 val_loss 早停
+  best_metric: val_f1_0.5  # 段级指标选 best.pt（val_acc 会偏爱 idle 坍缩解）

@@ -77,6 +77,30 @@ datasets:
     labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
     split_overlap_policy: frame
 
+  temporal.actionmixed-auto-cnn-v1:
+    family: temporal
+    format: actionmixed_bbox
+    dataset_version: cleansight-actionmixed-auto-cnn-v1
+    revision: 7b039550f6daa0bddd1b2fd06460349e7e0fba22cf1eaf36501ad684819e9820
+    data_root: datasets/cleansight-ActionMixed-auto
+    feature_mapping: actionmixed-bbox-cnn-resnet18-v1
+    feature_blocks: 3
+    input_dim: 120
+    labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    split_overlap_policy: frame
+
+  temporal.actionmixed-auto-hand-cnn-v1:
+    family: temporal
+    format: actionmixed_bbox
+    dataset_version: cleansight-actionmixed-auto-hand-cnn-v1
+    revision: 7b039550f6daa0bddd1b2fd06460349e7e0fba22cf1eaf36501ad684819e9820
+    data_root: datasets/cleansight-ActionMixed-auto
+    feature_mapping: actionmixed-bbox-hand-cnn-v1
+    feature_blocks: 4
+    input_dim: 160
+    labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    split_overlap_policy: frame
+
   temporal.endo-project-v1:
     family: temporal
     dataset_version: endo-project-v1
@@ -175,6 +199,30 @@ testsets:
 
   temporal.actionmixed-auto-global-hand-v1.val:
     dataset: temporal.actionmixed-auto-global-hand-v1
+    split: val
+    manifest: benchmark/manifests/actionmixed-auto/val.txt
+    purpose: validation_only
+
+  temporal.actionmixed-auto-cnn-v1.train:
+    dataset: temporal.actionmixed-auto-cnn-v1
+    split: train
+    manifest: benchmark/manifests/actionmixed-auto/train.txt
+    purpose: training_only
+
+  temporal.actionmixed-auto-cnn-v1.val:
+    dataset: temporal.actionmixed-auto-cnn-v1
+    split: val
+    manifest: benchmark/manifests/actionmixed-auto/val.txt
+    purpose: validation_only
+
+  temporal.actionmixed-auto-hand-cnn-v1.train:
+    dataset: temporal.actionmixed-auto-hand-cnn-v1
+    split: train
+    manifest: benchmark/manifests/actionmixed-auto/train.txt
+    purpose: training_only
+
+  temporal.actionmixed-auto-hand-cnn-v1.val:
+    dataset: temporal.actionmixed-auto-hand-cnn-v1
     split: val
     manifest: benchmark/manifests/actionmixed-auto/val.txt
     purpose: validation_only

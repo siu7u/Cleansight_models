@@ -23,6 +23,14 @@ from .roi_bbox import (
     ROI_N_REGIONS,
     build_roi_frame_features,
 )
+from .cnn_concat import (
+    CNN_BBOX_VERSION,
+    CNN_FEATURE_DIMS,
+    CNN_HAND_VERSION,
+    build_cnn_concat_frame,
+    load_pca,
+    project_embedding,
+)
 
 
 def feature_names_for_version(version: str) -> list[str] | None:
@@ -34,6 +42,9 @@ def feature_names_for_version(version: str) -> list[str] | None:
 
 
 __all__ = [
+    "CNN_BBOX_VERSION",
+    "CNN_FEATURE_DIMS",
+    "CNN_HAND_VERSION",
     "CLEAN_FEATURE_DIMS",
     "GLOBAL_HAND_BBOX_VERSION",
     "GLOBAL_HAND_FEATURE_DIM",

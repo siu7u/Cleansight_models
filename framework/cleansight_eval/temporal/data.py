@@ -38,6 +38,13 @@ from pathlib import Path
 import numpy as np
 import yaml
 
+from .features.cnn_concat import (
+    CNN_BBOX_VERSION,
+    CNN_FEATURE_DIMS,
+    CNN_HAND_VERSION,
+    build_cnn_concat_frame,
+    load_pca,
+)
 from .features import (
     CLEAN_FEATURE_DIMS,
     GLOBAL_HAND_BBOX_VERSION,
@@ -444,6 +451,15 @@ def load_split(
     roi_recipe = feature_version == ROI_FEATURE_VERSION
     hand_recipe = feature_version == HAND_BBOX_VERSION
     global_hand_recipe = feature_version == GLOBAL_HAND_BBOX_VERSION
+    cnn_recipe = feature_version in CNN_FEATURE_DIMS
+    cnn_include_hand = feature_version == CNN_HAND_VERSION
+    if cnn_recipe:
+        embedding_dir = Path(
+            (feature_schema or {}).get(
+                "embedding_dir", "runs/image_embeddings/actionmixed-resnet18-v1"
+            )
+        )
+        pca = load_pca(embedding_dir / "pca80.npz")
     clean_recipe = feature_version in CLEAN_FEATURE_DIMS
     detection_mapping = load_detection_mapping(data_cfg) if clean_recipe else None
     fps = float(data_cfg.get("fps", 7.5))
@@ -498,6 +514,31 @@ def load_split(
                         ]
                     )
                     for path in frame_paths
+                ]
+            ).astype(np.float32)
+        elif cnn_recipe:
+            emb_npy = embedding_dir / split / f"{stem}.npy"
+            if not emb_npy.exists():
+                raise FileNotFoundError(
+                    f"S2/S3 契约缺少预计算 embedding: {emb_npy}（先跑 extract_embeddings）"
+                )
+            embeddings = np.load(emb_npy)
+            if len(embeddings) != len(frame_paths):
+                raise ValueError(
+                    f"embedding 行数 {len(embeddings)} 与标签帧数 {len(frame_paths)} 不对齐: {emb_npy}"
+                )
+            feats = np.stack(
+                [
+                    build_cnn_concat_frame(
+                        featurize_frame_bbox(path, mask_target_ids=mask_target_ids),
+                        build_hand_frame_features(path, mask_target_ids=mask_target_ids)
+                        if cnn_include_hand
+                        else None,
+                        embeddings[row],
+                        pca,
+                        include_hand=cnn_include_hand,
+                    )
+                    for row, path in enumerate(frame_paths)
                 ]
             ).astype(np.float32)
         else:
