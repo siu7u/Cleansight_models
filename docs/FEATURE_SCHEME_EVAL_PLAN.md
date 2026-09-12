@@ -19,15 +19,15 @@
 
 ## 2. 现有资产盘点（写方案前先看清楚已有什么）
 
-| 资产 | 位置 | 状态 |
-|---|---|---|
-| 基线特征 clean_bbox_v2（113/121/249 维，含插补/速度/pair 统计） | `framework/cleansight_eval/temporal/features/clean_bbox_v2.py`（本分支） | ✅ 现行 |
-| 手部区域 bbox 编码 `actionmixed-bbox-hand-8cls-v1`（40 维） | `temporal/features/hand_bbox.py`（feat/roi-training 分支） | ✅ 已实现+测试 |
-| 全局+手部拼接 `actionmixed-bbox-global-hand-8cls-v1`（80 维） | 同上（data.py 拼接） | ✅ 已实现 |
-| ROI 网格 `actionmixed-roi-grid-v1`（2×3 网格 × 8 类 × 3 通道 = 144 维） | `temporal/features/roi_bbox.py`（feat/roi-training 分支） | ✅ 已实现，先行实验**段级指标领先基线 ~15 点** |
-| 全帧 CNN embedding 离线预计算（resnet18/34/50、mobilenet、efficientnet） | `temporal/features/extract_embeddings.py`（feat/roi-training 分支） | ✅ 已实现+测试 |
-| 策略横向对比先例（含 3-seed 矩阵工具 `tools/run_strategy_matrix.py`） | feat/roi-training 分支 `docs/FEATURE_STRATEGY_COMPARE.md` | ✅ 可复用流程 |
-| 数据 `temporal.actionmixed-auto-v3`（train 14 / val 4，test 已并入取消） | datasets + testsets.yaml | ✅ 就绪 |
+| 资产                                                             | 位置                                                                  | 状态                           |
+| -------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------- |
+| 基线特征 clean_bbox_v2（113/121/249 维，含插补/速度/pair 统计）               | `framework/cleansight_eval/temporal/features/clean_bbox_v2.py`（本分支） | ✅ 现行                         |
+| 手部区域 bbox 编码 `actionmixed-bbox-hand-8cls-v1`（40 维）             | `temporal/features/hand_bbox.py`（feat/roi-training 分支）              | ✅ 已实现+测试                     |
+| 全局+手部拼接 `actionmixed-bbox-global-hand-8cls-v1`（80 维）           | 同上（data.py 拼接）                                                      | ✅ 已实现                        |
+| ROI 网格 `actionmixed-roi-grid-v1`（2×3 网格 × 8 类 × 3 通道 = 144 维）  | `temporal/features/roi_bbox.py`（feat/roi-training 分支）               | ✅ 已实现，先行实验**段级指标领先基线 ~15 点** |
+| 全帧 CNN embedding 离线预计算（resnet18/34/50、mobilenet、efficientnet）  | `temporal/features/extract_embeddings.py`（feat/roi-training 分支）     | ✅ 已实现+测试                     |
+| 策略横向对比先例（含 3-seed 矩阵工具 `tools/run_strategy_matrix.py`）         | feat/roi-training 分支 `docs/FEATURE_STRATEGY_COMPARE.md`             | ✅ 可复用流程                      |
+| 数据 `temporal.actionmixed-auto-v3`（train 14 / val 4，test 已并入取消） | datasets + testsets.yaml                                            | ✅ 就绪                         |
 
 > 结论：四个方案**基本不需要从零造轮子**，主要工作是把 feat/roi-training 分支的特征实现
 > 迁移/对齐到本分支，并补齐"全局视觉特征"与"手部特征"的**组合融合**路径。
