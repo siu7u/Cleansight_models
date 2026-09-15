@@ -44,6 +44,11 @@
 
 ## 3. 六特征集逐类 F1 对比（3-seed 中位数）
 
+> ⚠️ **配方混杂提示（2026-09-12 审计）**：本表 bbox-40 / hand-40 / global-hand-80 三列
+> 产生于未含健康配方的 YAML（无 dropout/weight_decay/patience，best.pt 按 val_acc 选型），
+> 与 roi-144 / S2 / S3 口径不一致；配置已修复但**重跑已暂停（待后续执行）**，
+> 替换前这三列仅作诊断参考。详见 [`FEATURE_LAB.md`](FEATURE_LAB.md) §6.2。
+
 | 动作类别 | bbox-40 (B0a) | roi-144 (B0b) | hand-40 | global-hand-80 (S1) | bbox+cnn-120 (S2) | hand+bbox+cnn-160 (S3) |
 |---|---:|---:|---:|---:|---:|---:|
 | idle | 0.7851 | 0.7219 | 0.8154 | 0.7799 | 0.7113 | 0.7422 |

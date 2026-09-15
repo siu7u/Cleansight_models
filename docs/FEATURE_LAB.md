@@ -42,10 +42,15 @@ action-test 流转：采集上传 → LS 标注（仅 timeline，沿用 project-
 
 ## 6. 四特征集 3-seed 矩阵结果（2026-09-12，CPU/WSL 口径）
 
-> 按 `docs/FEATURE_SCHEME_EVAL_PLAN.md` §4 执行：GRU（hidden=128, 3 层），健康配方
->（wd=1e-4 / dropout=0.2 / patience=4 / best_metric=val_f1_0.5），数据 v3
->（train 14 / val 4，eval split=val），seed 42/7/2026，12 run 全部完成并评估。
-> 运行目录 `runs/strategy_matrix/`；**单机 CPU/WSL exploratory 口径，未设固定 testset。**
+> 按 `docs/FEATURE_SCHEME_EVAL_PLAN.md` §4 执行：GRU（hidden=128, 3 层），数据 v3
+>（train 14 / val 4，eval split=val），seed 42/7/2026。运行目录 `runs/strategy_matrix/`；
+> **单机 CPU/WSL exploratory 口径，未设固定 testset。**
+>
+> ⚠️ **配方混杂警告（2026-09-12 审计发现，见 §6.2）**：本表 bbox-40 / hand-40 /
+> global-hand-80 三行产生于**未含健康配方的 YAML**（dropout/weight_decay/patience/
+> best_metric 四键缺失，best.pt 按 val_acc 选型）。配置已修复，但**重跑尚未完成
+> （用户于 2026-09-15 主动暂停，待后续执行）**；重跑落定前表中三行仅作诊断参考，
+> 与 roi-144 不可直接比较。
 
 | 特征集 | median edit | median F1@0.1 | median F1@0.25 | median F1@0.5 | median frame mIoU |
 |---|---:|---:|---:|---:|---:|
@@ -95,3 +100,48 @@ S2/S3 判据结论：
 - **定版建议**：特征选型定格 **roi-144（actionmixed-roi-grid-v1）**——因果、无状态、
   纯几何零部署成本，段级指标全面第一；升正式前需 GPU 多 seed 复跑（本轮为 CPU
   exploratory 口径，val 仅 4 视频且 PCA/评估均在低算力环境）。
+
+### 6.2 训练充分性分析与配方混杂审计（2026-09-12）
+
+#### 6.2.1 用 loss 曲线判断「训练是否充分」（18 个 run 全量审计）
+
+| 组 | 实际 epochs | train_loss（首→末） | val_loss 最低点 | 早停 | 判读 |
+|---|---|---|---|---|---|
+| roi-144 / S2 / S3 | 5~6（早停触发） | 1.2 → 0.70~0.88（未收敛） | **ep1~2**，其后单调恶化 | ✅ | 训练充分：ep2 起即过拟合，加 epoch 无益 |
+| bbox-40 / hand-40 / global-hand-80 | 20（跑满） | 1.4 → 0.23~0.53（尾部每 3ep 仍降 3~7%） | ep3~5，其后持续恶化（如 1.09→1.83） | ❌ 未启用 | 同理：val 早在 ep5 见底，瓶颈不在优化步数 |
+
+**结论：本轮不存在「训练不足」问题。** 两组都表现为 train 仍在下降、val 早已回头——
+瓶颈是**泛化**，而非训练轮数。可归因于：
+
+1. **val 分布失衡**：idle 占 68.20%，water_injection 仅 17 帧（0.50%），val_loss 被 idle
+   主导且稀有类噪声极大（见 [`FEATURE_LAB_CLASS_ACCURACY.md`](FEATURE_LAB_CLASS_ACCURACY.md)）；
+2. **模型/特征容量与任务不匹配**：纯几何特征可线性区分的动作模式有限，段级边界定位难题
+   （insert/withdraw 互混）不是靠多训几个 epoch 能解决的；
+3. **val 仅 4 视频**：单视频的分布偏移即可主导整条 val_loss 曲线，早停点因此抖动。
+
+#### 6.2.2 配方混杂问题（本轮审计的重要发现）
+
+审计早停行为不一致时发现：**只有 roi 的 YAML 携带健康配方**（dropout=0.2 /
+weight_decay=1e-4 / patience=4 / best_metric=val_f1_0.5），而 bbox-40、hand-40、
+global-hand-80 三个基线 YAML 均缺这四键——它们实际按以下口径训练：
+
+- 无 dropout、无 weight_decay（过拟合无约束）；
+- **best.pt 按 `val_acc` 选择**——`status.json` 证实 bbox-40 seed42 选中的是
+  **epoch1** 的模型（val_acc=64.89），即偏向 idle 的早期解；
+- `patience` 缺失 → 无早停，硬跑满 20 epoch。
+
+这正是 `docs/FEATURE_STRATEGY_COMPARE.md` 已诊断并修复过的「val_acc 选型偏爱 idle 坍缩解」
+问题，但三个基线 YAML 未同步修复，导致第一轮矩阵中**基线与 ROI 的对比口径不一致**。
+
+**处置**：
+
+1. 三份 YAML 已补齐健康配方（dropout 置于 `model` 段，weight_decay/patience/best_metric
+   置于 `train` 段），提交 `2d04bf7`；
+2. 首次重跑已验证修复生效（新 run `gru-20260915-160858`：`best_metric=val_f1_0.5`、
+   按 val_loss 早停于 ep7、best.pt 选在 ep3——不再是 ep1 的 val_acc 解）；
+3. **重跑已暂停**（2026-09-15 用户主动中止，仅完成 1/9），待后续重启。脚本
+   `tmp/run_rerun_matrix.py`、进度文件 `runs/strategy_matrix/progress_rerun.txt` 保留；
+   重跑完成后替换 §6 表格三行并复核 §6.1 的 S1/S2/S3 判据。
+
+**在此之前，§6 与 §6.1 中涉及 bbox-40 / hand-40 / global-hand-80 的绝对数字均不可用于
+定版结论。**
