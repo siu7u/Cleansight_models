@@ -15,6 +15,7 @@ model:
   num_classes: 6         # idle/water_injection/flush/long_brush_insert/long_brush_withdraw/short_brush_cleaning
   hidden: 128
   num_layers: 3
+  dropout: 0.2           # 层间 dropout（健康配方，坍缩诊断修复 0059eb9）
 
 data:
   dataset_ref: temporal.actionmixed-auto-hand-v1  # 根目录、类别、mapping 和 manifest 由 benchmark catalog 解析
@@ -36,5 +37,8 @@ evaluation:
 train:
   epochs: 20
   lr: 0.001
+  weight_decay: 0.0001   # 健康配方（与 roi-144 配方对齐，0059eb9）
+  patience: 4            # 按 val_loss 早停
+  best_metric: val_f1_0.5  # 段级指标选 best.pt（val_acc 会偏爱 idle 坍缩解）
   batch_size: 32
   window: 16          # 必须 ≤ 最短视频的采样帧数（auto v3 数据最短约 195 帧）

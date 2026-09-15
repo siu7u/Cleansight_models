@@ -1,0 +1,33 @@
+# mstcn + clean_bbox_v2 基线（exploratory 对照）：与 mstcn-clean-v3.yaml 同模型同超参，
+# 仅特征契约不同（clean_bbox_v2_top1_impute，113 维绝对坐标），用于 v3 scope 坐标系
+# 特征的对照验证（docs/FEATURE_INPUT_DESIGN_V3.md）。v2 家族未登记 catalog 契约，
+# 故用显式 data.root 指向同一份数据（与 temporal.actionmixed-auto-clean-v3 同 revision）。
+
+schema_version: 1
+pipeline: full_sequence_temporal
+
+model:
+  type: mstcn
+  input_dim: 113
+  num_classes: 6
+  hidden: 32
+
+data:
+  root: E:/曦源/Cleansight_models/datasets/cleansight-ActionMixed-auto  # 绝对路径：无 dataset_ref 时相对路径按配置目录解析
+  split_train: train
+  split_val: val
+  split_eval: val
+
+feature_schema:
+  dim: 113
+  version: clean_bbox_v2_top1_impute
+  detection_confidence_default: 1.0
+
+evaluation:
+  mode: exploratory
+  visualize: true
+
+train:
+  epochs: 30
+  lr: 0.002
+  grad_clip: 5.0

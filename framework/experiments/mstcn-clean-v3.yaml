@@ -1,0 +1,32 @@
+# clean_bbox_v3 scope 坐标系特征对照训练（docs/FEATURE_INPUT_DESIGN_V3.md 第一步验证）。
+# 与 mstcn-actionmixed-auto.yaml 同模型同超参，仅 feature_schema.version 不同；
+# 对应特征实现 features/clean_bbox_v3.py（113 维，scope 相对坐标系）。
+
+schema_version: 1
+pipeline: full_sequence_temporal
+
+model:
+  type: mstcn            # 双向非因果，只能进全序列流水线
+  input_dim: 113         # clean_bbox_v3_scope_frame
+  num_classes: 6         # idle/air_injection/flush/long_brush_insert/long_brush_withdraw/short_brush_cleaning
+  hidden: 32
+
+data:
+  dataset_ref: temporal.actionmixed-auto-clean-v3
+  split_train: train
+  split_val: val
+  split_eval: val                        # 2026-09-05 起 auto-v3 取消 test，评测与选型用 val
+
+feature_schema:
+  dim: 113
+  version: clean_bbox_v3_scope_frame
+  detection_confidence_default: 1.0   # 自动标注带 conf 时忽略；exploratory 口径
+
+evaluation:
+  mode: exploratory
+  visualize: true
+
+train:
+  epochs: 30
+  lr: 0.002
+  grad_clip: 5.0
