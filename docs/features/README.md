@@ -18,6 +18,7 @@
 | `actionmixed-bbox-global-hand-8cls-v1` | 80 | 全局 + 手部 | 全局 40 维与手部 40 维拼接（每类 10 维块） | `features/hand_bbox.py` + `data.py` 拼接 | `temporal.actionmixed-auto-global-hand-v1` | `gru-actionmixed-auto-global-hand.yaml` |
 | `legacy-20d-v1` | 20 | —（历史预存特征） | Endo Project npy 特征，仅评测兼容 | `temporal/data.py` `_load_legacy_endo_split` | `temporal.endo-project-v1` | `legacy-*.yaml` |
 | `clean_bbox_v2_*` 族（113/121/249） | 113/121/249 | 整个画面 | CLEAN 离线模型特征（含速度/业务先验），exploratory 评测用 | `features/clean_bbox_v2.py` | 未登记（外部 checkpoint 配套） | `external_checkpoints/*.yaml` |
+| `clean_bbox_v3_scope_frame` | 113 | 整个画面 | scope 器械轴相对坐标系 + 尺度归一（v2 对照实验），exploratory 评测用 | `features/clean_bbox_v3.py` | 未登记（复用 actionmixed-auto 数据） | `mstcn-clean-v3.yaml` |
 
 公共语义（所有 bbox 系契约）：因果、无状态、逐帧独立计算；空 bbox 文件 → 全零；
 `feature_schema.mask_targets` 按检测类整块清零（块宽随契约不同：bbox 5 / ROI 18 / 全局+手部 10）；
@@ -67,7 +68,18 @@
 - Endo Project 时代预存 `features/*.npy` + `groundTruth/` + `mapping.txt`；仅框架兼容加载，
   不再有训练入口。三类（Idle/Long_Brushing/Short_Brushing）。
 
-### 1.6 CLEAN 离线特征族（113/121/249 维）
+### 1.6 `clean_bbox_v3_scope_frame`（113 维，scope 坐标系对照）
+
+- **动机**：v2 绝对图像坐标在内镜推拉镜头下非平稳；v3 以 `scope_control_body →
+  scope_distal_end` 定义器械轴，位置编码为沿轴/垂轴分量（÷轴长），面积编码为相对
+  `scope_distal_end` 面积的对数比；连续列 clip 有界，不依赖全局 z-score。
+- **布局**：块结构与 v2 base 一一对应（hand_count + hand×2 + 8 目标×9 + 7 pair×3 + 时间 3）。
+- **回退链**：轴依次 distal-control / distal-mid / mid-control / 上一帧有效 / (1,0)；
+  `ref_len`/`ref_area` 前向填充，序列无有效值回退中位数 / 常数。
+- **设计依据与验证计划**：`docs/FEATURE_INPUT_DESIGN_V3.md`；对照训练配置
+  `mstcn-clean-v3.yaml`。
+
+### 1.7 CLEAN 离线特征族（113/121/249 维）
 
 - 迁自 CleanSightBackend 的 CLEAN offline segmenter 数学口径（`features/clean_bbox_v2.py`），
   含速度特征、业务先验（pair features）与居中窗口统计；只供外部裸 checkpoint 的 exploratory

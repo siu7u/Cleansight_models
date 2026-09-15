@@ -24,6 +24,12 @@ SPLIT_OVERLAP_POLICIES = {"error", "frame", "allow"}
 # ROI 空间特征映射（temporal/features/roi_bbox.py）：按 feature_layout 声明校验维度，
 # 不在此重复 recipe 实现；core 层不 import 任何流水线。
 ROI_FEATURE_MAPPING_PREFIX = "actionmixed-roi-"
+# clean_bbox_v3 scope 坐标系契约（temporal/features/clean_bbox_v3.py）：布局为
+# hand_count(1) + hand×2×8 + 8 目标×9 + 7 pair×3 + 时间 3 = 113，core 层不 import 流水线，
+# 在此以常量声明维度断言（检测类数需为 8）。
+CLEAN_V3_FEATURE_MAPPING = "clean_bbox_v3_scope_frame"
+CLEAN_V3_INPUT_DIM = 113
+CLEAN_V3_REQUIRED_DETECTION_COUNT = 8
 
 
 @dataclass(frozen=True)
@@ -492,7 +498,18 @@ def _validate_temporal(spec: TestsetSpec) -> list[str]:
                 detection_count = len(detection_names)
             else:
                 detection_count = 0
-            if str(spec.feature_mapping or "").startswith(ROI_FEATURE_MAPPING_PREFIX):
+            if spec.feature_mapping == CLEAN_V3_FEATURE_MAPPING:
+                if detection_count != CLEAN_V3_REQUIRED_DETECTION_COUNT:
+                    errors.append(
+                        f"clean_bbox_v3 要求检测类数={CLEAN_V3_REQUIRED_DETECTION_COUNT}，"
+                        f"实际={detection_count}"
+                    )
+                elif CLEAN_V3_INPUT_DIM != spec.input_dim:
+                    errors.append(
+                        f"clean_bbox_v3 固定维度={CLEAN_V3_INPUT_DIM} "
+                        f"与 input_dim={spec.input_dim} 不一致"
+                    )
+            elif str(spec.feature_mapping or "").startswith(ROI_FEATURE_MAPPING_PREFIX):
                 layout = spec.raw.get("feature_layout") or {}
                 rows, cols, channels = layout.get("rows"), layout.get("cols"), layout.get("channels")
                 if not all(isinstance(v, int) and v > 0 for v in (rows, cols, channels)):

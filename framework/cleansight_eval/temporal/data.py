@@ -47,10 +47,12 @@ from .features.cnn_concat import (
 )
 from .features import (
     CLEAN_FEATURE_DIMS,
+    CLEAN_V3_FEATURE_DIMS,
     GLOBAL_HAND_BBOX_VERSION,
     HAND_BBOX_VERSION,
     ROI_FEATURE_VERSION,
     build_clean_bbox_features,
+    build_clean_bbox_v3_features,
     build_hand_frame_features,
     build_roi_frame_features,
 )
@@ -460,7 +462,9 @@ def load_split(
             )
         )
         pca = load_pca(embedding_dir / "pca80.npz")
-    clean_recipe = feature_version in CLEAN_FEATURE_DIMS
+    clean_recipe = (
+        feature_version in CLEAN_FEATURE_DIMS or feature_version in CLEAN_V3_FEATURE_DIMS
+    )
     detection_mapping = load_detection_mapping(data_cfg) if clean_recipe else None
     fps = float(data_cfg.get("fps", 7.5))
     confidence_default = float(
@@ -477,7 +481,15 @@ def load_split(
             if window is not None and len(frame_ids) < window:
                 continue
         frame_paths = [frames_dir / f"{stem}-{frame_id:06d}.txt" for frame_id in frame_ids]
-        if clean_recipe:
+        if feature_version in CLEAN_V3_FEATURE_DIMS:
+            feats, _feature_names, actual_version = build_clean_bbox_v3_features(
+                frame_paths,
+                detection_mapping=detection_mapping or {},
+                fps=fps,
+                confidence_default=confidence_default,
+                mask_target_ids=mask_target_ids,
+            )
+        elif clean_recipe:
             feats, _feature_names, actual_version = build_clean_bbox_features(
                 frame_paths,
                 detection_mapping=detection_mapping or {},

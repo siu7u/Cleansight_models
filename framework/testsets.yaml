@@ -53,6 +53,19 @@ datasets:
     labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
     split_overlap_policy: frame
 
+  # clean_bbox_v3 scope 坐标系特征契约（docs/FEATURE_INPUT_DESIGN_V3.md）：与 v3 同一
+  # 物理数据与 revision，仅特征契约不同，独立 dataset_version 避免泄漏检查跨契约误报。
+  temporal.actionmixed-auto-clean-v3:
+    family: temporal
+    format: actionmixed_bbox
+    dataset_version: cleansight-actionmixed-auto-clean-v3
+    revision: 7b039550f6daa0bddd1b2fd06460349e7e0fba22cf1eaf36501ad684819e9820
+    data_root: datasets/cleansight-ActionMixed-auto
+    feature_mapping: clean_bbox_v3_scope_frame
+    input_dim: 113
+    labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    split_overlap_policy: frame
+
   temporal.actionmixed-auto-hand-v1:
     family: temporal
     format: actionmixed_bbox
@@ -175,6 +188,18 @@ testsets:
 
   temporal.actionmixed-auto-roi-v1.val:
     dataset: temporal.actionmixed-auto-roi-v1
+    split: val
+    manifest: benchmark/manifests/actionmixed-auto/val.txt
+    purpose: validation_only
+
+  temporal.actionmixed-auto-clean-v3.train:
+    dataset: temporal.actionmixed-auto-clean-v3
+    split: train
+    manifest: benchmark/manifests/actionmixed-auto/train.txt
+    purpose: training_only
+
+  temporal.actionmixed-auto-clean-v3.val:
+    dataset: temporal.actionmixed-auto-clean-v3
     split: val
     manifest: benchmark/manifests/actionmixed-auto/val.txt
     purpose: validation_only
