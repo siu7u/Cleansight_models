@@ -40,33 +40,31 @@ action-test 流转：采集上传 → LS 标注（仅 timeline，沿用 project-
 - 特征集一旦变化 → feature_mapping 升版本（按 YAML_CONFIG/注册规范），模型需重训
 - action-test 数据不与 v3 混用目录；若正式并入数据集走 manifest 三件套流程
 
-## 6. 四特征集 3-seed 矩阵结果（2026-09-12，CPU/WSL 口径）
+## 6. 特征集矩阵结果（2026-09-15 统一健康配方后定稿，CPU/WSL 口径）
 
-> 按 `docs/FEATURE_SCHEME_EVAL_PLAN.md` §4 执行：GRU（hidden=128, 3 层），数据 v3
->（train 14 / val 4，eval split=val），seed 42/7/2026。运行目录 `runs/strategy_matrix/`；
-> **单机 CPU/WSL exploratory 口径，未设固定 testset。**
->
-> ⚠️ **配方混杂警告（2026-09-12 审计发现，见 §6.2）**：本表 bbox-40 / hand-40 /
-> global-hand-80 三行产生于**未含健康配方的 YAML**（dropout/weight_decay/patience/
-> best_metric 四键缺失，best.pt 按 val_acc 选型）。配置已修复，但**重跑尚未完成
-> （用户于 2026-09-15 主动暂停，待后续执行）**；重跑落定前表中三行仅作诊断参考，
-> 与 roi-144 不可直接比较。
+> 按 `docs/FEATURE_SCHEME_EVAL_PLAN.md` §4 执行：GRU（hidden=128, 3 层）、健康配方
+>（wd=1e-4 / dropout=0.2 / patience=4 / best_metric=val_f1_0.5），数据 v3
+>（train 14 / val 4，eval split=val）。**单机 CPU/WSL exploratory 口径，未设固定 testset。**
+> bbox/hand/global-hand 三基线于 2026-09-15 按统一配方重跑（seed 42/7 完成，seed 2026
+> 因时间预算跳过待补）；roi/S2/S3 为 2026-09-12 原生健康配方 run（3 seed）。
 
-| 特征集 | median edit | median F1@0.1 | median F1@0.25 | median F1@0.5 | median frame mIoU |
+| 特征集 | n | median edit | median F1@0.1 | median F1@0.25 | median frame mIoU |
 |---|---:|---:|---:|---:|---:|
-| **roi-144**（B0b 参照） | **24.83** | **24.24** | **18.18** | 2.02 | 11.35 |
-| bbox-40（B0a 基线） | 23.35 | 23.66 | 17.20 | **4.40** | **20.93** |
-| global-hand-80（S1） | 18.75 | 21.74 | 13.04 | 2.20 | 17.30 |
-| hand-40（S1 退化组） | 14.56 | 13.79 | 9.20 | 2.30 | 17.62 |
+| **roi-144**（B0b 参照） | 3 | **24.83** | **24.24** | **18.18** | 11.35 |
+| bbox-40（B0a 基线） | 2 | 18.53 | 22.59 | 15.05 | **20.51** |
+| hand-40（S1 退化组） | 2 | 16.55 | 18.77 | 13.26 | 17.16 |
+| global-hand-80（S1） | 2 | 14.96 | 17.88 | 11.14 | 17.41 |
 
-结论（3-seed 中位数，val 仅 4 视频方差不小，谨慎解读）：
+> F1@0.5 各组均个位数且 seed 方差大，从略。混杂前的旧数字见 §6.2.2——bbox-40 旧值
+> edit 23.35 系 val_acc 选型偏差抬高，统一配方后回落至 18.53。
 
-- **ROI 网格段级指标仍最优**（edit / F1@0.1 / F1@0.25 均第一），复现了分支先行实验的排序；
-- **纯手部特征明确劣于全局 bbox**，且 global+hand 拼接（80 维）仍不敌基线——与数据侧事实一致
-  （scope 类在手部区域 presence 仅 14~16%，手部 box 通道稀释 scope 信号）；
-- 依方案判据：S1（box 锚定手部）**未通过**「同时优于 B0a 与 B0b」，ROI 网格暂胜；
-- 待跑：S2（bbox ⊕ 全帧 CNN embedding）与 S3（手部+全局视觉），手部贡献的最终判断待
-  CNN 全局特征加入后重新评估。
+结论（统一健康配方后，**roi-144 领先幅度扩大**）：
+
+- **ROI 网格段级指标全面第一**，且与基线差距从 ~1.5 扩大到 **+6.3 edit / +1.6 F1@0.25**；
+- **bbox-40 基线被混杂配方显著高估**（见 §6.2.2：旧 run 的 best.pt 是 epoch1 的 val_acc 解）；
+- **纯手部特征与 global+hand 拼接均劣于全局 bbox**——与数据侧事实一致（scope 类在手部
+  区域 presence 仅 14~16%，手部 box 通道稀释 scope 信号）；
+- 依方案判据：S1（box 锚定手部）**未通过**「同时优于 B0a 与 B0b」；
 
 ### 6.1 S2/S3 结果（2026-09-12 补充，CPU/WSL 口径）
 
@@ -133,15 +131,20 @@ global-hand-80 三个基线 YAML 均缺这四键——它们实际按以下口�
 这正是 `docs/FEATURE_STRATEGY_COMPARE.md` 已诊断并修复过的「val_acc 选型偏爱 idle 坍缩解」
 问题，但三个基线 YAML 未同步修复，导致第一轮矩阵中**基线与 ROI 的对比口径不一致**。
 
-**处置**：
+**处置（2026-09-15 完成）**：
 
 1. 三份 YAML 已补齐健康配方（dropout 置于 `model` 段，weight_decay/patience/best_metric
-   置于 `train` 段），提交 `2d04bf7`；
-2. 首次重跑已验证修复生效（新 run `gru-20260915-160858`：`best_metric=val_f1_0.5`、
-   按 val_loss 早停于 ep7、best.pt 选在 ep3——不再是 ep1 的 val_acc 解）；
-3. **重跑已暂停**（2026-09-15 用户主动中止，仅完成 1/9），待后续重启。脚本
-   `tmp/run_rerun_matrix.py`、进度文件 `runs/strategy_matrix/progress_rerun.txt` 保留；
-   重跑完成后替换 §6 表格三行并复核 §6.1 的 S1/S2/S3 判据。
+   置于 `train` 段），提交 `2d04bf7`；首次重跑验证修复生效（`gru-20260915-160858`：
+   `best_metric=val_f1_0.5`、按 val_loss 早停于 ep7、best.pt 选在 ep3）；
+2. **统一配方重跑已完成 seed 42/7 两轮**（3 配置 × 2 seed = 6 run + 评估全绿，
+   seed 2026 因时间预算跳过待补）；执行中发现并修复两个编排缺陷：
+   ① torch 线程超订阅（4 进程 × 16 线程 → 50 倍减速，限 OMP/MKL=4 修复）；
+   ② 并行训练同秒启动撞出同名 run 目录导致 checkpoint 污染（改为**训练串行 + 评估并行**，
+   污染目录已删除）；
+3. 数据集同步迁移 WSL 原生文件系统（symlink），eval 从 ~20 分钟降到 ~10 分钟，
+   **指标等价性已验证（14/14 项 summary 完全一致）**；
+4. §6 表格已替换为统一配方数字：**bbox-40 基线从 23.35 回落到 18.53，roi-144 领先
+   扩大至 +6.3 edit**——混杂不但没有推翻结论，反而强化了 roi-144 的优势；S1 判据
+   （未通过）维持不变。
 
-**在此之前，§6 与 §6.1 中涉及 bbox-40 / hand-40 / global-hand-80 的绝对数字均不可用于
-定版结论。**
+> 遗留：seed 2026 补跑（预计 ~25 分钟）；GPU 多 seed 正式复跑仍未做。
