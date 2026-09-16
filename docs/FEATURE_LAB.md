@@ -148,3 +148,29 @@ global-hand-80 三个基线 YAML 均缺这四键——它们实际按以下口�
    （未通过）维持不变。
 
 > 遗留：GPU 多 seed 正式复跑仍未做。
+
+## 7. clean_bbox v2 vs v3 对照结果（2026-09-16，MS-TCN 特征质量探针）
+
+> 设计见 [`FEATURE_INPUT_DESIGN_V3.md`](FEATURE_INPUT_DESIGN_V3.md)：v3 以
+> `scope_control_body → scope_distal_end` 器械轴建相对坐标系（沿/垂轴分量 ÷ 轴长、
+> 相对面积对数比、多级回退链），对照 v2 绝对图像坐标。同数据（v3 revision）、
+> 同模型（MS-TCN hidden=32，双向非因果 → **特征质量探针，非可部署方案**）、
+> 同配方（lr=2e-3 / grad_clip=5 / best_metric=val_f1_0.5）、3 seed（42/7/2026）。
+> CPU/WSL exploratory 口径。注意 MS-TCN 数字与 §6 的 GRU 矩阵不可直接横比。
+
+| 特征 | n | median edit | median F1@0.1 | median F1@0.25 | median frame mIoU |
+|---|---:|---:|---:|---:|---:|
+| **clean_bbox_v3_scope_frame** | 3 | **39.81** | **28.43** | **23.53** | 16.70 |
+| clean_bbox_v2_top1_impute | 3 | 29.23 | 26.17 | 18.79 | **16.65** |
+
+结论：
+
+- **scope 相对坐标系全面优于绝对坐标**：+10.6 edit / +4.7 F1@0.25，三个 seed 中 v3
+  最差（37.95）仍高于 v2 最好（40.46）以外的全部 v2 run——内镜镜头推拉下坐标非平稳性
+  的假设被实验证实；
+- v3 的 F1@0.25（23.53）也高于 GRU+roi-144 的 18.18——但模型族不同（双向 vs 因果），
+  只说明特征信息量上限高，**不等价于可部署结论**；
+- 执行口径备注：v2 执行副本将 Windows 绝对路径改为 WSL 路径（仓库 YAML 未动，建议
+  后续登记 catalog 契约）；两配置统一 val_f1_0.5 选型（控制变量保持）；
+- **下一步（关键）**：clean_bbox_v3 + GRU（因果滑窗）入 §6 矩阵与 roi-144 正面对比——
+  若复现优势，特征选型结论将从「roi-144」升级为「clean_bbox_v3（scope 相对坐标系）」。
