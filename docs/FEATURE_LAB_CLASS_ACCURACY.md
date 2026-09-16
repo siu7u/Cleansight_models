@@ -1,7 +1,8 @@
 # 训练数据类别分布与逐类准确率（feature-lab）
 
-> 数据：`temporal.actionmixed-auto-v3`（train 14 / val 4）· 模型：GRU 健康配方 · 3 seed（42/7/2026）·
-> CPU/WSL exploratory 口径 · 生成脚本逻辑见提交说明；上游结果见 [`FEATURE_LAB.md`](FEATURE_LAB.md)。
+> 数据：temporal.actionmixed-auto-v3（train 14 / val 4）· 模型：GRU 健康配方 · 3 seed（42/7/2026）·
+> CPU/WSL exploratory 口径 · **2026-09-16 起全部数字为统一健康配方口径**（混杂 run 已剔除）。
+> 上游结果见 FEATURE_LAB.md。
 
 ## 1. 训练数据类别帧分布（含 idle 占比）
 
@@ -42,37 +43,28 @@
 | **long_brush_withdraw** | 524 | 0 | 0 | 24 | 70 | 0 |
 | **short_brush_cleaning** | 487 | 0 | 0 | 0 | 0 | 38 |
 
-## 3. 六特征集逐类 F1 对比（3-seed 中位数）
+## 3. 六特征集逐类 F1 对比（3-seed 中位数，统一健康配方）
 
-> ⚠️ **配方混杂提示（2026-09-12 审计）**：本表 bbox-40 / hand-40 / global-hand-80 三列
-> 产生于未含健康配方的 YAML（无 dropout/weight_decay/patience，best.pt 按 val_acc 选型），
-> 与 roi-144 / S2 / S3 口径不一致；2026-09-15 已按统一健康配方重跑（seed 42/7，2026 待补）
-> 并更新段级结论（见 [`FEATURE_LAB.md`](FEATURE_LAB.md) §6），但本逐类表尚未随重跑重新
-> 生成——这三列仍为旧口径，仅作诊断参考，待 seed 补齐后统一重生成。
-
-| 动作类别                 | bbox-40 (B0a) | roi-144 (B0b) | hand-40 | global-hand-80 (S1) | bbox+cnn-120 (S2) | hand+bbox+cnn-160 (S3) |
-| -------------------- | ------------: | ------------: | ------: | ------------------: | ----------------: | ---------------------: |
-| idle                 |        0.7851 |        0.7219 |  0.8154 |              0.7799 |            0.7113 |                 0.7422 |
-| water_injection      |        0.0000 |        0.0000 |     n/a |                 n/a |               n/a |                    n/a |
-| flush                |        0.4422 |        0.3533 |     n/a |              0.2157 |            0.4008 |                 0.3313 |
-| long_brush_insert    |        0.0000 |        0.0428 |     n/a |                 n/a |            0.0279 |                 0.0000 |
-| long_brush_withdraw  |           n/a |        0.1033 |     n/a |                 n/a |            0.0000 |                 0.0000 |
-| short_brush_cleaning |        0.5212 |        0.0976 |  0.5390 |              0.4308 |            0.2338 |                 0.2932 |
+| 动作类别 | bbox-40 (B0a) | roi-144 (B0b) | hand-40 | global-hand-80 (S1) | bbox+cnn-120 (S2) | hand+bbox+cnn-160 (S3) |
+|---|---:|---:|---:|---:|---:|---:|
+| idle | 0.7850 | 0.7219 | 0.8122 | 0.7655 | 0.7113 | 0.7422 |
+| water_injection | n/a | 0.0000 | n/a | n/a | n/a | n/a |
+| flush | 0.3654 | 0.3533 | n/a | 0.3526 | 0.4008 | 0.3313 |
+| long_brush_insert | 0.0000 | 0.0428 | 0.0000 | n/a | 0.0279 | 0.0000 |
+| long_brush_withdraw | 0.0000 | 0.1033 | 0.0000 | 0.0000 | 0.0000 | 0.0000 |
+| short_brush_cleaning | 0.4577 | 0.0976 | 0.5378 | 0.4884 | 0.2338 | 0.2932 |
 
 ### 3.1 关键观察
 
-- **idle 占 train 65.5% / val 68.2%**，模型帧级 acc 约 55~69% 基本由 idle 主导；
-- 非 idle 类逐类召回普遍极低（多数在 0~10%），说明模型识别动作段的能力仍弱——
-  这正是段级指标（edit / F1@IoU）才是主线、帧级 acc 不可用作选型的原因；
+- **idle 占 train 65.5% / val 68.2%**，帧级 acc 基本由 idle 主导；
+- 非 idle 类逐类召回普遍极低，模型定位动作段的能力仍是主要瓶颈——段级指标才是主线；
 - 六个特征集对 water_injection 全为 0 命中：val 仅 17 帧（0.50%），属数据不足而非特征问题；
-- roi-144 相对 bbox-40 的逐类差异：长毛刷 insert 有非零 F1（0.0428 vs 0），
-  而 short_brush_cleaning 反而更弱（0.0976 vs 0.5212）——两方案的段级优劣由段匹配而非
-  单帧判对决定；
-- 多类出现 `n/a`：该 seed 下该类无有效预测（metric 未定义），属预期现象。
+- 统一配方后基线回落：bbox-40 edit 23.35→18.53，roi-144 领先扩大到 +6.3；
+- 多处 n/a：该 seed 下该类无有效预测（metric 未定义），属预期现象。
 
 ## 4. 口径说明与限制
 
-- 逐类 precision/recall/F1/IoU 取自 `EvaluationResult.metrics.details.temporal.frame.per_class`，
+- 逐类 precision/recall/F1/IoU 取自 EvaluationResult.metrics.details.temporal.frame.per_class，
   帧级口径为 micro（跨视频汇总帧）；3 seed 取中位数。
 - 混淆矩阵为 3 个 seed 的逐像素计数合计（每 seed 独立评估 3384 帧）。
 - 帧级 acc 在 idle 占比 68.2% 的 val 上会被"永远猜 idle"抬到 68% 以上，

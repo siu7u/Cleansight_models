@@ -45,15 +45,15 @@ action-test 流转：采集上传 → LS 标注（仅 timeline，沿用 project-
 > 按 `docs/FEATURE_SCHEME_EVAL_PLAN.md` §4 执行：GRU（hidden=128, 3 层）、健康配方
 >（wd=1e-4 / dropout=0.2 / patience=4 / best_metric=val_f1_0.5），数据 v3
 >（train 14 / val 4，eval split=val）。**单机 CPU/WSL exploratory 口径，未设固定 testset。**
-> bbox/hand/global-hand 三基线于 2026-09-15 按统一配方重跑（seed 42/7 完成，seed 2026
-> 因时间预算跳过待补）；roi/S2/S3 为 2026-09-12 原生健康配方 run（3 seed）。
+> bbox/hand/global-hand 三基线于 2026-09-15/16 按统一配方重跑（3 seed 全部完成）；
+> roi/S2/S3 为 2026-09-12 原生健康配方 run（3 seed）。
 
 | 特征集 | n | median edit | median F1@0.1 | median F1@0.25 | median frame mIoU |
 |---|---:|---:|---:|---:|---:|
 | **roi-144**（B0b 参照） | 3 | **24.83** | **24.24** | **18.18** | 11.35 |
-| bbox-40（B0a 基线） | 2 | 18.53 | 22.59 | 15.05 | **20.51** |
-| hand-40（S1 退化组） | 2 | 16.55 | 18.77 | 13.26 | 17.16 |
-| global-hand-80（S1） | 2 | 14.96 | 17.88 | 11.14 | 17.41 |
+| bbox-40（B0a 基线） | 3 | 18.53 | 23.66 | 15.05 | **20.37** |
+| global-hand-80（S1） | 3 | 17.06 | 21.98 | 14.74 | 19.12 |
+| hand-40（S1 退化组） | 3 | 15.81 | 17.98 | 13.48 | 17.52 |
 
 > F1@0.5 各组均个位数且 seed 方差大，从略。混杂前的旧数字见 §6.2.2——bbox-40 旧值
 > edit 23.35 系 val_acc 选型偏差抬高，统一配方后回落至 18.53。
@@ -136,8 +136,8 @@ global-hand-80 三个基线 YAML 均缺这四键——它们实际按以下口�
 1. 三份 YAML 已补齐健康配方（dropout 置于 `model` 段，weight_decay/patience/best_metric
    置于 `train` 段），提交 `2d04bf7`；首次重跑验证修复生效（`gru-20260915-160858`：
    `best_metric=val_f1_0.5`、按 val_loss 早停于 ep7、best.pt 选在 ep3）；
-2. **统一配方重跑已完成 seed 42/7 两轮**（3 配置 × 2 seed = 6 run + 评估全绿，
-   seed 2026 因时间预算跳过待补）；执行中发现并修复两个编排缺陷：
+2. **统一配方重跑已全部完成**（3 配置 × 3 seed = 9 run + 评估全绿，2026-09-16 收官）；
+   执行中发现并修复两个编排缺陷：
    ① torch 线程超订阅（4 进程 × 16 线程 → 50 倍减速，限 OMP/MKL=4 修复）；
    ② 并行训练同秒启动撞出同名 run 目录导致 checkpoint 污染（改为**训练串行 + 评估并行**，
    污染目录已删除）；
@@ -147,4 +147,4 @@ global-hand-80 三个基线 YAML 均缺这四键——它们实际按以下口�
    扩大至 +6.3 edit**——混杂不但没有推翻结论，反而强化了 roi-144 的优势；S1 判据
    （未通过）维持不变。
 
-> 遗留：seed 2026 补跑（预计 ~25 分钟）；GPU 多 seed 正式复跑仍未做。
+> 遗留：GPU 多 seed 正式复跑仍未做。
