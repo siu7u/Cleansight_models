@@ -158,10 +158,10 @@ global-hand-80 三个基线 YAML 均缺这四键——它们实际按以下口�
 > 同配方（lr=2e-3 / grad_clip=5 / best_metric=val_f1_0.5）、3 seed（42/7/2026）。
 > CPU/WSL exploratory 口径。注意 MS-TCN 数字与 §6 的 GRU 矩阵不可直接横比。
 
-| 特征 | n | median edit | median F1@0.1 | median F1@0.25 | median frame mIoU |
-|---|---:|---:|---:|---:|---:|
-| **clean_bbox_v3_scope_frame** | 3 | **39.81** | **28.43** | **23.53** | 16.70 |
-| clean_bbox_v2_top1_impute | 3 | 29.23 | 26.17 | 18.79 | **16.65** |
+| 特征                            |   n | median edit | median F1@0.1 | median F1@0.25 | median frame mIoU |
+| ----------------------------- | --: | ----------: | ------------: | -------------: | ----------------: |
+| **clean_bbox_v3_scope_frame** |   3 |   **39.81** |     **28.43** |      **23.53** |         **16.70** |
+| clean_bbox_v2_top1_impute     |   3 |       29.23 |         26.17 |          18.79 |             16.65 |
 
 结论：
 
@@ -174,3 +174,29 @@ global-hand-80 三个基线 YAML 均缺这四键——它们实际按以下口�
   后续登记 catalog 契约）；两配置统一 val_f1_0.5 选型（控制变量保持）；
 - **下一步（关键）**：clean_bbox_v3 + GRU（因果滑窗）入 §6 矩阵与 roi-144 正面对比——
   若复现优势，特征选型结论将从「roi-144」升级为「clean_bbox_v3（scope 相对坐标系）」。
+
+### 7.1 GRU + clean_bbox_v3 正面对比（2026-09-16，决定性实验）
+
+> 配置 `gru-actionmixed-auto-clean-v3.yaml`：与 §6 矩阵同 GRU、同健康配方、同数据，
+> 仅特征契约不同（113 维 scope 相对坐标系 vs 144 维 ROI 网格）。3 seed（42/7/2026），
+> 串行训练 + 并行评估（防碰撞编排），CPU/WSL exploratory 口径。
+
+| 特征（GRU，因果可部署） | n | median edit | median F1@0.1 | median F1@0.25 | median frame mIoU |
+|---|---:|---:|---:|---:|---:|
+| **clean_bbox_v3_scope_frame** | 3 | **31.07** | **25.93** | **18.52** | 13.43 |
+| roi-144（§6 最优） | 3 | 24.83 | 24.24 | 18.18 | 11.35 |
+| bbox-40（基线） | 3 | 18.53 | 23.66 | 15.05 | **20.37** |
+
+逐 seed：clean-v3 edit = 26.98 / 31.07 / 31.41——**三个 seed 全部高于 roi-144 的中位数**
+（roi 逐 seed 24.71 / 24.83 / 28.74），edit 优势跨 seed 稳定。
+
+结论：
+
+- **scope 相对坐标系的优势在因果可部署模型上复现**：edit +6.2、F1@0.1 +1.7、
+  F1@0.25 +0.3（三项中位数全部 ≥ roi-144）；
+- 依方案判据（同时优于 B0a 与 B0b）：**通过**——特征选型结论升级为
+  **clean_bbox_v3_scope_frame（113 维，scope 器械轴相对坐标系）**；
+- 边界精度（F1@0.25）优势微弱（+0.3，seed 方差内），主要增益在段级 edit——
+  两套特征可视为段定位 vs 边界精度各有侧重，定版前建议 GPU 复跑确认；
+- 部署成本备注：clean_bbox_v3 为因果逐帧纯几何特征（含跨帧回退链的前向填充），
+  与 roi-144 同级，无额外模型依赖。
