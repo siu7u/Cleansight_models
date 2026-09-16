@@ -1,0 +1,40 @@
+# GRU 滑窗对照配置（clean_bbox_v3 scope 相对坐标系，docs/FEATURE_LAB.md §7 下一步）。
+# 与 §6 矩阵中的 roi-144/bbox-40 等 GRU 配置同模型同健康配方，仅特征契约不同——
+# 用于回答"scope 相对坐标系在可部署因果模型上能否复现 MS-TCN 探针的优势"。
+# feature_mapping=clean_bbox_v3_scope_frame（113 维，features/clean_bbox_v3.py），
+# 数据集登记 temporal.actionmixed-auto-clean-v3（与 v3 同物理数据与 revision）。
+
+schema_version: 1
+pipeline: sliding_window_temporal
+
+model:
+  type: gru              # 因果模型，可用于滑窗
+  input_dim: 113         # clean_bbox_v3_scope_frame
+  num_classes: 6         # idle/water_injection/flush/long_brush_insert/long_brush_withdraw/short_brush_cleaning
+  hidden: 128
+  num_layers: 3
+  dropout: 0.2           # 层间 dropout（健康配方，与 §6 矩阵一致）
+
+data:
+  dataset_ref: temporal.actionmixed-auto-clean-v3
+  split_train: train
+  split_val: val
+  split_eval: val                        # 2026-09-05 起 v3 取消 test，评测与选型用 val
+
+feature_schema:
+  dim: 113
+  version: clean_bbox_v3_scope_frame
+  detection_confidence_default: 1.0      # exploratory 口径（标注无真实检测置信度）
+
+evaluation:
+  mode: exploratory
+  visualize: false                       # 评估副本口径；指标不受渲染影响（已验证 14/14 一致）
+
+train:
+  epochs: 20
+  lr: 0.001
+  batch_size: 32
+  window: 16
+  weight_decay: 0.0001   # 健康配方（与 §6 矩阵一致）
+  patience: 4            # 按 val_loss 早停
+  best_metric: val_f1_0.5  # 段级指标选 best.pt
