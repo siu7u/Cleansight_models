@@ -1,0 +1,39 @@
+# GRU + clean_bbox_v2 对照（exploratory 探针）：补齐 GRU 侧 v2 vs v3 证据链。
+# 与 gru-actionmixed-auto-clean-v3.yaml 同模型同健康配方同数据，仅特征契约不同
+# （clean_bbox_v2_top1_impute，113 维绝对坐标）。v2 家族未登记 catalog 契约，
+# 沿用 mstcn-clean-v2-baseline.yaml 的显式 data.root 约定。
+
+schema_version: 1
+pipeline: sliding_window_temporal
+
+model:
+  type: gru
+  input_dim: 113
+  num_classes: 6
+  hidden: 128
+  num_layers: 3
+  dropout: 0.2           # 健康配方（与 §6 矩阵一致）
+
+data:
+  root: E:/曦源/Cleansight_models/datasets/cleansight-ActionMixed-auto
+  split_train: train
+  split_val: val
+  split_eval: val
+
+feature_schema:
+  dim: 113
+  version: clean_bbox_v2_top1_impute
+  detection_confidence_default: 1.0
+
+evaluation:
+  mode: exploratory
+  visualize: false
+
+train:
+  epochs: 20
+  lr: 0.001
+  batch_size: 32
+  window: 16
+  weight_decay: 0.0001
+  patience: 4
+  best_metric: val_f1_0.5

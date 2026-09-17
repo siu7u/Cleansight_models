@@ -1,0 +1,40 @@
+# GRU + v3⊕roi 拼接对照（exploratory 探针，docs/FEATURE_LAB_NEXT_STEPS.md §1.1-#2）：
+# clean_bbox_v3（113 维）⊕ ROI 网格（144 维）= 257 维，验证段级 edit（v3 强项）与
+# 边界精度/frame mIoU（roi 强项）是否互补。与 §6 矩阵同模型同健康配方同数据。
+# 契约 actionmixed-cleanv3-roi-concat-v1（features/clean_v3_roi.py）；
+# 257 维不符合 catalog 现有维度规则，探针阶段用显式 data.root，不登记契约。
+
+schema_version: 1
+pipeline: sliding_window_temporal
+
+model:
+  type: gru
+  input_dim: 257
+  num_classes: 6
+  hidden: 128
+  num_layers: 3
+  dropout: 0.2
+
+data:
+  root: E:/曦源/Cleansight_models/datasets/cleansight-ActionMixed-auto
+  split_train: train
+  split_val: val
+  split_eval: val
+
+feature_schema:
+  dim: 257
+  version: actionmixed-cleanv3-roi-concat-v1
+  detection_confidence_default: 1.0
+
+evaluation:
+  mode: exploratory
+  visualize: false
+
+train:
+  epochs: 20
+  lr: 0.001
+  batch_size: 32
+  window: 16
+  weight_decay: 0.0001
+  patience: 4
+  best_metric: val_f1_0.5
