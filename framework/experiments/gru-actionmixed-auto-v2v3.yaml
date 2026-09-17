@@ -24,8 +24,7 @@ data:
 feature_schema:
   dim: 226
   version: actionmixed-cleanv2v3-concat-v1
-  detection_confidence_default: 1.0
-  v2_sub_version: clean_bbox_v2_top1_impute
+  detection_confidence_default: 1.0   # v2 子版本由 recipe 默认（clean_bbox_v2_top1_impute）
 
 evaluation:
   mode: exploratory
