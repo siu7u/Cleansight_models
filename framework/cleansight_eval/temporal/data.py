@@ -38,6 +38,11 @@ from pathlib import Path
 import numpy as np
 import yaml
 
+from .features.clean_v2_v3 import (
+    CLEAN_V2V3_DIM,
+    CLEAN_V2V3_VERSION,
+    build_clean_v2_v3_features,
+)
 from .features.clean_v3_roi import (
     CLEAN_V3_ROI_DIM,
     CLEAN_V3_ROI_VERSION,
@@ -471,8 +476,11 @@ def load_split(
         feature_version in CLEAN_FEATURE_DIMS or feature_version in CLEAN_V3_FEATURE_DIMS
     )
     clean_v3_roi_recipe = feature_version == CLEAN_V3_ROI_VERSION
+    clean_v2v3_recipe = feature_version == CLEAN_V2V3_VERSION
     detection_mapping = (
-        load_detection_mapping(data_cfg) if (clean_recipe or clean_v3_roi_recipe) else None
+        load_detection_mapping(data_cfg)
+        if (clean_recipe or clean_v3_roi_recipe or clean_v2v3_recipe)
+        else None
     )
     fps = float(data_cfg.get("fps", 7.5))
     confidence_default = float(
@@ -497,6 +505,21 @@ def load_split(
                 confidence_default=confidence_default,
                 mask_target_ids=mask_target_ids,
             )
+        elif clean_v2v3_recipe:
+            feats = build_clean_v2_v3_features(
+                frame_paths,
+                feature_version_v2=(feature_schema or {}).get(
+                    "v2_sub_version", "clean_bbox_v2_top1_impute"
+                ),
+                detection_mapping=detection_mapping or {},
+                fps=fps,
+                confidence_default=confidence_default,
+                mask_target_ids=mask_target_ids,
+            )
+            if feats.shape[1] != CLEAN_V2V3_DIM:
+                raise ValueError(
+                    f"v2⊕v3 拼接维度 {feats.shape[1]} != {CLEAN_V2V3_DIM}"
+                )
         elif clean_v3_roi_recipe:
             feats = build_clean_v3_roi_features(
                 frame_paths,
