@@ -28,10 +28,10 @@
 resnet18（ImageNet 预训练、去分类头）逐帧 embedding 为 512 维。为复用现有
 catalog 的 `feature_blocks` 校验（input_dim = 检测类数 8 × 5 × blocks），投影维度定为 **80**：
 
-| 契约 | feature_mapping | 组成 | 维度 | blocks |
-|---|---|---|---:|---:|
-| S2 | `actionmixed-bbox-cnn-resnet18-v1` | bbox-40 ⊕ PCA-80(embedding) | **120** | 3 |
-| S3 | `actionmixed-bbox-hand-cnn-v1` | bbox-40 ⊕ hand-40 ⊕ PCA-80(embedding) | **160** | 4 |
+| 契约  | feature_mapping                    | 组成                                    |      维度 | blocks |
+| --- | ---------------------------------- | ------------------------------------- | ------: | -----: |
+| S2  | `actionmixed-bbox-cnn-resnet18-v1` | bbox-40 ⊕ PCA-80(embedding)           | **120** |      3 |
+| S3  | `actionmixed-bbox-hand-cnn-v1`     | bbox-40 ⊕ hand-40 ⊕ PCA-80(embedding) | **160** |      4 |
 
 - PCA 在 **train split 的全部帧 embedding** 上拟合（numpy SVD，零均值），均值向量与
   成分矩阵存 `pca80.npz`（含 meta：backbone/输入尺寸/拟合帧数/sha256），val 推理只用
