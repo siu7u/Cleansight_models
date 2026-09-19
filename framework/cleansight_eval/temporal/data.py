@@ -58,6 +58,11 @@ from .features.cnn_concat import (
 from .features import (
     CLEAN_FEATURE_DIMS,
     CLEAN_V3_FEATURE_DIMS,
+    CLEAN_V4_FEATURE_DIMS,
+    CLEAN_V4_VERSION,
+    build_clean_bbox_v4_features,
+    build_roi_v4_frame_features,
+    ROI_V4_VERSION,
     GLOBAL_HAND_BBOX_VERSION,
     HAND_BBOX_VERSION,
     ROI_FEATURE_VERSION,
@@ -475,11 +480,14 @@ def load_split(
     clean_recipe = (
         feature_version in CLEAN_FEATURE_DIMS or feature_version in CLEAN_V3_FEATURE_DIMS
     )
+    # v4 沿用 clean_recipe 的 detection_mapping/fps/confidence 通道（模块内自剔废弃类）
     clean_v3_roi_recipe = feature_version == CLEAN_V3_ROI_VERSION
     clean_v2v3_recipe = feature_version == CLEAN_V2V3_VERSION
+    clean_v4_recipe = feature_version == CLEAN_V4_VERSION
+    roi_v4_recipe = feature_version == ROI_V4_VERSION
     detection_mapping = (
         load_detection_mapping(data_cfg)
-        if (clean_recipe or clean_v3_roi_recipe or clean_v2v3_recipe)
+        if (clean_recipe or clean_v3_roi_recipe or clean_v2v3_recipe or clean_v4_recipe)
         else None
     )
     fps = float(data_cfg.get("fps", 7.5))
@@ -497,7 +505,26 @@ def load_split(
             if window is not None and len(frame_ids) < window:
                 continue
         frame_paths = [frames_dir / f"{stem}-{frame_id:06d}.txt" for frame_id in frame_ids]
-        if feature_version in CLEAN_V3_FEATURE_DIMS:
+        if clean_v4_recipe:
+            feats, _feature_names, actual_version = build_clean_bbox_v4_features(
+                frame_paths,
+                detection_mapping=detection_mapping or {},
+                fps=fps,
+                confidence_default=confidence_default,
+                mask_target_ids=mask_target_ids,
+            )
+            if actual_version != CLEAN_V4_VERSION:
+                raise ValueError(
+                    f"v4 recipe 返回版本 {actual_version!r}，期望 {CLEAN_V4_VERSION!r}"
+                )
+        elif roi_v4_recipe:
+            feats = np.stack(
+                [
+                    build_roi_v4_frame_features(path, mask_target_ids=mask_target_ids)
+                    for path in frame_paths
+                ]
+            ).astype(np.float32)
+        elif feature_version in CLEAN_V3_FEATURE_DIMS:
             feats, _feature_names, actual_version = build_clean_bbox_v3_features(
                 frame_paths,
                 detection_mapping=detection_mapping or {},
