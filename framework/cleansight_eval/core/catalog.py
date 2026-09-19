@@ -509,6 +509,31 @@ def _validate_temporal(spec: TestsetSpec) -> list[str]:
                         f"clean_bbox_v3 固定维度={CLEAN_V3_INPUT_DIM} "
                         f"与 input_dim={spec.input_dim} 不一致"
                     )
+            elif str(spec.feature_mapping or "").startswith("ama-v4-"):
+                # v4 契约（docs/FEATURE_V4_DIM_SPEC.md）：核心类数与维度显式声明，
+                # roi 变体额外校验 类数×区域×通道。
+                layout = spec.raw.get("feature_layout") or {}
+                classes = layout.get("classes")
+                declared = layout.get("dim")
+                if not (isinstance(classes, int) and classes > 0):
+                    errors.append(
+                        f"ama-v4- 契约需要 feature_layout.classes（核心类数，正整数）"
+                    )
+                elif not (isinstance(declared, int) and declared == spec.input_dim):
+                    errors.append(
+                        f"ama-v4- feature_layout.dim={declared!r} 与 input_dim={spec.input_dim} 不一致"
+                    )
+                elif str(spec.feature_mapping).startswith("ama-v4-roi-"):
+                    rows, cols, channels = (
+                        layout.get("rows"), layout.get("cols"), layout.get("channels"),
+                    )
+                    if not all(isinstance(v, int) and v > 0 for v in (rows, cols, channels)):
+                        errors.append("ama-v4-roi- 需要 feature_layout rows/cols/channels（正整数）")
+                    elif classes * rows * cols * channels != spec.input_dim:
+                        errors.append(
+                            f"roi v4 类数×区域×通道={classes * rows * cols * channels} "
+                            f"与 input_dim={spec.input_dim} 不一致"
+                        )
             elif str(spec.feature_mapping or "").startswith(ROI_FEATURE_MAPPING_PREFIX):
                 layout = spec.raw.get("feature_layout") or {}
                 rows, cols, channels = layout.get("rows"), layout.get("cols"), layout.get("channels")
