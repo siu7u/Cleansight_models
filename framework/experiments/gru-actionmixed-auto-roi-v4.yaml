@@ -1,0 +1,38 @@
+# GRU 滑窗正式训练配置（v4 ROI 网格：108 维（6 核心类 × 2×3 网格 × 3 通道），docs/FEATURE_SCHEME_V4_DESIGN.md）。
+# 与 §6 矩阵同 GRU 同健康配方同数据，仅特征契约不同（ama-v4-roi-6c-108d）。
+# split_eval: test = project-18 action-test（跨批次长短毛刷专项，解读需注明口径）。
+
+schema_version: 1
+pipeline: sliding_window_temporal
+
+model:
+  type: gru
+  input_dim: 108
+  num_classes: 6         # idle/water_injection/flush/long_brush_insert/long_brush_withdraw/short_brush_cleaning
+  hidden: 128
+  num_layers: 3
+  dropout: 0.2           # 健康配方（与 §6 矩阵一致）
+
+data:
+  dataset_ref: temporal.actionmixed-auto-roi-v4    # 根目录/类别/mapping/manifest 由 catalog 解析（含 test split）
+  split_train: train
+  split_val: val
+  split_eval: test       # project-18 专项评测（跨批次）
+
+feature_schema:
+  dim: 108
+  version: ama-v4-roi-6c-108d
+  detection_confidence_default: 1.0      # exploratory 口径
+
+evaluation:
+  mode: exploratory
+  visualize: false                       # 渲染不影响指标（已验证 14/14 一致）
+
+train:
+  epochs: 20
+  lr: 0.001
+  batch_size: 32
+  window: 16
+  weight_decay: 0.0001   # 健康配方（与 §6 矩阵一致）
+  patience: 4            # 按 val_loss 早停
+  best_metric: val_f1_0.5  # 段级指标选 best.pt
