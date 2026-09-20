@@ -1,0 +1,39 @@
+# GRU + v2⊕v3 废弃类消融（exploratory 探针，FEATURE_LAB §8.3-2）：
+# 编码与维度与 v2⊕v3 完全一致（226），唯一变量 = 废弃类检测行读入层丢弃。
+# 判读：val 回 33+ → v4 回落系块结构重构所致；test 优于 26.09 → 剔废弃泛化收益与结构无关。
+# 探针阶段用显式 data.root（同 v2v3 约定），不登记 catalog。
+
+schema_version: 1
+pipeline: sliding_window_temporal
+
+model:
+  type: gru
+  input_dim: 226
+  num_classes: 6
+  hidden: 128
+  num_layers: 3
+  dropout: 0.2
+
+data:
+  root: E:/曦源/Cleansight_models/datasets/cleansight-ActionMixed-auto
+  split_train: train
+  split_val: val
+  split_eval: test
+
+feature_schema:
+  dim: 226
+  version: ama-v3-concat23-nodep-226d
+  detection_confidence_default: 1.0
+
+evaluation:
+  mode: exploratory
+  visualize: false
+
+train:
+  epochs: 20
+  lr: 0.001
+  batch_size: 32
+  window: 16
+  weight_decay: 0.0001
+  patience: 4
+  best_metric: val_f1_0.5

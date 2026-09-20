@@ -38,6 +38,11 @@ from pathlib import Path
 import numpy as np
 import yaml
 
+from .features.nodep_concat import (
+    NODEP_CONCAT_DIM,
+    NODEP_CONCAT_VERSION,
+    build_nodep_concat_features,
+)
 from .features.clean_v2_v3 import (
     CLEAN_V2V3_DIM,
     CLEAN_V2V3_VERSION,
@@ -484,10 +489,12 @@ def load_split(
     clean_v3_roi_recipe = feature_version == CLEAN_V3_ROI_VERSION
     clean_v2v3_recipe = feature_version == CLEAN_V2V3_VERSION
     clean_v4_recipe = feature_version == CLEAN_V4_VERSION
+    nodep_concat_recipe = feature_version == NODEP_CONCAT_VERSION
     roi_v4_recipe = feature_version == ROI_V4_VERSION
     detection_mapping = (
         load_detection_mapping(data_cfg)
-        if (clean_recipe or clean_v3_roi_recipe or clean_v2v3_recipe or clean_v4_recipe)
+        if (clean_recipe or clean_v3_roi_recipe or clean_v2v3_recipe or clean_v4_recipe
+                or nodep_concat_recipe)
         else None
     )
     fps = float(data_cfg.get("fps", 7.5))
@@ -505,7 +512,21 @@ def load_split(
             if window is not None and len(frame_ids) < window:
                 continue
         frame_paths = [frames_dir / f"{stem}-{frame_id:06d}.txt" for frame_id in frame_ids]
-        if clean_v4_recipe:
+        if nodep_concat_recipe:
+            feats, _names, actual_version = build_nodep_concat_features(
+                frame_paths,
+                detection_mapping=detection_mapping or {},
+                fps=fps,
+                confidence_default=confidence_default,
+                mask_target_ids=mask_target_ids,
+            )
+            if actual_version != NODEP_CONCAT_VERSION:
+                raise ValueError(
+                    f"nodep recipe 返回版本 {actual_version!r}，期望 {NODEP_CONCAT_VERSION!r}"
+                )
+            if feats.shape[1] != NODEP_CONCAT_DIM:
+                raise ValueError(f"nodep 拼接维度 {feats.shape[1]} != {NODEP_CONCAT_DIM}")
+        elif clean_v4_recipe:
             feats, _feature_names, actual_version = build_clean_bbox_v4_features(
                 frame_paths,
                 detection_mapping=detection_mapping or {},
