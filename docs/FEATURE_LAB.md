@@ -327,6 +327,27 @@ F1@0.1 34.62 > 34.00（v2）✅——**v2⊕v3 在全部三项段级指标上同
 3. roi-v4 两口径均弱于 v4 主特征，ROI 路线随 v1→v4 演进退出主选。
 4. 全部结论仍为 CPU/WSL exploratory 口径，定版需 GPU 复跑。
 
+### 8.5 nodep 增益逐类分解与 test 构成（2026-09-22 晚，数据侧分析）
+
+**test split（project-18，2639 帧）构成**：idle 55.2% / **long_brush_insert 26.8%（707 帧）** /
+**long_brush_withdraw 9.8%（259 帧）** / flush 6.2% / short_brush_cleaning 1.9%（51 帧）/
+water_injection **0 帧**。P0 对（insert+withdraw）合计 36.6%——专项评测力度充分；
+water_injection 与 short_brush_cleaning 无统计意义（后者逐类 F1 全方案为 0，属数据不足）。
+
+**nodep 的 +5.8 test edit 增益来源**（逐类 F1 中位数，n=3）：
+
+| 类 | nodep | v2⊕v3 | v3 |
+|---|---:|---:|---:|
+| idle | 0.680 | 0.704 | 0.704 |
+| flush | 0.100 | n/a | n/a |
+| long_brush_insert | 0.171 | 0.238 | 0.211 |
+| **long_brush_withdraw** | **0.295** | 0.216 | 0.279 |
+| short_brush_cleaning | 0.000 | 0.000 | 0.000 |
+
+增益主要来自 **long_brush_withdraw（+36% vs v2⊕v3）**——恰为 P0 对；代价是 insert 略降
+（-0.067），净段级效应强正。为"废弃通道 = 过拟合源"补上逐类证据：withdraw 判别更依赖
+手部运动模式，原被 distal/short_brush 恒零通道噪声干扰最重。
+
 ## 9. 窗口长度实验：上下文瓶颈假设被证伪（2026-09-21/22）
 
 > 动机：GRU(31.07) 与 MS-TCN 双向(39.81) 的差距曾归因于上下文长度，假设加长窗口
