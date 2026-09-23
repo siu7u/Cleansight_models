@@ -68,15 +68,14 @@ for i, (fold, vid8, ed, gt, pred, names, acc) in enumerate(records):
     hl = fold in ("fold12", "fold09")
     # data y -> axes 分数
     fy = 0.10 + 0.80 * ((y + 0.45) / N)
-    fig.text(0.145, fy, f"{fold}  {vid8}", ha="right", va="center", fontsize=9.5,
-             color="#c0392b" if hl else "#333", fontweight="bold" if hl else "normal")
-    fig.text(0.113, fy, f"{ed:.1f}", ha="right", va="center", fontsize=9.5,
-             color="#c0392b" if hl else "#555", fontweight="bold" if hl else "normal")
+    # 单列右对齐（折名+视频ID+edit 合并为一个字符串），从根上杜绝列间重叠
+    fig.text(0.145, fy, f"{fold} · {vid8} · edit {ed:.1f}", ha="right", va="center",
+             fontsize=9.5, color="#c0392b" if hl else "#333",
+             fontweight="bold" if hl else "normal")
     fig.text(0.955, fy, f"{acc*100:.0f}%", ha="left", va="center", fontsize=8.5,
              color="#c0392b" if hl else "#888", fontweight="bold" if hl else "normal")
 
-fig.text(0.145, 0.915, "折 / 视频", ha="right", fontsize=10, fontweight="bold", color="#333")
-fig.text(0.113, 0.915, "edit", ha="right", fontsize=10, fontweight="bold", color="#333")
+fig.text(0.145, 0.915, "折 / 视频 / edit", ha="right", fontsize=10, fontweight="bold", color="#333")
 fig.text(0.955, 0.915, "帧acc", ha="left", fontsize=10, fontweight="bold", color="#333")
 
 ax.set_xlim(0, maxT); ax.set_ylim(-0.15, N - 0.1)
