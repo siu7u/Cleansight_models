@@ -28,6 +28,12 @@ max_area]``，拼成 144 维；该类其他语义（mask_targets、空帧全零�
 中心落在"面积最大 hand 框扩张 1.5 倍"区域内的框，坐标相对该区域归一化，维度仍为
 8×5=40；无 hand 框时全零。"全局+手部"契约（version=actionmixed-bbox-global-hand-8cls-v1）
 为两者拼接，8×5×2=80 维，左半 40 维为全局编码、右半 40 维为手部编码。
+
+图像 embedding 契约（version=actionmixed-bbox-embed-*，见 ``features/image_embed.py``）：
+左侧 40 维 bbox 块口径同上，右侧拼接 ``extract_embeddings.py`` 预计算的逐帧整图 CNN
+embedding（按标签行位置对齐，``data.embedding_root`` 指向产物根目录），如
+``actionmixed-bbox-embed-mbv3s-v1`` = 40 + 576 = 616 维。该契约下 ``mask_targets`` 与
+目标随机遮罩只作用于 bbox 块（图像块无检测类结构）。
 """
 
 from __future__ import annotations
@@ -40,12 +46,23 @@ import yaml
 
 from .features import (
     CLEAN_FEATURE_DIMS,
+    EMBED_BBOX_DIM,
     GLOBAL_HAND_BBOX_VERSION,
     HAND_BBOX_VERSION,
     ROI_FEATURE_VERSION,
+    ROI_GRID_V2_VERSION,
+    ROI_PRESENCE_VERSION,
     build_clean_bbox_features,
     build_hand_frame_features,
     build_roi_frame_features,
+    build_roi_grid_v2_frame_features,
+    build_roi_presence_frame_features,
+    block_dims_for_version,
+    is_image_embed_version,
+    load_video_embeddings,
+    resolve_embed_dim,
+    resolve_embedding_root,
+    roi_grid_v2_block_dims,
 )
 
 N_DET_CLASSES = 8  # frames/data.yaml 的检测类数（每类 5 维）
@@ -108,7 +125,13 @@ def resolve_mask_target_ids(data_cfg: dict, feature_schema: dict | None) -> froz
     if raw_targets is None or raw_targets == "" or raw_targets == []:
         return frozenset()
     if isinstance(raw_targets, (str, int)) and not isinstance(raw_targets, bool):
-        targets = [raw_targets]
+        # 字符串支持逗号分隔的多个目标（CLI `-S feature_schema.mask_targets=a,b` 用），
+        # 单个名字/ID 保持原样。
+        targets = [part.strip() for part in raw_targets.split(",")] if isinstance(raw_targets, str) \
+            else [raw_targets]
+        targets = [part for part in targets if part]
+        if not targets:
+            raise ValueError("feature_schema.mask_targets 不能是空字符串")
     elif isinstance(raw_targets, list):
         targets = raw_targets
     else:
@@ -202,11 +225,17 @@ def apply_target_mask_augmentation(
     augmentation: dict | None,
     *,
     seed: int,
+    feature_schema: dict | None = None,
 ) -> list[np.ndarray]:
     """对训练集 ``[T, F]`` 特征应用可复现的逐帧目标随机遮罩。
 
     每个指定目标按其类别特征块清零（bbox 契约 5 维 / ROI 契约 18 维）；块宽由
-    特征维与检测类别数推导。同一 seed、相同视频顺序和相同配置产生相同遮罩；
+    特征维与检测类别数推导。**块宽不等的契约**（``actionmixed-roi-grid-v2``：高频类
+    27 维、低频类 3 维）改由 ``features.block_dims_for_version`` 提供显式逐类块宽，
+    按"总维 ÷ 类数"推导会静默遮错列。图像 embedding 契约（``feature_schema.version``
+    属 ``actionmixed-bbox-embed-*``）下遮罩只作用于左侧 bbox 块（块宽 40 ÷ 检测类数），
+    图像块无检测类结构、保持原样——该契约的总维度不是"类数 × 块宽"的整数倍语义，
+    按总维度推导会静默错切。同一 seed、相同视频顺序和相同配置产生相同遮罩；
     该函数不应由 val/test 数据路径调用。未启用或概率为零时原样返回输入列表。
     """
 
@@ -216,26 +245,85 @@ def apply_target_mask_augmentation(
 
     detection_mapping = load_detection_mapping(data_cfg)
     n_det_classes = len(detection_mapping)
+    embed_mask = is_image_embed_version((feature_schema or {}).get("version"))
+    explicit_blocks = block_dims_for_version((feature_schema or {}).get("version"), n_det_classes)
     rng = np.random.default_rng(seed)
     augmented: list[np.ndarray] = []
     for sequence in features:
         masked = sequence.copy()
-        block = masked.shape[1] // n_det_classes  # 每类特征块宽（bbox 契约 5 / ROI 契约 18）
-        if block * n_det_classes != masked.shape[1]:
-            raise ValueError(
-                f"目标随机遮罩需要特征维是检测类数 {n_det_classes} 的整数倍，"
-                f"实际 {masked.shape[1]}"
-            )
-        for target_id in sorted(spec["target_ids"]):
-            if masked.ndim != 2 or masked.shape[1] < (target_id + 1) * block:
+        if masked.ndim != 2:
+            raise ValueError(f"目标随机遮罩要求 [T, F] 特征，实际 shape={masked.shape}")
+        if embed_mask:
+            if EMBED_BBOX_DIM % n_det_classes != 0:
                 raise ValueError(
-                    f"目标 ID={target_id} 的 {block} 维切片超出特征形状 {tuple(masked.shape)}"
+                    f"图像契约的 bbox 块 {EMBED_BBOX_DIM} 维不是检测类数 {n_det_classes} 的整数倍"
                 )
+            block = EMBED_BBOX_DIM // n_det_classes  # 每类 bbox 块宽（8 类 → 5）
+            maskable_dim = EMBED_BBOX_DIM
+            if masked.shape[1] < maskable_dim:
+                raise ValueError(
+                    f"图像契约特征维至少 {maskable_dim}（bbox 块），实际 {masked.shape[1]}"
+                )
+        elif explicit_blocks is not None:
+            block = 0  # 非均匀契约不使用单一块宽
+            maskable_dim = sum(explicit_blocks)
+            if masked.shape[1] < maskable_dim:
+                raise ValueError(
+                    f"块宽不等契约的特征维至少 {maskable_dim}（逐类块宽之和），"
+                    f"实际 {masked.shape[1]}"
+                )
+        else:
+            block = masked.shape[1] // n_det_classes  # 每类特征块宽（bbox 契约 5 / ROI 契约 18）
+            maskable_dim = masked.shape[1]
+            if block * n_det_classes != masked.shape[1]:
+                raise ValueError(
+                    f"目标随机遮罩需要特征维是检测类数 {n_det_classes} 的整数倍，"
+                    f"实际 {masked.shape[1]}"
+                )
+        for target_id in sorted(spec["target_ids"]):
+            if explicit_blocks is not None:
+                start = sum(explicit_blocks[:target_id])
+                width = explicit_blocks[target_id] if target_id < len(explicit_blocks) else 0
+                if width == 0:
+                    raise ValueError(
+                        f"目标 ID={target_id} 超出块宽表 {explicit_blocks}，无法遮罩"
+                    )
+            else:
+                start = target_id * block
+                width = block
+                if masked.shape[1] < maskable_dim or maskable_dim < start + width:
+                    raise ValueError(
+                        f"目标 ID={target_id} 的 {width} 维切片超出特征形状 {tuple(masked.shape)}"
+                    )
             dropped = rng.random(masked.shape[0]) < spec["probability"]
-            start = target_id * block
-            masked[dropped, start : start + block] = 0.0
+            masked[dropped, start : start + width] = 0.0
         augmented.append(masked)
     return augmented
+
+
+def resolve_image_feature_dim(model_cfg: dict, feature_schema: dict | None) -> int:
+    """交叉校验「图像 embedding 契约 ↔ 模型投影头」声明，返回图像块宽度（非图像契约为 0）。
+
+    图像契约必须声明 ``model.image_dim``（尾部图像块宽度，用于投影头），且与
+    ``feature_schema.dim - 40`` 一致；非图像契约声明 ``model.image_dim`` 直接报错——
+    静默忽略会让模型少一个投影头却照常训练出无意义的对照结果。
+    """
+
+    declared = model_cfg.get("image_dim")
+    if not is_image_embed_version((feature_schema or {}).get("version")):
+        if declared:
+            raise ValueError(
+                f"model.image_dim={declared!r} 只在图像 embedding 契约下有效，"
+                f"当前 feature_schema.version={(feature_schema or {}).get('version')!r}"
+            )
+        return 0
+    expected = resolve_embed_dim(feature_schema)
+    if declared != expected:
+        raise ValueError(
+            f"model.image_dim={declared!r} 与契约声明的图像块宽度 {expected} 不一致"
+            f"（feature_schema.dim - {EMBED_BBOX_DIM}）"
+        )
+    return expected
 
 
 def _registered_split_items(data_cfg: dict, split: str) -> list[str] | None:
@@ -249,24 +337,42 @@ def _registered_split_items(data_cfg: dict, split: str) -> list[str] | None:
     return read_split_items(get_dataset_split(str(dataset_ref), split))
 
 
-def _iter_split_sequences(data_cfg: dict, split: str, window: int | None = None):
+def _split_label_files(data_cfg: dict, split: str) -> list[Path]:
+    """split 的标签文件清单（顺序 = 登记 manifest 顺序或目录 sorted 顺序）。
+
+    ``load_split`` / ``split_video_names`` / :func:`count_split_videos` 共用这一处，
+    保证"取前 k 个视频"在三处切的是同一批。
+    """
+
+    root = Path(data_cfg["root"])
+    labels_dir = root / data_cfg.get("labels_dir", "labels") / split
+    if not labels_dir.is_dir():
+        raise FileNotFoundError(f"labels split 目录不存在: {labels_dir}")
+    registered_items = _registered_split_items(data_cfg, split)
+    if registered_items is not None:
+        return [labels_dir / f"{name}.txt" for name in registered_items]
+    return sorted(labels_dir.glob("*.txt"))
+
+
+def count_split_videos(data_cfg: dict, split: str) -> int:
+    """split 里的视频数（只数列文件，不读内容）。"""
+
+    return len(_split_label_files(data_cfg, split))
+
+
+def _iter_split_sequences(data_cfg: dict, split: str, window: int | None = None,
+                          limit: int | None = None):
     """按登记 manifest 遍历 split，产出 ``(stem, frame_ids, action_ids)``。
 
     ``data.dataset_ref`` 存在时，manifest 是唯一样本真源；临时/合成配置没有引用时才按目录
     ``sorted`` 遍历。丢弃无有效 "frame_id action_id" 行的空文件；给了 ``window`` 时跳过
     过短序列。``load_split`` 与 ``split_video_names`` 共用此生成器，保证三者严格对齐。
+    ``limit`` 取清单**前 k 个**视频（学习曲线用的训练子采样口径，见
+    :func:`resolve_train_video_limit`）。
     """
-    root = Path(data_cfg["root"])
-    labels_dir = root / data_cfg.get("labels_dir", "labels") / split
-    if not labels_dir.is_dir():
-        raise FileNotFoundError(f"labels split 目录不存在: {labels_dir}")
-
-    registered_items = _registered_split_items(data_cfg, split)
-    label_files = (
-        [labels_dir / f"{name}.txt" for name in registered_items]
-        if registered_items is not None
-        else sorted(labels_dir.glob("*.txt"))
-    )
+    label_files = _split_label_files(data_cfg, split)
+    if limit is not None:
+        label_files = label_files[: max(0, int(limit))]
     for label_file in label_files:
         if not label_file.is_file():
             raise FileNotFoundError(f"manifest 登记的动作标签不存在: {label_file}")
@@ -395,6 +501,7 @@ def load_split(
     *,
     max_videos: int | None = None,
     max_frames: int | None = None,
+    video_limit: int | None = None,
 ):
     """读某个 split 目录的全部视频，返回 (features_list, truths_list, id2name)。
 
@@ -404,6 +511,8 @@ def load_split(
     ``feature_schema.mask_targets`` 可按 ``frames/data.yaml`` 的目标名或 ID 遮罩整组特征块
     （bbox 契约 5 维 / ROI 契约 18 维）。
     ``max_videos`` / ``max_frames`` 仅用于显式 smoke 评测限制，训练调用不传这两个参数。
+    ``video_limit`` 取清单前 k 个视频（训练子采样口径，见 :func:`resolve_train_video_limit`），
+    与 ``split_video_names(video_limit=...)`` 严格同序同批。
     """
     feature_version = (feature_schema or {}).get("version", "actionmixed-bbox-8cls-v1")
     if feature_version == LEGACY_FEATURE_VERSION:
@@ -412,7 +521,7 @@ def load_split(
             split,
             window=window,
             feature_schema=feature_schema,
-            max_videos=max_videos,
+            max_videos=max_videos if video_limit is None else video_limit,
             max_frames=max_frames,
         )
         return features, truths, id2name
@@ -441,7 +550,12 @@ def load_split(
         }
         id2name = {index: name for index, name in enumerate(class_order)}
     mask_target_ids = resolve_mask_target_ids(data_cfg, feature_schema)
+    image_embed_recipe = is_image_embed_version(feature_version)
+    embed_root = resolve_embedding_root(data_cfg) if image_embed_recipe else None
+    embed_dim = resolve_embed_dim(feature_schema) if image_embed_recipe else 0
     roi_recipe = feature_version == ROI_FEATURE_VERSION
+    roi_presence_recipe = feature_version == ROI_PRESENCE_VERSION
+    roi_v2_recipe = feature_version == ROI_GRID_V2_VERSION
     hand_recipe = feature_version == HAND_BBOX_VERSION
     global_hand_recipe = feature_version == GLOBAL_HAND_BBOX_VERSION
     clean_recipe = feature_version in CLEAN_FEATURE_DIMS
@@ -452,7 +566,8 @@ def load_split(
     )
 
     features, truths = [], []
-    for stem, frame_ids, action_ids in _iter_split_sequences(data_cfg, split, window):
+    for stem, frame_ids, action_ids in _iter_split_sequences(data_cfg, split, window,
+                                                             limit=video_limit):
         if max_videos is not None and len(features) >= max_videos:
             break
         if max_frames is not None:
@@ -461,7 +576,28 @@ def load_split(
             if window is not None and len(frame_ids) < window:
                 continue
         frame_paths = [frames_dir / f"{stem}-{frame_id:06d}.txt" for frame_id in frame_ids]
-        if clean_recipe:
+        if image_embed_recipe:
+            bbox_feats = np.stack(
+                [
+                    featurize_frame_bbox(path, mask_target_ids=mask_target_ids)
+                    for path in frame_paths
+                ]
+            ).astype(np.float32)  # [T, 40]
+            embeddings = load_video_embeddings(
+                embed_root,
+                split,
+                stem,
+                embed_dim,
+                # smoke 截断（max_frames）时标签行已被截短，此时只按前缀切片
+                expected_rows=None if max_frames is not None else len(frame_ids),
+            )
+            embeddings = embeddings[: len(frame_ids)]  # [T, embed_dim]
+            if embeddings.shape[0] != len(frame_ids):
+                raise ValueError(
+                    f"embedding 行数少于标签行数: {stem} {embeddings.shape[0]} < {len(frame_ids)}"
+                )
+            feats = np.concatenate([bbox_feats, embeddings], axis=1)  # [T, 40 + embed_dim]
+        elif clean_recipe:
             feats, _feature_names, actual_version = build_clean_bbox_features(
                 frame_paths,
                 detection_mapping=detection_mapping or {},
@@ -478,6 +614,20 @@ def load_split(
             feats = np.stack(
                 [
                     build_roi_frame_features(path, mask_target_ids=mask_target_ids)
+                    for path in frame_paths
+                ]
+            ).astype(np.float32)
+        elif roi_presence_recipe:
+            feats = np.stack(
+                [
+                    build_roi_presence_frame_features(path, mask_target_ids=mask_target_ids)
+                    for path in frame_paths
+                ]
+            ).astype(np.float32)
+        elif roi_v2_recipe:
+            feats = np.stack(
+                [
+                    build_roi_grid_v2_frame_features(path, mask_target_ids=mask_target_ids)
                     for path in frame_paths
                 ]
             ).astype(np.float32)
@@ -524,6 +674,7 @@ def split_video_names(
     *,
     max_videos: int | None = None,
     max_frames: int | None = None,
+    video_limit: int | None = None,
 ) -> list[str]:
     """与 ``load_split`` 完全一致顺序的视频名列表（供可视化把逐帧预测贴回具体视频）。"""
 
@@ -537,12 +688,13 @@ def split_video_names(
                 "version": LEGACY_FEATURE_VERSION,
                 "dim": data_cfg.get("input_dim", 20),
             },
-            max_videos=max_videos,
+            max_videos=max_videos if video_limit is None else video_limit,
             max_frames=max_frames,
         )
         return names
     names = []
-    for stem, frame_ids, _action_ids in _iter_split_sequences(data_cfg, split, window):
+    for stem, frame_ids, _action_ids in _iter_split_sequences(data_cfg, split, window,
+                                                             limit=video_limit):
         if max_frames is not None and window is not None and len(frame_ids[:max_frames]) < window:
             continue
         names.append(stem)
@@ -551,14 +703,52 @@ def split_video_names(
     return names
 
 
+def resolve_train_video_fraction(data_cfg: dict) -> float | None:
+    """读取并校验 ``data.train_video_fraction``（训练视频子采样比例）。
+
+    缺省 ``None`` = 用整个 train split（历史行为）。合法区间 ``(0, 1]``；非法值立即报错，
+    不静默退回全量——学习曲线的横轴口径不能靠猜。
+    """
+
+    raw = data_cfg.get("train_video_fraction")
+    if raw is None:
+        return None
+    try:
+        fraction = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"data.train_video_fraction 必须是 (0, 1] 内的数，实际 {raw!r}") from exc
+    if not 0.0 < fraction <= 1.0:
+        raise ValueError(f"data.train_video_fraction 必须在 (0, 1] 内，实际 {fraction}")
+    return fraction
+
+
+def resolve_train_video_limit(data_cfg: dict, split: str | None = None) -> int | None:
+    """把比例换算成"取前 k 个视频"的 k；未设置时返回 ``None``（全量）。
+
+    口径：k = max(1, round(视频数 × fraction))，按 manifest/目录顺序取前 k 个——同一配置、
+    同一 split 下每次切的是同一批视频（可复现的学习曲线横轴）。比例 ≥1 或 round 后等于全量
+    时返回 ``None``，即不做子采样。
+    """
+
+    fraction = resolve_train_video_fraction(data_cfg)
+    if fraction is None:
+        return None
+    total = count_split_videos(data_cfg, split or data_cfg["split_train"])
+    limit = max(1, int(round(total * fraction)))
+    return None if limit >= total else limit
+
+
 def build_dataset_provenance(data_cfg: dict, feature_schema: dict | None) -> dict:
     """构造 checkpoint 使用的数据集版本、revision、split fingerprint 和映射摘要。"""
 
+    fraction = resolve_train_video_fraction(data_cfg)
+    subsample = {"train_video_fraction": fraction} if fraction is not None else {}
     dataset_ref = data_cfg.get("dataset_ref")
     if not dataset_ref:
         return {
             "registered": False,
             "id": data_cfg.get("name") or str(data_cfg.get("root")),
+            **subsample,
         }
     from ..core.catalog import (
         get_dataset_specs,
@@ -615,6 +805,8 @@ def build_dataset_provenance(data_cfg: dict, feature_schema: dict | None) -> dic
         "splits": splits,
         "action_mapping": mapping_info(action_mapping),
         "feature_schema": dict(feature_schema or {}),
+        # 训练视图：子采样比例（未设置时不写该键），供 checkpoint 自证"这版权重是在多少数据上训的"。
+        **subsample,
     }
     if detection_mapping is not None:
         provenance["detection_mapping"] = mapping_info(detection_mapping)
@@ -622,11 +814,19 @@ def build_dataset_provenance(data_cfg: dict, feature_schema: dict | None) -> dic
 
 
 def assert_resume_dataset_compatible(checkpoint_meta: dict, current: dict) -> None:
-    """恢复训练时要求数据版本和 train fingerprint 完全一致，拒绝静默混训。"""
+    """恢复训练时要求数据版本、train fingerprint 与训练视图完全一致，拒绝静默混训。"""
 
+    previous = checkpoint_meta.get("dataset")
+    # 训练子采样口径先于"是否登记"检查：换子集 = 换训练视图，与数据集是否登记无关。
+    if isinstance(previous, dict) and (
+        previous.get("train_video_fraction") != current.get("train_video_fraction")
+    ):
+        raise ValueError(
+            "resume 数据集不兼容: train_video_fraction "
+            f"checkpoint={previous.get('train_video_fraction')!r} current={current.get('train_video_fraction')!r}"
+        )
     if not current.get("registered"):
         return
-    previous = checkpoint_meta.get("dataset")
     if not isinstance(previous, dict) or not previous.get("registered"):
         raise ValueError("当前训练使用已登记数据集，但 resume checkpoint 缺少数据集溯源")
     for key in ("id", "version", "revision", "feature_mapping", "labels"):

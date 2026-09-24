@@ -26,12 +26,12 @@ Pipeline 校验并执行。
 |---|---|
 | `schema_version` | 实验配置契约版本，当前为 `1`。 |
 | `pipeline` | 选择检测、滑窗时序或全序列时序流程，确定训练和推理语义。 |
-| `model` | 模型类型、输入/输出维度、网络规模、初始权重及 metadata 策略。`allow_missing_meta: true` 只在 `exploratory` 生效：YOLO 由自身格式加载，时序模型按本段结构严格加载裸 state dict、常见包装、受限 NumPy metadata 包装或由 JIT API 提取参数的 TorchScript；`formal` 禁止该降级。 |
-| `data` | `dataset_ref` 引用 benchmark catalog；catalog 解析数据根、类别和 manifest，实验只声明 train/val/eval split。没有引用的临时/合成配置仍可直接使用 `root`；CLEAN v2 recipe 用 `fps` 计算速度特征。 |
+| `model` | 模型类型、输入/输出维度、网络规模、初始权重及 metadata 策略。`allow_missing_meta: true` 只在 `exploratory` 生效：YOLO 由自身格式加载，时序模型按本段结构严格加载裸 state dict、常见包装、受限 NumPy metadata 包装或由 JIT API 提取参数的 TorchScript；`formal` 禁止该降级。输入归一化口径：`normalization`（`none` 默认 = 原始量纲直通 / `zscore` = 按训练集逐维标准化，统计写入 buffer 并随 checkpoint 持久化）与可选 `norm_clip`（把标准化结果截断到 ±norm_clip，防近零方差维被放大，见 INPUT_DESIGN_PROPOSAL §1.3、P2a）；MS-TCN/MS-TCN++ 恒为 z-score，GRU 默认 `none` 以保持历史 checkpoint 口径，仅 GRU 支持该字段。另有时序离线模型专属的 `sequence_normalization`（`none` 默认 / `demean`）：在 z-score 之后、进入网络之前按**该序列自身**逐维减去时间轴均值，用于消掉单条视频的电平/构图差异；因为需要看到整段序列，仅 `mstcn` / `mstcn2` 支持（`gru` / `transformer` / `clean_mstcn_bilstm` 传该字段直接报错），口径随 checkpoint 记为 `zscore/train-set/buffers/v1+sequence-demean/v1`。实测它显著提 insert 召回，但过分割、段级指标不增（见 `docs/FEATURE_STRATEGY_COMPARE.md` 第十五轮）。 |
+| `data` | `dataset_ref` 引用 benchmark catalog；catalog 解析数据根、类别和 manifest，实验只声明 train/val/eval split。没有引用的临时/合成配置仍可直接使用 `root`；CLEAN v2 recipe 用 `fps` 计算速度特征。时序训练可加 `train_video_fraction`（(0,1]，缺省全量）：按 manifest/目录顺序取**前 k 个训练视频**（k = max(1, round(视频数 × 比例))），用于学习曲线横轴；**只作用于 train split，val/test 恒全量**，比例写进 checkpoint 数据溯源（`dataset.train_video_fraction`），resume 时不一致会被拒绝；非法值在配置校验阶段报错。 |
 | `feature_schema` | 时序特征维度、mapping 版本、类别布局及可选固定目标遮罩。`class_order` 可把数据动作 ID 重排到 checkpoint 输出顺序；五列 bbox 缺 confidence 时，`detection_confidence_default` 只允许作为 exploratory 的显式替代值。 |
-| `augmentation` | 训练期数据增强；`target_mask` 只作用于 train，不作用于 val/test。 |
-| `evaluation` | 正式/探索模式、预测保存、延迟及检测阈值；时序 testset 由 `dataset_ref + split_eval` 唯一推导，也可显式写 `testset_id` 做一致性断言。两条时序 Pipeline 默认启用测试 timeline。 |
-| `train` | epoch、学习率、batch/window、早停、梯度裁剪和 resume 等参数。 |
+| `augmentation` | 训练期数据增强；只作用于 train，不作用于 val/test。目前仅 `target_mask`：`enabled`（布尔）、`strategy: frame_dropout`（当前唯一实现）、`targets`（检测目标名或 ID 列表，语义同 `feature_schema.mask_targets`）、`probability`（0~1，**每个采样帧对每个指定目标独立**清零其整类特征块的概率）。块宽随契约（bbox 5 / ROI-144 18 / ROI-presence 6），图像 embedding 契约只遮左侧 bbox 块。同 seed 可复现；`enabled=true` 且 `probability>0` 时 `targets` 不能为空（否则配置校验报错）。用途是**抗批次特定线索记忆**——随机遮罩是正则而非删特征（同一类在别的帧仍可见），机制与依据见 `docs/FEATURE_STRATEGY_COMPARE.md` 第二十轮。 |
+| `evaluation` | 正式/探索模式、预测保存、延迟及检测阈值；时序 testset 由 `dataset_ref + split_eval` 唯一推导，也可显式写 `testset_id` 做一致性断言。两条时序 Pipeline 默认启用测试 timeline。滑窗时序另有 `smoothing_min_duration`（正整数，默认 25）：因果平滑 `causal_decision` 要求候选类连续出现这么多帧才切换输出，**它同时是召回上限**——真实段长普遍短于该值的类/数据会被结构性压到 0 召回（2026-09-18 跨批次诊断：project-18 test 的 short_brush_cleaning 六段全部 ≤19 帧，阈值 25 下召回恒为 0）；实验对照可用它做推理侧消融（不重训）。 |
+| `train` | epoch、学习率、batch/window、早停、梯度裁剪和 resume 等参数。`best_metric`（时序流水线）决定 best checkpoint 依据哪个验证指标，取值**由指标注册表派生**（`framework/cleansight_eval/core/metrics.py` 的 `TEMPORAL_METRIC_SPECS` 中声明了 `training_key` 的项，见 [`../docs/EVAL.md`](../docs/EVAL.md) §3.4）：`val_acc` / `val_edit` / `val_f1_0.1` / `val_f1_0.25` / `val_f1_0.5`，与正式评测 `evaluation.json` 的 `acc` / `edit` / `f1@0.1` / `f1@0.25` / `f1@0.5` 一一同口径；ROI 分类流水线另有 `val_loss` / `val_precision` / `val_recall` / `val_f1` / `val_exact_match`（缺省 `val_loss`，与历史行为一致）。未注册的名字在配置校验阶段直接报错。**`best_metric` 是一等口径参数**：它决定"留哪个 epoch 的权重"，同一次训练换它能把 headline 移动 11 分以上（2026-09-23 实测：`mstcn2` s4l10 h128 的 test edit 在 `val_f1_0.5` 51.47 / `val_edit` 58.35 / `val_f1_0.25` 46.97 之间浮动），所以**报告里必须与指标一起写明选点口径**。选型建议（依据 326 个 run 的 val→test 迁移体检，工具 `tools/probe_selection_transfer.py`）：以 edit 为主指标时用 `val_edit`（旗舰配置上 +11.11 edit，p=0.0068）；不要用 `val_acc`（val−test 差 +14.76，峰值常在第 1 轮）与 `val_loss`（最小值几乎恒在第 3~9 轮）；现行默认 `val_f1_0.5` 与 test 的 Spearman ρ 仅 0.199（见 `docs/FEATURE_STRATEGY_COMPARE.md` 第二十三轮）。`class_weight_clip`（`[lo,hi]` 或 `"lo,hi"`，默认 `[0.1,5.0]`）是**类别权重截断区间**：下限决定多数类（idle）的梯度权重——idle 的原始倒数权重 ≈0.031，默认下限把它抬高 3.2 倍；调低下限（如 `0.03,5.0`）模型更"敢说"非 idle（稀类召回显著上升、段级指标下降），调高则相反。非法值在配置校验阶段报错（见 `docs/FEATURE_STRATEGY_COMPARE.md` 第十四轮）。 |
 
 | YAML | 主要内容 | 功能 |
 |---|---|---|
@@ -57,10 +57,12 @@ Pipeline 校验并执行。
 | [`framework/experiments/gru-actionmixed-auto.yaml`](../framework/experiments/gru-actionmixed-auto.yaml) | GRU、40 维输入、6 类、16 帧窗口、`dataset_ref: temporal.actionmixed-auto-v3` | 自动标注数据上 GRU 滑窗正式训练；与历史 gru-actionmixed.yaml（人工标注）同超参，用于对照自动标注特征代价。 |
 | [`framework/experiments/transformer-actionmixed-auto.yaml`](../framework/experiments/transformer-actionmixed-auto.yaml) | Transformer、40 维输入、6 类、`max_len: 2560`（v3 最长序列约 1635 帧，保留余量）、`dataset_ref: temporal.actionmixed-auto-v3` | 自动标注数据上 Transformer 全序列正式训练；与历史 transformer-actionmixed.yaml 同结构，max_len 上调以容纳更长序列。 |
 | [`framework/experiments/gru-actionmixed-auto-roi.yaml`](../framework/experiments/gru-actionmixed-auto-roi.yaml) | GRU、144 维 ROI 空间特征（`actionmixed-roi-grid-v1`：2×3 网格，每 (检测类,区域) 统计 [presence,count,max_area]，8 类 × 6 区域 × 3 通道）、16 帧窗口、`dataset_ref: temporal.actionmixed-auto-roi-v1`；**健康配方已固化为默认值**（wd/dropout/patience/段级 best 指标） | **正式训练方案配置**（见 docs/features/IMAGE_FEATURE_TRAINING.md §3.4，由多 seed 对照证据确定）；对照实验如需与其他策略同超参用 -S 覆盖 |
+| [`framework/experiments/gru-actionmixed-auto-roi-v2.yaml`](../framework/experiments/gru-actionmixed-auto-roi-v2.yaml) | GRU、96 维 ROI **可见性重排**特征（`actionmixed-roi-grid-v2`：高频 3 类 3×3 网格每类 27 维、低频 5 类全局 1 区域每类 3 维）、16 帧窗口、`dataset_ref: temporal.actionmixed-auto-roi-v2`；健康配方同 roi v1 配置 | 与 gru-actionmixed-auto-roi.yaml（roi-grid-v1，144 维）**同模型同超参、仅特征契约不同**的对照实验（设计依据 docs/features/INPUT_DESIGN_PROPOSAL.md §2 P2b）；块宽不等，遮罩类配置须按显式块宽切片 |
 | [`framework/experiments/mstcn-actionmixed-auto-roi.yaml`](../framework/experiments/mstcn-actionmixed-auto-roi.yaml) | MS-TCN、144 维 ROI 空间特征、30 epoch、`dataset_ref: temporal.actionmixed-auto-roi-v1` | 自动标注数据上 MS-TCN 全序列正式训练（ROI 特征变体，对照 mstcn-actionmixed-auto.yaml）。 |
 | [`framework/experiments/transformer-actionmixed-auto-roi.yaml`](../framework/experiments/transformer-actionmixed-auto-roi.yaml) | Transformer、144 维 ROI 空间特征、`max_len: 2560`、`dataset_ref: temporal.actionmixed-auto-roi-v1` | 自动标注数据上 Transformer 全序列正式训练（ROI 特征变体，对照 transformer-actionmixed-auto.yaml）。 |
 | [`framework/experiments/gru-actionmixed-auto-hand.yaml`](../framework/experiments/gru-actionmixed-auto-hand.yaml) | GRU、40 维手部区域特征（`actionmixed-bbox-hand-8cls-v1`：只编码面积最大 hand 框扩张 1.5 倍区域内的框，坐标相对区域归一化）、16 帧窗口、`dataset_ref: temporal.actionmixed-auto-hand-v1` | 与 gru-actionmixed-auto.yaml 同模型同超参，仅特征提取范围不同（整个画面 vs 仅手部周围）。 |
 | [`framework/experiments/gru-actionmixed-auto-global-hand.yaml`](../framework/experiments/gru-actionmixed-auto-global-hand.yaml) | GRU、80 维全局+手部双通道（`actionmixed-bbox-global-hand-8cls-v1` = 全局 40 维与手部 40 维拼接）、16 帧窗口、`dataset_ref: temporal.actionmixed-auto-global-hand-v1` | "两个都提取"策略：与"整个画面"/"仅手部"两路横向对比。 |
+| [`framework/experiments/gru-actionmixed-embed.yaml`](../framework/experiments/gru-actionmixed-embed.yaml) | GRU、616 维输入（40 bbox + 576 图像 embedding，`actionmixed-bbox-embed-mbv3s-v1`）、6 类、16 帧窗口、`dataset_ref: temporal.actionmixed-v2-embed-mbv3s-v1`、`model.image_dim: 576` + `model.image_proj_dim: 64`（图像块先线性投影再拼接） | 形态 B（像素特征进时序）E1 实验：与 E0 基线 gru-actionmixed.yaml 同模型同超参，仅特征契约不同；embedding 由 features/extract_embeddings.py 离线预计算，训练侧不依赖图像与 GPU；健康配方由运行命令 -S 注入。 |
 
 ## 2. Benchmark 数据集和 split
 
@@ -71,25 +73,36 @@ Pipeline 校验并执行。
 |---|---|
 | `schema_version` / `root` | 定义清单版本和相对路径解析根。 |
 | `datasets` | 数据集级公共事实：family、版本、数据根或 manifest、feature mapping、维度和 labels。 |
-| `revision` | 外部数据仓库的固定 revision；自动通道 v3 钉定为三个 split manifest 拼接内容的 sha256（`b7edb874…`），对应 18 视频、12,959 抽样帧。 |
+| `revision` | 外部数据仓库的固定 revision；自动通道 v3 钉定为三个 split manifest 拼接内容的 sha256（2026-09-17 重算为 `6375eba9…`，该配方可精确复现重算前的 `b7edb874…`），对应 26 视频、15,598 抽样帧。 |
 | `split_overlap_policy` | `error` 禁止同源跨 split；`frame` 允许同源但禁止具体帧重合；`allow` 关闭重叠门禁。 |
 | `testsets` | split 身份、manifest、用途和可选预期样本。 |
 | `purpose` | 区分训练、训练期验证、开发 benchmark、锁定 holdout 和 schema smoke。 |
 
 当前内容登记 ActionMixed 时序 train/val/test（`temporal.actionmixed-v2`，人工标注）、
-自动标注数据通道 `temporal.actionmixed-auto-v3`（YOLO 检测框 + 人工动作标签，18 个
-project-16 视频，train 13 / val 3 / test 2，test 锚定 task#195/#199，动作标签随 LS 更名
-air_injection → water_injection；检测源 yolo11s-g1/g2-v1，8 类全非零，2026-08-28 升 v3；
-2026-09-03 同步 ModelScope HEAD 的 task#204 sbc 标注修正——仅 train 标签变化
-（详见 testsets.yaml 注释与 docs/TEMPORAL_DATASET_TRANSFORMATION_PLAN.md 6.5）；
+自动标注数据通道 `temporal.actionmixed-auto-v3`（YOLO 检测框 + 人工动作标签，2026-08-28
+起数据源为 Label Studio project-16 导出，动作标签随 LS 更名 air_injection →
+water_injection；检测源 yolo11s-g1/g2-v1，8 类全非零；2026-09-03 同步 task#204 sbc 标注
+修正、2026-09-05 val 重划并取消 test、2026-09-17 恢复 test——test 取 project-18 的 8 视频
+2,639 帧，与 train/val 不同录制批次且无 water_injection 帧；现为 train 14 / val 4 / test 8，
+26 视频 15,598 抽样帧（详见 testsets.yaml 注释与
+docs/TEMPORAL_DATASET_TRANSFORMATION_PLAN.md 6.5）；
 旧 v2 见各 auto pin 与本地 -v2-backup）、同一份原始数据的 ROI 空间特征版
 `temporal.actionmixed-auto-roi-v1`（feature_mapping `actionmixed-roi-grid-v1`，
 `feature_layout: {rows: 2, cols: 3, channels: 3}`，144 维；revision 与 v3 相同，
-dataset_version 独立以便对照训练）、同一份原始数据的两种空间范围特征版：
+dataset_version 独立以便对照训练）、同一份原始数据的 **ROI 可见性重排版**
+`temporal.actionmixed-auto-roi-v2`（feature_mapping `actionmixed-roi-grid-v2`，96 维：
+高频 3 类 3×3 网格每类 27 维、低频 5 类全局 1 区域每类 3 维；catalog 用
+`feature_layout.groups` 校验 Σ(类数×区域×通道)，**每类块宽不等**，遮罩按
+`features.roi_grid_v2_block_dims` 显式块宽切片）、同一份原始数据的两种空间范围特征版：
 手部区域版 `temporal.actionmixed-auto-hand-v1`（`actionmixed-bbox-hand-8cls-v1`，
 40 维，只编码 hand 框扩张区域内的框）与全局+手部版
 `temporal.actionmixed-auto-global-hand-v1`（`actionmixed-bbox-global-hand-8cls-v1`，
-`feature_blocks: 2`，80 维 = 全局 40 + 手部 40 拼接）、旧 Endo Project train/test、
+`feature_blocks: 2`，80 维 = 全局 40 + 手部 40 拼接）、人工标注数据的图像 embedding 版
+`temporal.actionmixed-v2-embed-mbv3s-v1`（feature_mapping `actionmixed-bbox-embed-mbv3s-v1`
+= 40 维 bbox 块 + 576 维逐帧整图 mobilenet_v3_small embedding = 616 维；新增
+`feature_embed: {root, feat_dim, backbone}` 声明产物根目录与维度，catalog 据此校验
+「检测类数×5 + feat_dim == input_dim」并核对每个样本的 `.npy` 存在，config 解析时注入
+`data.embedding_root`）、旧 Endo Project train/test、
 两组 YOLO val/test 和一个端到端 smoke case。评估时据此记录数据集版本、split、重叠策略和
 fingerprint。
 

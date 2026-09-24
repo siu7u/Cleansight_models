@@ -63,3 +63,29 @@ def build_roi_frame_features(
                 feat[c, region, 2] = area
     feat[:, :, 0] = feat[:, :, 1] > 0  # presence = count > 0
     return feat.reshape(-1)  # [n_classes * 区域数 * 3]
+
+
+ROI_PRESENCE_VERSION = "actionmixed-roi-grid-presence-v1"
+ROI_PRESENCE_DIM = 8 * ROI_N_REGIONS  # = 48（8 类 × 6 区域的 presence 平面）
+
+
+def build_roi_presence_frame_features(
+    txt_path: Path,
+    n_classes: int = 8,
+    mask_target_ids: frozenset[int] = frozenset(),
+) -> np.ndarray:
+    """一帧 bbox → ``[n_classes * 区域数]`` 的 **presence 平面**（等价 ROI-144 的通道 0）。
+
+    立项依据（第十七轮 §17.4）：ROI-144 的三通道高度冗余（逐 (类,区域) |Pearson r| =
+    0.990 / 0.926 / 0.920），且 ``insert`` / ``sbc`` 的判别信号集中在 presence 通道
+    （LDA 探针：insert 41.3 → 68.8、sbc 16.7 → 73.0），presence-only 48 维的探针 edit（14.60）
+    还高于全量 144 维（9.01）。本契约把 144 维压成 48 维，用于验证"省 2/3 输入维度不掉指标"。
+
+    语义与 ROI-144 完全一致（同一份 frames/ 检测框、同样的 2×3 行优先区域划分、同样的
+    ``mask_target_ids`` 整类遮罩），只是丢弃 ``count`` 与 ``max_area`` 两个通道。
+    空 bbox 文件 → 全零 48 维。
+    """
+
+    full = build_roi_frame_features(txt_path, n_classes=n_classes, mask_target_ids=mask_target_ids)
+    presence = full.reshape(n_classes, ROI_N_REGIONS, ROI_CHANNELS)[:, :, 0]
+    return np.ascontiguousarray(presence.reshape(-1), dtype=np.float32)

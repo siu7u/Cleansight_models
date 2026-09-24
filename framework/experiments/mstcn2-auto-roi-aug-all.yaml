@@ -1,0 +1,50 @@
+# MS-TCN++ 全序列训练配置（ROI-144 契约）+ **全检测类随机遮罩**（8 类都以同一概率被清零）。
+#
+# 与 mstcn2-auto-roi-aug-hand.yaml 同一立项（第十三轮 §13.1 的批次特定线索记忆 /
+# 第十九轮 §19.3 的"52% 真值段标签认错"）：那一版只遮漂移最大的 `hand`，
+# 本版把 8 个检测类全部纳入 → 相当于**逐帧随机抹掉一部分检测证据**，
+# 迫使模型依赖"多帧 + 多类共同出现的时序模式"，而不是任一单帧的单类线索。
+#
+# 语义：每个采样帧、每个目标独立按 probability 清零其整类特征块（ROI-144 下 18 维）；
+# 只作用于 train，val/test 干净；同 seed 可复现。
+# 注意 p 过高会退化成"输入大面积置零"，因此与单类版共用 p=0.5 做对照。
+
+schema_version: 1
+pipeline: full_sequence_temporal
+
+model:
+  type: mstcn2
+  input_dim: 144
+  num_classes: 6
+  hidden: 128
+  num_stages: 2
+  num_layers: 5
+
+data:
+  dataset_ref: temporal.actionmixed-auto-roi-v1
+  split_train: train
+  split_val: val
+  split_eval: test
+
+feature_schema:
+  dim: 144
+  version: actionmixed-roi-grid-v1
+
+augmentation:
+  target_mask:
+    enabled: true
+    strategy: frame_dropout
+    targets: [hand, scope_control_body, scope_mid_section, scope_distal_end,
+              syringe, air_gun, short_brush, brush_tip_out]
+    probability: 0.5
+
+evaluation:
+  mode: formal
+  visualize: true
+
+train:
+  epochs: 60
+  lr: 0.0005
+  grad_clip: 5.0
+  weight_decay: 0.0001
+  best_metric: val_f1_0.5

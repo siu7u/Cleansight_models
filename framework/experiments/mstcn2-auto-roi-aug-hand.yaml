@@ -1,0 +1,53 @@
+# MS-TCN++ 全序列训练配置（ROI-144 契约）+ **训练期随机目标遮罩**（只遮 `hand` 一类）。
+#
+# 立项依据（docs/FEATURE_STRATEGY_COMPARE.md 第十三轮 §13.1、第十九轮）：
+# - 本仓库最顽固的失败模式是**批次特定线索记忆**：per-class train→test AUC 全面塌陷
+#   （flush 0.838→0.272），机制上 flush 依赖的 `hand.left-top` 在 train 帧出现率 0.448、
+#   在 test 帧 **0.000**；`hand` 正是 train/test 出现率漂移最大的检测类。
+# - `feature_schema.mask_targets`（静态整块清零）在第十四轮测过：只有 flush 召回 +15.7pp（p=0.031），
+#   其余是 seed 混合假象。但**随机遮罩是正则而非删特征**：同一类在别的帧仍然可见，
+#   模型无法"整块无视"，只能学会不依赖单帧的单一检测类 → 直接针对泛化病灶。
+# - 该增强此前**从未被启用过**（所有配置里 `enabled: false`）。
+#
+# 语义（framework/cleansight_eval/temporal/data.py::apply_target_mask_augmentation）：
+# 每个采样帧独立按 probability 把 `hand` 的整类特征块（ROI-144 下 18 维）清零；
+# **只作用于 train**，val/test 始终干净输入；同一 seed 可复现。
+
+schema_version: 1
+pipeline: full_sequence_temporal
+
+model:
+  type: mstcn2
+  input_dim: 144
+  num_classes: 6
+  hidden: 128
+  num_stages: 2
+  num_layers: 5
+
+data:
+  dataset_ref: temporal.actionmixed-auto-roi-v1
+  split_train: train
+  split_val: val
+  split_eval: test
+
+feature_schema:
+  dim: 144
+  version: actionmixed-roi-grid-v1
+
+augmentation:
+  target_mask:
+    enabled: true
+    strategy: frame_dropout
+    targets: [hand]
+    probability: 0.5
+
+evaluation:
+  mode: formal
+  visualize: true
+
+train:
+  epochs: 60
+  lr: 0.0005
+  grad_clip: 5.0
+  weight_decay: 0.0001
+  best_metric: val_f1_0.5
