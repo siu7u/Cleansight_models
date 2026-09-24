@@ -1,0 +1,49 @@
+# GRU 滑窗训练配置（ROI 可见性重排特征 roi-grid-v2，自动标注数据 cleansight-ActionMixed-auto）。
+# 与 gru-actionmixed-auto-roi.yaml（roi-grid-v1，144 维）**同模型同超参**，仅特征契约不同，
+# 用于"按可见性重排维度预算是否优于按类别表整齐分配"的对照实验。
+# feature_mapping=actionmixed-roi-grid-v2：高频 3 类（hand / scope_control_body /
+# scope_mid_section）用 3×3 网格（每类 27 维），低频 5 类合并为全局 1 区域（每类 3 维），
+# 8 类 → 3×27 + 5×3 = 96 维（recipe 见
+# framework/cleansight_eval/temporal/features/roi_bbox_v2.py；设计依据
+# docs/features/INPUT_DESIGN_PROPOSAL.md §1.1/§1.3/§2 P2b）。
+# 数据集登记 temporal.actionmixed-auto-roi-v2（同一份原始数据，独立特征契约，
+# revision 与 v3 相同）；正式训练建议多 seed（42/7/2026）取中位数评估。
+
+schema_version: 1
+pipeline: sliding_window_temporal
+
+model:
+  type: gru              # 因果模型，可用于滑窗；规模由本段超参表达
+  input_dim: 96          # 3 高频类 × 9 区域 × 3 通道 + 5 低频类 × 1 区域 × 3 通道
+  num_classes: 6         # idle/water_injection/flush/long_brush_insert/long_brush_withdraw/short_brush_cleaning
+  hidden: 128
+  num_layers: 3
+  dropout: 0.2           # 层间 dropout（坍缩诊断的配方修复，0059eb9）
+
+data:
+  dataset_ref: temporal.actionmixed-auto-roi-v2  # 根目录、类别、mapping 和 manifest 由 benchmark catalog 解析
+  split_train: train
+  split_val: val
+  split_eval: test
+
+feature_schema:
+  dim: 96
+  version: actionmixed-roi-grid-v2
+  # 类顺序同 frames/data.yaml：hand, scope_control_body, scope_mid_section,
+  # scope_distal_end, syringe, air_gun, short_brush, brush_tip_out。
+  # 前 3 类每类 27 维（3×3 区域 × [presence, count, max_area]，区域行优先），
+  # 后 5 类每类 3 维（全局 1 区域 × [presence, count, max_area]）；类块宽不等，
+  # 遮罩类配置按显式块宽切片（features.roi_grid_v2_block_dims）。
+
+evaluation:
+  mode: formal
+  visualize: true
+
+train:
+  epochs: 20
+  lr: 0.001
+  batch_size: 32
+  window: 16          # 必须 ≤ 最短视频的采样帧数（auto v3 数据最短约 195 帧）
+  weight_decay: 0.0001   # 健康配方（同 roi-grid-v1 正式配置）
+  patience: 4            # 按 val_loss 早停
+  best_metric: val_f1_0.5  # 段级指标选 best.pt（val_acc 会偏爱 idle 坍缩解）
