@@ -472,6 +472,7 @@ checkpoint + checkpoint metadata + CARD.md + pin.yaml
 - [架构简述](docs/ARCHITECTURE_OVERVIEW.md)：用目录和数据流快速说明当前仓库结构。
 - [YAML 配置文档](usage/YAML_CONFIG.md)：所有受跟踪 YAML 的内容、读取方、功能和快速定位链接。
 - [测试命令行教程](usage/TEST_COMMANDS.md)：模型评测、timeline、矩阵和 pytest 的常用写法。
+- [特征方案评测 RUNBOOK](usage/FEATURE_EVAL_RUNBOOK.md)：数据更新 → 特征契约登记 → 评测口径 → 矩阵 → 门禁的实操顺序与常见陷阱。
 - [模型集总览](docs/MODELSET_OVERVIEW.md)：现状、使用入口与汇报要点（合并原 STATUS/PRESENTATION/USAGE 三份）。
 - [项目流程](docs/PROJECT_FLOW.md)：数据、训练、评测与交付的流程关系。
 - [framework README](framework/README.md)：CLI、配置字段、resume 与扩展点。

@@ -24,9 +24,9 @@
 
 本文档只保留**一种**进入时序训练的图像方案：
 
-| 方案 | 定义 | 现状（2026-09-03） |
+| 方案 | 定义 | 现状（2026-09-11） |
 |---|---|---|
-| **像素特征进时序（形态 B）** | 每帧 CNN embedding 作为时序输入 `[B,T,F]` 的像素派生通道（冻结预训练 backbone，不训练第二套视觉模型） | **提取工具已落地**（§3.1），训练侧接入未实现（§4 为候选增强实验） |
+| **像素特征进时序（形态 B）** | 每帧 CNN embedding 作为时序输入 `[B,T,F]` 的像素派生通道（冻结预训练 backbone，不训练第二套视觉模型） | **提取工具与训练侧接入均已落地**：契约/分发/投影头/登记/单测（§3.5），E1 机制床对照见 §4.2 |
 
 > 注（D7）：早前的"独立 ROI 图像分类"（`roi_classification`/`feature_fusion`，对裁剪块做多标签分类）
 > 已**移出本文档训练主线**——该形态的模型输入只有裁剪图，帧内位置与时间关系均不进模型，
@@ -128,6 +128,24 @@ GPU 口径（2026-09-04，RTX 4060 Laptop，数据根 `-lhh`，同配方同 seed
   （`runs/strategy_compare_gpu/`，4 策略 × 3 seed）跑完，GPU 口径基线数字定版为 §3.3 表
   GPU 行（roi-grid-144 为唯一跨设备三 seed 零坍缩策略，中位指标见该表）。
 
+### 3.5 已接入：训练侧（契约 / 分发 / 投影头 / 登记 / 单测）
+
+形态 B 的训练侧链路已落地（2026-09-11），与 §4.3 的落地步骤 3~7 对应：
+
+| 环节 | 落点 |
+|---|---|
+| 契约 recipe | `framework/cleansight_eval/temporal/features/image_embed.py`（`actionmixed-bbox-embed-mbv3s-v1` = 40 bbox + 576 embedding；按标签行位置对齐，行数/列数不符立即报错） |
+| 数据分发 | `temporal/data.py` `load_split` 图像分支（bbox 块 + npy 前缀拼接；`max_frames` smoke 截断只取前缀） |
+| 产物根目录 | catalog 数据集条目声明 `feature_embed: {root, feat_dim, backbone}`，config 解析时注入 `data.embedding_root`；换 backbone / 换数据源 = 换登记，不改代码 |
+| 遮罩语义 | `mask_targets` 与 train 期目标随机遮罩只作用 bbox 块（`EMBED_BBOX_DIM ÷ 检测类数`）；按总维度推导会错切，已显式区分 |
+| 投影头 | `temporal/models/gru.py`：`model.image_dim`（尾部图像块宽）+ `model.image_proj_dim`（E1 = 64），逐帧线性投影后拼接；非 GRU 架构声明 `image_dim` 直接报错 |
+| 数据登记 | `framework/testsets.yaml`：`temporal.actionmixed-v2-embed-mbv3s-v1`（机制床，revision 同 actionmixed-v2）+ train/val/test 三条；catalog 按前缀校验「检测类数×5 + feat_dim == input_dim」并核对每个样本 `.npy` 存在 |
+| 单测 | `framework/tests/test_image_embed_features.py`（对齐/错位报错/维度不符/遮罩只作用 bbox 块/交叉校验/投影头形状） |
+
+> 机制床：`datasets/cleansight-ActionMixed`（人工标注 9,532 帧，`images/` 齐全，576 维
+> mobilenet_v3_small embedding 已预计算：train 5993 / val 2082 / test 1457，缺图 0）。
+> 它与正式通道 v3 auto 不同源，只用于验证接入链路与方向性判断，**不冒充正式结论**。
+
 ## 4. 候选增强实验：bbox 系 + 图像通道（形态 B，E 系列）
 
 ### 4.1 融合设计（回应 D1/D2/D3）
@@ -150,6 +168,7 @@ bbox 特征通道（ROI 网格 144 或基线 40）—— 位置/数量/类别（
 | 实验 | 特征组合 | 对照问题 |
 |---|---|---|
 | **E0（已完成）** | bbox 系四策略（矩阵中位数基准） | 参照系：ROI 网格 F1@0.1 中位 31.8（CPU 轮；GPU 复跑 19.5，见 §3.3 设备注） |
+| **E1（机制床已完成，见 4.2 注）** | E0 底座 + 整帧 embedding（mobilenet_v3_small 576 维 → 投影 64 维） | 全局外观有无增益：机制床 3 seed 段级 edit/F1@0.25 稳定小幅优于基线，但帧级宏 F1 与 air_injection recall 明显下降——混合结论，未定论 |
 | **E1** | E0 底座 + 整帧 embedding（resnet18 冻结 512 维 → 投影） | 全局外观有无增益 |
 | **E2** | E0 底座 + 检测框 ROI 外观聚合（crop_detection 现成） | 干扰过滤后外观有无增益 |
 | **E3** | backbone 消融（DINOv2/mobilenet） | 表征质量 vs 成本 |
@@ -159,15 +178,16 @@ bbox 特征通道（ROI 网格 144 或基线 40）—— 位置/数量/类别（
 
 ### 4.3 落地步骤（E1 起）
 
-1. **图像源就绪**（§5，阻塞项）
-2. 批量提取 embedding（extract_embeddings，GPU 上跑全量）→ 产物目录
+1. **图像源就绪**（§5，阻塞项）—— 机制床已用现成 embedding 绕开该阻塞做链路验证，正式轮仍需
+2. 批量提取 embedding（extract_embeddings，GPU 上跑全量）→ 产物目录 —— 机制床产物已就位（CPU 实测约 40s/全量）
 3. 登记：embedding 产物作为新数据集契约（testsets.yaml 条目 + feature 声明；
-   或按"embedding 目录 + 原 manifest"镜像登记），帧对齐校验进 validate 逻辑
-4. `load_split` 增图像契约分支（按视频读 npy，路径可参照 legacy-20d 的 npy 加载方式）
-5. 新 recipe/契约常量（维度=bbox_dim + feat_dim，投影在模型层做）
-6. 训练配置（E1~E3 各一）+ 一键矩阵扩展策略表
-7. 单测（帧缺失/解码失败/维度/确定性）+ validate 门禁
-8. 结论写入本文档与 FEATURE_STRATEGY_COMPARE.md
+   或按"embedding 目录 + 原 manifest"镜像登记），帧对齐校验进 validate 逻辑 —— **已落地**（§3.5）
+4. `load_split` 增图像契约分支（按视频读 npy，路径可参照 legacy-20d 的 npy 加载方式）—— **已落地**（§3.5）
+5. 新 recipe/契约常量（维度=bbox_dim + feat_dim，投影在模型层做）—— **已落地**（§3.5）
+6. 训练配置（E1~E3 各一）+ 一键矩阵扩展策略表 —— E1 配置已落地；E2/E3 与矩阵策略表待正式轮
+7. 单测（帧缺失/解码失败/维度/确定性）+ validate 门禁 —— **已落地**（§3.5，`test_image_embed_features.py` + `validate_testsets.py`）
+8. 结论写入本文档与 FEATURE_STRATEGY_COMPARE.md —— 机制床 E1 结论见 §4.2 与
+   `docs/EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md`；正式结论待图像源就绪
 
 ### 4.4 部署影响（重大架构决策，提前知会）
 

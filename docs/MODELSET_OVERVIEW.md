@@ -78,8 +78,10 @@ export MPLCONFIGDIR=/tmp/matplotlib
 | ROI 分类（特征融合） | `framework/experiments/roi-fusion.yaml` | `roi_classification` |
 | GRU | `framework/experiments/gru-actionmixed.yaml` | `sliding_window_temporal` |
 | GRU（ROI 空间特征） | `framework/experiments/gru-actionmixed-auto-roi.yaml` | `sliding_window_temporal` |
+| GRU（ROI 可见性重排 96 维） | `framework/experiments/gru-actionmixed-auto-roi-v2.yaml` | `sliding_window_temporal` |
 | GRU（手部区域特征） | `framework/experiments/gru-actionmixed-auto-hand.yaml` | `sliding_window_temporal` |
 | GRU（全局+手部） | `framework/experiments/gru-actionmixed-auto-global-hand.yaml` | `sliding_window_temporal` |
+| GRU（bbox + 图像 embedding，形态 B） | `framework/experiments/gru-actionmixed-embed.yaml` | `sliding_window_temporal` |
 | MS-TCN | `framework/experiments/mstcn-actionmixed.yaml` | `full_sequence_temporal` |
 | MS-TCN（ROI 空间特征） | `framework/experiments/mstcn-actionmixed-auto-roi.yaml` | `full_sequence_temporal` |
 | MS-TCN++ | `framework/experiments/mstcn2-actionmixed.yaml` | `full_sequence_temporal` |
@@ -92,7 +94,16 @@ export MPLCONFIGDIR=/tmp/matplotlib
 ROI 空间特征变体（`-roi` 后缀）与对应 40 维 bbox 基线同模型同超参，仅特征契约不同：
 `actionmixed-roi-grid-v1` 把画面按 2×3 网格分区，每 (检测类, 区域) 统计
 [presence, count, max_area] 共 144 维（recipe 见 `framework/cleansight_eval/temporal/features/roi_bbox.py`），
-用于对照"空间分区信息"对动作识别的影响。
+用于对照"空间分区信息"对动作识别的影响；`actionmixed-roi-grid-v2` 按实测可见性重排维度预算
+（高频 3 类 3×3 网格 27 维/类、低频 5 类全局 1 区域 3 维/类，共 96 维，
+recipe 见 `features/roi_bbox_v2.py`，依据 `docs/features/INPUT_DESIGN_PROPOSAL.md` §2 P2b），
+用于对照"按可见性分配 vs 按类别表整齐分配"。
+
+形态 B（像素特征进时序，E 系列）把冻结 backbone 预计算的逐帧整图 embedding 拼进时序输入：
+`actionmixed-bbox-embed-mbv3s-v1` = 40 维 bbox 块 + 576 维 mobilenet_v3_small embedding
+（recipe 见 `framework/cleansight_eval/temporal/features/image_embed.py`），进 GRU 前经 64 维
+线性投影头（`model.image_dim` / `model.image_proj_dim`）；embedding 产物由
+`features/extract_embeddings.py` 离线预计算，训练侧不依赖图像与 GPU。
 
 ## 5. 训练
 
