@@ -5,13 +5,123 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from statistics import mean
-from typing import Hashable, Iterable, Mapping, Sequence
+from typing import Any, Hashable, Iterable, Mapping, Sequence
 
 
 Label = Hashable
 DEFAULT_INTERVAL_IOU_THRESHOLDS = (0.1, 0.25, 0.5)
 INTERVAL_MATCHING_METHOD = "label-aware one-to-one global-greedy maximum IoU"
 INTERVAL_METRIC_VERSION = "interval-matching-v2"
+
+# ---------------------------------------------------------------------------
+# 指标口径注册表：**全仓库唯一的指标定义处**
+# ---------------------------------------------------------------------------
+# 同一批指标会出现在四个面上，过去各处各自拼名字/口径字符串，容易出现"训练侧
+# val_f1_0.5、评测侧 f1@0.5、单位一个是百分数一个是 0..1 比率"这类隐性分歧。
+# 现在四个面全部引用本表：
+#   1. 训练期 validation（``temporal/training_validation.py``）→ ``training_key``；
+#   2. 正式评测结果（``benchmark/evaluators/temporal.py``）→ 注册表键 = summary 键 + ``spec``；
+#   3. 训练 history/曲线（``core/history.py`` + 两条流水线）→ ``training_key`` 列；
+#   4. 矩阵汇总与报告（``tools/*``、``benchmark/core/report.py``）→ summary 键。
+#
+# 字段含义：
+#   spec          口径版本字符串，直接落进 evaluation.json 的 MetricValue.spec；
+#   unit          该指标对外报出的单位（``percent`` = 0..100，已四舍五入到 2 位）；
+#   detail_path   ``metrics.details.temporal`` 里同口径原始值的路径元组（比率 0..1 或计数）；
+#   training_key  训练期 history 列名（无则说明该指标不参与选点/不写 history）。
+#
+# 口径变更（改了聚合方式或单位）必须递增 spec 版本号并同步更新 docs/EVAL.md。
+
+_SOURCE = "framework.cleansight_eval.core.metrics"
+FRAME_CLASS_SPEC = f"classification/frame-micro-pool-per-class/percent/v3; source={_SOURCE}"
+ACC_SPEC = f"accuracy/frame-wise-micro-across-items/percent/v3; source={_SOURCE}"
+EDIT_SPEC = f"edit/levenshtein-item-macro-mean/percent/v3; source={_SOURCE}"
+_SEGMENT_SPEC = "counts-micro-across-items-label-aware-one-to-one-global-greedy-iou"
+# 计数指标（tp/fp/fn@0.5）的历史口径字符串没有 `counts-` 前缀，与 F1/P/R 不同——这是既有
+# evaluation.json 里已落盘的口径标识，注册表原样保留，不做"顺手统一"（改字符串等于改口径）。
+_SEGMENT_COUNTS_SPEC = "micro-across-items-label-aware-one-to-one-global-greedy-iou"
+SEGMENTAL_F1_SPEC = f"segmental_f1/{_SEGMENT_SPEC}/percent/v4; source={_SOURCE}"
+SEGMENTAL_PRECISION_SPEC = f"segmental_precision/{_SEGMENT_SPEC}/percent/v4; source={_SOURCE}"
+SEGMENTAL_RECALL_SPEC = f"segmental_recall/{_SEGMENT_SPEC}/percent/v4; source={_SOURCE}"
+SEGMENTAL_COUNTS_SPEC = f"segmental_counts/{_SEGMENT_COUNTS_SPEC}/v4; source={_SOURCE}"
+TEMPORAL_IOU_SPEC = f"temporal_iou/matched-segment-global-greedy-micro-pool-mean/percent/v4; source={_SOURCE}"
+
+TEMPORAL_METRIC_SPECS: dict[str, dict[str, object]] = {
+    "acc": {
+        "spec": ACC_SPEC,
+        "unit": "percent",
+        "detail_path": ("frame", "accuracy"),
+        "training_key": "val_acc",
+    },
+    "edit": {
+        "spec": EDIT_SPEC,
+        "unit": "percent",
+        "detail_path": ("segment", "edit"),
+        "training_key": "val_edit",
+    },
+    "frame.macro_f1": {"spec": FRAME_CLASS_SPEC, "unit": "percent", "detail_path": ("frame", "macro_f1")},
+    "frame.macro_iou": {"spec": FRAME_CLASS_SPEC, "unit": "percent", "detail_path": ("frame", "macro_iou")},
+    "frame.micro_f1": {"spec": FRAME_CLASS_SPEC, "unit": "percent", "detail_path": ("frame", "micro_f1")},
+    "precision@0.5": {"spec": SEGMENTAL_PRECISION_SPEC, "unit": "percent", "detail_path": ("segment", "details_at_iou", "0.50", "precision")},
+    "recall@0.5": {"spec": SEGMENTAL_RECALL_SPEC, "unit": "percent", "detail_path": ("segment", "details_at_iou", "0.50", "recall")},
+    "temporal_iou@0.5": {"spec": TEMPORAL_IOU_SPEC, "unit": "percent", "detail_path": ("segment", "details_at_iou", "0.50", "mean_matched_iou")},
+    "tp@0.5": {"spec": SEGMENTAL_COUNTS_SPEC, "unit": "count", "detail_path": ("segment", "details_at_iou", "0.50", "tp")},
+    "fp@0.5": {"spec": SEGMENTAL_COUNTS_SPEC, "unit": "count", "detail_path": ("segment", "details_at_iou", "0.50", "fp")},
+    "fn@0.5": {"spec": SEGMENTAL_COUNTS_SPEC, "unit": "count", "detail_path": ("segment", "details_at_iou", "0.50", "fn")},
+}
+# 分段 F1 逐阈值展开（summary 键 `f1@0.1/0.25/0.5`，details 键 `0.10/0.25/0.50`）。
+for _threshold in DEFAULT_INTERVAL_IOU_THRESHOLDS:
+    TEMPORAL_METRIC_SPECS[f"f1@{_threshold:g}"] = {
+        "spec": SEGMENTAL_F1_SPEC,
+        "unit": "percent",
+        "detail_path": ("segment", "f1_at_iou", f"{float(_threshold):.2f}"),
+        "training_key": f"val_f1_{_threshold:g}",
+    }
+del _threshold
+
+
+def metric_spec(name: str) -> str:
+    """返回指标的 spec 口径字符串；未注册的名字立即报错，避免各处自造口径。"""
+
+    if name not in TEMPORAL_METRIC_SPECS:
+        raise KeyError(f"未注册的时序指标: {name!r}；已注册: {sorted(TEMPORAL_METRIC_SPECS)}")
+    return TEMPORAL_METRIC_SPECS[name]["spec"]
+
+
+def training_metric_keys() -> tuple[str, ...]:
+    """训练期 history 的验证指标列（同时也是 ``train.best_metric`` 的可选值）。"""
+
+    return tuple(
+        entry["training_key"]
+        for entry in TEMPORAL_METRIC_SPECS.values()
+        if entry.get("training_key")
+    )
+
+
+def training_metric_name(training_key: str) -> str:
+    """训练侧列名 → 评测侧 summary 键名（如 ``val_f1_0.5`` → ``f1@0.5``）。"""
+
+    for name, entry in TEMPORAL_METRIC_SPECS.items():
+        if entry.get("training_key") == training_key:
+            return name
+    raise KeyError(f"未注册的训练期指标: {training_key!r}；已注册: {training_metric_keys()}")
+
+
+def detail_value(raw: Mapping, detail_path: Sequence[str]):
+    """按注册表的 ``detail_path`` 元组从 ``temporal_metrics`` 结果取原始值。
+
+    路径用元组而非点分字符串：段级 IoU 阈值键本身就是 ``"0.50"`` 这种带小数点的形式，
+    点分字符串会被拆成 ``"0"`` / ``"50"`` 两个键。
+    """
+
+    node: object = raw
+    for part in detail_path:
+        if not isinstance(node, Mapping):
+            return None
+        node = node.get(part)
+        if node is None:
+            return None
+    return node
 
 
 @dataclass(frozen=True)
@@ -407,3 +517,223 @@ def timeline_metrics(
         "details_at_iou": details,
         "per_class": per_class,
     }
+
+
+# ---------------------------------------------------------------------------
+# 多标签分类（ROI）指标：口径注册表 + 唯一实现
+# ---------------------------------------------------------------------------
+# 与上面的时序注册表同构：名字、spec、单位、训练侧别名只有这一个定义处；训练期 validation
+# （``classification/pipeline.py::_fit``）与正式评测（``benchmark/evaluators/classification.py``）
+# 调用同一批纯函数，因此同名指标必然同口径。
+#
+# 本任务的指标刻意放在 core 内核而不是 ``framework.cleansight_eval.classification`` 下：
+# benchmark evaluator 只允许依赖 framework core 的纯指标原语
+# （见 ``tests/test_evaluator_boundaries.py``），实现与口径必须一起落在允许的模块里。
+#
+# 与时序注册表有意保留的差别（不做"顺手统一"）：
+# - 单位是 **0..1 比率**（对外保留 4 位小数）；时序侧是 0..100 百分数（2 位）。
+# - 判正阈值 0.5 属口径的一部分，登记为 :data:`DECISION_THRESHOLD`：训练与评测都经
+#   :func:`decide` 生成 0/1 预测，改阈值只改一处。
+# 计算函数在函数内延迟 import numpy，保持内核在无 numpy 环境也可导入。
+
+CLASSIFICATION_SOURCE = "framework.cleansight_eval.classification"
+CLASSIFICATION_PRECISION_SPEC = f"precision/multi-label-micro/v1; source={CLASSIFICATION_SOURCE}"
+CLASSIFICATION_RECALL_SPEC = f"recall/multi-label-micro/v1; source={CLASSIFICATION_SOURCE}"
+CLASSIFICATION_F1_SPEC = f"f1/multi-label-micro/v1; source={CLASSIFICATION_SOURCE}"
+CLASSIFICATION_EXACT_MATCH_SPEC = f"exact-match/multi-label/v1; source={CLASSIFICATION_SOURCE}"
+
+# 判正阈值（sigmoid 概率 > 该值记为正）。训练期验证与正式评测共用，改这里即改全链路。
+DECISION_THRESHOLD = 0.5
+# 对外报出的比率小数位（评测结果与训练 history 一致）。
+CLASSIFICATION_DECIMALS = 4
+
+# 指标注册表：键 = 评测 ``metrics.summary`` 里的键名。
+#   spec         口径版本字符串，直接落进 evaluation.json 的 MetricValue.spec；
+#   unit         对外单位（本任务恒为 0..1 比率）；
+#   decimals     外报小数位；
+#   value_path   ``multilabel_metrics`` 结果里的取值路径元组；
+#   training_key 训练期 history 键（无则说明该指标不参与训练侧记录）。
+CLASSIFICATION_METRIC_SPECS: dict[str, dict[str, Any]] = {
+    "precision": {
+        "spec": CLASSIFICATION_PRECISION_SPEC,
+        "unit": "ratio",
+        "decimals": CLASSIFICATION_DECIMALS,
+        "value_path": ("micro", "precision"),
+        "training_key": "val_precision",
+    },
+    "recall": {
+        "spec": CLASSIFICATION_RECALL_SPEC,
+        "unit": "ratio",
+        "decimals": CLASSIFICATION_DECIMALS,
+        "value_path": ("micro", "recall"),
+        "training_key": "val_recall",
+    },
+    "f1": {
+        "spec": CLASSIFICATION_F1_SPEC,
+        "unit": "ratio",
+        "decimals": CLASSIFICATION_DECIMALS,
+        "value_path": ("micro", "f1"),
+        "training_key": "val_f1",
+    },
+    "exact_match": {
+        "spec": CLASSIFICATION_EXACT_MATCH_SPEC,
+        "unit": "ratio",
+        "decimals": CLASSIFICATION_DECIMALS,
+        "value_path": ("exact_match",),
+        "training_key": "val_exact_match",
+    },
+}
+
+
+def classification_metric_spec(name: str) -> str:
+    """返回分类指标的 spec 口径字符串；未注册立即报错，避免各处自造口径。"""
+
+    if name not in CLASSIFICATION_METRIC_SPECS:
+        raise KeyError(
+            f"未注册的分类指标: {name!r}；已注册: {sorted(CLASSIFICATION_METRIC_SPECS)}"
+        )
+    return CLASSIFICATION_METRIC_SPECS[name]["spec"]
+
+
+def classification_training_keys() -> tuple[str, ...]:
+    """训练期 history 的分类指标键（顺序与注册表一致）。"""
+
+    return tuple(
+        entry["training_key"]
+        for entry in CLASSIFICATION_METRIC_SPECS.values()
+        if entry.get("training_key")
+    )
+
+
+def classification_training_values(metrics: Mapping[str, Any]) -> dict[str, float]:
+    """按注册表的 ``value_path`` 从 :func:`multilabel_metrics` 结果取出训练侧指标值。
+
+    训练循环与测试都用它把"算出来的指标"映射成 history 键，避免在流水线里再抄一份
+    「键 → 取值位置」对照表。
+    """
+
+    values: dict[str, float] = {}
+    for entry in CLASSIFICATION_METRIC_SPECS.values():
+        training_key = entry.get("training_key")
+        if not training_key:
+            continue
+        values[training_key] = detail_value(metrics, entry["value_path"])
+    return values
+
+
+def decide(scores, threshold: float = DECISION_THRESHOLD):
+    """概率 → 0/1 判正矩阵（唯一阈值入口）。
+
+    输入 ``[N, C]`` 的 sigmoid 概率（numpy 数组或可转数组的序列），返回同形状 float32 0/1 数组。
+    训练期验证与正式评测都走这里，因此"阈值 0.5"不会在两处各写一遍。
+    """
+
+    import numpy as np
+
+    return (np.asarray(scores, dtype=np.float32) > float(threshold)).astype(np.float32)
+
+
+def confusion_counts(binary_preds, labels) -> dict:
+    """逐类与整体的 tp/fp/fn 计数，供逐 batch 累加。
+
+    输入 ``[N, C]`` 的 0/1 预测与 0/1 真值。返回普通 dict（python int / list），
+    可用 :func:`merge_counts` 跨 batch 相加，最后交给 :func:`metrics_from_counts` 出指标。
+    """
+
+    import numpy as np
+
+    preds = np.asarray(binary_preds, dtype=np.float32) > 0.5
+    truth = np.asarray(labels, dtype=np.float32) > 0.5
+    if preds.shape != truth.shape:
+        raise ValueError(f"预测与真值形状不一致: {preds.shape} vs {truth.shape}")
+    per_class_tp, per_class_fp, per_class_fn = [], [], []
+    for index in range(truth.shape[1]):
+        pred_col, truth_col = preds[:, index], truth[:, index]
+        per_class_tp.append(int((pred_col & truth_col).sum()))
+        per_class_fp.append(int((pred_col & ~truth_col).sum()))
+        per_class_fn.append(int((~pred_col & truth_col).sum()))
+    return {
+        "per_class_tp": per_class_tp,
+        "per_class_fp": per_class_fp,
+        "per_class_fn": per_class_fn,
+        "tp": int((preds & truth).sum()),
+        "fp": int((preds & ~truth).sum()),
+        "fn": int((~preds & truth).sum()),
+        "samples": int(truth.shape[0]),
+        "exact_matches": int((preds == truth).all(axis=1).sum()),
+    }
+
+
+def merge_counts(parts: Sequence[Mapping[str, Any]]) -> dict:
+    """把多个 batch 的计数相加（逐类列表按位相加）。"""
+
+    merged: dict[str, Any] = {
+        "per_class_tp": [], "per_class_fp": [], "per_class_fn": [],
+        "tp": 0, "fp": 0, "fn": 0, "samples": 0, "exact_matches": 0,
+    }
+    for part in parts:
+        for key in ("per_class_tp", "per_class_fp", "per_class_fn"):
+            values = list(part.get(key, []))
+            if not merged[key]:
+                merged[key] = [0] * len(values)
+            if len(values) != len(merged[key]):
+                raise ValueError("逐类计数长度不一致，无法合并")
+            merged[key] = [a + b for a, b in zip(merged[key], values)]
+        for key in ("tp", "fp", "fn", "samples", "exact_matches"):
+            merged[key] += int(part.get(key, 0))
+    return merged
+
+
+def metrics_from_counts(counts: Mapping[str, Any], class_names: Sequence[str]) -> dict:
+    """计数 → micro P/R/F1 + 样本级 exact_match + 逐类 P/R/F1/support。
+
+    非空输入下与历史实现数值完全一致：``precision = tp / max(tp + fp, 1)``、
+    ``f1 = 2pr / max(p + r, 1e-8)``、``support = tp + fn``，逐项四舍五入到 :data:`CLASSIFICATION_DECIMALS` 位。
+    逐类计数长度必须与 ``class_names`` 一致：一个 batch 都没累积到就调用会立即报错
+    （不静默返回一组 0 指标把接线错误盖掉）；``samples == 0`` 时 ``exact_match`` 为 0.0。
+    """
+
+    def ratio(numerator: float, denominator: float) -> float:
+        return numerator / max(denominator, 1)
+
+    def f1_of(precision: float, recall: float) -> float:
+        return 2 * precision * recall / max(precision + recall, 1e-8)
+
+    names = list(class_names)
+    per_class_tp = list(counts.get("per_class_tp", []))
+    per_class_fp = list(counts.get("per_class_fp", []))
+    per_class_fn = list(counts.get("per_class_fn", []))
+    if len(per_class_tp) != len(names):
+        raise ValueError("逐类计数与类别数不一致")
+
+    per_class = {}
+    for index, name in enumerate(names):
+        precision = ratio(per_class_tp[index], per_class_tp[index] + per_class_fp[index])
+        recall = ratio(per_class_tp[index], per_class_tp[index] + per_class_fn[index])
+        per_class[name] = {
+            "precision": round(float(precision), CLASSIFICATION_DECIMALS),
+            "recall": round(float(recall), CLASSIFICATION_DECIMALS),
+            "f1": round(float(f1_of(precision, recall)), CLASSIFICATION_DECIMALS),
+            "support": int(per_class_tp[index] + per_class_fn[index]),
+        }
+
+    micro_precision = ratio(counts.get("tp", 0), counts.get("tp", 0) + counts.get("fp", 0))
+    micro_recall = ratio(counts.get("tp", 0), counts.get("tp", 0) + counts.get("fn", 0))
+    samples = int(counts.get("samples", 0))
+    exact_match = (counts.get("exact_matches", 0) / samples) if samples else 0.0
+    return {
+        "per_class": per_class,
+        "micro": {
+            "precision": round(float(micro_precision), CLASSIFICATION_DECIMALS),
+            "recall": round(float(micro_recall), CLASSIFICATION_DECIMALS),
+            "f1": round(float(f1_of(micro_precision, micro_recall)), CLASSIFICATION_DECIMALS),
+        },
+        "exact_match": round(float(exact_match), CLASSIFICATION_DECIMALS),
+        "labels": {index: name for index, name in enumerate(names)},
+    }
+
+
+def multilabel_metrics(binary_preds, labels, class_names: Sequence[str]) -> dict:
+    """一次算完多标签分类指标（计数 → 指标），供评测路径直接调用。"""
+
+    return metrics_from_counts(confusion_counts(binary_preds, labels), class_names)

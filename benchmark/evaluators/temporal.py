@@ -5,19 +5,33 @@ from __future__ import annotations
 from typing import Any, Mapping, Sequence
 
 from benchmark.core.artifacts import build_temporal_prediction_artifact
-from framework.cleansight_eval.core.metrics import DEFAULT_INTERVAL_IOU_THRESHOLDS, temporal_metrics
+from framework.cleansight_eval.core.metrics import (
+    ACC_SPEC,
+    DEFAULT_INTERVAL_IOU_THRESHOLDS,
+    EDIT_SPEC,
+    FRAME_CLASS_SPEC,
+    SEGMENTAL_COUNTS_SPEC,
+    SEGMENTAL_F1_SPEC,
+    SEGMENTAL_PRECISION_SPEC,
+    SEGMENTAL_RECALL_SPEC,
+    TEMPORAL_IOU_SPEC,
+    metric_spec,
+    temporal_metrics,
+)
 from benchmark.core.result import EvaluationResult, MetricValue
 
 
+# 各指标口径字符串统一来自 framework 的指标注册表（core/metrics.py），benchmark 只做
+# 0..1 → 0..100 的三态适配，不再各自拼口径字符串——训练侧 val_* 与这里的同名指标因此必然同口径。
 # v4 将段级匹配统一为全局 IoU 贪心一对一；帧级和 Edit 未变，继续沿用 v3。
-SPEC_ACC = "accuracy/frame-wise-micro-across-items/percent/v3; source=framework.cleansight_eval.core.metrics"
-SPEC_EDIT = "edit/levenshtein-item-macro-mean/percent/v3; source=framework.cleansight_eval.core.metrics"
-SPEC_F1 = "segmental_f1/counts-micro-across-items-label-aware-one-to-one-global-greedy-iou/percent/v4; source=framework.cleansight_eval.core.metrics"
-SPEC_PRECISION = "segmental_precision/counts-micro-across-items-label-aware-one-to-one-global-greedy-iou/percent/v4; source=framework.cleansight_eval.core.metrics"
-SPEC_RECALL = "segmental_recall/counts-micro-across-items-label-aware-one-to-one-global-greedy-iou/percent/v4; source=framework.cleansight_eval.core.metrics"
-SPEC_COUNTS = "segmental_counts/micro-across-items-label-aware-one-to-one-global-greedy-iou/v4; source=framework.cleansight_eval.core.metrics"
-SPEC_TEMPORAL_IOU = "temporal_iou/matched-segment-global-greedy-micro-pool-mean/percent/v4; source=framework.cleansight_eval.core.metrics"
-SPEC_FRAME_CLASS = "classification/frame-micro-pool-per-class/percent/v3; source=framework.cleansight_eval.core.metrics"
+SPEC_ACC = metric_spec("acc")
+SPEC_EDIT = metric_spec("edit")
+SPEC_F1 = SEGMENTAL_F1_SPEC
+SPEC_PRECISION = SEGMENTAL_PRECISION_SPEC
+SPEC_RECALL = SEGMENTAL_RECALL_SPEC
+SPEC_COUNTS = SEGMENTAL_COUNTS_SPEC
+SPEC_TEMPORAL_IOU = TEMPORAL_IOU_SPEC
+SPEC_FRAME_CLASS = FRAME_CLASS_SPEC
 SPEC_MODEL_FORWARD = "latency/model-forward-single-window/ms/v2; excludes=data,postprocess,io,production"
 
 

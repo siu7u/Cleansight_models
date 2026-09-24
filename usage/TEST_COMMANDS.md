@@ -7,6 +7,9 @@
 
 以下命令默认从仓库根目录执行。
 
+> 要按「数据 → 登记 → 口径 → 矩阵 → 门禁」的完整流程跑一轮特征方案评测，先看
+> [`FEATURE_EVAL_RUNBOOK.md`](./FEATURE_EVAL_RUNBOOK.md)；本文是命令清单。
+
 ## 1. 准备环境
 
 先激活已经安装项目依赖的 Python 环境。团队开发机可复用 Backend 的虚拟环境：
@@ -246,12 +249,59 @@ python -m framework.cleansight_eval.cli.train --config framework/experiments/tra
 python -m framework.cleansight_eval.cli.train --config framework/experiments/gru-actionmixed-auto-roi.yaml -S train.epochs=1
 ```
 
+时序模型 + ROI **可见性重排**特征（`actionmixed-roi-grid-v2`，96 维：高频 3 类 3×3 网格、
+低频 5 类全局 1 区域；与 roi-grid-v1 同模型同超参对照）：
+
+```bash
+python -m framework.cleansight_eval.cli.train --config framework/experiments/gru-actionmixed-auto-roi-v2.yaml
+```
+
+多方案多 seed 一键对照矩阵（训练 + 正式评估 + 汇总，含逐类 recall）：
+
+```bash
+python tools/run_strategy_matrix.py --runs-dir runs/strategy_cmp_p18            # 5 策略 × seed 42/7/2026
+python tools/run_strategy_matrix.py --runs-dir runs/strategy_cmp_p18 --skip-train   # 只重新汇总（复用已有评估）
+python tools/run_strategy_matrix.py --runs-dir runs/norm_zscore \
+    --strategies roi-grid-144 --set model.normalization=zscore \
+    --smoothing-min-duration 5                                                 # 口径/超参可参数化
+```
+
+数据与特征诊断（纯 CPU、只读数据、不训练）：
+
+```bash
+python tools/probe_split_shift.py --json tmp/probe.json      # 域 AUC + 逐帧线性探针 + 段长/阈值可达性
+python tools/probe_direction.py --json tmp/dir.json          # 类对可分性（默认 insert vs withdraw）+ 上下文效应
+python tools/probe_input_features.py --root datasets/cleansight-ActionMixed-auto-lhh  # 覆盖/量纲/可分性体检
+python tools/probe_pixel_channel.py extract && python tools/probe_pixel_channel.py evaluate   # 像素通道四臂对照（P1）
+```
+
 特征提取范围横向对比（bbox 编码固定，整个画面 vs 仅手部周围 vs 全局+手部，同超参）：
 
 ```bash
 python -m framework.cleansight_eval.cli.train --config framework/experiments/gru-actionmixed-auto.yaml            # 整个画面 40 维（基线）
 python -m framework.cleansight_eval.cli.train --config framework/experiments/gru-actionmixed-auto-hand.yaml        # 仅手部周围 40 维
 python -m framework.cleansight_eval.cli.train --config framework/experiments/gru-actionmixed-auto-global-hand.yaml  # 全局+手部 80 维
+```
+
+形态 B（bbox + 图像 embedding）E0/E1 消融（机制床 `cleansight-ActionMixed`，先确认 embedding
+产物存在：`datasets/cleansight-ActionMixed/embeddings/mobilenet_v3_small-v1/`；缺失时先跑
+`python -m framework.cleansight_eval.temporal.features.extract_embeddings --root datasets/cleansight-ActionMixed
+--splits train,val,test --backbone mobilenet_v3_small --out-dir datasets/cleansight-ActionMixed/embeddings/mobilenet_v3_small-v1`）：
+
+```bash
+# E0 基线：40 维 bbox；E1：616 维（40 bbox + 576 图像 embedding，投影头 64 维）
+# 两路同模型同超参，健康配方用 -S 注入；跑多个 seed 后在 evals/*.evaluation.json 取中位数
+for cfg in gru-actionmixed gru-actionmixed-embed; do
+  for seed in 42 7 2026; do
+    python -m framework.cleansight_eval.cli.train --config framework/experiments/$cfg.yaml \
+      --runs-dir runs/embed_ablation --seed $seed \
+      -S train.weight_decay=0.0001 -S model.dropout=0.2 -S train.patience=4 \
+      -S train.epochs=20 -S train.best_metric=val_f1_0.5
+  done
+done
+# 每个 run 的正式评测（--config 用训练时同一份配置，ckpt 用该 run 的 best.pt）：
+python -m benchmark.cli.eval --config framework/experiments/gru-actionmixed-embed.yaml \
+  --ckpt runs/embed_ablation/<run-id>/checkpoints/best.pt
 ```
 
 ## 5. 查看评测输出
@@ -296,6 +346,24 @@ python -m benchmark.cli.matrix \
 ```
 
 输出为 `matrix.json` 和 `matrix.md`，保留 computed、N/A 和 MISSING 三态，不生成跨任务综合分。
+
+## 6.1 汇总模型容量（参数量）对照
+
+只变 `model.hidden`（参数量）、数据/特征/配方/seed 集合全同，逐点训练 + 正式评估 + 汇总
+（含跨 seed 噪声地板、段级过分割计数、逐类 recall、逐帧线性探针下界；`best.pt` 与 `last.pt` 都评估）：
+
+```bash
+python tools/run_capacity_matrix.py --runs-dir runs/capacity-mstcn \
+    --hidden 16,32,64,128,256 --seeds 42,7,2026 --epochs 30
+
+# 幂等重汇总（复用已有评估，秒级）
+python tools/run_capacity_matrix.py --runs-dir runs/capacity-mstcn \
+    --hidden 16,32,64,128,256 --seeds 42,7,2026 --epochs 30 --skip-train
+```
+
+输出为 `runs/<批次>/CAPACITY_SUMMARY.md`；判读规则与既有实测见
+[`docs/mstcn-capacity/`](../docs/mstcn-capacity/README.md)（参数量盘点 + 输入维度关系 + 容量实验）。
+注意 `type: mstcn` 只认 `model.hidden`——`model.dropout` / `num_stages` / `num_layers` 会被静默忽略。
 
 ## 7. 代码测试命令
 

@@ -9,6 +9,29 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from .metrics import training_metric_keys
+
+
+def temporal_history_columns() -> list[str]:
+    """时序训练 history.csv 的列定义（训练循环与曲线绘制共用）。
+
+    验证指标列**由指标注册表派生**（``core/metrics.py`` 的 ``training_key``），因此
+    ``history.csv`` 的列名、``train.best_metric`` 的合法取值与 ``benchmark.cli.eval``
+    报出的同名指标永远是一套名字；新增一个可训练指标只需在注册表登记一次。
+    """
+
+    return [
+        "epoch",
+        "train_loss",
+        "val_loss",
+        *training_metric_keys(),
+        "lr",
+        "epoch_sec",
+        "checkpoint_best",
+        "checkpoint_last",
+        "status",
+    ]
+
 
 class HistoryWriter:
     """稳定追加逐 epoch 指标；文件不存在时自动写表头。"""
@@ -100,7 +123,7 @@ def plot_training_history(history_path: str | Path, output_path: str | Path) -> 
             axis.text(0.5, 0.5, "no data", ha="center", va="center", transform=axis.transAxes)
 
     draw(axes[0, 0], ["train_loss", "val_loss"], "Loss", "loss")
-    draw(axes[0, 1], ["val_acc", "val_edit", "val_f1_0.5"], "Validation metrics", "percent")
+    draw(axes[0, 1], list(training_metric_keys()), "Validation metrics", "percent")
     draw(axes[1, 0], ["lr"], "Learning rate", "lr")
     draw(axes[1, 1], ["epoch_sec"], "Epoch duration", "seconds")
     figure.suptitle(f"Training history · {history_path.parent.name}")

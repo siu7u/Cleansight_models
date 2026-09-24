@@ -128,5 +128,37 @@ class TemporalMetricTests(unittest.TestCase):
         self.assertEqual(result["metric_spec"]["version"], "interval-matching-v2")
 
 
+class EditSemanticsTests(unittest.TestCase):
+    """固化 `edit` 的语义：它是**段标签序列**的 Levenshtein，对时长完全免疫。
+
+    背景（docs/FEATURE_STRATEGY_COMPARE.md 第二十四轮）：edit 常被误读成"段边界质量"。
+    实现里 `edit_score` 只取每段标签、丢弃时长，因此以下两条性质是口径的一部分，
+    改动它们等于改口径（必须同时 bump spec 版本）。
+    """
+
+    LABELS = ["idle", "flush", "insert"]
+
+    def _edit(self, predicted: list[str], truth: list[str]) -> float:
+        result = temporal_metrics({"v": predicted}, {"v": truth}, self.LABELS)
+        return result["segment"]["edit"]
+
+    def test_duration_changes_do_not_affect_edit(self) -> None:
+        truth = ["idle"] * 20 + ["flush"] * 10 + ["idle"] * 20
+        same_order = ["idle"] * 38 + ["flush"] * 1 + ["idle"] * 11  # 顺序对、时长全错、位置也不对
+        self.assertAlmostEqual(self._edit(same_order, truth), 1.0)
+
+    def test_extra_segment_is_penalized_even_when_frame_accuracy_is_high(self) -> None:
+        truth = ["idle"] * 20 + ["flush"] * 10 + ["idle"] * 20
+        extra = ["idle"] * 20 + ["flush"] * 10 + ["idle"] * 10 + ["insert"] + ["idle"] * 9
+        result = temporal_metrics({"v": extra}, {"v": truth}, self.LABELS)
+        self.assertLess(result["segment"]["edit"], 0.7)          # 序列多一段 → 重罚
+        self.assertGreater(result["frame"]["accuracy"], 0.95)    # 但逐帧几乎全对
+
+    def test_missing_segment_is_penalized(self) -> None:
+        truth = ["idle"] * 10 + ["flush"] * 10 + ["idle"] * 10
+        missing = ["idle"] * 30  # 漏掉 flush 段
+        self.assertAlmostEqual(self._edit(missing, truth), 1 / 3)
+
+
 if __name__ == "__main__":
     unittest.main()

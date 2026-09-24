@@ -60,7 +60,7 @@ checkpoint 与 sidecar、testset manifest、prediction artifact 都记录 SHA-25
 另外两份 Schema 分别约束 prediction artifact 和 delivery manifest。Schema 不参与指标计算；仓库
 运行时仍由 `benchmark/core/result.py`、`artifacts.py`、`delivery.py` 的 Python 校验器执行检查。
 
-## 2. 三条评估流水线
+## 2. 评估流水线
 
 评估入口 [benchmark/cli/eval.py](../benchmark/cli/eval.py) 按配置中的 `pipeline` 字段，
 通过 framework 的 [Pipeline 注册表](../framework/cleansight_eval/core/registry.py) 获取唯一
@@ -71,6 +71,7 @@ checkpoint 与 sidecar、testset manifest、prediction artifact 都记录 SHA-25
 | `detection` | 单帧目标检测 | `single_frame`，无状态逐图独立推理 | YOLO |
 | `sliding_window_temporal` | 实时行为分割 | `windowed_causal`，滑窗逐帧前进、取窗口末帧决策 | 因果模型（GRU） |
 | `full_sequence_temporal` | 离线行为分割 | `full_sequence`，整段一次前向 | 非因果模型（MS-TCN / MS-TCN++ / Transformer / CLEAN ASFormer、BiGRU、BiLSTM+MS-TCN），也可跑因果模型作离线上界 |
+| `roi_classification` | ROI 多标签分类 | `single_roi`，无状态逐 ROI 独立推理 | feature_fusion（CNN backbone + MLP 头），指标见 §3.5 |
 
 **滑窗 vs 全序列的意义**：同一种因果网络结构可以分别在两条流水线中建立独立实验——全序列用于
 观察完整上下文下的离线表现，滑窗用于评估只能看到历史窗口的在线语义。一个 checkpoint 的训练和
@@ -101,20 +102,21 @@ benchmark CLI ───────► evaluation/report/delivery manifest 落�
 
 ## 3. 当前覆盖的指标
 
-### 3.1 时序（真源：[benchmark/evaluators/temporal.py](../benchmark/evaluators/temporal.py)）
+### 3.1 时序（口径注册表：[framework/cleansight_eval/core/metrics.py](../framework/cleansight_eval/core/metrics.py)；三态适配：[benchmark/evaluators/temporal.py](../benchmark/evaluators/temporal.py)）
 
 | 指标 | spec | 粒度 | 定义 |
 |---|---|---|---|
 | 帧准确率 `acc` | `accuracy/frame-wise-micro-across-items/percent/v3` | 帧级 | 合并所有视频帧做 micro accuracy |
-| 编辑分 `edit` | `edit/levenshtein-item-macro-mean/percent/v3` | 逐视频段级 | 各视频独立计算后做 macro mean |
+| 编辑分 `edit` | `edit/levenshtein-item-macro-mean/percent/v3` | 逐视频段级 | 各视频独立计算后做 macro mean。**实现是"段标签序列"上的归一化 Levenshtein 相似度**（`edit_score`：先把逐帧标签折叠成段、**只取每段的标签、丢弃时长**，再算 `1 − 距离/max(段数)`）→ 它对**边界/时长完全不敏感**，只度量"段标签的出现顺序"，并对**多出/漏掉一段**重罚。实测：真值 `idle(20) flush(10) idle(20)` 下，预测 `idle(38) flush(1) idle(11)`（时长全错、顺序对）edit=**100.0** 而 acc 仅 78；预测多出一个 `insert` 段时 acc 98 而 edit=**60.0**。**读 edit 必须同时看段数比与非 idle 帧**，不要把它当作"边界质量"（2026-09-23 第二十四轮固化该语义） |
 | 分段 F1 `f1@0.1/0.25/0.5` | `segmental_f1/...one-to-one-global-greedy-iou/percent/v4` | 段级 | 每视频独立匹配，再汇总 TP/FP/FN 做 micro F1 |
 | `tp/fp/fn@0.5` | `segmental_counts/...one-to-one-global-greedy-iou/v4` | 段级 | 主阈值 0.5 的跨视频 micro 计数 |
 | `precision/recall@0.5` | `segmental_precision/recall/...global-greedy.../percent/v4` | 段级 | 由跨视频汇总的 TP/FP/FN 得出 |
 | `temporal_iou@0.5` | `temporal_iou/matched-segment-global-greedy.../percent/v4` | 段级 | 所有已匹配片段合并后的平均 IoU |
 | `frame.macro_f1/macro_iou/micro_f1` | `classification/frame-micro-pool-per-class/percent/v3` | 帧级 | 帧池化混淆矩阵派生的分类指标 |
 
-- 数值真源是 [`framework/cleansight_eval/core/metrics.py`](../framework/cleansight_eval/core/metrics.py)，framework 只做 0..1 到
-  0..100 的三态适配。
+- 数值真源是 [`framework/cleansight_eval/core/metrics.py`](../framework/cleansight_eval/core/metrics.py)：该模块的
+  `TEMPORAL_METRIC_SPECS` 是**全仓库唯一的指标定义处**（名字、spec、单位、details 路径、训练侧别名），
+  benchmark 只做 0..1 到 0..100 的三态适配，训练侧与工具读同一张表（见 §3.4）。
 - `metrics.summary` 保留主指标；所有 IoU 阈值详情、逐类 P/R/F1/IoU 和混淆矩阵放在
   `metrics.details.temporal`，避免矩阵横向无限膨胀。
 - 所有视频保持独立边界，禁止把不同视频先拼成一条序列再算 Edit/F1。
@@ -146,6 +148,82 @@ benchmark CLI ───────► evaluation/report/delivery manifest 落�
   `model_forward_single_window`，不含数据加载、特征提取和报告写盘。
 - **全序列流水线**对这三项标 `not_applicable`（离线一次性推理不代表实时行为），**不造假数字**。
 
+### 3.4 训练期 validation 与选点口径（与 §3.1 同一注册表）
+
+训练期的验证指标不是"另一套口径"，而是 §3.1 同一批指标的**训练侧别名**：名字、聚合方式、单位、
+spec 版本全部来自唯一注册表
+[`framework/cleansight_eval/core/metrics.py`](../framework/cleansight_eval/core/metrics.py) 的
+`TEMPORAL_METRIC_SPECS`（声明了 `training_key` 的项即可用于选点）。
+
+| 训练侧（`history.csv` 列 / `train.best_metric`） | 评测侧（`metrics.summary` 键） | 单位 | spec |
+|---|---|---|---|
+| `val_acc` | `acc` | 百分数（0..100，2 位小数） | `accuracy/frame-wise-micro-across-items/percent/v3` |
+| `val_edit` | `edit` | 百分数 | `edit/levenshtein-item-macro-mean/percent/v3` |
+| `val_f1_0.1` / `val_f1_0.25` / `val_f1_0.5` | `f1@0.1` / `f1@0.25` / `f1@0.5` | 百分数 | `segmental_f1/...global-greedy-iou/percent/v4` |
+
+- **单位约定**：注册表 `unit=percent` 的指标对外恒为 0..100（四舍五入 2 位）；
+  `metrics.details.temporal` 里的原始值恒为 0..1 比率（计数类为整数），需要详情时按注册表的
+  `detail_path` 取值，不要各自 `*100`。
+- **一致性由测试保证**：[`tests/test_metric_consistency.py`](../tests/test_metric_consistency.py) 断言
+  ①评测器落盘的 spec 与注册表逐一相同、②同输入下训练侧 `val_*` 与评测侧同名指标数值完全相等、
+  ③选点词表 = 注册表派生的 `training_key` 集合（不存在第二份枚举）、④两条流水线的
+  `history.csv` 列覆盖全部可选指标。新增指标只在注册表登记一次即可全链路生效。
+- 实测（2026-09-20）：同一 checkpoint 在 val split 上，`history.csv` 第 1 行的
+  `val_acc/val_edit/val_f1_0.1/val_f1_0.25/val_f1_0.5` 与 `benchmark.cli.eval` 产出的
+  `acc/edit/f1@0.1/f1@0.25/f1@0.5` **逐项相等**；统一口径前后重跑同一 checkpoint，评测
+  `metrics.summary` 与 `metrics.details` **完全一致**（纯定义收敛，不改数值）。
+- 范围说明：**时序**（§3.1/§3.4，注册表 `core/metrics.py`）与 **ROI 分类**（§3.5，注册表
+  `core/metrics.py` 里的 `CLASSIFICATION_METRIC_SPECS`）各自有一个口径注册表，两者结构相同（`spec / unit / training_key`），
+  都保证"训练侧与评测侧同名同实现"；检测（§3.2）沿用 ultralytics 原生指标口径，没有训练侧
+  选点耦合。三个任务都遵循"三态 + spec + 不折算综合分"的约定。
+- **统一范围的边界**："统一"指的是**进入 `evaluation.json` 的指标口径**（以及训练侧同名选点/
+  history 键）。诊断工具里为自身用途现算的临场统计不在其列——例如
+  `tools/visualize_predictions.py` 打印的逐序列 `frame-acc`（渲染进度）、
+  `tools/quality_report.py` 的标注质量 IoU、`tools/per_tag_eval.py` 的 PR 曲线；
+  它们不写进评测结果，也不参与模型间比较。
+
+### 3.5 ROI 分类（口径注册表：[framework/cleansight_eval/core/metrics.py](../framework/cleansight_eval/core/metrics.py) 的 `CLASSIFICATION_METRIC_SPECS`）
+
+| 指标 | spec | 粒度 | 训练侧键（history.json） |
+|---|---|---|---|
+| `precision` | `precision/multi-label-micro/v1` | 多标签 micro | `val_precision` |
+| `recall` | `recall/multi-label-micro/v1` | 多标签 micro | `val_recall` |
+| `f1` | `f1/multi-label-micro/v1` | 多标签 micro | `val_f1` |
+| `exact_match` | `exact-match/multi-label/v1` | 样本级（全标签一致） | `val_exact_match`（旧别名 `val_acc` 保留，同值） |
+| 逐类 P/R/F1/support | 同上 | 逐类 | — |
+
+- **单位**：0..1 比率，保留 4 位小数（与时序侧的百分数不同，注册表里显式声明 `unit`，不靠约定俗成）。
+- **判正阈值**：`DECISION_THRESHOLD = 0.5`，训练期验证与正式评测都经 `decide()` 生成 0/1 预测——
+  阈值只有一处，改它不会出现"训练期 val_acc 与评测 exact_match 口径不同"。
+- **同一实现**：micro/逐类 P/R/F1 与 exact_match 由 `confusion_counts → merge_counts →
+  metrics_from_counts` 一条链算出；训练循环逐 batch 累加计数，评测路径一次性计算，两者数值等价
+  （`tests/test_metric_consistency.py::test_classification_batch_merge_equals_oneshot`）。
+- 实测（2026-09-20）：共享实现与统一前的内联公式在随机 200×3 多标签样本上**逐项相同**；
+  评测器 4 个 spec 字符串与改前**逐字节一致**。
+- **选点口径**（2026-09-20 起与 §3.4 对齐）：`train.best_metric` 支持
+  `val_loss / val_precision / val_recall / val_f1 / val_exact_match`，词表由注册表派生
+  （`CLASSIFICATION_BEST_METRICS = ("val_loss", *classification_training_keys())`），方向由
+  `best_metric_mode` 给出（`val_loss` 越小越好，其余越大越好）。缺省仍是 `val_loss`，与历史行为一致；
+  未注册的值在 `validate_config` 阶段直接报错。时序侧不含 `val_loss`（其时序指标是选点口径，
+  早停另按 val_loss），分类侧保留它是为了兼容既有配方——这是两处唯一的有意差异。
+- **端到端实测（2026-09-20）**：合成 ROI 数据集（33 个裁剪、2 类）跑真实 CLI——
+  `train.best_metric=val_f1` 时 `history.json` 记录 `val_precision/val_recall/val_f1/val_exact_match`
+  与旧别名 `val_acc`（同值），`status.json`/checkpoint meta 记录
+  `{"name": "val_f1", "mode": "max", "value": 0.7826, "epoch": 3}`；随后 `benchmark.cli.eval`
+  在同一 checkpoint 上产出 4 个注册表指标（precision 0.6852 / recall 1.0 / f1 0.8132 /
+  exact_match 0.4848），spec 与注册表逐字符一致。缺省配置（不写 `best_metric`）仍按 `val_loss` 选。
+- **跑通这条链路时修掉的三个既有 bug**（都在 `classification/pipeline.py`，与指标统一无关但挡住了验证）：
+  ① `_fit` 用逐张量 `.detach()` 快照 `model.state_dict()`，而 `FeatureFusionModel` 不是 `nn.Module`、
+  state_dict 是两层嵌套 dict → 抛 `AttributeError`（改为整体 `copy.deepcopy`）；
+  ② `predict()` 重建模型时不传 `hidden_dim`/`freeze_backbone`/`dropout` → 非默认 `hidden_dim` 的
+  checkpoint 直接 shape mismatch（改为优先取 checkpoint meta 的 `model` 段）；
+  ③ 训练末批大小为 1 时 resnet 的 BatchNorm 报错（数据规模问题，验证时用 batch_size=5 规避，未改代码）。
+- **仍未解决的环境阻塞**：`_fit` 依赖 scikit-learn，当前后端 venv 未安装；上面那次端到端验证是
+  在 `PYTHONPATH=tmp/sklearn_shim`（`train_test_split` 的 numpy 等价实现）下跑的，验证的是**指标链路**，
+  不是 sklearn 的精确随机流。要让分类训练在正式环境可跑，需在后端 venv 安装 scikit-learn；
+  另外 `datasets/cleansight-yolo/group2_small/data.yaml` 的 `names` 是 dict 形式而
+  `build_roi_dataset` 只认 list 形式，用真实数据训练前需先修其一。
+
 ## 4. 指标 × 流水线 覆盖矩阵
 
 | 指标 | 全序列时序 | 滑窗时序 | 检测 |
@@ -162,6 +240,12 @@ benchmark CLI ───────► evaluation/report/delivery manifest 落�
 
 `✓`=computed，`N/A`=not_applicable，`—`=该指标在此流水线下不产出（矩阵中留空）。
 
+训练侧另有选点口径（`train.best_metric`）：两条时序流水线都可用 `acc/edit/f1@0.1/f1@0.25/f1@0.5`
+这五个指标选 best checkpoint（见 §3.4），检测流水线用 ultralytics 内部口径（`best.pt` = 验证集 mAP）。
+
+ROI 分类（§3.5）不在本矩阵内：它按**多标签 micro P/R/F1 + 样本级 exact_match**（0..1 比率）评估，
+与"逐帧/分段时序"不可横向折算；边界与单位见 §3.5。
+
 ## 5. 输入契约与因果处理
 
 - **时序特征契约** `actionmixed-bbox-8cls-v1`（[temporal/data.py](../framework/cleansight_eval/temporal/data.py)）：
@@ -173,6 +257,15 @@ benchmark CLI ───────► evaluation/report/delivery manifest 落�
 - **滑窗因果推理**：冷启动前 `window−1` 帧填 idle；每视频重置状态；`causal_decision` 做因果平滑
   （`MIN_DURATION=25` 帧最小持续时长；仅在 3 类 Idle/Long/Short 时叠加类别转移先验，其他类别数退化为
   仅最小持续时长平滑）。
+- **离线全序列（`full_sequence_temporal`：mstcn / mstcn2 / transformer）没有任何后处理平滑**：
+  `evaluation.smoothing_min_duration` **只实现在 `sliding_window_pipeline`**，离线流水线是
+  **逐帧 argmax、零平滑、无冷启动填充**。两条流水线因此不可直接比大小——把因果侧（带 md 平滑）的数字
+  当成离线侧的参照会得出反向结论（2026-09-22 实盘踩过：`docs/FEATURE_STRATEGY_COMPARE.md` 第十六轮
+  §16.5 修正了容量报告与配图里的这处跨协议比较）。要做"同等后处理"的对照，用
+  `tools/probe_offline_postprocess.py`（对已存盘 predictions 补平滑，参数在 val 上选、再报 test）。
+- **段级指标的读数陷阱**：`docs/FEATURE_STRATEGY_COMPARE.md` 第十九轮给出无偏分解——离线模型匹配段里
+  92% 是 idle；`boundary_mae` 只在已匹配段上统计（有偏），不能当"典型边界误差"外推上限。
+  逐类帧级 P/R/F1 用 `tools/compare_runs.py --per-class` 直接产出。
 
 ## 6. 完整性检查
 
