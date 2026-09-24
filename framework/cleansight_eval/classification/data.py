@@ -34,7 +34,13 @@ def build_roi_dataset(
         raise FileNotFoundError(f"data.yaml 缺失: {data_yaml}")
 
     cfg = yaml.safe_load(data_yaml.read_text(encoding="utf-8")) or {}
-    all_names = cfg["names"]
+    # data.yaml 的 names 可能是 list 或 dict{id: name}（与 detection/data_tools.py 同一约定，
+    # 真实分组数据集用的是 dict 形式）；两种都要认，否则目标类别会被误判为"不在 data.yaml 中"。
+    raw_names = cfg["names"]
+    if isinstance(raw_names, dict):
+        all_names = [str(name) for _, name in sorted(raw_names.items(), key=lambda kv: int(kv[0]))]
+    else:
+        all_names = [str(name) for name in raw_names]
     name_to_id = {name: i for i, name in enumerate(all_names)}
     target_ids = {name_to_id[c] for c in classes if c in name_to_id}
     if not target_ids:
@@ -152,15 +158,21 @@ def save_dataset(X, y, classes: List[str], stats: dict, base_dir: Path) -> Path:
     return ds_dir
 
 
-def load_dataset(classes: List[str], base_dir: Path):
-    """加载已保存的 ROI 数据集，返回 (X, y, classes)。"""
+def load_dataset(classes: List[str], base_dir: Path, *, mmap: bool = True):
+    """加载已保存的 ROI 数据集，返回 (X, y, classes)。
+
+    ``mmap=True``（默认）用只读内存映射打开 ``X.npy``：真实分组数据集的裁剪可达 2 万张、
+    约 3 GB（uint8），直接 ``np.load`` 会整块常驻内存，训练时再转 float32 还要翻 4 倍——
+    WSL 下容易被 OOM kill。内存映射只占页缓存（可回收），配合按需转换即可把峰值压到
+    一个 batch 的量级。
+    """
 
     import numpy as np
 
     ds_dir = base_dir / "-".join(classes)
     if not ds_dir.is_dir():
         raise FileNotFoundError(f"数据集不存在: {ds_dir}\n请先构建（训练时自动构建）")
-    X = np.load(ds_dir / "X.npy")
+    X = np.load(ds_dir / "X.npy", mmap_mode="r" if mmap else None)
     y = np.load(ds_dir / "y.npy")
     meta = json.loads((ds_dir / "meta.json").read_text(encoding="utf-8"))
     print(f"[load] X={X.shape} y={y.shape} classes={meta['classes']}")

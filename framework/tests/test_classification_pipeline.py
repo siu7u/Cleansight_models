@@ -76,3 +76,38 @@ def test_classification_evaluator_missing_class_marked_missing():
     result = evaluate(output, {"save_predictions": False})
     detail = result.metric_details["per_class"]["air_gun"]
     assert detail["precision"] == {"state": "missing"}
+
+
+def test_roi_dataset_accepts_both_names_forms(tmp_path):
+    """data.yaml 的 names 无论 list 还是 dict{id: name}，ROI 提取结果都必须一致。"""
+
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+
+    from framework.cleansight_eval.classification.data import build_roi_dataset
+
+    def make(root, names_block):
+        (root / "images" / "train").mkdir(parents=True)
+        (root / "labels" / "train").mkdir(parents=True)
+        (root / "data.yaml").write_text(
+            "train: images/train\nval: images/train\nnc: 2\n" + names_block, encoding="utf-8"
+        )
+        for index in range(4):
+            image = np.zeros((64, 64, 3), dtype=np.uint8)
+            image[10:30, 10:30] = (0, 0, 255)
+            cv2.imwrite(str(root / "images" / "train" / f"img{index}.jpg"), image)
+            cls = index % 2
+            (root / "labels" / "train" / f"img{index}.txt").write_text(
+                f"{cls} 0.3 0.3 0.3 0.3\n", encoding="utf-8"
+            )
+
+    list_root = tmp_path / "list_form"
+    dict_root = tmp_path / "dict_form"
+    make(list_root, "names:\n  - syringe\n  - air_gun\n")
+    make(dict_root, "names:\n  0: syringe\n  1: air_gun\n")
+
+    xs, ys, names_a, _ = build_roi_dataset(list_root, ["air_gun"], roi_size=32, neg_ratio=0.0)
+    xd, yd, names_b, _ = build_roi_dataset(dict_root, ["air_gun"], roi_size=32, neg_ratio=0.0)
+    assert names_a == names_b == ["air_gun"]
+    assert xs.shape == xd.shape and ys.shape == yd.shape
+    assert np.array_equal(xs, xd) and np.array_equal(ys, yd)

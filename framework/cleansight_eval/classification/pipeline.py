@@ -10,16 +10,77 @@ torch/torchvision 为重依赖，全部在方法内部 import（与 detection/yo
 
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 
 from ..core.checkpoint import load_checkpoint, save_checkpoint
 from ..core.environment import now_stamp, set_seed
 from ..core.execution import PredictionOutput
+from ..core.metrics import (
+    classification_training_keys,
+    classification_training_values,
+    confusion_counts,
+    decide,
+    merge_counts,
+    metrics_from_counts,
+    multilabel_metrics,
+)
 from ..core.pipeline import Pipeline
 from ..core.run import RunContext
 from .data import build_roi_dataset, load_dataset, save_dataset
 from .model import BACKBONE_CONFIGS, FeatureFusionModel
+
+
+# 训练期可选点指标：val_loss（历史默认，越小越好）+ 注册表里的全部分类指标（越大越好）。
+# 与两条时序流水线的 train.best_metric 同一机制；时序侧只允许指标（不含 val_loss），
+# 分类侧保留 val_loss 以兼容既有配方。
+CLASSIFICATION_BEST_METRICS: tuple[str, ...] = ("val_loss", *classification_training_keys())
+
+
+def best_metric_mode(name: str) -> str:
+    """选点方向：``val_loss`` 越小越好，其余（precision/recall/f1/exact_match）越大越好。"""
+
+    return "min" if name == "val_loss" else "max"
+
+
+def metric_improved(value: float | None, best: float | None, mode: str) -> bool:
+    """按方向判断当前 epoch 是否优于历史最优；``None``（样本不足）永不视为改善。"""
+
+    if value is None:
+        return False
+    if best is None:
+        return True
+    return value < best if mode == "min" else value > best
+
+
+class _RoiTensorDataset:
+    """按需把 uint8 BGR 的 ROI 转成 float32 RGB 张量（内存峰值 ≈ 一个 batch）。
+
+    历史实现是 `torch.from_numpy(X).float()` 一次性把整个数据集转成 float32（2 万张 224×224
+    的裁剪 = 约 12 GB），在 WSL 这类内存受限环境里会被 OOM kill。这里改成逐样本转换：
+    只在 ``__getitem__`` 里复制单张图（约 600 KB），原始数组可以是 ``np.load(..., mmap_mode="r")``
+    的内存映射，不常驻内存。
+    """
+
+    def __init__(self, images, labels, indices):
+        self.images = images
+        self.labels = labels
+        self.indices = indices
+
+    def __len__(self) -> int:
+        return len(self.indices)
+
+    def __getitem__(self, position: int):
+        import numpy as np
+        import torch
+
+        row = int(self.indices[position])
+        # np.array(..., copy=True) 而非 ascontiguousarray：内存映射的整行本身就是连续视图，
+        # ascontiguousarray 会原样返回只读 memmap 视图，torch.from_numpy 会警告"非可写数组"。
+        image = np.array(self.images[row], copy=True)           # 只复制这一张（约 600 KB）
+        tensor = torch.from_numpy(image).permute(2, 0, 1).float()  # HWC uint8 -> CHW float32
+        return tensor[[2, 1, 0]], torch.from_numpy(np.asarray(self.labels[row])).float()  # BGR->RGB
 
 
 class ClassificationPipeline(Pipeline):
@@ -37,6 +98,11 @@ class ClassificationPipeline(Pipeline):
             raise ValueError("分类流水线 data 段需包含 classes（目标类别名列表）")
         if not data.get("group_dir"):
             raise ValueError("分类流水线 data 段需包含 group_dir（YOLO 分组数据集目录）")
+        best_metric = (cfg.get("train") or {}).get("best_metric")
+        if best_metric is not None and best_metric not in CLASSIFICATION_BEST_METRICS:
+            raise ValueError(
+                f"train.best_metric 必须是 {list(CLASSIFICATION_BEST_METRICS)} 之一，实际 {best_metric!r}"
+            )
 
     def _dataset_dir(self, data_cfg: dict) -> Path:
         from ..core.run import RunContext  # noqa: F401  (保持导入一致性)
@@ -87,12 +153,14 @@ class ClassificationPipeline(Pipeline):
             )
             model.to_device(str(device))
 
-            history, best_state, best_val = self._fit(
+            best_metric = str(train_cfg.get("best_metric") or "val_loss")
+            history, best_state, best = self._fit(
                 model, X, y, classes,
                 epochs=int(train_cfg.get("epochs", 50)),
                 batch_size=int(train_cfg.get("batch_size", 32)),
                 lr=float(train_cfg.get("lr", 1e-3)),
                 val_split=float(data_cfg.get("val_split", 0.2)),
+                best_metric=best_metric,
             )
 
             # 保存 checkpoint + 绑定 meta
@@ -109,7 +177,9 @@ class ClassificationPipeline(Pipeline):
                 "train": train_cfg,
                 "data": data_cfg,
                 "trained_at": now_stamp(),
-                "best_val_loss": best_val,
+                # best_val_loss 保留为历史字段；best_metric 结构与时序侧一致（name/value/epoch/mode）。
+                "best_val_loss": best["val_loss"],
+                "best_metric": best,
             }
             save_checkpoint(ckpt, model.state_dict(), meta)
 
@@ -117,47 +187,49 @@ class ClassificationPipeline(Pipeline):
             history_path.write_text(json.dumps(history, indent=2, default=str),
                                     encoding="utf-8")
             run.write_status("succeeded", best_checkpoint=str(ckpt),
-                             best_val_loss=best_val, history=str(history_path))
+                             best_metric=best, best_val_loss=best["val_loss"],
+                             history=str(history_path))
             print(f"[train] run_dir={run.dir}")
             print(f"[train] checkpoint={ckpt}")
+            print(f"[train] best_metric={best['name']} value={best['value']} epoch={best['epoch']}")
             return str(ckpt)
         except Exception as exc:
             run.write_exception_status(exc)
             raise
 
-    def _fit(self, model, X, y, classes, *, epochs, batch_size, lr, val_split):
-        """训练循环，返回 (history, best_state_dict, best_val_loss)。"""
+    def _fit(self, model, X, y, classes, *, epochs, batch_size, lr, val_split,
+             best_metric: str = "val_loss"):
+        """训练循环，返回 ``(history, best_state_dict, best_metric_info)``。
+
+        ``best_metric`` 取自 :data:`CLASSIFICATION_BEST_METRICS`（默认 ``val_loss``，与历史行为一致）；
+        每个 epoch 的验证指标按注册表口径计算，选点方向由 :func:`best_metric_mode` 给出。
+        """
 
         import numpy as np
         import torch
         import torch.nn as nn
         from sklearn.model_selection import train_test_split
-        from torch.utils.data import DataLoader, TensorDataset
+        from torch.utils.data import DataLoader
 
-        X_train, X_val, y_train, y_val = train_test_split(
-            X, y, test_size=val_split, random_state=42,
+        # 只切**索引**：sklearn 的划分只依赖 (n, random_state, stratify 标签)，对索引数组切分
+        # 得到的 train/val 划分与直接切 X 完全一致，但不会复制两份 uint8 大数组。
+        index = np.arange(len(y))
+        train_idx, val_idx = train_test_split(
+            index, test_size=val_split, random_state=42,
             stratify=y.any(axis=1) if y.shape[1] > 1 else y,
         )
-        print(f"[train] train: {len(X_train)}, val: {len(X_val)}")
+        print(f"[train] train: {len(train_idx)}, val: {len(val_idx)}（数据按需从 mmap 读取）")
 
-        def _to_rgb(tensor):
-            return tensor[:, [2, 1, 0], :, :]  # BGR -> RGB
-
-        train_ds = TensorDataset(
-            _to_rgb(torch.from_numpy(X_train).float().permute(0, 3, 1, 2)),
-            torch.from_numpy(y_train).float(),
-        )
-        val_ds = TensorDataset(
-            _to_rgb(torch.from_numpy(X_val).float().permute(0, 3, 1, 2)),
-            torch.from_numpy(y_val).float(),
-        )
+        train_ds = _RoiTensorDataset(X, y, train_idx)
+        val_ds = _RoiTensorDataset(X, y, val_idx)
         train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,
                                   num_workers=0, pin_memory=False)
         val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False,
                                 num_workers=0, pin_memory=False)
 
+        y_train = y[train_idx]
         pos_counts = y_train.sum(axis=0)
-        neg_counts = len(y_train) - pos_counts
+        neg_counts = len(train_idx) - pos_counts
         pos_weight = torch.tensor(
             [neg_counts[i] / max(pos_counts[i], 1) for i in range(len(classes))],
             dtype=torch.float32,
@@ -170,9 +242,20 @@ class ClassificationPipeline(Pipeline):
         )
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
 
-        best_val_loss = float("inf")
-        best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
-        history = {"train_loss": [], "val_loss": [], "val_acc": []}
+        mode = best_metric_mode(best_metric)
+        best_value: float | None = None
+        best_epoch: int | None = None
+        best_val_loss: float | None = None
+        # FeatureFusionModel 不是 nn.Module：state_dict() 是
+        # {backbone_state, classifier_state} 两层嵌套 dict，必须整体拷贝——逐张量 .detach()
+        # 会在嵌套 dict 上抛 AttributeError（既有 bug，验证指标链路时暴露）。
+        best_state = copy.deepcopy(model.state_dict())
+        # history 的验证指标键来自分类指标注册表（与正式评测同名同实现）；
+        # val_acc 保留为历史别名（= val_exact_match，样本级全标签匹配率）。
+        history = {
+            "train_loss": [], "val_loss": [], "val_acc": [],
+            **{key: [] for key in classification_training_keys()},
+        }
 
         for epoch in range(1, epochs + 1):
             model.backbone.train()
@@ -191,33 +274,52 @@ class ClassificationPipeline(Pipeline):
             model.backbone.eval()
             model.classifier.eval()
             val_loss = 0.0
-            correct = 0
-            total = 0
+            batch_counts = []
             with torch.no_grad():
                 for bx, by in val_loader:
                     bx, by = bx.to(model.device), by.to(model.device)
                     feat = model.backbone(bx)
                     logits = model.forward_from_features(feat)
                     val_loss += criterion(logits, by).item() * len(bx)
-                    preds = (torch.sigmoid(logits) > 0.5).float()
-                    correct += (preds == by).all(dim=1).sum().item()
-                    total += len(bx)
+                    # 判正走注册表的唯一阈值入口，训练期与评测期不会各写一份 0.5。
+                    batch_counts.append(
+                        confusion_counts(
+                            decide(torch.sigmoid(logits).cpu().numpy()),
+                            by.cpu().numpy(),
+                        )
+                    )
             val_loss /= max(len(val_ds), 1)
-            val_acc = correct / max(total, 1)
+            val_metrics = metrics_from_counts(merge_counts(batch_counts), classes)
+            # 键 → 取值位置由注册表给出（value_path），这里不再手抄对照表。
+            epoch_values = {"val_loss": val_loss, **classification_training_values(val_metrics)}
+            val_acc = epoch_values["val_exact_match"]
             history["train_loss"].append(train_loss)
             history["val_loss"].append(val_loss)
-            history["val_acc"].append(val_acc)
+            history["val_acc"].append(val_acc)  # 旧别名，与 val_exact_match 同值
+            for key in classification_training_keys():
+                history[key].append(epoch_values[key])
             scheduler.step()
 
             if epoch % 5 == 0 or epoch == epochs:
                 print(f"  epoch {epoch:3d}/{epochs}: train_loss={train_loss:.4f}  "
-                      f"val_loss={val_loss:.4f}  val_acc={val_acc:.4f}")
-            if val_loss < best_val_loss:
+                      f"val_loss={val_loss:.4f}  val_acc={val_acc:.4f}  "
+                      f"val_f1={val_metrics['micro']['f1']:.4f}")
+            if metric_improved(epoch_values[best_metric], best_value, mode):
+                best_value = epoch_values[best_metric]
+                best_epoch = epoch
+                # best_val_loss 的语义是"被选中那个 epoch 的 val_loss"（默认按 val_loss 选点时即最小值）。
                 best_val_loss = val_loss
-                best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+                best_state = copy.deepcopy(model.state_dict())
 
-        print(f"[train] 最佳 val_loss={best_val_loss:.4f}")
-        return history, best_state, best_val_loss
+        info = {
+            "name": best_metric,
+            "mode": mode,
+            "value": best_value,
+            "epoch": best_epoch,
+            "val_loss": best_val_loss,
+        }
+        print(f"[train] 最佳 {best_metric}={best_value} (epoch {best_epoch})")
+        return history, best_state, info
 
     def predict(self, cfg: dict, ckpt: str, device) -> PredictionOutput:
         """加载 checkpoint，对 ROI 数据推理，返回含逐类 P/R/F1 的事实结果。"""
@@ -233,9 +335,16 @@ class ClassificationPipeline(Pipeline):
             require_meta_schema=cfg.get("evaluation", {}).get("mode", "formal") == "formal",
         )
         actual_classes = meta.get("classes") or classes
+        # 结构超参必须取自 checkpoint 绑定 meta（训练时写入的 model 段），否则 hidden_dim /
+        # backbone 与权重不一致会在 load_state_dict 处 shape mismatch（既有 bug：此前只传
+        # num_classes/backbone，hidden_dim 回落到默认值，导致非默认 hidden_dim 的权重无法评估）。
+        train_model_cfg = dict(meta.get("model") or {})
         model = FeatureFusionModel(
             num_classes=len(actual_classes),
             backbone_name=meta.get("backbone", model_cfg.get("backbone", "resnet50")),
+            freeze_backbone=bool(train_model_cfg.get("freeze_backbone", model_cfg.get("freeze_backbone", False))),
+            hidden_dim=int(train_model_cfg.get("hidden_dim", model_cfg.get("hidden_dim", 256))),
+            dropout=float(train_model_cfg.get("dropout", model_cfg.get("dropout", 0.3))),
         )
         model.load_state_dict(state)
         model.to_device(str(device))
@@ -274,17 +383,20 @@ class ClassificationPipeline(Pipeline):
         )
 
     def _evaluate(self, model, X, y, classes, device, batch_size: int = 32) -> dict:
-        """多标签 P/R/F1 计算，返回普通 dict 供 benchmark evaluator 翻译。"""
+        """多标签 P/R/F1 与 exact-match 计算：复用 ``core/metrics.py`` 注册表的唯一实现。
+
+        返回普通 dict（``per_class`` / ``micro`` / ``exact_match`` / ``labels``）供 benchmark
+        evaluator 翻译成三态指标；训练期 validation 走的是同一套计数与换算函数。
+        """
 
         import numpy as np
         import torch
-        from torch.utils.data import DataLoader, TensorDataset
+        from torch.utils.data import DataLoader
 
-        ds = TensorDataset(
-            torch.from_numpy(X).float().permute(0, 3, 1, 2)[:, [2, 1, 0], :, :],
-            torch.from_numpy(y).float(),
+        loader = DataLoader(
+            _RoiTensorDataset(X, y, np.arange(len(y))),
+            batch_size=batch_size, shuffle=False, num_workers=0,
         )
-        loader = DataLoader(ds, batch_size=batch_size, shuffle=False, num_workers=0)
 
         model.backbone.eval()
         model.classifier.eval()
@@ -298,38 +410,6 @@ class ClassificationPipeline(Pipeline):
                 all_labels.append(by.numpy())
         all_preds = np.concatenate(all_preds, axis=0)
         all_labels = np.concatenate(all_labels, axis=0)
-        binary_preds = (all_preds > 0.5).astype(np.float32)
+        binary_preds = decide(all_preds)
 
-        per_class = {}
-        for i, cls_name in enumerate(classes):
-            tp = ((binary_preds[:, i] == 1) & (all_labels[:, i] == 1)).sum()
-            fp = ((binary_preds[:, i] == 1) & (all_labels[:, i] == 0)).sum()
-            fn = ((binary_preds[:, i] == 0) & (all_labels[:, i] == 1)).sum()
-            precision = tp / max(tp + fp, 1)
-            recall = tp / max(tp + fn, 1)
-            f1 = 2 * precision * recall / max(precision + recall, 1e-8)
-            per_class[cls_name] = {
-                "precision": round(float(precision), 4),
-                "recall": round(float(recall), 4),
-                "f1": round(float(f1), 4),
-                "support": int(all_labels[:, i].sum()),
-            }
-
-        tp_all = ((binary_preds == 1) & (all_labels == 1)).sum()
-        fp_all = ((binary_preds == 1) & (all_labels == 0)).sum()
-        fn_all = ((binary_preds == 0) & (all_labels == 1)).sum()
-        micro_p = tp_all / max(tp_all + fp_all, 1)
-        micro_r = tp_all / max(tp_all + fn_all, 1)
-        micro_f1 = 2 * micro_p * micro_r / max(micro_p + micro_r, 1e-8)
-        acc = float(((binary_preds == all_labels).all(axis=1)).mean())
-
-        return {
-            "per_class": per_class,
-            "micro": {
-                "precision": round(float(micro_p), 4),
-                "recall": round(float(micro_r), 4),
-                "f1": round(float(micro_f1), 4),
-            },
-            "exact_match": round(acc, 4),
-            "labels": {i: name for i, name in enumerate(classes)},
-        }
+        return multilabel_metrics(binary_preds, all_labels, classes)
