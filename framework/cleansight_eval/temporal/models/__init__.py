@@ -26,6 +26,10 @@ def _build_gru(cfg: dict) -> nn.Module:
         hidden=cfg.get("hidden", 128),
         num_layers=cfg.get("num_layers", 3),
         dropout=float(cfg.get("dropout", 0.0)),
+        image_dim=cfg.get("image_dim", 0),
+        image_proj_dim=cfg.get("image_proj_dim", 64),
+        normalization=cfg.get("normalization", "none"),
+        norm_clip=cfg.get("norm_clip"),
     )
 
 
@@ -34,6 +38,7 @@ def _build_mstcn(cfg: dict) -> nn.Module:
         in_dim=cfg["input_dim"],
         classes=cfg["num_classes"],
         hidden=cfg.get("hidden", 32),
+        sequence_normalization=cfg.get("sequence_normalization", "none"),
     )
 
 
@@ -67,6 +72,7 @@ def _build_mstcn2(cfg: dict) -> nn.Module:
         dropout=cfg.get("dropout", 0.3),
         tmse_weight=cfg.get("tmse_weight", 0.15),
         tmse_clip=cfg.get("tmse_clip", 4.0),
+        sequence_normalization=cfg.get("sequence_normalization", "none"),
     )
 
 
@@ -135,10 +141,27 @@ _MODELS = {
 
 
 def build_model(model_cfg: dict) -> nn.Module:
-    """按 ``model_cfg["type"]`` 构造网络。"""
+    """按 ``model_cfg["type"]`` 构造网络。
+
+    ``model.image_dim``（形态 B 图像 embedding 投影头）目前只在 GRU 上实现；其它架构声明
+    该字段直接报错，避免"配了投影头却没生效"的静默对照污染。
+    """
+
     t = model_cfg.get("type")
     if t not in _MODELS:
         raise KeyError(f"未注册的时序模型: {t!r}；已注册: {sorted(_MODELS)}")
+    if model_cfg.get("image_dim") and t not in {"gru", "legacy_gru_v1"}:
+        raise ValueError(
+            f"model.image_dim（图像 embedding 投影头）当前只在 GRU 上实现，{t!r} 不支持"
+        )
+    # 序列级归一化需要看到整段序列，只有全序列离线模型支持；其余类型显式报错，
+    # 避免"配了却没生效"的静默对照（同 image_dim 的处理）。
+    sequence_normalization = str(model_cfg.get("sequence_normalization") or "none").lower()
+    if sequence_normalization != "none" and t not in {"mstcn", "mstcn2"}:
+        raise ValueError(
+            f"model.sequence_normalization={sequence_normalization!r} 只在全序列模型 "
+            f"mstcn/mstcn2 上实现，{t!r} 不支持（因果/滑窗模型看不到整段序列）"
+        )
     return _MODELS[t]["build"](model_cfg)
 
 

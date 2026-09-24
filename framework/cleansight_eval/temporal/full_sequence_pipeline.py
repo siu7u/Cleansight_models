@@ -33,7 +33,7 @@ except ImportError:  # tqdm 可选，缺失时退化为原样迭代
 from ..core.checkpoint import load_checkpoint, load_training_checkpoint, save_training_checkpoint
 from ..core.environment import now_stamp, set_seed
 from ..core.execution import PredictionOutput, format_params
-from ..core.history import HistoryWriter, try_plot_training_history
+from ..core.history import HistoryWriter, temporal_history_columns, try_plot_training_history
 from ..core.integrity import check_feature_schema
 from ..core.pipeline import Pipeline
 from ..core.run import RunContext
@@ -43,15 +43,18 @@ from .data import (
     build_dataset_provenance,
     build_temporal_meta,
     load_split,
+    resolve_image_feature_dim,
     resolve_mask_target_ids,
     resolve_external_temporal_meta,
     resolve_target_mask_augmentation,
+    resolve_train_video_fraction,
+    resolve_train_video_limit,
     split_video_names,
 )
 from .external import configure_external_model
 from .models import build_model
 from .training_validation import summarize_training_metrics
-from .util import VALID_BEST_METRICS, compute_class_weights
+from .util import VALID_BEST_METRICS, compute_class_weights, resolve_class_weight_clip
 
 
 def _load_eval_model(cfg: dict, ckpt: str, device):
@@ -178,7 +181,10 @@ class FullSequenceTemporalPipeline(Pipeline):
             if k not in data:
                 raise ValueError(f"时序流水线 data 段缺少必要字段: {k}（用数据集内建目录切分）")
         resolve_mask_target_ids(data, cfg.get("feature_schema"))
+        resolve_image_feature_dim(model, cfg.get("feature_schema"))
         resolve_target_mask_augmentation(data, cfg.get("augmentation"))
+        resolve_train_video_fraction(data)  # 校验 (0, 1] 范围，非法值直接报错
+        resolve_class_weight_clip((cfg.get("train") or {}).get("class_weight_clip"))  # 早校验
         train = cfg.get("train", {})
         best_metric = train.get("best_metric", "val_acc")
         if best_metric not in VALID_BEST_METRICS:
@@ -211,12 +217,15 @@ class FullSequenceTemporalPipeline(Pipeline):
                 cfg["data"],
                 cfg["data"]["split_train"],
                 feature_schema=cfg.get("feature_schema"),
+                # 训练子采样（data.train_video_fraction）：只作用于 train split，val/test 全量评估。
+                video_limit=resolve_train_video_limit(cfg["data"], cfg["data"]["split_train"]),
             )
             features = apply_target_mask_augmentation(
                 features,
                 cfg["data"],
                 cfg.get("augmentation"),
                 seed=seed,
+                feature_schema=cfg.get("feature_schema"),
             )
             problems = check_feature_schema(features[0].shape[1], cfg.get("feature_schema"))
             if problems:
@@ -237,7 +246,10 @@ class FullSequenceTemporalPipeline(Pipeline):
             )
             train_loader = DataLoader(train_ds, batch_size=1, shuffle=True)
 
-            weights = compute_class_weights(train_loader, num_classes=model_cfg["num_classes"])
+            weights = compute_class_weights(
+                train_loader, num_classes=model_cfg["num_classes"],
+                clip=train_cfg.get("class_weight_clip"),
+            )
             criterion = nn.CrossEntropyLoss(
                 weight=torch.tensor([weights[i] for i in sorted(weights)], dtype=torch.float32).to(device)
             )
@@ -260,7 +272,16 @@ class FullSequenceTemporalPipeline(Pipeline):
                 best_metric.update(payload.get("best_metric") or {})
                 run.write_status("running", stage="resumed", resume=str(resume_path), start_epoch=start_epoch)
 
-            extra = {"normalizer": "zscore/train-set/buffers/v1"} if hasattr(model, "fit_normalization") else None
+            # 归一化口径溯源：模型自己声明（GRU 默认直通返回 None；MS-TCN 恒为 z-score）。
+            # 无 normalizer_spec 的历史模型（外部 checkpoint）保持原样声明。
+            spec_fn = getattr(model, "normalizer_spec", None)
+            if callable(spec_fn):
+                spec = spec_fn()
+            elif hasattr(model, "fit_normalization"):
+                spec = "zscore/train-set/buffers/v1"
+            else:
+                spec = None
+            extra = {"normalizer": spec} if spec else None
             meta = build_temporal_meta(
                 model_cfg,
                 cfg.get("feature_schema", {}),
@@ -275,7 +296,7 @@ class FullSequenceTemporalPipeline(Pipeline):
             )
             history = HistoryWriter(
                 run.history_path,
-                ["epoch", "train_loss", "val_loss", "val_acc", "val_edit", "val_f1_0.5", "lr", "epoch_sec", "checkpoint_best", "checkpoint_last", "status"],
+                temporal_history_columns(),
             )
             best_path = run.checkpoints_dir / "best.pt"
             last_path = run.checkpoints_dir / "last.pt"

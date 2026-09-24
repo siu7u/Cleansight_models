@@ -47,12 +47,22 @@ KNOWN_SECTION_KEYS = {
         "hidden", "num_layers", "num_stages", "dropout", "tmse_weight", "tmse_clip",
         "d_model", "nhead", "dim_feedforward", "max_len", "lstm_layers", "tcn_layers",
         "refine_stages", "hidden_dims",
+        # 形态 B（图像 embedding 契约）：图像块宽度 + 线性投影头宽度
+        "image_dim", "image_proj_dim",
+        # 输入归一化口径（P2a）：none/zscore + 可选截断
+        "normalization", "norm_clip",
+        # 序列级归一化（只在全序列 mstcn/mstcn2 上实现）：none/demean（按视频去均值）
+        "sequence_normalization",
         # roi_classification（特征融合）
         "backbone", "roi_size", "freeze_backbone", "hidden_dim",
     },
     "data": {
         "name", "dataset_ref", "data_yaml", "eval_split", "root", "action_mapping", "labels_dir",
         "frames_dir", "split_train", "split_val", "split_eval", "names", "fps",
+        # 训练视频子采样比例（学习曲线横轴；只作用于 train split，val/test 恒全量）
+        "train_video_fraction",
+        # 形态 B：embedding 产物根目录（catalog 的 feature_embed.root 为默认值）
+        "embedding_root",
         # roi_classification（特征融合）
         "classes", "group_dir", "neg_ratio", "val_split", "dataset_dir",
     },
@@ -64,11 +74,13 @@ KNOWN_SECTION_KEYS = {
     "evaluation": {
         "mode", "testset_id", "save_predictions", "measure_latency", "latency_warmup",
         "latency_runs", "limits", "conf", "iou", "max_det", "agnostic_nms",
-        "visualize", "viz_per_page",
+        "visualize", "viz_per_page", "smoothing_min_duration",
     },
     "train": {
         "epochs", "lr", "batch", "batch_size", "patience", "window", "grad_clip",
         "weight_decay", "resume", "best_metric",
+        # 类别权重截断区间（活动量旋钮）：[lo, hi] 或 "lo,hi"
+        "class_weight_clip",
     } | YOLO_TRAIN_HPARAMS,
 }
 
@@ -148,7 +160,7 @@ def resolve_relative_paths(cfg: dict, base_dir: Path) -> None:
     data = cfg.get("data")
     if not isinstance(data, dict):
         return
-    for key in ("data_yaml", "root"):
+    for key in ("data_yaml", "root", "embedding_root"):
         value = data.get(key)
         if not isinstance(value, str):
             continue
@@ -195,6 +207,21 @@ def resolve_dataset_reference(cfg: dict, base_dir: Path, *, explicit_root: bool)
             )
     data["root"] = str(catalog_root)
     data["name"] = str(dataset_ref)
+
+    embed = baseline.raw.get("feature_embed") or {}
+    embed_root = embed.get("root")
+    if embed_root:
+        catalog_embed_root = str(resolve_path(str(embed_root), baseline.root))
+        configured_embed_root = data.get("embedding_root")
+        if isinstance(configured_embed_root, str):
+            path = Path(configured_embed_root).expanduser()
+            configured = path.resolve() if path.is_absolute() else (base_dir / path).resolve()
+            if str(configured) != catalog_embed_root:
+                raise ValueError(
+                    f"data.embedding_root={configured} 与 dataset_ref={dataset_ref!r} 登记的 "
+                    f"feature_embed.root={catalog_embed_root} 不一致"
+                )
+        data["embedding_root"] = catalog_embed_root
 
     feature_schema = cfg.get("feature_schema") or {}
     configured_version = feature_schema.get("version")

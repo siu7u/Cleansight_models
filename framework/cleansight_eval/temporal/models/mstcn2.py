@@ -29,6 +29,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .mstcn import _apply_sequence_normalization, _resolve_sequence_normalization
+
 
 class DilatedResidualLayer(nn.Module):
     """单膨胀残差层：膨胀 conv3 → ReLU → 1×1 conv → Dropout，残差相加（精化 stage 用）。"""
@@ -120,8 +122,10 @@ class MSTCN2(nn.Module):
         dropout: float = 0.3,
         tmse_weight: float = 0.15,
         tmse_clip: float = 4.0,
+        sequence_normalization: str = "none",
     ):
         super().__init__()
+        self.sequence_normalization = _resolve_sequence_normalization(sequence_normalization)
         self.num_classes = classes
         self.tmse_weight = tmse_weight
         self.tmse_clip = tmse_clip
@@ -136,6 +140,7 @@ class MSTCN2(nn.Module):
     def _forward_stages(self, x: torch.Tensor) -> list[torch.Tensor]:
         """返回各 stage 的 logits 列表，每个 ``[B, C, T]``（内部 Conv1d 布局）。"""
         x = (x - self.norm_mean) / self.norm_std
+        x = _apply_sequence_normalization(x, self.sequence_normalization)
         z = x.transpose(1, 2)  # [B, F, T]
         out = self.stage0(z)
         outputs = [out]
@@ -164,6 +169,12 @@ class MSTCN2(nn.Module):
             ).mean()
             total = total + ce + self.tmse_weight * tmse
         return total
+
+    def normalizer_spec(self) -> str:
+        """归一化口径的溯源声明（本模型恒按训练集 z-score 归一化）。"""
+
+        return ("zscore/train-set/buffers/v1" if self.sequence_normalization == "none"
+                else f"zscore/train-set/buffers/v1+sequence-{self.sequence_normalization}/v1")
 
     def fit_normalization(self, features: list) -> None:
         """训练前可选钩子：按训练集 z-score 统计写入归一化 buffer（同 ``mstcn``）。"""

@@ -28,7 +28,7 @@ except ImportError:  # tqdm 可选，缺失时退化为原样迭代
 from ..core.checkpoint import load_checkpoint, load_training_checkpoint, save_training_checkpoint
 from ..core.environment import now_stamp, set_seed
 from ..core.execution import PredictionOutput, format_params, sample_callable_latency
-from ..core.history import HistoryWriter, try_plot_training_history
+from ..core.history import HistoryWriter, temporal_history_columns, try_plot_training_history
 from ..core.integrity import check_feature_schema
 from ..core.pipeline import Pipeline
 from ..core.run import RunContext
@@ -38,18 +38,26 @@ from .data import (
     build_dataset_provenance,
     build_temporal_meta,
     load_split,
+    resolve_image_feature_dim,
     resolve_mask_target_ids,
     resolve_external_temporal_meta,
     resolve_target_mask_augmentation,
+    resolve_train_video_fraction,
+    resolve_train_video_limit,
     split_video_names,
 )
 from .external import configure_external_model
 from .models import build_model, is_causal
 from .training_validation import summarize_training_metrics
-from .util import VALID_BEST_METRICS, causal_decision, compute_class_weights
+from .util import (
+    VALID_BEST_METRICS,
+    causal_decision,
+    compute_class_weights,
+    resolve_class_weight_clip,
+)
 
 IDLE_ID = 0
-MIN_DURATION = 25  # causal_decision 内部最小持续时长，此处仅用于语义描述
+MIN_DURATION = 25  # causal_decision 最小持续时长默认值（可用 evaluation.smoothing_min_duration 覆盖）
 
 
 
@@ -144,7 +152,10 @@ class SlidingWindowTemporalPipeline(Pipeline):
             if k not in data:
                 raise ValueError(f"时序流水线 data 段缺少必要字段: {k}（用数据集内建目录切分）")
         resolve_mask_target_ids(data, cfg.get("feature_schema"))
+        resolve_image_feature_dim(model, cfg.get("feature_schema"))
         resolve_target_mask_augmentation(data, cfg.get("augmentation"))
+        resolve_train_video_fraction(data)  # 校验 (0, 1] 范围，非法值直接报错
+        resolve_class_weight_clip((cfg.get("train") or {}).get("class_weight_clip"))  # 早校验
         train = cfg.get("train", {})
         best_metric = train.get("best_metric", "val_acc")
         if best_metric not in VALID_BEST_METRICS:
@@ -178,12 +189,15 @@ class SlidingWindowTemporalPipeline(Pipeline):
                 cfg["data"]["split_train"],
                 window=window,
                 feature_schema=cfg.get("feature_schema"),
+                # 训练子采样（data.train_video_fraction）：只作用于 train split，val/test 全量评估。
+                video_limit=resolve_train_video_limit(cfg["data"], cfg["data"]["split_train"]),
             )
             features = apply_target_mask_augmentation(
                 features,
                 cfg["data"],
                 cfg.get("augmentation"),
                 seed=seed,
+                feature_schema=cfg.get("feature_schema"),
             )
             problems = check_feature_schema(features[0].shape[1], cfg.get("feature_schema"))
             if problems:
@@ -207,7 +221,10 @@ class SlidingWindowTemporalPipeline(Pipeline):
             train_loader = DataLoader(train_ds, batch_size=train_cfg.get("batch_size", 32), shuffle=True)
             val_datasets = [SlidingWindowDataset(val_features[i], val_truths[i], window) for i in range(len(val_features))]
 
-            weights = compute_class_weights(train_loader, num_classes=model_cfg["num_classes"])
+            weights = compute_class_weights(
+                train_loader, num_classes=model_cfg["num_classes"],
+                clip=train_cfg.get("class_weight_clip"),
+            )
             criterion = nn.CrossEntropyLoss(
                 weight=torch.tensor([weights[i] for i in sorted(weights)], dtype=torch.float32).to(device)
             )
@@ -230,7 +247,16 @@ class SlidingWindowTemporalPipeline(Pipeline):
                 best_metric.update(payload.get("best_metric") or {})
                 run.write_status("running", stage="resumed", resume=str(resume_path), start_epoch=start_epoch)
 
-            extra = {"normalizer": "zscore/train-set/buffers/v1"} if hasattr(model, "fit_normalization") else None
+            # 归一化口径溯源：模型自己声明（GRU 默认直通返回 None；MS-TCN 恒为 z-score）。
+            # 无 normalizer_spec 的历史模型（外部 checkpoint）保持原样声明。
+            spec_fn = getattr(model, "normalizer_spec", None)
+            if callable(spec_fn):
+                spec = spec_fn()
+            elif hasattr(model, "fit_normalization"):
+                spec = "zscore/train-set/buffers/v1"
+            else:
+                spec = None
+            extra = {"normalizer": spec} if spec else None
             meta = build_temporal_meta(
                 model_cfg,
                 cfg.get("feature_schema", {}),
@@ -245,7 +271,7 @@ class SlidingWindowTemporalPipeline(Pipeline):
             )
             history = HistoryWriter(
                 run.history_path,
-                ["epoch", "train_loss", "val_loss", "val_acc", "val_edit", "val_f1_0.5", "lr", "epoch_sec", "checkpoint_best", "checkpoint_last", "status"],
+                temporal_history_columns(),
             )
             best_path = run.checkpoints_dir / "best.pt"
             last_path = run.checkpoints_dir / "last.pt"
@@ -368,6 +394,11 @@ class SlidingWindowTemporalPipeline(Pipeline):
 
         window = meta.get("window") or cfg["train"].get("window", 64)
         limits = (cfg.get("evaluation") or {}).get("limits") or {}
+        # 因果平滑的最小持续时长（帧）：默认 25 保持历史行为；该阈值同时是召回上限，
+        # 段长普遍短于它的数据/类别会被结构性压到 0（见 2026-09-18 跨批次诊断）。
+        min_duration = int((cfg.get("evaluation") or {}).get("smoothing_min_duration", MIN_DURATION))
+        if min_duration < 1:
+            raise ValueError(f"evaluation.smoothing_min_duration 必须 ≥1，实际 {min_duration}")
         features, truths, id2name = load_split(
             cfg["data"],
             cfg["data"]["split_eval"],
@@ -391,7 +422,9 @@ class SlidingWindowTemporalPipeline(Pipeline):
                     x, _ = ds[i]
                     x = x.unsqueeze(0).to(device)  # [1, window, F]
                     last = model(x)[0, -1]  # 末帧 logits
-                    pending, stable, count = causal_decision(last, pending, stable, count)
+                    pending, stable, count = causal_decision(
+                        last, pending, stable, count, min_duration=min_duration
+                    )
                     preds[i + window - 1] = stable
                 video_preds.append(preds)
                 video_gts.append(ds.y.numpy())
@@ -419,7 +452,7 @@ class SlidingWindowTemporalPipeline(Pipeline):
             "advance": 1,
             "cold_start": f"前 {window - 1} 帧填充 idle",
             "reset": "per_video",
-            "smoothing": f"causal_decision(min_duration={MIN_DURATION})",
+            "smoothing": f"causal_decision(min_duration={min_duration})",
         }
 
         timing = {}
