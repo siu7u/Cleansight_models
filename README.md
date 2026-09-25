@@ -469,6 +469,9 @@ checkpoint + checkpoint metadata + CARD.md + pin.yaml
 
 ## 文档索引
 
+> **完整分类索引见 [`docs/README.md`](docs/README.md)**（按入口 / 架构 / 手册 / 评测 / 特征 / 实验报告 / 协作约定分组，
+> 含全部实验报告与周报）；下面只列最常用的入口。
+
 - [架构简述](docs/ARCHITECTURE_OVERVIEW.md)：用目录和数据流快速说明当前仓库结构。
 - [YAML 配置文档](usage/YAML_CONFIG.md)：所有受跟踪 YAML 的内容、读取方、功能和快速定位链接。
 - [测试命令行教程](usage/TEST_COMMANDS.md)：模型评测、timeline、矩阵和 pytest 的常用写法。
