@@ -50,6 +50,7 @@
 |---|---|
 | [`features/README.md`](features/README.md) | **特征契约唯一索引**：各方案的语义、维度、代码/登记/配置定位与实测结论；新增方案照检查清单执行 |
 | [`features/INPUT_DESIGN_PROPOSAL.md`](features/INPUT_DESIGN_PROPOSAL.md) | 输入设计提案：体检探针 + 推荐方案 P1/P2 + 有证据否掉的方向 |
+| [`features/INPUT_DESIGN_V3_REVIEW_20260924.md`](features/INPUT_DESIGN_V3_REVIEW_20260924.md) | 评审意见：《输入特征设计提案与 v3 验证计划》—— 状态核实、与既有实测证据的冲突、成功标准可判读性、集成风险与推进顺序 |
 | [`features/IMAGE_FEATURE_TRAINING.md`](features/IMAGE_FEATURE_TRAINING.md) | 图像（像素级）特征训练流程与正式方案（ROI 网格 144 + 健康配方） |
 
 ## 6. 实验报告与周报（时间倒序）
