@@ -120,6 +120,11 @@ h128 vs h32 逐 (seed,视频) 配对 28/10、p=0.0026，h256 与 h128 等价（p
 | mstcn2 | **0** | 只有配置与代码，**没有任何训练权重** |
 | clean_mstcn_bilstm | **0** | 只有 `external_checkpoints/mstcn-bilstm-offline/` 的外部 `.pt` |
 
+> **补注（2026-09-24）**：本表是 **2026-09-19（第 1 部分）** 的磁盘快照，`mstcn2` 那一行**已过期**——
+> 随后的特征/精度杠杆轮次跑了 **122 个 run**（[`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](../EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md)），
+> `mstcn2` 不但已有训练权重，还是**当前最佳架构**（`s4l10 h128` @331 万参：edit 51.47、逐 seed 摆幅 0.64，
+> 见该报告 §2.1/§2.3）。本表其余行未再核对，引用"磁盘上有什么"时以当次实测为准。
+
 注册模型 `registry/temporal/auto-mstcn-v1`：`type: mstcn`、h32、F=40 = **34,790 参**，权重
 `runs/mstcn-20260817-170254/checkpoints/best.pt`（30 epoch）。其 sha256 与 `pin.yaml` 声明
 逐字节一致（`b458f23b…`，2026-09-19 复核），且 `strict=True` 可加载。

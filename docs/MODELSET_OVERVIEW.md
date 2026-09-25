@@ -5,6 +5,22 @@
 > 最新工作汇报见 [`YOLO_WORK_SUMMARY.md`](YOLO_WORK_SUMMARY.md)；架构原则见
 > [`ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) 与 [`DESIGN.md`](DESIGN.md)。
 
+> **最新状态（2026-09-24 更新）**
+>
+> - **当前最佳时序配方**：`mstcn2` `s4l10 h128`（331 万参）+ `roi-grid-144`(z-score)，
+>   lr 5e-4 / 60 轮 / `dropout 0.3` / T-MSE 0.15 / clip 0.1，
+>   **`best_metric = val_edit`** → edit 中位 **51.08**、F1@0.1 40.01、acc 53.98（8 seed）；
+>   换回默认选点 `val_f1_0.5` 时 3~8 seed 读数 51.47、逐 seed 摆幅 0.64。
+>   依据：[`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md) §2.1/§2.3/§2.4。
+> - **两条轴已探尽**：容量轴（加参数默认配方无用，`mstcn` h128 到顶）与特征轴
+>   （**无任何替代契约超过 `roi-grid-144`**，其唯一稳健优势是 insert 召回）。
+> - **本周新增契约**：`actionmixed-roi-grid-presence-v1`（48 维，presence 平面）。
+> - **选点口径是一等参数**：现行默认 `val_f1_0.5` 与 test 的 Spearman ρ 仅 **0.199**（326 run 体检）。
+> - **已否掉的外部方案**：TimesFM 时序基础模型（预测式预警路线证伪，见
+>   [`EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md`](EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md)）。
+> - 本周汇总与风险见 [`WEEKLY_REPORT_20260924.md`](WEEKLY_REPORT_20260924.md)；
+>   可复用图表见 [`figures/README.md`](figures/README.md)。
+
 ## 1. 总体结论
 
 `Cleansight_models` 已从零散模型整理成**可训练、可评估、可登记、可复现**的模型资产仓库：
@@ -168,15 +184,27 @@ python -m benchmark.cli.matrix --runs runs
 
 > 以上为新数据建设前的历史基线。新数据集（`datasets/cleansight-yolo`，5.6 万图 / 8 类）的
 > 正式基线正在重建中，见 [`YOLO_WORK_SUMMARY.md`](YOLO_WORK_SUMMARY.md)。
+>
+> **补注（2026-09-24）**：上表是**旧 20 维特征**口径，与当前主线（`roi-grid-144`）**不可直接比较**。
+> 当前 mainline 数据为 `temporal.actionmixed-auto-roi-v1`（144 维，revision `6375eba9…`，
+> test 8 视频 / 2,639 帧），最佳配方与指标见本文顶部「最新状态」及
+> [`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md)。
 
 ## 9. 当前最大缺口
 
 1. **YOLO 指标未达标**：large 组 P/R 需 ≥0.7；small 组 <0.3 的类转 ROI 特征融合。
-2. **新 YOLO 特征尚未闭环到时序**：`feature_mapping.py` 新版为 64 维
-   （8 类 × [present, cx, cy, w, h, conf, dcx, dcy]），现有时序 v1 checkpoint 仍是旧 20 维，
-   需要用新 YOLO 输出重新生成 64 维特征并重训时序模型。
+2. ~~**新 YOLO 特征尚未闭环到时序**（旧 20 维 / 64 维叙事）~~ —— **已过期（2026-09-24 更新）**：
+   时序输入早已切到 `actionmixed-roi-grid-v1`（144 维），特征轴也已探尽。**当前真实缺口是精度天花板**：
+   最强模型上 **51.6% 的真值段连标签都认错**（flush 20/21、withdraw 25/27、sbc 18/18），
+   错误的大头**不在标签边界附近**（距最近切换 ≤3 帧的帧占 16.1%、只承载 21.9% 的错误）
+   —— 即瓶颈不在模型/特征/损失，见 [`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md) §4.1。
 3. **端到端真实验收未完成**：`benchmark/e2e_3min` 评分器已存在，但真实
    `clean_001.prediction.json` 需要 `CleanSightBackend` 在线推理导出。
+4. **架构门禁红灯（2026-09-24 新增识别）**：`tests/test_architecture_boundaries.py` 2 条失败，
+   12 个违规文件中 **10 个来自已提交旧文件**（HEAD 上即红），需一次决策（放宽 `tools/` 运行规则
+   vs 下沉执行模型的工具）。
+5. **`--resume` 语义错位（已知未修）**：会导致"以为续训、实际未续训"，属会污染实验结论的隐患
+   （记录见 [`mstcn-capacity/MSTCN_CAPACITY_STUDY.md`](mstcn-capacity/MSTCN_CAPACITY_STUDY.md) §0.1）。
 4. **ModelScope 与复刻链路未完全落地**：本地上传目录已整理，仍需上传、回填地址/revision、
    完善 `pin.yaml` schema 与一键复刻脚本。
 
