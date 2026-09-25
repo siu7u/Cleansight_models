@@ -1,0 +1,31 @@
+{
+  "figure": "fig7_image_embed_e0_e1",
+  "title": "E0 vs E1: effect of adding frozen image embeddings",
+  "source": "docs/EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md §4（机制床 9,532 帧，CPU，3 seed 中位数）",
+  "data": {
+    "metrics": [
+      "segment edit",
+      "frame acc",
+      "frame macro-F1",
+      "recall air_injection"
+    ],
+    "E0_bbox40": [
+      42.49,
+      47.01,
+      46.63,
+      86.96
+    ],
+    "E1_bbox_plus_embed616": [
+      45.22,
+      27.52,
+      35.66,
+      0.0
+    ],
+    "delta": [
+      2.73,
+      -19.49,
+      -10.97,
+      -86.96
+    ]
+  }
+}

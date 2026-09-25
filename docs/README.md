@@ -73,6 +73,15 @@
 |---|---|
 | [`BRANCH_CONVENTION.md`](BRANCH_CONVENTION.md) | 分支体量、提交纪律与合并流程 |
 
+## 8. 图表库
+
+| 位置 | 内容 |
+|---|---|
+| [`figures/README.md`](figures/README.md) | **跨报告复用的图表库**（周报/汇报引用）：容量曲线 · 架构对照 · 特征契约缺口 · 选点口径 · TimesFM 探针 · 在线代价 · 图像 E1，共 7 张；每张配同名 JSON 旁证（所画数字 + 来源标注），生成脚本 [`tools/plot_report_figures.py`](../tools/plot_report_figures.py) |
+
+> 报告专属插图可留在各自报告目录（先例 [`mstcn-capacity/figures/`](mstcn-capacity/figures/)）；
+> **跨报告复用**或**被周报引用**的图统一放 `figures/`。
+
 ---
 
 ## 维护约定
@@ -82,6 +91,8 @@
   [`features/README.md`](features/README.md)，指标口径类同步 [`EVAL.md`](EVAL.md)，
   涉及 YAML 的同步 [`usage/YAML_CONFIG.md`](../usage/YAML_CONFIG.md)。
 - 多文件报告（含图/数据）自建子目录（先例：[`mstcn-capacity/`](mstcn-capacity/)），并在 §6 登记其主文档。
+- 新增/修改图表：放 [`figures/`](figures/README.md) 并在 §8 登记，图内数字必须能在报告里溯源
+  （纪律见 [`figures/README.md`](figures/README.md) §3）。
 
 ## 归类待定（暂按当前判断归入，确认后可调整）
 
