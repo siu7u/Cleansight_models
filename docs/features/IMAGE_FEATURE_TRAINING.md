@@ -114,6 +114,19 @@ GPU 口径（2026-09-04，RTX 4060 Laptop，数据根 `-lhh`，同配方同 seed
 | 模型 | GRU 滑窗为主（在线推荐基线）；MS-TCN 全序列作对照 | MODELSET_OVERVIEW 流式结论 |
 | 配方 | wd=1e-4、dropout=0.2、patience=4、best_metric=val_f1_0.5、epochs≤20、**多 seed** | 坍缩诊断与修复（0059eb9）；单 seed 结论不可靠 |
 | 评估 | formal testset、**多 seed 取中位数**、段级指标（edit/F1@0.1~0.5 + 逐类）为准 | acc 在 65%+ idle 数据上具欺骗性 |
+
+> **补注（2026-09-24，依据本周两轮定版报告）** —— 上表是 **2026-09-03 定稿**，以下两处需要按新证据读：
+>
+> 1. **模型分两条轨道，不是"GRU 优于 MS-TCN"**：本表"GRU 为主"指的是**在线轨道**（`gru` 因果滑窗，
+>    可流式部署）；**离线轨道**（全序列，双向非因果）当前最佳是 **`mstcn2` `s4l10 h128`（331 万参）**，
+>    edit 51.47 / 逐 seed 摆幅 0.64，显著优于 `mstcn` h128（41.79）与 GRU（42.40、摆幅 14.5）。
+>    **`mstcn2` 不能用于在线**（`causal=False`，滑窗流水线会拒绝）。选型按部署形态决定，不是精度排序。
+>    依据：[`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](../EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md) §2.3。
+> 2. **选点口径建议由 `val_f1_0.5` 改为 `val_edit`**：同配方 8 seed 配对，edit **+9.63（p=0.0107）**、
+>    insert 召回 **+5.46（p=0.0214）**；现行默认 `val_f1_0.5` 与 test 的 Spearman ρ 仅 **0.199**
+>    （326 run 体检），即选点近乎随机。代价是 acc −0.66，需业务侧确认取舍。同上报告 §2.4。
+> 3. 容量与特征两侧均已探尽（加参数无用、`mstcn` h128 到顶；**无替代契约超过 `roi-grid-144`**），
+>    本周汇总见 [`WEEKLY_REPORT_20260924.md`](../WEEKLY_REPORT_20260924.md)。
 | 复跑入口 | `python tools/run_strategy_matrix.py --strategies roi-grid-144 --seeds 42,7,2026` | 一键工具（43f15ef） |
 
 **执行记录**：
