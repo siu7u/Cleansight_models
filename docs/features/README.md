@@ -4,7 +4,7 @@
 > 语义、维度、代码位置、数据登记、训练配置与实测结论，供后续方案设计与横向对比参考。
 > **新增或修改方案时必须同步更新本索引**（见文末「新增方案检查清单」）。
 > **要动手跑一轮评测**（数据更新 → 登记 → 口径 → 矩阵 → 门禁）见
-> [`../usage/FEATURE_EVAL_RUNBOOK.md`](../usage/FEATURE_EVAL_RUNBOOK.md)（实操手册，含常见陷阱）。
+> [`../../usage/FEATURE_EVAL_RUNBOOK.md`](../../usage/FEATURE_EVAL_RUNBOOK.md)（实操手册，含常见陷阱）。
 >
 > 图像（像素级）特征训练流程见 [`IMAGE_FEATURE_TRAINING.md`](./IMAGE_FEATURE_TRAINING.md)：
 > 正式训练方案已定稿（ROI 网格 144 + 健康配方，§3.4）；像素特征进时序（形态 B）的**提取工具
