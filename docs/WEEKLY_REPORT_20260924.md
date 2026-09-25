@@ -1,7 +1,7 @@
 # 本周工作周报（2026-09-19 ~ 09-24）
 
 - 汇报日：2026-09-24（周四）
-- 覆盖期：2026-09-19 ~ 2026-09-24（沿用 `MSTCN_CAPACITY_STUDY.md` 的"本周 09-19 ~ 09-22"口径，续上 09-23 / 09-24）
+- 覆盖期：2026-09-19 ~ 2026-09-24（沿用 [`MSTCN_CAPACITY_STUDY.md`](mstcn-capacity/MSTCN_CAPACITY_STUDY.md) 的"本周 09-19 ~ 09-22"口径，续上 09-23 / 09-24）
 - 性质：**汇总周报**——只引用已定版报告的数字，不产生新指标；各条线的完整口径与原始数字见对应报告
 - 归属：本仓库（模型训练 / 离线评估 / benchmark / checkpoint 契约 / 交付清单）
 
@@ -23,9 +23,9 @@
 
 ## 1. 主线一：MS-TCN 容量轴研究（09-19 ~ 09-22，结题 09-22）
 
-**产出**：`docs/mstcn-capacity/MSTCN_CAPACITY_STUDY.md`（合并原 PARAMS_INVENTORY / PARAMS_VS_INPUT_DIM /
-CAPACITY_EXPERIMENT / CAPACITY_LR_FOLLOWUP / GAP_FILLING 五份）、配套 `tools/run_capacity_matrix.py`、
-`tools/plot_capacity_curves.py`、容量矩阵曲线图。
+**产出**：[`docs/mstcn-capacity/MSTCN_CAPACITY_STUDY.md`](mstcn-capacity/MSTCN_CAPACITY_STUDY.md)（合并原 PARAMS_INVENTORY / PARAMS_VS_INPUT_DIM /
+CAPACITY_EXPERIMENT / CAPACITY_LR_FOLLOWUP / GAP_FILLING 五份）、配套 [`tools/run_capacity_matrix.py`](../tools/run_capacity_matrix.py)、
+[`tools/plot_capacity_curves.py`](../tools/plot_capacity_curves.py)、容量矩阵曲线图。
 
 **规模**：**122 个 run**（110 个带正式评估），全部 CPU 训练；数据口径 `cleansight-ActionMixed-auto-lhh`
 revision `6375eba9…`，test 8 视频。
@@ -51,8 +51,8 @@ revision `6375eba9…`，test 8 视频。
 
 ## 2. 主线二：特征提取方式与精度杠杆（09-23，结题 09-23）
 
-**产出**：`docs/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`（13 杠杆 × 多 seed）、
-逐轮机制回写 `docs/FEATURE_STRATEGY_COMPARE.md`（第十三~二十七轮）。
+**产出**：[`docs/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md)（13 杠杆 × 多 seed）、
+逐轮机制回写 [`docs/FEATURE_STRATEGY_COMPARE.md`](FEATURE_STRATEGY_COMPARE.md)（第十三~二十七轮）。
 
 **规模**：**新增 122 个 run / 128 份正式评估**（另复用容量研究既有批次作对照），全部 CPU。
 统计口径：逐 (seed,视频)×类配对 Wilcoxon，一律同 seed 配对；强制同时报非 idle 帧数与段数比
@@ -90,7 +90,7 @@ revision `6375eba9…`，test 8 视频。
 
 ## 3. 主线三：TimesFM 时序基础模型可行性探针（09-24）
 
-**产出**：`docs/EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md`（模型
+**产出**：[`docs/EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md`](EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md)（模型
 `google/timesfm-2.5-200m-pytorch`，Apache-2.0 权重；4 个 val 视频 × 4 条派生序列；全部 CPU）。
 
 **判定：预测式预警路线证伪，不建议引入主线。** 四条证据：
@@ -113,18 +113,18 @@ revision `6375eba9…`，test 8 视频。
 
 > 图 6：在线代价（对数刻度）。TimesFM 单序列 287–376 ms（区间条为报告实测区间），
 > 而帧预算只有 133 ms、你们 GRU 单 tick 是 1.49 ms —— **逐 tick 流式不可行**，
-> 只有低频旁路（每 5–10 s 触发）可行。口径：本机 CPU 实测 + `docs/INFERENCE_CHAIN_PERF.md`。
+> 只有低频旁路（每 5–10 s 触发）可行。口径：本机 CPU 实测 + [`docs/INFERENCE_CHAIN_PERF.md`](INFERENCE_CHAIN_PERF.md)。
 
 ## 4. 支撑线：指标口径统一与工程修复（09-20 ~ 09-23）
 
 | 项 | 内容 | 落点 |
 |---|---|---|
-| 指标口径统一 | 时序 14 项 + 分类 4 项指标建立**唯一注册表**；训练选点 / 正式评测 / history / 曲线 / 矩阵工具 / 文档全部引用它；选点词表 3 → 5；新增一致性测试 15 条 | `core/metrics.py`、`docs/EVAL.md` §3.4/§3.5、`tests/test_metric_consistency.py` |
-| 分类链修复 | `_fit` 嵌套 state_dict 崩溃、`predict` 结构超参缺失、mmap + 逐样本转换（内存 ~20 GiB → 4.2 GiB） | `classification/{data,pipeline}.py`、`benchmark/evaluators/classification.py` |
-| 新增旋钮 | `data.train_video_fraction`（学习曲线）、序列归一化、`class_weight_clip` | `core/config.py`、`temporal/{util,full_sequence_pipeline,sliding_window_pipeline}.py` |
-| 新增探针工具 | 6 个：`probe_channel_subsets` / `probe_boundary_error` / `probe_selection_transfer` / `probe_seed_ensemble` / `probe_segment_visibility` / `probe_offline_postprocess`，**各配单测**；另新增 `compare_runs.py` | `tools/`、`tests/` |
-| 文档回写 | `EVAL.md`、`YAML_CONFIG.md`、`features/README.md`、`FEATURE_STRATEGY_COMPARE.md`、`MODELSET_OVERVIEW.md` | `docs/`、`usage/` |
-| 已知未修 | `--resume` 语义错位（仅记录）；学习曲线协议待改随机子集 | `MSTCN_CAPACITY_STUDY.md` §0.1/§0.2 |
+| 指标口径统一 | 时序 14 项 + 分类 4 项指标建立**唯一注册表**；训练选点 / 正式评测 / history / 曲线 / 矩阵工具 / 文档全部引用它；选点词表 3 → 5；新增一致性测试 15 条 | [`core/metrics.py`](../framework/cleansight_eval/core/metrics.py)、[`docs/EVAL.md`](EVAL.md) §3.4/§3.5、[`tests/test_metric_consistency.py`](../tests/test_metric_consistency.py) |
+| 分类链修复 | `_fit` 嵌套 state_dict 崩溃、`predict` 结构超参缺失、mmap + 逐样本转换（内存 ~20 GiB → 4.2 GiB） | [`classification/data.py`](../framework/cleansight_eval/classification/data.py)、[`classification/pipeline.py`](../framework/cleansight_eval/classification/pipeline.py)、[`benchmark/evaluators/classification.py`](../benchmark/evaluators/classification.py) |
+| 新增旋钮 | `data.train_video_fraction`（学习曲线）、序列归一化、`class_weight_clip` | [`core/config.py`](../framework/cleansight_eval/core/config.py)、[`temporal/util.py`](../framework/cleansight_eval/temporal/util.py)、[`temporal/full_sequence_pipeline.py`](../framework/cleansight_eval/temporal/full_sequence_pipeline.py)、[`temporal/sliding_window_pipeline.py`](../framework/cleansight_eval/temporal/sliding_window_pipeline.py) |
+| 新增探针工具 | 6 个：[`probe_channel_subsets`](../tools/probe_channel_subsets.py) / [`probe_boundary_error`](../tools/probe_boundary_error.py) / [`probe_selection_transfer`](../tools/probe_selection_transfer.py) / [`probe_seed_ensemble`](../tools/probe_seed_ensemble.py) / [`probe_segment_visibility`](../tools/probe_segment_visibility.py) / [`probe_offline_postprocess`](../tools/probe_offline_postprocess.py)，**各配单测**；另新增 [`compare_runs.py`](../tools/compare_runs.py) | [`tools/`](../tools/)、[`tests/`](../tests/) |
+| 文档回写 | [`EVAL.md`](EVAL.md)、[`YAML_CONFIG.md`](../usage/YAML_CONFIG.md)、[`features/README.md`](features/README.md)、[`FEATURE_STRATEGY_COMPARE.md`](FEATURE_STRATEGY_COMPARE.md)、[`MODELSET_OVERVIEW.md`](MODELSET_OVERVIEW.md) | [`docs/`](README.md)、[`usage/`](../usage/) |
+| 已知未修 | `--resume` 语义错位（仅记录）；学习曲线协议待改随机子集 | [`MSTCN_CAPACITY_STUDY.md`](mstcn-capacity/MSTCN_CAPACITY_STUDY.md) §0.1/§0.2 |
 
 ## 5. 仓库状态与风险（本周最需要处置的一条）
 
@@ -144,7 +144,7 @@ revision `6375eba9…`，test 8 视频。
 
 | 失败项 | 性质 |
 |---|---|
-| `test_architecture_boundaries` × 2 | **架构门禁红灯**：12 个违规文件中 **10 个来自已提交旧文件**（HEAD 上即红），本周改动**新增 2 个**（`tools/probe_pixel_channel.py`、`tools/run_strategy_matrix.py`） |
+| `test_architecture_boundaries` × 2 | **架构门禁红灯**：12 个违规文件中 **10 个来自已提交旧文件**（HEAD 上即红），本周改动**新增 2 个**（[`tools/probe_pixel_channel.py`](../tools/probe_pixel_channel.py)、[`tools/run_strategy_matrix.py`](../tools/run_strategy_matrix.py)） |
 | `test_config_paths`、`test_temporal_masking`、`test_pipeline_smoke` | **预先存在**（09-11 的 E1 报告已记录，`HEAD` 同样失败） |
 | `test_predict_timeline` | 数据集版本漂移（引用旧视频名 `05ba4406-…`，数据已升级） |
 | `test_checkpoint_compat` | torchscript 归档加载（环境/权重相关） |
@@ -159,7 +159,7 @@ revision `6375eba9…`，test 8 视频。
 2. **门禁债务单独立项**：12 个架构边界违规需要一次性决策（放宽 `tools/` 的运行规则，
    还是把执行模型的工具下沉到允许层），否则 `tests/` 长期保持红灯。
 3. **选点口径落地**：`best_metric=val_edit` 已验证有效（edit +9.63，p=0.0107），
-   需决定是否把它写进正式配方默认值，并同步 `EVAL.md` 与实验 YAML。
+   需决定是否把它写进正式配方默认值，并同步 [`EVAL.md`](EVAL.md) 与实验 YAML。
 4. **正式轮前置**：图像源（project-16 抽帧）与 v3 数据对齐完成后，按 E 系列机制床结论推进 E2/E3；
    注意 E1 已显示图像通道**不是免费增益**（帧级 acc 47.01 → 27.52）。
 
@@ -173,21 +173,22 @@ revision `6375eba9…`，test 8 视频。
 
 ## 7. 附：更早的未提交产出（09-11 ~ 09-18，同一批未入库）
 
-- **09-11**：图像 embedding 契约（形态 B）——`image_embed.py`、GRU 投影头、E0/E1 机制床对照报告。
-- **09-14**：输入设计提案 `docs/features/INPUT_DESIGN_PROPOSAL.md` + 体检探针 `probe_input_features.py`。
+- **09-11**：图像 embedding 契约（形态 B）——[`image_embed.py`](../framework/cleansight_eval/temporal/features/image_embed.py)、GRU 投影头、E0/E1 机制床对照报告。
+- **09-14**：输入设计提案 [`docs/features/INPUT_DESIGN_PROPOSAL.md`](features/INPUT_DESIGN_PROPOSAL.md) + 体检探针 [`probe_input_features.py`](../tools/probe_input_features.py)。
 - **09-18**：ROI 可见性重排 v2 契约（96 维）、数据下载/manifest 重划、GRU 归一化与因果平滑测试、
   4 个专项探针（`probe_split_shift` / `probe_direction` / `probe_pixel_channel`）、
-  `usage/FEATURE_EVAL_RUNBOOK.md` 实操手册。
+  [`usage/FEATURE_EVAL_RUNBOOK.md`](../usage/FEATURE_EVAL_RUNBOOK.md) 实操手册。
 
 这些与本周主线同属一条"提精度"工作流，建议随本周产出一起入库。
 
 ## 8. 引用来源
 
-- `docs/mstcn-capacity/MSTCN_CAPACITY_STUDY.md`（容量轴，09-22 合并定版）
-- `docs/EXPERIMENT_REPORT_MSTCN_CAPACITY_20260922.md`（容量轴实验报告，09-23 回写）
-- `docs/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`（13 杠杆定版）
-- `docs/FEATURE_STRATEGY_COMPARE.md`（第十三~二十七轮逐轮机制）
-- `docs/EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md`（TimesFM 探针）
-- `docs/EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md`（E0/E1 机制床）
-- `docs/EVAL.md`、`usage/YAML_CONFIG.md`、`docs/features/README.md`（口径与索引回写）
-- **图表库**：[`docs/figures/README.md`](figures/README.md)（本报告引用的 7 张图及其 JSON 旁证、生成脚本 `tools/plot_report_figures.py`）
+- [`docs/mstcn-capacity/MSTCN_CAPACITY_STUDY.md`](mstcn-capacity/MSTCN_CAPACITY_STUDY.md)（容量轴，09-22 合并定版）
+- [`docs/EXPERIMENT_REPORT_MSTCN_CAPACITY_20260922.md`](EXPERIMENT_REPORT_MSTCN_CAPACITY_20260922.md)（容量轴实验报告，09-23 回写）
+- [`docs/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md)（13 杠杆定版）
+- [`docs/FEATURE_STRATEGY_COMPARE.md`](FEATURE_STRATEGY_COMPARE.md)（第十三~二十七轮逐轮机制）
+- [`docs/EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md`](EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md)（TimesFM 探针）
+- [`docs/EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md`](EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md)（E0/E1 机制床）
+- 口径与索引回写：[`docs/EVAL.md`](EVAL.md)、[`usage/YAML_CONFIG.md`](../usage/YAML_CONFIG.md)、[`docs/features/README.md`](features/README.md)、[`docs/features/INPUT_DESIGN_V3_REVIEW_20260924.md`](features/INPUT_DESIGN_V3_REVIEW_20260924.md)
+- **图表库**：[`docs/figures/README.md`](figures/README.md)（本报告引用的 7 张图及其 JSON 旁证、生成脚本 [`tools/plot_report_figures.py`](../tools/plot_report_figures.py)）
+- **文档总导航**：[`docs/README.md`](README.md)
