@@ -155,6 +155,15 @@ spec 版本全部来自唯一注册表
 [`framework/cleansight_eval/core/metrics.py`](../framework/cleansight_eval/core/metrics.py) 的
 `TEMPORAL_METRIC_SPECS`（声明了 `training_key` 的项即可用于选点）。
 
+> **选型提醒（2026-09-24）**：选点口径决定"留哪个 epoch 的权重"，**是一等口径参数**——同一次训练
+> 换它能移动 headline **9.63 分**（配对 p=0.0107）。8 seed 实测 `val_edit` 优于现行默认 `val_f1_0.5`
+> （edit +9.63、insert 召回 +5.46，代价 acc −0.66）；326 个 run 的迁移体检显示默认口径与 test 的
+> Spearman ρ 仅 **0.199**（近乎随机），`val_acc`（val−test 差 +14.76）与 `val_loss` 均不可用于选点。
+> 因此**报告里的任何指标都必须与选点口径一起写明**。完整建议见
+> [`usage/YAML_CONFIG.md`](../usage/YAML_CONFIG.md) 的 `train.best_metric` 条目、
+> [`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md) §2.4 与
+> [`figures/fig4_selection_metric.png`](figures/fig4_selection_metric.png)。
+
 | 训练侧（`history.csv` 列 / `train.best_metric`） | 评测侧（`metrics.summary` 键） | 单位 | spec |
 |---|---|---|---|
 | `val_acc` | `acc` | 百分数（0..100，2 位小数） | `accuracy/frame-wise-micro-across-items/percent/v3` |

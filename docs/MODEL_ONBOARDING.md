@@ -117,6 +117,20 @@ evaluation: { mode: formal }
 
 **不用改**：两个流水线文件、`data.py`、`metrics.py`、CLI、`core/*`。
 
+### D. 指标与选点口径（2026-09-24 补记）
+
+- **指标只有一处定义**：`framework/cleansight_eval/core/metrics.py` 的 `TEMPORAL_METRIC_SPECS` /
+  `CLASSIFICATION_METRIC_SPECS`（`spec / unit / training_key`）。新增指标**只在这里登记一次**，
+  评测器落盘 spec、训练侧 `val_*`、`history.csv` 列、矩阵与曲线工具**全部自动跟随**；
+  由 `tests/test_metric_consistency.py`（15 测试 / 53 断言）锁定"训练侧与评测侧同输入数值相等"。
+- **选点词表不要手写枚举**：`train.best_metric` 的合法取值 = 注册表中声明了 `training_key` 的项
+  （当前 5 个：`val_acc` / `val_edit` / `val_f1_0.1` / `val_f1_0.25` / `val_f1_0.5`），
+  由 `temporal/util.py` 的 `VALID_BEST_METRICS = frozenset(training_metric_keys())` 派生。
+- **选点口径是一等口径参数**：它决定"留哪个 epoch 的权重"，同一次训练换它能移动 headline **9.63 分**
+  （配对 p=0.0107）；现行默认 `val_f1_0.5` 与 test 的 Spearman ρ 仅 **0.199**，建议改用 `val_edit`。
+  报告里**必须与指标一起写明选点口径**。详见 [`usage/YAML_CONFIG.md`](../usage/YAML_CONFIG.md) 的
+  `train.best_metric` 条目与 [`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md) §2.4。
+
 ---
 
 # 二、YOLO（单帧检测）
