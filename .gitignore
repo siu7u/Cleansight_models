@@ -49,6 +49,8 @@ logs/
 tmp/
 temp/
 .cache/
+# Agent session dumps (multi-MB JSONL scratch, never part of the model set).
+.s_*.jsonl
 
 # ---------------------------------------------------------------------------
 # Raw media and generated datasets
