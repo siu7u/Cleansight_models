@@ -33,6 +33,35 @@
   正是当前混淆最严重的 P0 对比对；
 - water_injection val 仅 17 帧，六方案全零命中，只能靠补数据。
 
+### 1.4 数据集重标计划（2026-09-28 登记，待标注修复完成后一次性执行）
+
+> 触发：Label Studio 导出 2026-09-28-05-45（已归档 `datasets/label_studio_exports/`，本地不入库）。
+> 视频本体不变，仅标注变化；已比对全部 19 task 与当前标签（帧级 diff）。
+
+**标注状态**（LS task id → 视频）：
+
+- ✅ 已修复：#193 4cc6a009（36/375 帧）、#194 c1367d51（125/675 帧）、#201 39da2635（**194/294 帧，66%，实为重标——若本意是微调需回看**）；
+- ⏳ 待修：#202 071eb2d6（导出已含 14/261 帧小改，标注方称还会继续）、#205 e8ea5bb7、#207 152453e5（未动）；#203 f809e944 为**新视频**（flush 5 段），当前无 YOLO 检测 JSON，入集前需先跑 `annotate run`；
+- 其余 13 task 0 帧变化，帧率换算口径一致性已验证。
+
+**#198 f173153a 决定（已拍板）：移出 train、不进 val，隔离为遮挡回归池**
+
+- 理由：遮挡严重 = 特征源头缺失，训练教噪声、评估（val 仅 4 视频）被单个异常视频过度影响；但留作将来遮挡专项（组会①）改进后的回归测试用例——有标注、问题明确；
+- 落地：重建时把该视频的 labels/frames 移入 `occlusion/` 子目录（与 train/val/test 平级，不参与常规 load_split），文件留档不删。
+
+**一次性重建清单**（全部修复到位后执行，避免多次版本升级）：
+
+1. `annotate convert`（检测 JSON + 新导出）重建 train/val labels；
+2. f173153a → `occlusion/`（train 14→13 视频）；
+3. （若 #203 要入集）先 `annotate run` 生成检测 JSON，再 convert 并决定 split 归属；
+4. manifest 更新（`benchmark/manifests/actionmixed-auto/`）+ revision sha256 重算；
+5. `framework/testsets.yaml` 受影响条目（clean-v3/v4/roi-v4 等）版本升级；
+6. nodep 探针在新数据上重训验证（含 5-seed），时长先验（最短/最长双向）重拟合；
+7. GPU 复跑 + catalog 正式登记（依赖新数据版本）。
+
+> 注意：在重建完成前，当前数据集与已登记契约保持不变（198 仍在 train）——物理移动会立即令
+> validate_testsets 失败，故任何 split 变更都随重建一次做。
+
 ---
 
 ## 2. 当前最优方案
