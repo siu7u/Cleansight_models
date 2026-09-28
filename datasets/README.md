@@ -52,3 +52,30 @@ python download_modelscope_dataset.py --preset yolo
 手动 `git clone` 下载同样放这里：克隆到 `datasets/cleansight-yolo/` 后删除仓库元数据和上传
 缓存（`.git/`、`.gitattributes`、各组下的 `.ms_upload_cache`），只保留数据与文档文件。注意
 `git lfs pull` 需要跑完，否则 train/val 图像不完整。
+
+## 当前划分快照（v3.1，2026-09-28 定稿）
+
+> 身份锁定：revision `c30f62f5`（train+val）/ `df99637f`（含 test），catalog 以 `framework/testsets.yaml` 为准；
+> ModelScope `lhh010/cleansight-ActionMixed-auto`（v3.1 已发布）。逐视频 LS task id 溯源见数据集内 `task_ids.yaml`。
+
+| split | 视频数 | 帧数 | idle | water | flush | lb_insert | lb_withdraw | sb_cleaning | 来源 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| train | 14 | 9,646 | 6,546 | 0 | 930 | 1,289 | 437 | 444 | project-16 |
+| val | 3 | 3,140 | 2,080 | 0 | 184 | 495 | 206 | 175 | project-16 |
+| test | 8 | 2,639 | — | — | — | — | — | — | project-18（跨批次专项） |
+
+**train（14，LS task id → 视频前缀）**：#192 4ace5352 · #193 4cc6a009 · #194 c1367d51 · #195 5b181b9b · #196 789d58df · #197 15311df5 · #201 39da2635 · #202 071eb2d6 · **#203 f809e944（v3.1 新入集，266 帧 flush 52）** · #204 67aa31ca · #206 4894e7ba · #208 349f2a55 · #210 9c0f89a1 · #211 8634f3bc
+
+**val（3）**：#199 1b2c95ff · #205 e8ea5bb7 · #209 52d2541c
+
+**test（8，project-18 task#213-220）**：6f1a85e3 · 6d8c7af2 · ca09e5b5 · c7c853a4 · 935f9e44 · 67edf4f9 · ac38ca6b · 6d8b215c
+
+### 被剔除的（隔离区，不参与训练/评估）
+
+| 隔离区 | LS task | 视频前缀 | 帧数 | 原属 | 原因 |
+|---|---:|---|---:|---|---|
+| `occlusion/` | #198 | f173153a | 195 | train | 遮挡严重的 flush——特征源头缺失；留作遮挡专项改进后的回归用例 |
+| `deprecated/` | #207 | 152453e5 | 244 | val | 仅含废弃动作 water_injection（该类 train/val 已全部归零，id 位置保留） |
+
+> v3.1 相对 v3 的变更：#193/194/201/202/205 标注重生成（#201 大幅重标，water 帧归零）；#198/#207 隔离；#203 补录。
+> **v3.1 与 v3 指标不可比**——v3 口径的历史实验数字见 `docs/FEATURE_LAB.md`。
