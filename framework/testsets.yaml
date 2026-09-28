@@ -33,12 +33,12 @@ datasets:
   # revision 自 v3.1 起统一显式算法：无 test 条目 = train+val manifest 字节拼接 sha256，
   # 含 test 条目 = 三 split 拼接 sha256（旧 7b039550 无法从现行文件复现，系历史遗留值，
   # 本次一并修正；validate 不做 revision 重算，更新仅影响身份记录）。
-  # task#203 f809e944 视频文件缺失，本轮未入集，待补。
+  # 补录（同日）：task#203 f809e944 视频经 LS 取回后入 train（266 帧，flush 52）——train 14 视频 9,646 帧。
   temporal.actionmixed-auto-v3:
     family: temporal
     format: actionmixed_bbox
     dataset_version: cleansight-actionmixed-auto-v3
-    revision: a180e8c5562b7392fddc4734d00a0055cc08e6203c1f1bedd3b12295b2b202c8
+    revision: c30f62f52642caf17077ad4f814837a06d0b2a7b3fec3b93688a09d44ef1d412
     data_root: datasets/cleansight-ActionMixed-auto
     feature_mapping: actionmixed-bbox-8cls-v1
     input_dim: 40
@@ -52,7 +52,7 @@ datasets:
     family: temporal
     format: actionmixed_bbox
     dataset_version: cleansight-actionmixed-auto-roi-v1
-    revision: a180e8c5562b7392fddc4734d00a0055cc08e6203c1f1bedd3b12295b2b202c8
+    revision: c30f62f52642caf17077ad4f814837a06d0b2a7b3fec3b93688a09d44ef1d412
     data_root: datasets/cleansight-ActionMixed-auto
     feature_mapping: actionmixed-roi-grid-v1
     feature_layout: {rows: 2, cols: 3, channels: 3}
@@ -66,7 +66,7 @@ datasets:
     family: temporal
     format: actionmixed_bbox
     dataset_version: cleansight-actionmixed-auto-clean-v3
-    revision: a180e8c5562b7392fddc4734d00a0055cc08e6203c1f1bedd3b12295b2b202c8
+    revision: c30f62f52642caf17077ad4f814837a06d0b2a7b3fec3b93688a09d44ef1d412
     data_root: datasets/cleansight-ActionMixed-auto
     feature_mapping: clean_bbox_v3_scope_frame
     input_dim: 113
@@ -77,7 +77,7 @@ datasets:
     family: temporal
     format: actionmixed_bbox
     dataset_version: cleansight-actionmixed-auto-hand-v1
-    revision: a180e8c5562b7392fddc4734d00a0055cc08e6203c1f1bedd3b12295b2b202c8
+    revision: c30f62f52642caf17077ad4f814837a06d0b2a7b3fec3b93688a09d44ef1d412
     data_root: datasets/cleansight-ActionMixed-auto
     feature_mapping: actionmixed-bbox-hand-8cls-v1
     feature_blocks: 1
@@ -89,7 +89,7 @@ datasets:
     family: temporal
     format: actionmixed_bbox
     dataset_version: cleansight-actionmixed-auto-global-hand-v1
-    revision: a180e8c5562b7392fddc4734d00a0055cc08e6203c1f1bedd3b12295b2b202c8
+    revision: c30f62f52642caf17077ad4f814837a06d0b2a7b3fec3b93688a09d44ef1d412
     data_root: datasets/cleansight-ActionMixed-auto
     feature_mapping: actionmixed-bbox-global-hand-8cls-v1
     feature_blocks: 2
@@ -101,7 +101,7 @@ datasets:
     family: temporal
     format: actionmixed_bbox
     dataset_version: cleansight-actionmixed-auto-cnn-v1
-    revision: a180e8c5562b7392fddc4734d00a0055cc08e6203c1f1bedd3b12295b2b202c8
+    revision: c30f62f52642caf17077ad4f814837a06d0b2a7b3fec3b93688a09d44ef1d412
     data_root: datasets/cleansight-ActionMixed-auto
     feature_mapping: actionmixed-bbox-cnn-resnet18-v1
     feature_blocks: 3
@@ -113,7 +113,7 @@ datasets:
     family: temporal
     format: actionmixed_bbox
     dataset_version: cleansight-actionmixed-auto-hand-cnn-v1
-    revision: a180e8c5562b7392fddc4734d00a0055cc08e6203c1f1bedd3b12295b2b202c8
+    revision: c30f62f52642caf17077ad4f814837a06d0b2a7b3fec3b93688a09d44ef1d412
     data_root: datasets/cleansight-ActionMixed-auto
     feature_mapping: actionmixed-bbox-hand-cnn-v1
     feature_blocks: 4
@@ -130,7 +130,7 @@ datasets:
     family: temporal
     format: actionmixed_bbox
     dataset_version: cleansight-actionmixed-auto-v4
-    revision: 7cdebf9e1810a6594a1ba23d994e104a01010beeb6299b94313f7f3856689bfa
+    revision: df99637fd1c7a7da579df95971a0f3a5b2082a92727addf6e0b418f45c32bb83
     data_root: datasets/cleansight-ActionMixed-auto
     feature_mapping: ama-v4-scope-6c-60d
     feature_layout: {classes: 6, dim: 60}
@@ -142,7 +142,7 @@ datasets:
     family: temporal
     format: actionmixed_bbox
     dataset_version: cleansight-actionmixed-auto-roi-v4
-    revision: 7cdebf9e1810a6594a1ba23d994e104a01010beeb6299b94313f7f3856689bfa
+    revision: df99637fd1c7a7da579df95971a0f3a5b2082a92727addf6e0b418f45c32bb83
     data_root: datasets/cleansight-ActionMixed-auto
     feature_mapping: ama-v4-roi-6c-108d
     feature_layout: {classes: 6, dim: 108, rows: 2, cols: 3, channels: 3}

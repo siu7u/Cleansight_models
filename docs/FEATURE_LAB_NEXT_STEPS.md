@@ -44,7 +44,7 @@
 - ✅ manifest 重写 + revision 显式算法统一：v3 味 `a180e8c5`（train+val 拼接）、v4 味 `7cdebf9e`（三 split 拼接）
   ——旧 `7b039550` 系无法从现行文件复现的历史遗留值（tmp/_rev_*.py 已证），本次一并修正；
 - ✅ 全部 9 个 auto 条目 validate --testset 逐条通过；ModelScope 同步发布 v3.1；
-- ⏸️ #203 f809e944 未入集：**视频文件本地缺失**，无法跑 YOLO 检测，待补视频后再入；
+- ✅ #203 f809e944 补录（同日）：视频经送标平台溯源 + LS token 取回 → YOLO 检测（1061 帧源头/7 轨迹）→ convert 入 train（266 帧，flush 52）——train 14 视频 9,646 帧；staging 交叉验证 16/16 字节一致（此前手动重生成标签与官方 convert 完全吻合）；
 - ⏸️ 后续（依赖新数据版本）：nodep 重训验证、时长先验双向重拟合、GPU 复跑 + catalog 正式登记。
 
 > v3.1 与 v3 指标不可比；train/val 帧数 9,380 / 3,140（v3 为 9,575 / 3,384）；test 不变（8 视频 2,639 帧）。
