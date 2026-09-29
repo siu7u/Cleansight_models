@@ -139,8 +139,7 @@ ax.set_ylim(-0.3, N * ROW_H - 0.2)
 ax.set_yticks([]); ax.set_xticks([])
 ax.set_xlabel("帧号（各折长度不同；每折三行 = GT / 原始预测 / 时长过滤后）", fontsize=10.5)
 for s in ax.spines.values(): s.set_visible(False)
-ax.set_title("LOVO 18 折汇总 v2：时长先验过滤（P10）前后对比，按原始 edit 升序｜红框 = fold12(c1367d51, 重标修复视频)/fold09(789d58df, 最易折)",
-             fontsize=14, fontweight="bold", loc="left", pad=14)
+ax.set_title("v3.1 LOVO 17 折：双向时长过滤前后对比（按原始 edit 升序）", fontsize=14, fontweight="bold", loc="left", pad=14)
 handles = [plt.Rectangle((0,0),1,1, facecolor=c4(n)) for n in NAMES]
 fig.legend(handles, NAMES, fontsize=9.5, ncol=6, loc="lower center", bbox_to_anchor=(0.55, 0.012), frameon=False)
 
