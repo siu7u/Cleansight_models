@@ -13,6 +13,11 @@
 | `fig3_lovo_summary.png` | LOVO 18 折 GT vs 预测段汇总（按 edit 升序），红框标最难 fold12 (12.0) / 最易 fold09 (71.9) |
 | `fig4_lovo_summary_v2.png` | §11 时长过滤前后对比汇总（每折 GT/原始/过滤后三行段条），右栏标过滤后 edit 与 Δ，红框 = 受益最大难折 fold12/fold06 |
 | `lovo_probs_v2/foldXX_*.png` | v2 逐折概率-时间图：概率曲线 + GT/原始/时长过滤后三行段条，可视化 §11 过滤效果（原始版见 lovo_probs/） |
+
+以下为 **v3.1 数据版**（§13，2026-09-29）：
+
+| `fig5_lovo_summary_v31.png` | v3.1 版汇总：17 折 GT/原始/双向过滤(min+max)三行段条，按原始 edit 升序，红框 = fold12（c1367d51，重标修复视频 12→42）/ fold09（最易折） |
+| `lovo_probs_v31/foldXX_*.png` | v3.1 逐折概率-时间图：v3.1 模型概率曲线 + 双向时长过滤效果（v3 数据版对应 lovo_probs_v2/） |
 | `lovo_probs/foldXX_*.png` | 每折 held-out 视频的"各标签概率-时间"图：上=6 类 softmax 概率曲线 + GT 背景色带，下=GT vs 预测段条 |
 
 ## 生成方式（scripts/）
