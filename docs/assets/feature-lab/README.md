@@ -18,6 +18,11 @@
 
 | `fig5_lovo_summary_v31.png` | v3.1 版汇总：17 折 GT/原始/双向过滤(min+max)三行段条，按原始 edit 升序，红框 = fold12（c1367d51，重标修复视频 12→42）/ fold09（最易折） |
 | `lovo_probs_v31/foldXX_*.png` | v3.1 逐折概率-时间图：v3.1 模型概率曲线 + 双向时长过滤效果（v3 数据版对应 lovo_probs_v2/） |
+
+以下为**最终方案版**（§15 条件启用，2026-09-30）：
+
+| `fig6_lovo_summary_v31c.png` | 最终方案汇总：条件启用(碎段率>τ=3)过滤，中位 edit **50.00**，低碎段折保持 raw 零受损 |
+| `lovo_probs_v31c/foldXX_*.png` | 最终方案逐折图：条件启用版三行段条（碎段率≤3 的折第三行=原始预测） |
 | `lovo_probs/foldXX_*.png` | 每折 held-out 视频的"各标签概率-时间"图：上=6 类 softmax 概率曲线 + GT 背景色带，下=GT vs 预测段条 |
 
 ## 生成方式（scripts/）
