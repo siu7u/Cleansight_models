@@ -12,17 +12,26 @@ from typing import Dict, List, Tuple
 
 import yaml
 
+# 训练缓存的默认 split 集合（``train`` + ``val``）；留出集评估用 ``("test",)`` 单独构建。
+DEFAULT_ROI_SPLITS: Tuple[str, ...] = ("train", "val")
+
 
 def build_roi_dataset(
     group_dir: Path,
     classes: List[str],
     roi_size: int = 224,
     neg_ratio: float = 1.0,
+    splits: Tuple[str, ...] = DEFAULT_ROI_SPLITS,
+    seed: int = 0,
 ) -> Tuple["object", "object", List[str], dict]:
     """
     从 YOLO 数据集中为指定类别提取 ROI 区域。
 
-    返回 (X, y, class_names, stats)；X/y 为 numpy 数组（BGR 图像块与多标签）。
+    :param splits: 从哪些 YOLO split 目录取图（默认 ``("train", "val")``；留出集评估传 ``("test",)``
+        —— 见 ``docs/EVAL.md``：缓存由 train+val 构建、再随机切分属于 in-sample 评估）。
+    :param seed: 负样本随机裁剪的随机种子。此前未播种导致每次重建的负样本都不同，
+        评估数字不可复现；固定种子后同一份数据重建结果一致。
+    :return: ``(X, y, class_names, stats)``；X/y 为 numpy 数组（BGR 图像块与多标签）。
     """
 
     import cv2
@@ -48,15 +57,18 @@ def build_roi_dataset(
     target_names = [c for c in classes if c in name_to_id]
     print(f"[build] 目标类别: {target_names} (IDs: {target_ids})")
 
+    rng = np.random.default_rng(seed)
     samples = []
     stats = {
         "total_frames": 0,
         "per_class_pos": {c: 0 for c in target_names},
         "neg_frames": 0,
         "neg_rois": 0,
+        "splits": list(splits),
+        "seed": seed,
     }
 
-    for split in ("train", "val"):
+    for split in splits:
         img_dir = group_dir / "images" / split
         lbl_dir = group_dir / "labels" / split
         if not img_dir.is_dir():
@@ -116,10 +128,10 @@ def build_roi_dataset(
                 stats["neg_frames"] += 1
                 num_negs = max(1, int(neg_ratio))
                 for _ in range(num_negs):
-                    crop_w = np.random.randint(roi_size, max(roi_size + 1, w // 3))
-                    crop_h = np.random.randint(roi_size, max(roi_size + 1, h // 3))
-                    x1 = np.random.randint(0, max(1, w - crop_w))
-                    y1 = np.random.randint(0, max(1, h - crop_h))
+                    crop_w = int(rng.integers(roi_size, max(roi_size + 1, w // 3)))
+                    crop_h = int(rng.integers(roi_size, max(roi_size + 1, h // 3)))
+                    x1 = int(rng.integers(0, max(1, w - crop_w)))
+                    y1 = int(rng.integers(0, max(1, h - crop_h)))
                     roi = img[y1:y1 + crop_h, x1:x1 + crop_w]
                     roi = cv2.resize(roi, (roi_size, roi_size))
                     samples.append((roi, np.zeros(len(target_names), dtype=np.float32)))

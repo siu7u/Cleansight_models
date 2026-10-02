@@ -37,6 +37,10 @@ from .model import BACKBONE_CONFIGS, FeatureFusionModel
 # 分类侧保留 val_loss 以兼容既有配方。
 CLASSIFICATION_BEST_METRICS: tuple[str, ...] = ("val_loss", *classification_training_keys())
 
+# ``data.eval_split`` 可选值 = YOLO 分组数据集的 split 目录名。``train``/``val`` 用于诊断
+# （与留出集对照看乐观程度），``test`` 是唯一可作为泛化读数的留出集。
+ROI_EVAL_SPLITS: tuple[str, ...] = ("train", "val", "test")
+
 
 def best_metric_mode(name: str) -> str:
     """选点方向：``val_loss`` 越小越好，其余（precision/recall/f1/exact_match）越大越好。"""
@@ -102,6 +106,12 @@ class ClassificationPipeline(Pipeline):
         if best_metric is not None and best_metric not in CLASSIFICATION_BEST_METRICS:
             raise ValueError(
                 f"train.best_metric 必须是 {list(CLASSIFICATION_BEST_METRICS)} 之一，实际 {best_metric!r}"
+            )
+        eval_split = data.get("eval_split")
+        if eval_split is not None and eval_split not in ROI_EVAL_SPLITS:
+            raise ValueError(
+                f"data.eval_split 必须是 {list(ROI_EVAL_SPLITS)} 之一（YOLO 分组数据集的 split 目录名），"
+                f"实际 {eval_split!r}"
             )
 
     def _dataset_dir(self, data_cfg: dict) -> Path:
@@ -322,7 +332,13 @@ class ClassificationPipeline(Pipeline):
         return history, best_state, info
 
     def predict(self, cfg: dict, ckpt: str, device) -> PredictionOutput:
-        """加载 checkpoint，对 ROI 数据推理，返回含逐类 P/R/F1 的事实结果。"""
+        """加载 checkpoint，对 ROI 数据推理，返回含逐类 P/R/F1 的事实结果。
+
+        ``data.eval_split``（可选）指定**留出集评估**：只从该 YOLO split 目录构建 ROI 并现算，
+        不落缓存、不碰 train+val 缓存。未设置时维持历史行为——用 ``runs/feature_fusion/datasets/``
+        里由 train+val 构建的缓存整体评估，那是 **in-sample 读数**（同源帧的近重复裁剪会同时出现在
+        训练与评估两侧），不能当作泛化能力。
+        """
 
         model_cfg = cfg["model"]
         data_cfg = cfg["data"]
@@ -350,9 +366,9 @@ class ClassificationPipeline(Pipeline):
         model.to_device(str(device))
 
         ds_base = self._dataset_dir(data_cfg)
-        try:
-            X, y, loaded_classes = load_dataset(actual_classes, ds_base)
-        except FileNotFoundError:
+        eval_split = data_cfg.get("eval_split")
+        if eval_split:
+            # 留出集评估：现算不复用缓存，避免与 train+val 缓存（in-sample）混用。
             group_dir = Path(data_cfg["group_dir"])
             if not group_dir.is_absolute():
                 group_dir = Path(__file__).resolve().parents[3] / group_dir
@@ -361,7 +377,22 @@ class ClassificationPipeline(Pipeline):
                 actual_classes,
                 roi_size=int(meta.get("input_size", model_cfg.get("roi_size", 224))),
                 neg_ratio=float(data_cfg.get("neg_ratio", 1.0)),
+                splits=(str(eval_split),),
             )
+            print(f"[predict] 留出集评估 split={eval_split}（in-sample 缓存不参与）")
+        else:
+            try:
+                X, y, loaded_classes = load_dataset(actual_classes, ds_base)
+            except FileNotFoundError:
+                group_dir = Path(data_cfg["group_dir"])
+                if not group_dir.is_absolute():
+                    group_dir = Path(__file__).resolve().parents[3] / group_dir
+                X, y, loaded_classes, _ = build_roi_dataset(
+                    group_dir,
+                    actual_classes,
+                    roi_size=int(meta.get("input_size", model_cfg.get("roi_size", 224))),
+                    neg_ratio=float(data_cfg.get("neg_ratio", 1.0)),
+                )
         actual_classes = loaded_classes
 
         native = self._evaluate(model, X, y, actual_classes, device)

@@ -111,3 +111,48 @@ def test_roi_dataset_accepts_both_names_forms(tmp_path):
     assert names_a == names_b == ["air_gun"]
     assert xs.shape == xd.shape and ys.shape == yd.shape
     assert np.array_equal(xs, xd) and np.array_equal(ys, yd)
+
+
+def test_roi_dataset_splits_selection_and_negative_seed(tmp_path):
+    """``splits`` 只取指定目录；负样本随机裁剪**同 seed 可复现**（留出集评估可复现的前提）。
+
+    背景：负样本此前用未播种的 ``np.random.randint``，每次重建结果都不同，
+    留出集评估数字无法复现（2026-09-27 修复，新增 ``seed`` 参数）。
+    """
+
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+
+    from framework.cleansight_eval.classification.data import build_roi_dataset
+
+    root = tmp_path / "group"
+    root.mkdir(parents=True)
+    (root / "data.yaml").write_text("train: images/train\nval: images/val\ntest: images/test\nnc: 2\n"
+                                    "names:\n  0: syringe\n  1: air_gun\n", encoding="utf-8")
+    for split, count in (("train", 4), ("test", 3)):
+        (root / "images" / split).mkdir(parents=True)
+        (root / "labels" / split).mkdir(parents=True)
+        for index in range(count):
+            # 用非均匀底图，否则随机裁剪出的负样本块可能全同、掩盖播种问题。
+            image = np.arange(64 * 64 * 3, dtype=np.uint8).reshape(64, 64, 3) + index
+            cv2.imwrite(str(root / "images" / split / f"{split}{index}.jpg"), image)
+            # 只给第 0 张标 air_gun，其余为无目标帧 → 触发负样本随机裁剪
+            label = "1 0.3 0.3 0.2 0.2\n" if index == 0 else ""
+            (root / "labels" / split / f"{split}{index}.txt").write_text(label, encoding="utf-8")
+
+    # splits 只取 test：3 张图 → 1 正 + 2 负
+    x_test, y_test, _, stats_test = build_roi_dataset(root, ["air_gun"], roi_size=32, splits=("test",))
+    assert stats_test["splits"] == ["test"]
+    assert stats_test["neg_frames"] == 2
+    assert x_test.shape[0] == 3
+
+    # train+val+test 全取 → 7 张图（val 目录不存在，自动跳过）
+    x_all, _, _, _ = build_roi_dataset(root, ["air_gun"], roi_size=32, splits=("train", "val", "test"))
+    assert x_all.shape[0] == 7
+
+    # 同 seed 两次构建必须逐字节一致；不同 seed 的负样本应不同
+    first, _, _, _ = build_roi_dataset(root, ["air_gun"], roi_size=32, splits=("test",), seed=7)
+    second, _, _, _ = build_roi_dataset(root, ["air_gun"], roi_size=32, splits=("test",), seed=7)
+    other, _, _, _ = build_roi_dataset(root, ["air_gun"], roi_size=32, splits=("test",), seed=8)
+    assert np.array_equal(first, second), "同 seed 两次构建结果不一致，留出集评估不可复现"
+    assert not np.array_equal(first, other), "换 seed 负样本未变化，seed 参数未生效"

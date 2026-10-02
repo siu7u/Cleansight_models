@@ -12,6 +12,9 @@ from __future__ import annotations
 
 import json
 
+import pytest
+import yaml
+
 from benchmark.evaluators.temporal import compute_temporal_metrics_by_item
 from framework.cleansight_eval.core.history import temporal_history_columns
 from framework.cleansight_eval.core.metrics import (
@@ -23,7 +26,11 @@ from framework.cleansight_eval.core.metrics import (
     training_metric_name,
 )
 from framework.cleansight_eval.temporal.training_validation import summarize_training_metrics
-from framework.cleansight_eval.temporal.util import VALID_BEST_METRICS
+from framework.cleansight_eval.temporal.util import (
+    DEFAULT_BEST_METRIC,
+    VALID_BEST_METRICS,
+    resolve_best_metric,
+)
 
 LABELS = ["idle", "brush", "flush"]
 TRUTH = {
@@ -84,6 +91,68 @@ def test_best_metric_vocabulary_is_derived_from_registry():
     for training_key in VALID_BEST_METRICS:
         # 每个可选指标都必须能被「列名 → 评测指标名」解析，且已在注册表登记。
         assert training_metric_name(training_key) in TEMPORAL_METRIC_SPECS
+
+
+def test_default_best_metric_has_a_single_source():
+    """选点默认口径只有一个来源（框架层常量），管线/工具/YAML 不得各自兜底。
+
+    背景（2026-09 修复）：此前同一份实验有 4 个入口、3 个默认值——YAML 写死
+    ``val_f1_0.5``（326 run 实测与 test 的 Spearman ρ 仅 0.199）、代码兜底 ``val_acc``
+    （峰值常落在第 1 轮）、工具常量 ``val_f1_0.5``、文档里的 ``val_edit``。换个入口跑就会
+    存下不同的 ``best.pt``，且**不报错**。本测试把收敛结果钉死。
+    """
+
+    from pathlib import Path
+
+    assert DEFAULT_BEST_METRIC in VALID_BEST_METRICS
+    assert resolve_best_metric({}) == DEFAULT_BEST_METRIC
+    assert resolve_best_metric(None) == DEFAULT_BEST_METRIC
+    assert resolve_best_metric({"best_metric": "val_f1_0.25"}) == "val_f1_0.25"
+    with pytest.raises(ValueError):
+        resolve_best_metric({"best_metric": "val_not_registered"})
+
+    root = Path(__file__).resolve().parents[1]
+
+    # 两条训练管线：不得再内联兜底值（历史兜底是 val_acc），必须走共享解析。
+    import re
+
+    for name in ("full_sequence_pipeline.py", "sliding_window_pipeline.py"):
+        text = (root / "framework" / "cleansight_eval" / "temporal" / name).read_text(encoding="utf-8")
+        assert not re.search(r'(?:train|train_cfg)\.get\("best_metric"', text), (
+            f"{name} 仍内联 best_metric 兜底值"
+        )
+        assert "resolve_best_metric(" in text, f"{name} 未使用共享选点口径"
+
+    # 矩阵工具：从框架层导入常量，不得自定义默认值。
+    tool = (root / "tools" / "run_strategy_matrix.py").read_text(encoding="utf-8")
+    assert "from framework.cleansight_eval.temporal.util import DEFAULT_BEST_METRIC" in tool, (
+        "矩阵工具未从框架层导入选点默认值"
+    )
+
+
+def test_experiment_yaml_best_metric_is_registered_and_not_the_untranferable_legacy_default():
+    """实验 YAML 的选点口径必须是注册表里的合法值，且不得回退到已证不可迁移的旧默认。
+
+    ``val_f1_0.5`` 与 test 的 Spearman ρ 仅 0.199（§23.1，326 run），已从定版杠杆表移除
+    （§25.1）。要做"旧口径对照"这类消融，走工具参数 ``--best-metric`` 显式覆盖，不要写进
+    配置默认值——否则下一次直接跑 YAML 的人会静默拿到近随机的选点。
+    """
+
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    configs = sorted((root / "framework" / "experiments").glob("*.yaml"))
+    assert configs, "未找到实验配置"
+    for config in configs:
+        raw = yaml.safe_load(config.read_text(encoding="utf-8")) or {}
+        value = (raw.get("train") or {}).get("best_metric")
+        if value is None:
+            continue  # 未声明 = 用框架层默认值，由上一个测试保证
+        assert value in VALID_BEST_METRICS, f"{config.name} 选点口径未注册: {value!r}"
+        assert value != "val_f1_0.5", (
+            f"{config.name} 回退到已证不可迁移的旧选点口径 val_f1_0.5（ρ=0.199，§23.1）；"
+            f"消融请用 --best-metric 显式覆盖"
+        )
 
 
 def test_history_columns_cover_every_selectable_metric():

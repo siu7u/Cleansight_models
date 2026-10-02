@@ -47,4 +47,4 @@ train:
   lr: 0.0005
   grad_clip: 5.0
   weight_decay: 0.0001
-  best_metric: val_f1_0.5
+  best_metric: val_edit  # 定版选点口径（§25.1 第 4 行）；第二十轮用历史值 val_f1_0.5

@@ -14,6 +14,7 @@ from benchmark.cli import eval as eval_cli
 from benchmark.cli import matrix as matrix_cli
 from cleansight_eval.cli import train as train_cli
 from cleansight_eval.core.checkpoint import load_training_checkpoint
+from cleansight_eval.temporal.util import DEFAULT_BEST_METRIC
 from benchmark.core.result import MetricState
 
 _ACTIONS = ["idle", "air_injection", "flush", "long_brush_insert", "long_brush_withdraw", "short_brush_cleaning"]
@@ -87,7 +88,7 @@ def test_end_to_end(tmp_path):
     assert (run_dir / "checkpoints" / "last.pt").exists()
     status = json.loads((run_dir / "status.json").read_text())
     assert status["state"] == "succeeded"
-    assert status["best_metric"]["name"] == "val_acc"
+    assert status["best_metric"]["name"] == DEFAULT_BEST_METRIC
     assert status["training_curves"] == str(run_dir / "training_curves.png")
     payload, _meta = load_training_checkpoint(run_dir / "checkpoints" / "last.pt")
     assert payload["epoch"] == 1

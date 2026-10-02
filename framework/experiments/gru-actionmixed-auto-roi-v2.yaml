@@ -46,4 +46,4 @@ train:
   window: 16          # 必须 ≤ 最短视频的采样帧数（auto v3 数据最短约 195 帧）
   weight_decay: 0.0001   # 健康配方（同 roi-grid-v1 正式配置）
   patience: 4            # 按 val_loss 早停
-  best_metric: val_f1_0.5  # 段级指标选 best.pt（val_acc 会偏爱 idle 坍缩解）
+  best_metric: val_edit  # 定版选点口径（§25.1 第 4 行）；历史值 val_f1_0.5 与 test 的 ρ 仅 0.199

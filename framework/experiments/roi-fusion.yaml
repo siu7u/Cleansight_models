@@ -22,6 +22,10 @@ data:
   classes: [air_gun, brush_tip_out]
   neg_ratio: 1.0         # 负样本比例(相对正样本)
   val_split: 0.2
+  # eval_split 留空 = 历史行为：用 train+val 构建的缓存整体评估，**这是 in-sample 读数**
+  # （同源帧的近重复裁剪会同时出现在训练与评估两侧），不能当作泛化能力。
+  # 要拿泛化读数就显式指定留出集（见 roi-fusion-heldout.yaml）：
+  # eval_split: test
 
 evaluation:
   mode: exploratory      # 正式 testset 契约待淘汰类确定后登记
