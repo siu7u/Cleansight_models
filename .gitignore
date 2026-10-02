@@ -162,6 +162,14 @@ external_checkpoints/**
 !framework/experiments/
 !framework/experiments/**
 
+# ---------------------------------------------------------------------------
+# docs/experiments/ 是**实验报告**（长期有效、被 TOPIC_*/周简报跨周引用），不是训练输出目录。
+# `**/experiments/` 这条规则本意只忽略训练输出，此前漏了这条白名单 → 该目录下 19 份报告
+# （含帧准确率攻关系列 frame-acc/ 与架构调研）长期未被版本控制，clone 后文档链接全为死链。
+# ---------------------------------------------------------------------------
+!docs/experiments/
+!docs/experiments/**
+
 
 # Added by ggshield
 .cache_ggshield
