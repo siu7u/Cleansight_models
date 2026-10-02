@@ -20,9 +20,14 @@
 | 契约版本（feature_mapping） | 维度 | 提取范围 | 语义要点 | 代码 | 数据集登记 | 训练配置 |
 |---|---|---|---|---|---|---|
 | `actionmixed-bbox-8cls-v1` | 40 | 整个画面 | 每类取面积最大框 `[presence,cx,cy,w,h]` | `temporal/data.py` `featurize_frame_bbox` | `temporal.actionmixed-auto-v3` | `gru/mstcn/transformer-actionmixed-auto.yaml` |
-| `actionmixed-roi-grid-v1` | 144 | 整个画面（2×3 网格） | 每 (类,区域) 统计 `[presence,count,max_area]` | `features/roi_bbox.py` | `temporal.actionmixed-auto-roi-v1` | `*-actionmixed-auto-roi.yaml` |
+| `actionmixed-roi-grid-v1` | 144 | 整个画面（2×3 网格） | 每 (类,区域) 统计 `[presence,count,max_area]` | `features/roi_bbox.py` | `temporal.actionmixed-auto-roi-v1`；`temporal.actionmixed-union-roi-v1`（跨来源合并训练集，2026-09-29 新增，同一契约、只换数据根） | `*-actionmixed-auto-roi.yaml` |
 | `actionmixed-roi-grid-v2` | 96 | 整个画面（**可见性重排**：高频 3 类 3×3、低频 5 类全局 1 区） | 每类块宽不等（27/3），通道语义同 v1 | `features/roi_bbox_v2.py` | `temporal.actionmixed-auto-roi-v2` | `gru-actionmixed-auto-roi-v2.yaml` |
+| `actionmixed-roi-grid-v3` | 159 | 整个画面（**高频 3 类 4×4、低频 5 类全局 1 区**） | 每类块宽不等（48/3），通道语义同 v1；与 v2 只差高频网格（3×3→4×4）。实测：v2 与「v2 遮低频类」相对 v1（144 维）**+2.37 / +2.82pp（8/8 胜，p=0.0078）**，两者彼此无差异 → 杠杆是**高频类的空间分辨率** | `features/roi_bbox_v3.py` | `temporal.actionmixed-auto-roi-v3` | 复用 `mstcn-actionmixed-auto-roi.yaml` + `-S` 覆盖 |
+| `actionmixed-combo-v1` | 224 | **拼接**：左 128 维 `roi-grid-v4` + 右 96 维 `actionmixed-boxset-v1` | 用于回答"原始框信息里有没有 ROI 直方图没表达的增量"。实测与 `roi-grid-v4` **无显著差异**（配对 Δ 中位 −1.29pp，3/5，p=0.844）→ **直方图已足够**，框间关系没有可测增量 | `features/combo.py` | `temporal.actionmixed-auto-combo-v1` | `mstcn-actionmixed-auto-roi.yaml` + `-S` 覆盖 |
+| `actionmixed-boxset-v1` | 96 | **原始框集合**（每帧面积最大的前 8 个框，按面积降序填充） | 每槽 `[one-hot(8) | cx | cy | w | h]` = 12 维 × 8 槽；空槽全零（模型据此算掩码）。**不丢框间关系**：手工 ROI 直方图把每帧压成"(类, 区域) 计数与极值"，丢掉了谁和谁同时出现、谁大谁小；本契约配合可学习集合编码器（`models/boxset.py`）由模型自学。坐标不做标准化（故该契约不走 z-score） | `features/boxset.py` + `models/boxset.py` | `temporal.actionmixed-auto-boxset-v1` | `mstcn-actionmixed-auto-roi.yaml` + `-S model.type=boxset_mstcn2` |
+| `actionmixed-roi-grid-v4` | 128 | 整个画面（高频 3 类 3×3、低频 5 类全局 1 区；**通道替换**） | 通道为 `[count, max_area, w, h]`——把 v2 里**完全冗余**的 `presence`（≡count>0）换成最大面积框的宽/高，补上 `max_area=w×h` 丢掉的**长宽比**；每类块宽 36/4。源域筛选（与 test 无关）相对 `p,c,a` **+0.82pp、8/2 胜、p=0.084** | `features/roi_bbox_v4.py` | `temporal.actionmixed-auto-roi-v4` | 复用 `mstcn-actionmixed-auto-roi.yaml` + `-S` 覆盖 |
 | `actionmixed-roi-grid-presence-v1` | 48 | 整个画面（2×3 网格，**只留 presence**） | roi-v1 的通道 0 切片：8 类 × 6 区域的存在性平面；丢弃 `count` / `max_area` | `features/roi_bbox.py` `build_roi_presence_frame_features` | `temporal.actionmixed-auto-roi-presence-v1` | 复用 `mstcn-actionmixed-auto-roi.yaml` + `-S` 覆盖（见 FEATURE_STRATEGY_COMPARE 第十八轮） |
+| `actionmixed-roi-grid-delta-v1` | 240 | 整个画面（2×3 网格）+ **时间导数** | 每 (类,区域) `[presence,count,max_area,d_count,d_max_area]`；`d = x[t] − x[t−1]`，首帧约定 0；只对 count/max_area 取 Δ。**因果但有 1 帧状态**（与 roi-v1 的"逐帧独立"不同） | `features/roi_bbox.py` `build_roi_grid_delta_features` | `temporal.actionmixed-auto-roi-delta-v1` | 复用 `-S` 覆盖（见本周简报） |
 | `actionmixed-bbox-hand-8cls-v1` | 40 | 仅手部周围 | 只编码 hand 框扩张 1.5 倍区域内的框，坐标相对区域归一化；无 hand 全零 | `features/hand_bbox.py` | `temporal.actionmixed-auto-hand-v1` | `gru-actionmixed-auto-hand.yaml` |
 | `actionmixed-bbox-global-hand-8cls-v1` | 80 | 全局 + 手部 | 全局 40 维与手部 40 维拼接（每类 10 维块） | `features/hand_bbox.py` + `data.py` 拼接 | `temporal.actionmixed-auto-global-hand-v1` | `gru-actionmixed-auto-global-hand.yaml` |
 | `actionmixed-bbox-embed-mbv3s-v1` | 616 | 整个画面（bbox）+ 逐帧整图 | 左 40 维 bbox 块（同 1.1）+ 右 576 维冻结 mobilenet_v3_small 整图 embedding；进 GRU 前经 64 维线性投影头；`mask_targets` 只作用 bbox 块 | `features/image_embed.py` + `models/gru.py`（投影头） | `temporal.actionmixed-v2-embed-mbv3s-v1` | `gru-actionmixed-embed.yaml` |
@@ -153,7 +158,7 @@ E1 `temporal.actionmixed-v2-embed-mbv3s-v1` 616 维），运行目录 `runs/embe
 - 两臂 6/6 run 零坍缩；E1 早停更晚（8~9 epoch vs 5）说明投影头确实在学。
 - **限制**：机制床与正式 v3 auto 不同源、CPU 口径、3 seed、E2/E3 未跑——
   不能并入方案b 正式数字。完整证据与复现命令见
-  [`EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md`](../EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md)。
+  [`EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md`](../experiments/EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md)。
 
 ## 3. 新增方案检查清单（后续追加时照此执行）
 

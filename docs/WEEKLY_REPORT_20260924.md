@@ -52,7 +52,7 @@ revision `6375eba9…`，test 8 视频。
 
 ## 2. 主线二：特征提取方式与精度杠杆（09-23，结题 09-23）
 
-**产出**：[`docs/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md)（13 杠杆 × 多 seed）、
+**产出**：[`docs/experiments/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](experiments/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md)（13 杠杆 × 多 seed）、
 逐轮机制回写 [`docs/FEATURE_STRATEGY_COMPARE.md`](FEATURE_STRATEGY_COMPARE.md)（第十三~二十七轮）。
 
 **规模**：**新增 122 个 run / 128 份正式评估**（另复用容量研究既有批次作对照），全部 CPU。
@@ -91,7 +91,7 @@ revision `6375eba9…`，test 8 视频。
 
 ## 3. 主线三：TimesFM 时序基础模型可行性探针（09-24）
 
-**产出**：[`docs/EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md`](EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md)（模型
+**产出**：[`docs/experiments/EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md`](experiments/EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md)（模型
 `google/timesfm-2.5-200m-pytorch`，Apache-2.0 权重；4 个 val 视频 × 4 条派生序列；全部 CPU）。
 
 **判定：预测式预警路线证伪，不建议引入主线。** 四条证据：
@@ -124,7 +124,7 @@ revision `6375eba9…`，test 8 视频。
 | 分类链修复 | `_fit` 嵌套 state_dict 崩溃、`predict` 结构超参缺失、mmap + 逐样本转换（内存 ~20 GiB → 4.2 GiB） | [`classification/data.py`](../framework/cleansight_eval/classification/data.py)、[`classification/pipeline.py`](../framework/cleansight_eval/classification/pipeline.py)、[`benchmark/evaluators/classification.py`](../benchmark/evaluators/classification.py) |
 | 新增旋钮 | `data.train_video_fraction`（学习曲线）、序列归一化、`class_weight_clip` | [`core/config.py`](../framework/cleansight_eval/core/config.py)、[`temporal/util.py`](../framework/cleansight_eval/temporal/util.py)、[`temporal/full_sequence_pipeline.py`](../framework/cleansight_eval/temporal/full_sequence_pipeline.py)、[`temporal/sliding_window_pipeline.py`](../framework/cleansight_eval/temporal/sliding_window_pipeline.py) |
 | 新增探针工具 | 6 个：[`probe_channel_subsets`](../tools/probe_channel_subsets.py) / [`probe_boundary_error`](../tools/probe_boundary_error.py) / [`probe_selection_transfer`](../tools/probe_selection_transfer.py) / [`probe_seed_ensemble`](../tools/probe_seed_ensemble.py) / [`probe_segment_visibility`](../tools/probe_segment_visibility.py) / [`probe_offline_postprocess`](../tools/probe_offline_postprocess.py)，**各配单测**；另新增 [`compare_runs.py`](../tools/compare_runs.py) | [`tools/`](../tools/)、[`tests/`](../tests/) |
-| 文档回写 | [`EVAL.md`](EVAL.md)、[`YAML_CONFIG.md`](../usage/YAML_CONFIG.md)、[`features/README.md`](features/README.md)、[`FEATURE_STRATEGY_COMPARE.md`](FEATURE_STRATEGY_COMPARE.md)、[`MODELSET_OVERVIEW.md`](MODELSET_OVERVIEW.md) | [`docs/`](README.md)、[`usage/`](../usage/) |
+| 文档回写 | [`EVAL.md`](EVAL.md)、[`YAML_CONFIG.md`](../usage/YAML_CONFIG.md)、[`features/README.md`](features/README.md)、[`FEATURE_STRATEGY_COMPARE.md`](FEATURE_STRATEGY_COMPARE.md)、[`MODELSET_OVERVIEW.md`](MODELSET_OVERVIEW.md) | [`docs/`](experiments/frame-acc/README.md)、[`usage/`](../usage/) |
 | 已知未修 | `--resume` 语义错位（仅记录）；学习曲线协议待改随机子集 | [`MSTCN_CAPACITY_STUDY.md`](mstcn-capacity/MSTCN_CAPACITY_STUDY.md) §0.1/§0.2 |
 
 ## 5. 仓库状态与风险（本周最需要处置的一条）
@@ -194,11 +194,11 @@ revision `6375eba9…`，test 8 视频。
 ## 8. 引用来源
 
 - [`docs/mstcn-capacity/MSTCN_CAPACITY_STUDY.md`](mstcn-capacity/MSTCN_CAPACITY_STUDY.md)（容量轴，09-22 合并定版）
-- [`docs/EXPERIMENT_REPORT_MSTCN_CAPACITY_20260922.md`](EXPERIMENT_REPORT_MSTCN_CAPACITY_20260922.md)（容量轴实验报告，09-23 回写）
-- [`docs/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md)（13 杠杆定版）
+- [`docs/experiments/EXPERIMENT_REPORT_MSTCN_CAPACITY_20260922.md`](experiments/EXPERIMENT_REPORT_MSTCN_CAPACITY_20260922.md)（容量轴实验报告，09-23 回写）
+- [`docs/experiments/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](experiments/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md)（13 杠杆定版）
 - [`docs/FEATURE_STRATEGY_COMPARE.md`](FEATURE_STRATEGY_COMPARE.md)（第十三~二十七轮逐轮机制）
-- [`docs/EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md`](EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md)（TimesFM 探针）
-- [`docs/EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md`](EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md)（E0/E1 机制床）
+- [`docs/experiments/EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md`](experiments/EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md)（TimesFM 探针）
+- [`docs/experiments/EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md`](experiments/EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md)（E0/E1 机制床）
 - 口径与索引回写：[`docs/EVAL.md`](EVAL.md)、[`usage/YAML_CONFIG.md`](../usage/YAML_CONFIG.md)、[`docs/features/README.md`](features/README.md)、[`docs/features/INPUT_DESIGN_V3_REVIEW_20260924.md`](features/INPUT_DESIGN_V3_REVIEW_20260924.md)
 - **图表库**：[`docs/figures/README.md`](figures/README.md)（本报告引用的 7 张图及其 JSON 旁证、生成脚本 [`tools/plot_report_figures.py`](../tools/plot_report_figures.py)）
-- **文档总导航**：[`docs/README.md`](README.md)
+- **文档总导航**：[`docs/README.md`](experiments/frame-acc/README.md)

@@ -59,6 +59,17 @@ pipeline 不实现正式 `evaluate()`。
   T-MSE），把训练配方随架构走；`forward` 仍守 `[B,T,F]->[B,T,C]`，只能用于**全序列**。
 - **Transformer**（非因果）：标准 Encoder + 位置编码，输入输出同为逐帧序列，只能用于**全序列**。
 
+架构调研（2026-09-27）另加两个全序列实现，两者都在
+[`EXPERIMENT_REPORT_ARCH_SURVEY_20260927.md`](experiments/EXPERIMENT_REPORT_ARCH_SURVEY_20260927.md) 里被**实测否定**
+（保留作为"已试过"的记录与后续对照的基线，不代表推荐）：
+
+- **ASFormer**（`asformer`，非因果）：局部膨胀卷积 + 全局自注意力的编码器，接多级交叉注意力精化
+  解码器；专属键 `heads` / `num_encoders` / `num_decoders`。实测 F1@0.1 −11.96pp（p=0.0212）。
+- **动作性解耦双分支**（`actionness_tcn`，非因果）：MS-TCN++ 主干逐参数同构，把输出重参数化为
+  `P(idle)=1−a(t)`、`P(c)=a(t)·softmax(class_logits)`；`forward` 返回**已归一化的对数概率**
+  （可直接喂 `CrossEntropyLoss`，因其内部 `log_softmax` 对归一化向量是恒等映射）；专属键
+  `actionness_aux_weight`（`0.0` = 纯重参数化）。实测无显著增益。
+
 ## 1.2 新接入一个时序模型：要实现什么
 
 ### A. 新建 `temporal/models/<你的名字>.py`
@@ -129,7 +140,7 @@ evaluation: { mode: formal }
 - **选点口径是一等口径参数**：它决定"留哪个 epoch 的权重"，同一次训练换它能移动 headline **9.63 分**
   （配对 p=0.0107）；现行默认 `val_f1_0.5` 与 test 的 Spearman ρ 仅 **0.199**，建议改用 `val_edit`。
   报告里**必须与指标一起写明选点口径**。详见 [`usage/YAML_CONFIG.md`](../usage/YAML_CONFIG.md) 的
-  `train.best_metric` 条目与 [`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md) §2.4。
+  `train.best_metric` 条目与 [`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](experiments/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md) §2.4。
 
 ---
 

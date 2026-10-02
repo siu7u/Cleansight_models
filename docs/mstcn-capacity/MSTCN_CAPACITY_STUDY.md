@@ -41,7 +41,7 @@ h128 vs h32 逐 (seed,视频) 配对 28/10、p=0.0026，h256 与 h128 等价（p
 | 7 | 分类真实数据 | ⚠️ 链路已跑通，但**评估是 in-sample**；待办：给 `test` split 单独建缓存 |
 | 8 | 既有配方容量对照 | ✅ 16 个点全部完成（h16…h256 × 3 seed） |
 | 9 | 输入维度轴 | ✅ 成本侧 + 性能侧都补齐（40 vs 144 配对检验） |
-| 10 | 图像 embedding（616 维）训练 | ✅ 已证实无需补：`runs/embed_ablation` + `docs/EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md` 已有 E0/E1 对照 |
+| 10 | 图像 embedding（616 维）训练 | ✅ 已证实无需补：`runs/embed_ablation` + `docs/experiments/EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md` 已有 E0/E1 对照 |
 
 ---
 
@@ -121,7 +121,7 @@ h128 vs h32 逐 (seed,视频) 配对 28/10、p=0.0026，h256 与 h128 等价（p
 | clean_mstcn_bilstm | **0** | 只有 `external_checkpoints/mstcn-bilstm-offline/` 的外部 `.pt` |
 
 > **补注（2026-09-24）**：本表是 **2026-09-19（第 1 部分）** 的磁盘快照，`mstcn2` 那一行**已过期**——
-> 随后的特征/精度杠杆轮次跑了 **122 个 run**（[`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](../EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md)），
+> 随后的特征/精度杠杆轮次跑了 **122 个 run**（[`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](../experiments/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md)），
 > `mstcn2` 不但已有训练权重，还是**当前最佳架构**（`s4l10 h128` @331 万参：edit 51.47、逐 seed 摆幅 0.64，
 > 见该报告 §2.1/§2.3）。本表其余行未再核对，引用"磁盘上有什么"时以当次实测为准。
 

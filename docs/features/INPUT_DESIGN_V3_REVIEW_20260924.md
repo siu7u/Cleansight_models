@@ -63,7 +63,7 @@
 
 文档 §2 的判据是"训练**不劣于** v2 基线（帧级 acc 与段级 edit **至少持平**）"。按本周实测证据，这不是一个可判定命题：
 
-- `mstcn2 s4l10 h128` 逐 seed 摆幅 **0.64**，但 GRU **14.5**、Transformer **8.0**（`docs/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md` §2.3）→ seed 噪声可吞掉全部小效应；
+- `mstcn2 s4l10 h128` 逐 seed 摆幅 **0.64**，但 GRU **14.5**、Transformer **8.0**（`docs/experiments/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md` §2.3）→ seed 噪声可吞掉全部小效应；
 - **同一配置只换选点口径**，test edit 即浮动 **+9.63**（p=0.0107）乃至 11 分（`usage/YAML_CONFIG.md` 的 `best_metric` 条目）→ 选点口径是隐藏变量。
 
 建议改为可判读的四条：
@@ -120,7 +120,7 @@ grep -n -A6 "block = masked.shape\[1\] // n_det_classes" framework/cleansight_ev
 sed -n '86,110p;182,198p' docs/features/INPUT_DESIGN_PROPOSAL.md
 
 # 本周证据（seed 摆幅 14.5 / 选点口径 +9.63）
-sed -n '/2.3 架构族与容量/,/2.4 选点口径/p' docs/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md
+sed -n '/2.3 架构族与容量/,/2.4 选点口径/p' docs/experiments/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md
 ```
 
 ## 8. 本评审的限制

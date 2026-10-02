@@ -11,13 +11,13 @@
 >   lr 5e-4 / 60 轮 / `dropout 0.3` / T-MSE 0.15 / clip 0.1，
 >   **`best_metric = val_edit`** → edit 中位 **51.08**、F1@0.1 40.01、acc 53.98（8 seed）；
 >   换回默认选点 `val_f1_0.5` 时 3~8 seed 读数 51.47、逐 seed 摆幅 0.64。
->   依据：[`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md) §2.1/§2.3/§2.4。
+>   依据：[`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](experiments/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md) §2.1/§2.3/§2.4。
 > - **两条轴已探尽**：容量轴（加参数默认配方无用，`mstcn` h128 到顶）与特征轴
 >   （**无任何替代契约超过 `roi-grid-144`**，其唯一稳健优势是 insert 召回）。
 > - **本周新增契约**：`actionmixed-roi-grid-presence-v1`（48 维，presence 平面）。
 > - **选点口径是一等参数**：现行默认 `val_f1_0.5` 与 test 的 Spearman ρ 仅 **0.199**（326 run 体检）。
 > - **已否掉的外部方案**：TimesFM 时序基础模型（预测式预警路线证伪，见
->   [`EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md`](EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md)）。
+>   [`EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md`](experiments/EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md)）。
 > - 本周汇总与风险见 [`WEEKLY_REPORT_20260924.md`](WEEKLY_REPORT_20260924.md)；
 >   可复用图表见 [`figures/README.md`](figures/README.md)。
 
@@ -188,7 +188,7 @@ python -m benchmark.cli.matrix --runs runs
 > **补注（2026-09-24）**：上表是**旧 20 维特征**口径，与当前主线（`roi-grid-144`）**不可直接比较**。
 > 当前 mainline 数据为 `temporal.actionmixed-auto-roi-v1`（144 维，revision `6375eba9…`，
 > test 8 视频 / 2,639 帧），最佳配方与指标见本文顶部「最新状态」及
-> [`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md)。
+> [`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](experiments/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md)。
 
 ## 9. 当前最大缺口
 
@@ -197,7 +197,7 @@ python -m benchmark.cli.matrix --runs runs
    时序输入早已切到 `actionmixed-roi-grid-v1`（144 维），特征轴也已探尽。**当前真实缺口是精度天花板**：
    最强模型上 **51.6% 的真值段连标签都认错**（flush 20/21、withdraw 25/27、sbc 18/18），
    错误的大头**不在标签边界附近**（距最近切换 ≤3 帧的帧占 16.1%、只承载 21.9% 的错误）
-   —— 即瓶颈不在模型/特征/损失，见 [`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md) §4.1。
+   —— 即瓶颈不在模型/特征/损失，见 [`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](experiments/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md) §4.1。
 3. **端到端真实验收未完成**：`benchmark/e2e_3min` 评分器已存在，但真实
    `clean_001.prediction.json` 需要 `CleanSightBackend` 在线推理导出。
 4. **架构门禁红灯（2026-09-24 新增识别）**：`tests/test_architecture_boundaries.py` 2 条失败，

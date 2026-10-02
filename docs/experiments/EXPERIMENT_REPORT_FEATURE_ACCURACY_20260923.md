@@ -180,7 +180,7 @@ pytest tests/ -q          # 182 passed / 3 failed（3 个是会话开始前已�
 
 # ⑤ 产物
 #   逐轮机制与原始数字：docs/FEATURE_STRATEGY_COMPARE.md（第十三~二十七轮；§25 = 杠杆表）
-#   容量轴报告：docs/EXPERIMENT_REPORT_MSTCN_CAPACITY_20260922.md（含本次 3 处口径修正）
+#   容量轴报告：docs/experiments/EXPERIMENT_REPORT_MSTCN_CAPACITY_20260922.md（含本次 3 处口径修正）
 #   口径文档：docs/EVAL.md §3.1/§5；usage/YAML_CONFIG.md（best_metric = 一等口径参数）
 #   新 run：runs/round16-* … runs/round23-*（122 个 run / 128 份评估）
 ```

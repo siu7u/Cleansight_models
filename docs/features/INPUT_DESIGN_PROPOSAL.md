@@ -186,7 +186,7 @@ scope_distal_end 12/18、syringe 12/18、**short_brush 9/18、air_gun 6/18、bru
 | bbox 运动/几何非线性块（速度、Δ距离、轴向投影、pair 特征） | **暂缓** | §1.4：AUC 0.43~0.56，平滑后仍 ≈0.5。仓库历史设计（legacy 64 维含 `dcx/dcy`）与 CLEAN 离线特征（`clean_bbox_v2` 的 speed/pair/priors）都做过，但那套口径服务于后端 CLEAN 模型，未在本数据上验证过增益 |
 | 参考系归一化（以 hand/scope 为原点的坐标系） | **暂缓** | 理论上更"语义"，但几何量本身在当前覆盖下无判别力（§1.4）；等 P1/P2 结论后再评估 |
 | 置信度（conf）通道复活 | **排队** | 真实且便宜：`outputs/annotations/*.json` 的轨迹逐帧带 `conf`，`convert.py` 只写 5 列把它丢了。但单独加 conf 不解决覆盖问题——应与"逐类降阈值重建检测"一起做 |
-| 检测侧扩召回（逐类降阈值 / 换 g2 权重 / 补帧） | **最高天花板，但有资源前置** | `auto-annotate.yaml` 里已有注释掉的逐类阈值示例（`syringe: 0.1` 等）。本 checkout 缺视频与 `yolo11s-g2-v1` 权重（`legacy/yolo-detection/pipeline/versioned_weights/` 只有 large-v1/v2/v3 与 small-v3），需在 **-lhh 机器**上执行 |
+| 检测侧扩召回（逐类降阈值 / 换 g2 权重 / 补帧） | **最高天花板，但有资源前置** | `auto-annotate.yaml` 里已有注释掉的逐类阈值示例（`syringe: 0.1` 等）。本 checkout 缺视频与 `yolo11s-g2-v1` 权重（`legacy/yolo-detection/pipeline/versioned_weights/` 只有 large-v1/v2/v3 与 small-v3），需在 **-lhh 机器**上执行。**2026-09-29 第 3 轮实测补充（[`../EXPERIMENT_REPORT_FRAME_ACC_R3_20260929.md`](../experiments/frame-acc/EXPERIMENT_REPORT_FRAME_ACC_R3_20260929.md) §3）：**"逐类降阈值"只能救 `scope_distal_end`（0.25→0.10 召回 37.8%→50.2%，精度 99.7%→96.0%）；`syringe` 在任何阈值下精度都 ≈1%、召回 <12%，**降阈值无效，只有"换/训更好的检测器"这一半可行**。**另注（同报告 §0）**：第 2 轮"补回稀有类覆盖 → 帧准确率上升"的推理**已被 10 折配对检验推翻（p=0.557）**，故本方向的价值应按"检测本身该做好"来论证，**不能承诺帧准确率收益** |
 
 ## 4. 工程注意（给后续任何 tail block 改动）
 

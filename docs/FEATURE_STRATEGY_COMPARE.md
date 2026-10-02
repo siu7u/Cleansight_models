@@ -1106,7 +1106,7 @@ pytest framework/tests/test_sequence_normalization.py -q
 h64 与 h32 无差别（摆幅内），h128 才显著上一档。**加宽是"提精度"唯一被配对检验确认的动作**，
 且 `s2l5 h128`（100 万参）已达 `s4l10 h128`（331 万参）的 90%（edit 46.45 vs 51.47）——**性价比最高的点是 s2l5/h128**。
 
-> 本小节的配对行与 `docs/EXPERIMENT_REPORT_MSTCN_CAPACITY_20260922.md` §2.2 的同名行**同源同口径**
+> 本小节的配对行与 `docs/experiments/EXPERIMENT_REPORT_MSTCN_CAPACITY_20260922.md` §2.2 的同名行**同源同口径**
 > （同一批 run、同一检验方法），此处重列是为了让特征侧文档自洽，不是第二份独立证据。
 
 ### 16.2 T-MSE 剂量扫描：它是"平滑旋钮"，不是 `mstcn2` 优势的来源
@@ -1186,7 +1186,7 @@ h64 与 h32 无差别（摆幅内），h128 才显著上一档。**加宽是"提
 
 ### 16.5 口径修正：已交付报告与图里的"探针下界"用错了协议
 
-**问题**：`docs/EXPERIMENT_REPORT_MSTCN_CAPACITY_20260922.md` §2.4 与
+**问题**：`docs/experiments/EXPERIMENT_REPORT_MSTCN_CAPACITY_20260922.md` §2.4 与
 `docs/mstcn-capacity/figures/capacity_vs_segmental.png`（`tools/plot_capacity_curves.py` 里硬编码的
 `PROBE_EDIT = 50.63` / `PROBE_F1_025 = 33.58`）把**因果口径**的探针值当成了**离线曲线**的下界，
 据此得出的"模型刚刚追平/略超线性探针"**不成立**。
@@ -2464,5 +2464,5 @@ ROI-144 契约（第六~八轮双口径第一）· **z-score 输入归一化**�
 - 换 mstcn/transformer 全序列模型看段级表现是否改变排序。
 - 图像通道（形态 B，bbox + 冻结 backbone embedding）已接入并跑过机制床 E0/E1 对照：
   段级 edit/F1@0.25 略优、帧级宏指标与 air_injection recall 下降，未定论；
-  见 [`EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md`](EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md)
+  见 [`EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md`](experiments/EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md)
   与 [`features/README.md`](features/README.md) §1.7/§2.1。

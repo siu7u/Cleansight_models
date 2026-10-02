@@ -1,0 +1,1280 @@
+ 
+
+ Combining Boundary Supervision and Segment-Level Regularization for Fine-Grained Action Segmentation 
+
+## Report GitHub Issue
+
+ × 
+
+ Title: 
+
+ Content selection saved. Describe the issue below: 
+
+ Description: 
+
+ Submit without GitHub 
+ Submit in GitHub 
+
+ arXiv is now an independent nonprofit! 
+ Learn more 
+ × 
+
+ Back to arXiv 
+
+ Why HTML? 
+
+ Report Issue 
+
+ Back to Abstract 
+
+ Download PDF 
+
+ Abstract 
+ 1 Introduction 
+ 2 Related Works 
+
+ 2.1 Temporal Action Segmentation 
+ 2.2 Boundary-Regression Methods 
+ 2.3 Segment-Level Regularization for Temporal Alignment 
+
+ 3 Methodology 
+
+ 3.1 Boundary-Regression Loss 
+ 3.2 Segment Shape Regularization Loss 
+ 3.3 Loss Assignment to Avoid Gradient Conflicts 
+
+ 4 Experiments 
+
+ 4.1 Experimental Conditions 
+
+ 4.1.1 Datasets. 
+ 4.1.2 Metrics. 
+ 4.1.3 Implementation Details 
+
+ 4.2 Experimental Results 
+
+ 4.2.1 Quantitative results. 
+ 4.2.2 Qualitative results. 
+ 4.2.3 Comparison with Boundary-Aware Methods. 
+
+ 4.3 Ablation Study 
+
+ 4.3.1 Component Analysis. 
+ 4.3.2 Start Epoch Sensitivity. 
+ 4.3.3 Effect of Temporally Decoupled Loss Assignment. 
+ 4.3.4 Synergy with Post-Processing Methods 
+
+ 5 Conclusion 
+ References 
+
+ License: arXiv.org perpetual non-exclusive license
+
+arXiv:2604.01859v1 [cs.CV] 02 Apr 2026 
+
+## Combining Boundary Supervision and Segment-Level Regularization for Fine-Grained Action Segmentation
+
+ Hinako Mitsuoka
+
+ Kazuhiro Hotta
+
+ Affiliation:  Meijo University
+
+ Affiliation:  1-501 Shiogamaguchi, Tempaku-ku, Nagoya 468-8502, Japan
+
+ Affiliation:  263441509@ccmailg.meijo-u.ac.jp, kazuhotta@meijo-u.ac.jp 
+
+## Abstract
+
+ Recent progress in Temporal Action Segmentation (TAS) has increasingly relied on complex architectures, which can hinder practical deployment.
+We present a lightweight dual-loss training framework that improves fine-grained segmentation quality with only one additional output channel and two auxiliary loss terms, requiring minimal architectural modification.
+Our approach combines a boundary-regression loss that promotes accurate temporal localization via a single-channel boundary prediction and a CDF-based segment-level regularization loss that encourages coherent within-segment structure by matching cumulative distributions over predicted and ground-truth segments.
+The framework is architecture-agnostic and can be integrated into existing TAS models (e.g., MS-TCN, C2F-TCN, FACT) as a training-time loss function.
+Across three benchmark datasets, the proposed method improves segment-level consistency and boundary quality, yielding higher F1 and Edit scores across three different models.
+Frame-wise accuracy remains largely unchanged, highlighting that precise segmentation can be achieved through simple loss design rather than heavier architectures or inference-time refinements. 
+
+## 1 Introduction
+
+ Figure 1 : 
+ Overview of the proposed method and its performance improvement. 
+The left shows that the proposed method adds a single boundary output channel and introduces two auxiliary training losses that can be integrated into conventional TAS models with minimal modification.
+The right shows the relationship between the F1 score and the number of parameters on GTEA, illustrating improved performance with minimal parameter overhead.
+
+ Recent advances in Temporal Action Segmentation (TAS) have been driven by increasingly complex architectures [ 6 , 24 , 2 , 14 , 3 , 15 ] .
+The field has evolved from early single-path models such as MS-TCN [ 6 ] to multi-path frameworks like ASRF [ 8 ] and FACT [ 15 ] , which employ auxiliary modules for boundary refinement and other tasks.
+Although effective, such designs increase computational complexity and can reduce interpretability.
+While frame-wise classification losses such as cross-entropy remain a core component in many supervised TAS pipelines, they often lead to over-segmentation and boundary misalignment due to unstable frame-level predictions and ambiguous label transitions. 
+
+ We propose a simple yet effective training-time enhancement for fully supervised TAS by augmenting existing models with two auxiliary losses and only one additional boundary output channel, as shown in Figure 1 (left).
+The first loss is a boundary-regression objective that enables accurate temporal boundary localization via a single class-agnostic boundary prediction, without introducing auxiliary branches.
+The second is a CDF-based segment shape regularization loss, which acts as a lightweight segment-level structural prior by penalizing discrepancies between cumulative distributions computed from predictions and ground-truth segments, thereby mitigating over-segmentation and boundary errors.
+Unlike post-hoc refinement approaches, our method injects structural guidance directly into supervised training, requiring no inference-time refinement.
+Overall, the proposed losses are architecture-agnostic and can be integrated into existing TAS backbones with minimal implementation overhead. 
+
+ We evaluate the proposed method on three widely used benchmarks: GTEA [ 7 ] , 50Salads [ 20 ] , and Breakfast [ 10 ] , with three representative architectures: MS-TCN, C2F-TCN [ 19 ] , and FACT.
+The proposed method achieved consistent improvements across all datasets and architectures, confirming its general effectiveness.
+Figure 1 (right) presents a representative example.
+Furthermore, the proposed method achieved a better trade-off between accuracy and complexity than boundary-regression methods such as ASRF [ 8 ] and BCN [ 22 ] , and is complementary to post-hoc refinements such as ASOT [ 23 ] . 
+
+ In summary, our main contributions are as follows. 
+
+ • 
+
+ We propose a lightweight dual-loss training framework for fully supervised TAS that combines boundary supervision with a segment-level regularization loss. 
+
+ • 
+
+ Our method is architecture-agnostic , requiring only one additional boundary output channel and two auxiliary loss terms as a training-time objective. 
+
+ • 
+
+ We introduce a CDF-based segment shape regularization loss and a decoupled loss assignment that applies boundary and segment regularization to different temporal regions to reduce optimization conflicts. 
+
+ • 
+
+ When our method is used with MS-TCN, our method improved the performance by up to 4.6% in Edit and 5.4% in F1@10 on benchmark datasets, while requiring only minimal architectural modification. 
+
+## 2 Related Works
+
+## 2.1 Temporal Action Segmentation
+
+ Temporal Action Segmentation (TAS) has evolved from hand-crafted pipelines to deep learning architectures.
+Early approaches employed sliding windows [ 17 , 9 ] , probabilistic models such as HMMs [ 11 , 16 ] , and RNNs [ 18 ] , but struggled to capture long-range dependencies and maintain temporal resolution.
+Inspired by the success of WaveNet in speech modeling [ 21 ] , Temporal Convolutional Networks (TCNs) became a widely adopted backbone for TAS, leading to methods such as ED-TCN [ 12 ] , MS-TCN [ 6 ] , and MS-TCN++ [ 13 ] , C2F-TCN [ 19 ] .
+More recent work leverages Transformers [ 5 ] and multi-scale fusion, e.g., FACT [ 15 ] , to further boost accuracy.
+However, these improvements often increase computational overhead, parameter counts, and latency, limiting deployment in real-world scenarios. 
+
+ While frame-wise classification losses (e.g., cross-entropy) remain a core component in many supervised TAS pipelines, recent approaches often incorporate additional objectives or refinement mechanisms to improve temporal coherence.
+Nevertheless, over-segmentation and boundary misalignment can persist when explicit segment-level structural guidance is limited.
+Our work focuses on loss-level enhancements that introduce boundary-aware and segment-level supervision with minimal architectural modification. 
+
+## 2.2 Boundary-Regression Methods
+
+ Several works have tackled over-segmentation and imprecise transitions by explicitly modeling boundaries.
+ASRF [ 8 ] employs a two-branch design, combining an Action Segmentation Branch with a Boundary Regression Branch that predicts class-agnostic boundaries and refines predictions via post-processing.
+BCN [ 22 ] adopts a cascaded framework where each stage refines frame-wise predictions using both the input features and outputs of previous stages, and incorporates a Barrier Generation Module that predicts boundary probabilities and applies local barrier pooling as a temporal regularizer to frame-level features, improving transition alignment.
+Although these approaches are effective, they require dedicated branches or heads, increasing architectural complexity and inference cost. 
+
+ In contrast, our method introduces boundary supervision in a lightweight manner by adding a single class-agnostic boundary output channel and a corresponding training loss.
+This design enables boundary-sensitive representations without auxiliary branches, thereby integrating seamlessly into existing TAS models with minimal overhead. 
+
+ Figure 2 : Overview of the proposed training framework. 
+In addition to the model-specific loss, our method introduces two complementary auxiliary losses: a boundary-regression loss using an additional boundary output channel and a CDF-based segment shape regularization loss.
+The losses are applied selectively to different temporal regions (boundary vs non-boundary) to reduce optimization conflicts, and can be combined with existing TAS models with minimal architectural modification.
+
+## 2.3 Segment-Level Regularization for Temporal Alignment
+
+ Segment-level constraints have been explored to improve temporal coherence in TAS, including post-hoc refinement strategies and objectives that encourage structured predictions.
+For example, ASOT [ 23 ] and VASOT [ 1 ] leverage optimal transport to align frame-level representations with latent prototypes in unsupervised or self-supervised settings, and ASOT can also refine supervised predictions as a post-hoc step.
+Such inference-time refinements, however, operate outside the supervised training objective and therefore do not directly shape the model’s representations during learning. 
+
+ In contrast, our method introduces a CDF-based segment shape regularization loss as a training-time objective.
+By penalizing discrepancies between cumulative distributions computed from predictions and ground-truth segments, the proposed loss encourages coherent within-segment structure and mitigates over-segmentation.
+Although this formulation is inspired by the connection between 1D Wasserstein distance and cumulative distributions, we use it as a simple supervised segment-level shape constraint rather than an explicit OT matching procedure.
+Importantly, this regularization is complementary to post-hoc refinement methods: it improves temporal coherence during training, while refinement can optionally further adjust predictions at inference. 
+
+ Figure 3 : Visualization of Boundary-Regression Loss ℒ B \mathcal{L}_{B} .
+The additional output channel predicts a boundary probability curve ( orange ), which is supervised by a binary ground-truth boundary mask (top).
+The loss encourages high responses around class transitions while maintaining low values elsewhere.
+Segment labels (bottom) are color-coded for clarity.
+
+## 3 Methodology
+
+ We propose a simple training-time enhancement for fully supervised TAS that can be integrated into existing architectures with minimal modification.
+The overview is shown in Figure 2 .
+Our method introduces two complementary auxiliary losses, targeting common issues in TAS: over-segmentation from unstable frame-wise predictions, and degraded segment-level structure.
+We describe each component and its joint effect below. 
+
+## 3.1 Boundary-Regression Loss
+
+ To improve localization of action transitions, we add a single class-agnostic boundary channel , as illustrated in Figure 2 .
+Conventional TAS models output a tensor of size C × T C\times T , where C C is the number of classes and T T is the number of frames.
+We extend this to ( C + 1 ) × T (C{+}1)\times T by introducing an additional boundary output. 
+
+ This additional channel outputs a boundary probability b ^ t ∈ [ 0 , 1 ] \hat{b}_{t}\in[0,1] for each frame, supervised by a binary boundary mask b t b_{t} derived from ground-truth transitions, as illustrated in Figure 3 .
+The boundary supervision is formulated as a binary cross-entropy loss 
+
+ | 
+ ℒ B = − 1 T ∑ t = 1 T ( b t log b ^ t + ( 1 − b t ) log ( 1 − b ^ t ) ) . \mathcal{L}_{\text{B}}=-\frac{1}{T}\sum_{t=1}^{T}\big(b_{t}\log\hat{b}_{t}+(1-b_{t})\log(1-\hat{b}_{t})\big). | 
+ | 
+ (1) | 
+
+ This requires only a minimal modification to the output dimension, without auxiliary branches or notable overhead. 
+
+## 3.2 Segment Shape Regularization Loss
+
+ Although the boundary loss encourages sharper transitions at action boundaries, it does not explicitly enforce structural consistency within segments.
+To complement this, we introduce a CDF-based segment shape regularization loss , which encourages coherent within-segment structure by aligning cumulative distributions computed from predictions and ground-truth segments, as illustrated in Figure 4 .
+This loss acts as a lightweight segment-level structural prior and is activated after coarse frame-level predictions have stabilized, making it effective at mitigating residual errors such as over-segmentation and local misalignments. 
+
+ Let Y ^ ∈ ℝ C × T \hat{Y}\in\mathbb{R}^{C\times T} denote the predicted class probability map obtained via softmax.
+For each ground-truth segment S i = [ s i : e i ] S_{i}=[s_{i}:e_{i}] with class label c i c_{i} , we exclude a δ \delta -frame margin near boundaries to avoid unstable supervision around ambiguous class-transition frames where labels change abruptly, and obtain a subsequence of length L i = e i − s i − 2 ​ δ L_{i}=e_{i}-s_{i}-2\delta .
+If L i ≤ 0 L_{i}\leq 0 , the segment is skipped.
+We define the predicted distribution as 
+
+ | 
+ p ^ i = norm ℓ 1 ( Y ^ [ c i , s i + δ : e i − δ ] ) ∈ ℝ L i . \hat{p}_{i}=\mathrm{norm}_{\ell_{1}}\big(\hat{Y}[c_{i},\,s_{i}{+}\delta:e_{i}{-}\delta]\big)\in\mathbb{R}^{L_{i}}. | 
+ | 
+ (2) | 
+
+ and the ground-truth distribution as a uniform vector p i = 1 L i ​ 𝟏 L i ∈ ℝ L i p_{i}=\tfrac{1}{L_{i}}\mathbf{1}_{L_{i}}\in\mathbb{R}^{L_{i}} . 
+
+ The loss is computed as the squared ℓ 2 \ell_{2} distance between their cumulative distributions. 
+
+ | 
+ ℒ S = 1 N ​ ∑ i = 1 N 1 L i ​ ∑ j = 1 L i ( CDF ​ ( p ^ i ) ​ [ j ] − CDF ​ ( p i ) ​ [ j ] ) 2 . \mathcal{L}_{\text{S}}=\frac{1}{N}\sum_{i=1}^{N}\frac{1}{L_{i}}\sum_{j=1}^{L_{i}}\left(\text{CDF}(\hat{p}_{i})[j]-\text{CDF}(p_{i})[j]\right)^{2}. | 
+ | 
+ (3) | 
+
+ where CDF ​ ( ⋅ ) \text{CDF}(\cdot) denotes the cumulative distribution function, which accumulates probabilities along the temporal axis.
+This formulation is inspired by the connection between the 1D Wasserstein distance and cumulative distributions, and serves as a lightweight segment-level shape constraint.
+By aligning cumulative distributions, this formulation encourages predicted probabilities to match the temporal shape of ground-truth segments while remaining computationally efficient.
+In practice, ℒ S \mathcal{L}_{\text{S}} is activated after a warm-up period (e.g., E start = 20 E_{\text{start}}{=}20 epochs for MS-TCN). 
+
+ Figure 4 : Visualization of the CDF-based segment shape regularization loss ℒ S \mathcal{L}_{\text{S}} .
+Each ground-truth segment (top) is compared with its corresponding predicted region (bottom) using cumulative distributions.
+The loss penalizes structural mismatches such as over-segmentation or fragmented predictions by measuring discrepancies between cumulative probability distributions within each segment.
+
+## 3.3 Loss Assignment to Avoid Gradient Conflicts
+
+ Directly applying both ℒ B \mathcal{L}_{\text{B}} and ℒ S \mathcal{L}_{\text{S}} over the entire sequence can introduce conflicting gradients:
+ ℒ B \mathcal{L}_{\text{B}} favors sharp changes around transitions, while ℒ S \mathcal{L}_{\text{S}} encourages coherent within-segment structure, often resulting in unstable optimization. 
+
+ To avoid this, we adopt a temporally decoupled loss assignment .
+The temporal axis is partitioned into boundary regions (a small window, e.g., ± 5 \pm 5 frames around ground-truth transitions) and non-boundary regions (all other frames).
+ ℒ B \mathcal{L}_{\text{B}} is applied only within boundary regions to sharpen transitions, while ℒ S \mathcal{L}_{\text{S}} is applied to non-boundary regions to improve intra-segment consistency. 
+
+ The combined loss is thus formulated as 
+
+ | 
+ ℒ proposed = λ B ​ ℒ B (boundary) + λ S ​ ℒ S (non-boundary) \mathcal{L}_{\text{proposed}}=\lambda_{\text{B}}\mathcal{L}_{\text{B}}^{\text{(boundary)}}+\lambda_{\text{S}}\mathcal{L}_{\text{S}}^{\text{(non-boundary)}} | 
+ | 
+ (4) | 
+
+ where λ B \lambda_{\text{B}} and λ S \lambda_{\text{S}} balance the two components. 
+
+ Finally, the proposed auxiliary losses are added to the standard model-specific loss ℒ model \mathcal{L}_{\text{model}} (e.g., frame-wise cross-entropy), yielding the overall objective as 
+
+ | 
+ ℒ total = ℒ model + ℒ proposed . \mathcal{L}_{\text{total}}=\mathcal{L}_{\text{model}}+\mathcal{L}_{\text{proposed}}. | 
+ | 
+ (5) | 
+
+ This formulation ensures that boundary localization and segment-level shape consistency are optimized in complementary regions of the sequence. 
+
+## 4 Experiments
+
+ We evaluate the effectiveness of the proposed method on three benchmark datasets: Georgia Tech Egocentric Activities (GTEA) [ 7 ] , 50Salads [ 20 ] , and Breakfast [ 10 ] .
+To verify its general applicability, we apply our method to three structurally different models: MS-TCN [ 6 ] , C2F-TCN [ 19 ] , and FACT [ 15 ] .
+We also compare the proposed method with conventional boundary-aware approaches [ 8 , 22 ] to highlight its efficiency–accuracy trade-off. 
+
+## 4.1 Experimental Conditions
+
+## 4.1.1 Datasets.
+
+ We evaluate the proposed method on three benchmark datasets.
+ GTEA comprises 28 egocentric videos (7 activities, 11 classes) recorded from 4 subjects, and we use a leave-one-subject-out cross-validation protocol.
+ 50Salads contains 50 long videos (17 classes) of salad preparation, evaluated by 5-fold cross-validation.
+ Breakfast is a large-scale benchmark with 1,716 long videos from 10 recipes and 48 action classes, assessed by the standard 4-fold cross-validation protocol.
+Thus, all experiments are conducted using cross-validation protocols recommended in prior work, and the reported scores are averaged across all folds. 
+
+ For all datasets, we utilize I3D [ 4 ] features extracted from video frames as input.
+For GTEA and Breakfast, we retain the original temporal resolution of 15 frames per second (fps).
+For 50Salads, the features are downsampled from 30 fps to 15 fps for consistency across datasets.
+This process follows the conventional settings used in prior works [ 6 , 8 ] . 
+
+## 4.1.2 Metrics.
+
+ We evaluate model performance by three standard metrics in TAS: frame-wise accuracy ( Acc ), segmental edit distance ( Edit ), and the segmental F1 score ( F1 ).
+The F1 score is computed at intersection-over-union (IoU) thresholds of 10%, 25%, and 50%, denoted as F1@{10, 25, 50}. 
+
+ Frame-wise accuracy measures the proportion of correctly classified frames, but it is biased toward longer segments and underestimates over-segmentation errors.
+Therefore, following prior works [ 6 , 8 , 15 ] , we emphasize segmental F1, which better captures segmental quality and temporal consistency.
+Edit distance further evaluates temporal alignment by measuring the number of operations required to match predicted and ground-truth sequences. 
+
+ Methods | 
+ Dataset | 
+ λ B \lambda_{\text{B}} | 
+ λ S \lambda_{\text{S}} | 
+ E start E_{\text{start}} | 
+ E max E_{\text{max}} | 
+
+ MS-TCN | 
+ GTEA | 
+ 1.0 × 10 − 4 1.0\times 10^{-4} | 
+ 1.0 × 10 − 3 1.0\times 10^{-3} | 
+ 20 | 
+ 50 | 
+
+ 50Salads | 
+ 1.0 × 10 − 3 1.0\times 10^{-3} | 
+
+ Breakfast | 
+ 1.0 × 10 − 4 1.0\times 10^{-4} | 
+
+ C2F-TCN | 
+ GTEA | 
+ 1.0 × 10 − 4 1.0\times 10^{-4} | 
+ 1.0 × 10 − 3 1.0\times 10^{-3} | 
+ 200 | 
+ 500 | 
+
+ 50Salads | 
+ 1.0 × 10 − 3 1.0\times 10^{-3} | 
+
+ Breakfast | 
+ 1.0 × 10 − 5 1.0\times 10^{-5} | 
+
+ FACT | 
+ GTEA | 
+ 1.0 × 10 − 4 1.0\times 10^{-4} | 
+ 1.0 × 10 − 4 1.0\times 10^{-4} | 
+ 100 | 
+ 400 | 
+
+ 50Salads | 
+ 5.0 × 10 − 3 5.0\times 10^{-3} | 
+ 100 | 
+ 400 | 
+
+ Breakfast | 
+ 5.0 × 10 − 3 5.0\times 10^{-3} | 
+ 40 | 
+ 150 | 
+
+ Table 1 : Hyperparameters used for each model and dataset. 
+
+## 4.1.3 Implementation Details
+
+ We implemented our models in PyTorch and trained them on an NVIDIA RTX A6000 Ada GPU.
+All baseline models were implemented and evaluated by following the settings and protocols described in their original papers. 
+
+ For fair comparison, we adopted the official training settings of each backbone model (MS-TCN, C2F-TCN, and FACT),
+including optimizer configuration, learning schedule, and data augmentation.
+The maximum number of training epochs ( E max E_{\text{max}} ) was set by following prior works: 50 for MS-TCN, 500 for C2F-TCN, and 400/150 for FACT on GTEA and 50Salads / Breakfast, respectively. 
+
+ The proposed Boundary-Regression Loss ( ℒ B \mathcal{L}_{\text{B}} ) and CDF-based Segment Shape Regularization Loss ( ℒ S \mathcal{L}_{\text{S}} ) were added to each model’s original training objective.
+We used a boundary window size of ± 5 \pm 5 frames and set the segment margin δ = 5 \delta=5 in all experiments.
+The loss weights and warm-up epochs were selected by cross-validation for each model and dataset, as summarized in Table  1 .
+No additional model-specific tuning was performed beyond the loss configuration. 
+
+ Dataset | 
+ GTEA | 
+ 50Salads | 
+ Breakfast | 
+
+ Methods | 
+ F1@{10,25,50} | 
+ Edit | 
+ Acc | 
+ F1@{10,25,50} | 
+ Edit | 
+ Acc | 
+ F1@{10,25,50} | 
+ Edit | 
+ Acc | 
+
+ For Standard Architecture | 
+ | 
+ | 
+ | 
+ | 
+ | 
+ | 
+ | 
+ | 
+ | 
+ | 
+ | 
+ | 
+ | 
+ | 
+ | 
+
+ MS-TCN [ 6 ] | 
+ 86.47 | 
+ 83.73 | 
+ 71.20 | 
+ 79.92 | 
+ 76.53 | 
+ 73.96 | 
+ 71.42 | 
+ 62.12 | 
+ 66.29 | 
+ 79.11 | 
+ 50.61 | 
+ 46.41 | 
+ 36.58 | 
+ 61.75 | 
+ 66.96 | 
+
+ + Ours | 
+ 88.13 | 
+ 84.62 | 
+ 72.40 | 
+ 83.23 | 
+ 78.20 | 
+ 77.44 | 
+ 75.22 | 
+ 67.31 | 
+ 70.29 | 
+ 81.17 | 
+ 55.96 | 
+ 51.39 | 
+ 40.78 | 
+ 62.29 | 
+ 67.46 | 
+
+ For Complex Architecture | 
+ | 
+ | 
+ | 
+ | 
+ | 
+ | 
+ | 
+ | 
+ | 
+ | 
+ | 
+ | 
+ | 
+ | 
+ | 
+
+ C2F-TCN [ 19 ] | 
+ 87.80 | 
+ 86.38 | 
+ 76.72 | 
+ 81.14 | 
+ 80.32 | 
+ 84.03 | 
+ 82.65 | 
+ 74.37 | 
+ 76.76 | 
+ 86.63 | 
+ 71.41 | 
+ 67.80 | 
+ 57.28 | 
+ 67.84 | 
+ 76.10 | 
+
+ + Ours | 
+ 89.55 | 
+ 88.64 | 
+ 78.75 | 
+ 85.75 | 
+ 80.26 | 
+ 85.20 | 
+ 81.97 | 
+ 74.97 | 
+ 78.55 | 
+ 86.18 | 
+ 72.40 | 
+ 68.59 | 
+ 57.69 | 
+ 68.54 | 
+ 76.03 | 
+
+ FACT [ 15 ] | 
+ 92.49 | 
+ 90.36 | 
+ 79.83 | 
+ 89.89 | 
+ 84.74 | 
+ 82.89 | 
+ 80.94 | 
+ 75.52 | 
+ 76.70 | 
+ 85.47 | 
+ 80.36 | 
+ 75.79 | 
+ 65.47 | 
+ 79.23 | 
+ 75.89 | 
+
+ + Ours | 
+ 93.34 | 
+ 91.77 | 
+ 81.40 | 
+ 91.34 | 
+ 85.33 | 
+ 83.17 | 
+ 81.29 | 
+ 76.56 | 
+ 77.56 | 
+ 86.44 | 
+ 81.36 | 
+ 76.49 | 
+ 65.98 | 
+ 79.44 | 
+ 76.08 | 
+
+ Table 2 : Performance comparison on GTEA, 50Salads and Breakfast. 
+We apply our method to MS-TCN, C2F-TCN, and FACT. 
+
+ Methods | 
+ F1@{10,25,50} | 
+ Edit | 
+ Acc | 
+ MACs(G) | 
+ Params(M) | 
+
+ MS-TCN [ 6 ] | 
+ 86.47 | 
+ 83.73 | 
+ 71.20 | 
+ 79.92 | 
+ 76.53 | 
+ 0.80 | 
+ 0.80 | 
+
+ ASRF [ 8 ] | 
+ 86.52 | 
+ 85.27 | 
+ 73.68 | 
+ 78.59 | 
+ 76.01 | 
+ 1.30 | 
+ 1.30 | 
+
+ BCN [ 22 ] | 
+ 88.07 | 
+ 85.88 | 
+ 75.73 | 
+ 82.26 | 
+ 79.95 | 
+ 16.64 | 
+ 16.66 | 
+
+ MS-TCN + Ours | 
+ 88.13 | 
+ 84.62 | 
+ 72.40 | 
+ 83.23 | 
+ 78.20 | 
+ 0.80 | 
+ 0.80 | 
+
+ Table 3 : 
+ Comparison with existing boundary-aware methods (ASRF, BCN) and the proposed method on GTEA. 
+We report performance metrics along with computational cost (MACs) and model size (Params).
+
+## 4.2 Experimental Results
+
+## 4.2.1 Quantitative results.
+
+ Table 2 reports the performance of the proposed method applied to MS-TCN, C2F-TCN, and FACT on three benchmarks: GTEA, 50Salads, and Breakfast.
+Overall, the proposed method improved Edit and F1 scores across multiple backbones and datasets, while frame-wise accuracy remained largely comparable. 
+
+ For MS-TCN, the gains are most evident on 50Salads, with improvements of +4.0% in Edit and +3.5% in F1@10.
+On GTEA, the proposed method also improved segmental coherence, reflected by a +3.3% increase in Edit.
+On the large-scale dataset, Breakfast, the proposed method also showed consistent improvements, confirming that the trends observed on smaller datasets generalize to more challenging large-scale scenarios.
+In particular, F1@10 achieved the largest gain across all datasets, with an improvement of +5.4% .
+For FACT, despite its stronger baseline, the proposed method still yielded further benefits, such as +1.5% in Edit on GTEA.
+However, on Breakfast, since FACT already attains a high baseline performance, the relative gains were more limited. 
+
+ We also analyzed the interaction with C2F-TCN, which employs its own coarse-to-fine refinement architecture.
+On GTEA, our method provides a significant boost over the strong baseline, improving Edit by +4.6% and increasing F1 scores across thresholds.
+On 50Salads and Breakfast, we observe consistent gains in Edit and modest improvements in most F1 metrics, while some settings show marginal drops in frame-wise accuracy (and F1@25 on 50Salads).
+These results suggest that the proposed losses primarily enhance segment-level coherence, and their impact on frame-wise accuracy can be model- and dataset-dependent. 
+
+ Overall, the proposed method improves Edit and F1 scores across multiple backbones and datasets, while frame-wise accuracy remains largely comparable. 
+
+## 4.2.2 Qualitative results.
+
+ Figure 5 shows qualitative comparisons between the baseline MS-TCN and the proposed method on three datasets: (a) GTEA, (b) 50Salads, and (c) Breakfast.
+In all cases, incorporating the proposed losses led to temporally smoother predictions that better aligned with the ground-truth.
+In Figure 5 (a), MS-TCN with the proposed method successfully suppressed spurious transitions and recovered the correct segment boundaries.
+The over-segmentation observed in the baseline was notably reduced.
+A clear improvement can be observed in the first half, where fragmented label transitions are effectively suppressed. 
+
+ In Figure 5 (b), our method produced more coherent long-range predictions and alleviated fragmented outputs in the latter half of the sequence.
+This demonstrates that the CDF-based segment shape regularization loss promotes segment-level consistency, while the Boundary-Regression Loss enhances transition localization.
+In Figure 5 (c), our method also improved the alignment of long-duration actions. 
+
+ Overall, these visualizations support our quantitative findings and highlight the practical advantages of the proposed training losses in improving both boundary precision and the structural integrity of predicted action sequences. 
+
+ Figure 5 : Qualitative comparison on GTEA, 50Salads, and Breakfast using MS-TCN as the backbone.
+For each dataset, we show the ground-truth (GT), baseline MS-TCN predictions, and MS-TCN trained with the proposed losses.
+
+## 4.2.3 Comparison with Boundary-Aware Methods.
+
+ Table 3 and Figure 6 present a comparison of our method with prior boundary-aware approaches, ASRF [ 8 ] and BCN [ 22 ] , on GTEA.
+Although all methods are built on MS-TCN architecture, they differ significantly in how they incorporate boundary information and in their computational cost. 
+
+ BCN achieved the highest Acc and F1 score at all thresholds, but at a substantial computational cost, over 16 × \times MACs and parameters compared to MS-TCN.
+ASRF also introduces a boundary regression branch, resulting in a moderate increase in complexity.
+Although we carefully followed the official implementation, our reproduced results did not fully match the scores reported in the original paper.
+Nevertheless, the observed trend is consistent: ASRF provides only limited gains over the baseline despite its added complexity. 
+
+ In contrast, our method improved the performance across all metrics compared to the MS-TCN, with a particularly notable improvement in Edit (+3.31%), indicating enhanced temporal coherence.
+Importantly, this is achieved with only negligible computational and parameter overhead, since the proposed method introduces just one additional output channel as a minimal architectural modification. 
+
+ Figure 6 shows that the proposed method achieved a favorable trade-off between performance and efficiency among boundary-aware approaches.
+This suggests that our loss-based approach is more efficient in leveraging boundary information than methods relying on additional modules or branches. 
+
+ These results support the conclusion that the proposed losses provide an efficient way to incorporate boundary-aware supervision, offering a compelling alternative to heavyweight boundary regression networks. 
+
+ Figure 6 : 
+The trade-off between Params(M) and F1@10 for conventional boundary-aware methods and our method, on GTEA.
+
+## 4.3 Ablation Study
+
+## 4.3.1 Component Analysis.
+
+ Table 4 presents an ablation study on the GTEA dataset using MS-TCN, designed to evaluate the individual and joint effects of the proposed loss functions.
+Adding the Boundary-Regression Loss ( ℒ B \mathcal{L}_{\text{B}} ) alone improved the performance across all metrics, especially in Edit distance and Acc, suggesting enhanced boundary localization and temporal coherence.
+On the other hand, adding only Segment Shape Regularization Loss ( ℒ S \mathcal{L}_{\text{S}} ) yielded the highest F1@25 and F1@50, indicating that it effectively improves intra-segment consistency and corrects local misalignments. 
+
+ When both losses are adopted together using our temporally decoupled loss assignment, the model achieved the best overall performance, including the highest Edit distance and Acc.
+These results validated that the two losses address complementary aspects of temporal action segmentation—boundary sharpness and segment-level structure—and their combination leads to more accurate and temporally consistent predictions. 
+
+ ℒ B \mathcal{L}_{\text{B}} | 
+ ℒ S \mathcal{L}_{\text{S}} | 
+ F1@{10,25,50} | 
+ Edit | 
+ Acc | 
+
+ | 
+ | 
+ 86.47 | 
+ 83.73 | 
+ 71.20 | 
+ 79.92 | 
+ 76.53 | 
+
+ √ \surd | 
+ | 
+ 87.84 | 
+ 85.24 | 
+ 72.16 | 
+ 82.83 | 
+ 77.69 | 
+
+ | 
+ √ \surd | 
+ 87.36 | 
+ 85.55 | 
+ 72.73 | 
+ 82.42 | 
+ 77.30 | 
+
+ √ \surd | 
+ √ \surd | 
+ 88.13 | 
+ 84.62 | 
+ 72.40 | 
+ 83.23 | 
+ 78.20 | 
+
+ Table 4 : Ablation study on GTEA with MS-TCN. 
+We evaluate the individual and joint contributions of ℒ B \mathcal{L}_{\text{B}} and ℒ S \mathcal{L}_{\text{S}} .
+
+## 4.3.2 Start Epoch Sensitivity.
+
+ Table 5 investigates the sensitivity of Segment Shape Regularization Loss to its start epoch E start E_{\text{start}} during training on the GTEA dataset with MS-TCN.
+The total number of training epochs is 50, and all other components and training conditions were kept fixed. 
+
+ We observe that applying ℒ S \mathcal{L}_{\text{S}} after epoch 20 yields the best overall performance in terms of F1@10, F1@50, and Acc.
+Although starting earlier ( E start = 10 E_{\text{start}}=10 ) results in a slightly higher Edit distance, it comes at the cost of reduced F1 score and Acc, likely due to unstable predictions in the early training phase interfering with segment-level alignment.
+Conversely, delaying ℒ S \mathcal{L}_{\text{S}} to epoch 30 slightly improves F1@25, but degrades Edit distance and F1@50, suggesting missed opportunities for refining segment structure during mid-stage learning. 
+
+ These results validated our hypothesis that ℒ S \mathcal{L}_{\text{S}} is most effective when applied after the model has achieved coarse classification, and highlight the importance of scheduling segment-level regularization during training. 
+
+ We confirmed a similar trend on 50Salads and Breakfast, where introducing ℒ S \mathcal{L}_{\text{S}} too early similarly degraded performance due to unstable early predictions.
+Therefore, for all datasets with MS-TCN, we fixed E start = 20 E_{\text{start}}=20 as a consistent and empirically optimal setting.
+For C2F-TCN and FACT, E start E_{\text{start}} was also tuned via cross-validation to account for their different convergence behaviors. 
+
+ E start E_{\text{start}} | 
+ F1@{10,25,50} | 
+ Edit | 
+ Acc | 
+
+ 0 | 
+ 81.53 | 
+ 77.35 | 
+ 60.63 | 
+ 75.84 | 
+ 75.13 | 
+
+ 10 | 
+ 86.45 | 
+ 84.43 | 
+ 72.37 | 
+ 83.62 | 
+ 76.16 | 
+
+ 20 | 
+ 88.13 | 
+ 84.62 | 
+ 72.40 | 
+ 83.23 | 
+ 78.20 | 
+
+ 30 | 
+ 86.86 | 
+ 84.81 | 
+ 71.71 | 
+ 81.71 | 
+ 77.77 | 
+
+ Table 5 : 
+ Ablation study on the start epoch E start E_{\text{start}} for applying Segment Shape Regularization Loss on GTEA using MS-TCN. 
+We evaluate how the timing of introducing ℒ S \mathcal{L}_{\text{S}} affects performance, while keeping all other settings identical.
+
+## 4.3.3 Effect of Temporally Decoupled Loss Assignment.
+
+ Table 6 compares two loss assignment strategies:
+(1) ”All frames” applies both ℒ B \mathcal{L}_{\text{B}} and ℒ S \mathcal{L}_{\text{S}} to all frames uniformly, and
+(2) ”Ours” applies them in a temporally decoupled manner based on boundary proximity. 
+
+ We observe that our proposed boundary-aware strategy yields higher Edit distance and Acc while the uniform setting achieves competitive F1 scores.
+This suggests that separating the two losses reduces gradient conflict and better balances sharp boundary localization with smooth segment-level alignment.
+The improvement in structural metrics (Edit and Acc) confirms the benefit of temporally targeted regularization over naive joint supervision. 
+
+ Figure 7 further supports this observation, showing qualitative predictions on a GTEA sequence.
+Compared to the ”All frames” model, our method produces more coherent and semantically meaningful action segments, especially around complex transitions, by mitigating over-segmentation and reducing spurious boundaries. 
+
+ Methods | 
+ F1@{10,25,50} | 
+ Edit | 
+ Acc | 
+
+ All frames | 
+ 87.49 | 
+ 85.08 | 
+ 72.44 | 
+ 81.61 | 
+ 77.64 | 
+
+ Ours | 
+ 88.13 | 
+ 84.62 | 
+ 72.40 | 
+ 83.23 | 
+ 78.20 | 
+
+ Table 6 : 
+ Ablation study on loss assignment strategy using MS-TCN on GTEA .
+”All frames” applies both ℒ B \mathcal{L}_{\text{B}} and ℒ S \mathcal{L}_{\text{S}} to all frames uniformly, while ”Ours” follows our proposed boundary-aware strategy:
+ ℒ B \mathcal{L}_{\text{B}} is applied only near ground-truth boundaries, and ℒ S \mathcal{L}_{\text{S}} is applied to non-boundary regions.
+
+ Figure 7 : Qualitative results of “All frames” vs. “Ours” on GTEA. 
+Boundary-aware loss assignment improves alignment and segmentation quality, especially near action boundaries.
+
+ Dataset | 
+ GTEA | 
+ 50Salads | 
+ Breakfast | 
+
+ Methods | 
+ F1@{10,25,50} | 
+ Edit | 
+ Acc | 
+ F1@{10,25,50} | 
+ Edit | 
+ Acc | 
+ F1@{10,25,50} | 
+ Edit | 
+ Acc | 
+
+ MS-TCN [ 6 ] | 
+ 86.47 | 
+ 83.73 | 
+ 71.20 | 
+ 79.92 | 
+ 76.53 | 
+ 73.96 | 
+ 71.42 | 
+ 62.12 | 
+ 66.29 | 
+ 79.11 | 
+ 50.61 | 
+ 46.41 | 
+ 36.58 | 
+ 61.75 | 
+ 66.96 | 
+
+ + Ours | 
+ 88.13 | 
+ 84.62 | 
+ 72.40 | 
+ 83.23 | 
+ 78.20 | 
+ 77.44 | 
+ 75.22 | 
+ 67.31 | 
+ 70.29 | 
+ 81.17 | 
+ 55.96 | 
+ 51.39 | 
+ 40.78 | 
+ 62.29 | 
+ 67.46 | 
+
+ + ASOT [ 23 ] | 
+ 87.81 | 
+ 85.49 | 
+ 73.30 | 
+ 81.65 | 
+ 76.61 | 
+ 81.36 | 
+ 79.17 | 
+ 70.16 | 
+ 74.30 | 
+ 79.49 | 
+ 46.91 | 
+ 42.50 | 
+ 32.01 | 
+ 44.94 | 
+ 61.10 | 
+
+ + ASOT + ℒ B \mathcal{L}_{\text{B}} | 
+ 88.12 | 
+ 85.99 | 
+ 73.95 | 
+ 83.33 | 
+ 78.04 | 
+ 82.78 | 
+ 80.97 | 
+ 71.69 | 
+ 74.77 | 
+ 81.27 | 
+ 45.13 | 
+ 40.89 | 
+ 30.36 | 
+ 42.89 | 
+ 59.41 | 
+
+ + ASOT + ℒ S \mathcal{L}_{\text{S}} | 
+ 88.03 | 
+ 84.92 | 
+ 73.44 | 
+ 82.01 | 
+ 77.03 | 
+ 79.78 | 
+ 77.79 | 
+ 69.65 | 
+ 71.86 | 
+ 78.43 | 
+ 49.25 | 
+ 44.80 | 
+ 34.28 | 
+ 46.33 | 
+ 61.90 | 
+
+ + ASOT + Ours | 
+ 88.82 | 
+ 87.09 | 
+ 74.31 | 
+ 84.88 | 
+ 78.48 | 
+ 82.45 | 
+ 81.05 | 
+ 73.00 | 
+ 76.08 | 
+ 81.48 | 
+ 45.42 | 
+ 41.18 | 
+ 31.24 | 
+ 44.71 | 
+ 61.23 | 
+
+ Table 7 : Ablation study on synergy with post-processing method using MS-TCN on GTEA, 50Salads and Breakfast.
+We apply ASOT [ 23 ] as a post-processing step to both the baseline and our model trained with the proposed losses.
+
+## 4.3.4 Synergy with Post-Processing Methods
+
+ Beyond analyzing the internal components of our method, we also investigate its synergy with external post-processing methods.
+In particular, we focus on ASOT [ 23 ] , which was originally proposed for unsupervised TAS but can be applied as a post-processing refinement in supervised settings.
+We applied ASOT to the MS-TCN and to models trained with our framework and its individual components. 
+
+ Table 7 demonstrated a clear synergistic relationship on GTEA and 50Salads.
+On GTEA, the effect is evident.
+Although both the proposed method alone (”+ Ours”) and ASOT alone (”+ ASOT”) improved upon the baseline, their combination (”+ ASOT + Ours”) achieved the best performance across all metrics.
+Notably, the combined model reaches an F1@10 of 88.82 and an Edit of 84.88, surpassing both the proposed method alone and ASOT alone. 
+
+ A similar and even more pronounced trend is observed on 50Salads.
+Both our method alone and ASOT alone provide significant gains over the baseline.
+However, combining them (”+ ASOT + Ours”) yields the strongest overall results.
+This combination achieved an F1@10 of 82.45 and an F1@50 of 73.00, which are substantial improvements over both the proposed method alone and ASOT alone. 
+
+ In contrast, a different trend was observed on Breakfast.
+As shown in Table 7 , applying ASOT alone (”+ ASOT”) significantly degraded performance compared to the baseline, and even combining ASOT with either ℒ B \mathcal{L}_{\text{B}} , ℒ S \mathcal{L}_{\text{S}} , or our full method failed to recover this drop.
+This indicates that ASOT is inherently ineffective on Breakfast, likely because its post-hoc temporal refinement conflicts with the long, diverse action sequences in this dataset.
+In contrast, our method (”+ Ours”) improved the baseline on all metrics, while ASOT-based post-processing is not beneficial. 
+
+ These ablation studies collectively demonstrate that the proposed method not only improves predictions through its design, including complementary losses and targeted supervision, but also provides a stronger foundation for external refinements, such as ASOT.
+This highlights the versatility of the proposed method as both an internal regularizer and a complementary training scheme for post-hoc methods. 
+
+## 5 Conclusion
+
+ We presented a simple training-time enhancement for fully supervised Temporal Action Segmentation (TAS) based on two complementary auxiliary losses: a Boundary-Regression Loss and a CDF-based Segment Shape Regularization Loss.
+Unlike prior boundary-aware approaches that rely on additional branches or complex architectural modifications, our method is architecture-agnostic and requires only minimal changes: one additional boundary output channel, and two loss terms added to the original loss. 
+
+ Experiments on GTEA, 50Salads, and Breakfast demonstrated that the proposed losses improved Edit and F1 scores across MS-TCN, C2F-TCN, and FACT in many settings, while frame-wise accuracy remained largely comparable.
+We further show that the two losses address complementary aspects of TAS, boundary localization, and within-segment structural consistency, and that applying them with a temporally decoupled loss assignment helps mitigate gradient conflicts.
+In addition, compared to boundary-aware baselines such as ASRF and BCN, our approach achieves a favorable accuracy–efficiency trade-off with negligible computational overhead.
+Finally, combining our losses with ASOT as a post-hoc refinement can provide additional gains on certain datasets, suggesting that training-time regularization and inference-time refinement can be complementary. 
+
+ Overall, our results indicated that improving boundary fidelity and segment-level structure through loss design is a practical direction for enhancing TAS.
+We hope this work encourages further exploration of lightweight, architecture-agnostic objectives for temporal segmentation and sequence labeling tasks.
+
+## References
+
+ [1] 
+ A. S. Ali, S. A. Mahmood, M. Saeed, A. Konin, M. Z. Zia, and Q. Tran (2025) 
+
+ Joint self-supervised video alignment and action segmentation .
+
+ arXiv preprint arXiv:2503.16832 .
+
+ Cited by: §2.3 .
+
+ [2] 
+ E. Bahrami, G. Francesca, and J. Gall (2023) 
+
+ How much temporal long-term context is needed for action segmentation? .
+
+ In The IEEE/CVF International Conference on Computer Vision ,
+
+ pp. 10351–10361 .
+
+ Cited by: §1 .
+
+ [3] 
+ N. Behrmann, S. A. Golestaneh, Z. Kolter, J. Gall, and M. Noroozi (2022) 
+
+ Unified fully and timestamp supervised temporal action segmentation via sequence to sequence translation .
+
+ In European Conference on Computer Vision ,
+
+ pp. 52–68 .
+
+ Cited by: §1 .
+
+ [4] 
+ J. Carreira and A. Zisserman (2017) 
+
+ Quo vadis, action recognition? a new model and the kinetics dataset .
+
+ In The IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ Vol. , pp. 4724–4733 .
+
+ External Links: Document 
+
+ Cited by: §4.1.1 .
+
+ [5] 
+ A. Dosovitskiy, L. Beyer, A. Kolesnikov, D. Weissenborn, X. Zhai, T. Unterthiner, M. Dehghani, M. Minderer, G. Heigold, S. Gelly, J. Uszkoreit, and N. Houlsby (2021) 
+
+ An image is worth 16x16 words: transformers for image recognition at scale .
+
+ International Conference on Learning Representations .
+
+ Cited by: §2.1 .
+
+ [6] 
+ Y. A. Farha and J. Gall (2019) 
+
+ Ms-tcn: multi-stage temporal convolutional network for action segmentation .
+
+ In The IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 3575–3584 .
+
+ Cited by: §1 ,
+ §2.1 ,
+ §4.1.1 ,
+ §4.1.2 ,
+ Table 2 ,
+ Table 3 ,
+ Table 7 ,
+ §4 .
+
+ [7] 
+ A. Fathi, X. Ren, and J. M. Rehg (2011) 
+
+ Learning to recognize objects in egocentric activities .
+
+ In The IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ Vol. , pp. 3281–3288 .
+
+ External Links: Document 
+
+ Cited by: §1 ,
+ §4 .
+
+ [8] 
+ Y. Ishikawa, S. Kasai, Y. Aoki, and H. Kataoka (2021) 
+
+ Alleviating over-segmentation errors by detecting action boundaries .
+
+ In The IEEE/CVF Winter Conference on Applications of Computer Vision ,
+
+ pp. 2322–2331 .
+
+ Cited by: §1 ,
+ §1 ,
+ §2.2 ,
+ §4.1.1 ,
+ §4.1.2 ,
+ §4.2.3 ,
+ Table 3 ,
+ §4 .
+
+ [9] 
+ S. Karaman, L. Seidenari, and A. Del Bimbo (2014) 
+
+ Fast saliency based pooling of fisher encoded dense trajectories .
+
+ In European Conference on Computer Vision THUMOS Workshop ,
+
+ Vol. 1 , pp. 5 .
+
+ Cited by: §2.1 .
+
+ [10] 
+ H. Kuehne, A. Arslan, and T. Serre (2014) 
+
+ The language of actions: recovering the syntax and semantics of goal-directed human activities .
+
+ In The IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ Vol. , pp. 780–787 .
+
+ External Links: Document 
+
+ Cited by: §1 ,
+ §4 .
+
+ [11] 
+ H. Kuehne, J. Gall, and T. Serre (2016) 
+
+ An end-to-end generative framework for video segmentation and recognition .
+
+ In The IEEE/CVF Winter Conference on Applications of Computer Vision ,
+
+ pp. 1–8 .
+
+ Cited by: §2.1 .
+
+ [12] 
+ C. Lea, M. D. Flynn, R. Vidal, A. Reiter, and G. D. Hager (2017) 
+
+ Temporal convolutional networks for action segmentation and detection .
+
+ In The IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 156–165 .
+
+ Cited by: §2.1 .
+
+ [13] 
+ S. Li, Y. A. Farha, Y. Liu, M. Cheng, and J. Gall (2023) 
+
+ MS-tcn++: multi-stage temporal convolutional network for action segmentation .
+
+ IEEE Transactions on Pattern Analysis and Machine Intelligence 45 ( 6 ), pp. 6647–6658 .
+
+ External Links: Document 
+
+ Cited by: §2.1 .
+
+ [14] 
+ D. Liu, Q. Li, A. Dinh, T. Jiang, M. Shah, and C. Xu (2023) 
+
+ Diffusion action segmentation .
+
+ In The IEEE/CVF International Conference on Computer Vision ,
+
+ pp. 10139–10149 .
+
+ Cited by: §1 .
+
+ [15] 
+ Z. Lu and E. Elhamifar (2024) 
+
+ FACT: frame-action cross-attention temporal modeling for efficient supervised action segmentation .
+
+ In The IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 18175–18185 .
+
+ Cited by: §1 ,
+ §2.1 ,
+ §4.1.2 ,
+ Table 2 ,
+ §4 .
+
+ [16] 
+ A. Richard, H. Kuehne, and J. Gall (2017) 
+
+ Weakly supervised action learning with rnn based fine-to-coarse modeling .
+
+ In The IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 754–763 .
+
+ Cited by: §2.1 .
+
+ [17] 
+ M. Rohrbach, S. Amin, M. Andriluka, and B. Schiele (2012) 
+
+ A database for fine grained activity detection of cooking activities .
+
+ In The IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ Vol. , pp. 1194–1201 .
+
+ External Links: Document 
+
+ Cited by: §2.1 .
+
+ [18] 
+ B. Singh, T. K. Marks, M. Jones, O. Tuzel, and M. Shao (2016) 
+
+ A multi-stream bi-directional recurrent neural network for fine-grained action detection .
+
+ In The IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 1961–1970 .
+
+ Cited by: §2.1 .
+
+ [19] 
+ D. Singhania, R. Rahaman, and A. Yao (2023) 
+
+ C2F-tcn: a framework for semi-and fully-supervised temporal action segmentation .
+
+ IEEE Transactions on Pattern Analysis and Machine Intelligence 45 ( 10 ), pp. 11484–11501 .
+
+ Cited by: §1 ,
+ §2.1 ,
+ Table 2 ,
+ §4 .
+
+ [20] 
+ S. Stein and S. J. McKenna (2013) 
+
+ Combining embedded accelerometers with computer vision for recognizing food preparation activities .
+
+ In The ACM International Joint Conference on Pervasive and Ubiquitous Computing ,
+
+ UbiComp ’13 , New York, NY, USA , pp. 729–738 .
+
+ External Links: ISBN 9781450317702 ,
+ Link ,
+ Document 
+
+ Cited by: §1 ,
+ §4 .
+
+ [21] 
+ A. van den Oord, S. Dieleman, H. Zen, K. Simonyan, O. Vinyals, A. Graves, and N. Kalchbrenner (2016) 
+
+ WaveNet: a generative model for raw audio .
+
+ In International Speech Communication Association Speech Synthesis Workshop ,
+
+ pp. 125 .
+
+ Cited by: §2.1 .
+
+ [22] 
+ Z. Wang, Z. Gao, L. Wang, Z. Li, and G. Wu (2020) 
+
+ Boundary-aware cascade networks for temporal action segmentation .
+
+ In European Conference on Computer Vision ,
+
+ pp. 34–51 .
+
+ Cited by: §1 ,
+ §2.2 ,
+ §4.2.3 ,
+ Table 3 ,
+ §4 .
+
+ [23] 
+ M. Xu and S. Gould (2024) 
+
+ Temporally consistent unbalanced optimal transport for unsupervised action segmentation .
+
+ In The IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 14618–14627 .
+
+ Cited by: §1 ,
+ §2.3 ,
+ §4.3.4 ,
+ Table 7 ,
+ Table 7 ,
+ Table 7 .
+
+ [24] 
+ F. Yi, H. Wen, and T. Jiang (2021) 
+
+ ASFormer: transformer for action segmentation .
+
+ In The British Machine Vision Conference ,
+
+ pp. 236 .
+
+ Cited by: §1 .
+
+ Experimental support, please
+ view the build logs 
+ for errors. Generated by
+
+ L
+ A 
+ T
+ E 
+
+ xml 
+
+ .
+
+## Instructions for reporting errors
+
+ We are continuing to improve HTML versions of papers, and your feedback helps enhance accessibility and mobile
+ support. To report errors in the HTML that will help us improve conversion and rendering, choose any of the
+ methods listed below: 
+
+ Click the "Report Issue" ( 
+
+ ) button, located in the page header. 
+
+ Tip: You can select the relevant text first, to include it in your report. 
+ Our team has already identified the following issues . We appreciate your time reviewing and reporting rendering errors we
+ may not have found yet. Your efforts will help us improve the HTML versions for all readers, because disability
+ should not be a barrier to accessing research. Thank you for your continued support in championing open access for
+ all. 
+ Have a free development cycle? Help support accessibility at arXiv! Our collaborators at LaTeXML maintain a list of packages that need conversion , and welcome developer contributions . 
+
+ We gratefully acknowledge support from
+ our major funders ,
+ member institutions , ,
+ and all contributors.
+
+ About 
+ · 
+ Help 
+ · 
+ Contact 
+ · 
+ Subscribe 
+ · 
+ Copyright 
+ · 
+ Privacy 
+ · 
+ Accessibility 
+ · 
+ Operational Status (opens in new tab) 
+
+ Major funding support from 
+

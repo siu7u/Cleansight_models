@@ -1,0 +1,2072 @@
+ 
+
+ Joint Self-Supervised Video Alignment and Action Segmentation 
+
+## Report GitHub Issue
+
+ × 
+
+ Title: 
+
+ Content selection saved. Describe the issue below: 
+
+ Description: 
+
+ Submit without GitHub 
+ Submit in GitHub 
+
+ arXiv is now an independent nonprofit! 
+ Learn more 
+ × 
+
+ Back to arXiv 
+
+ Why HTML? 
+
+ Report Issue 
+
+ Back to Abstract 
+
+ Download PDF 
+
+ Abstract 
+ 1 Introduction 
+ 2 Related Work 
+ 3 Our Approach 
+
+ 3.1 Self-Supervised Video Alignment 
+
+ 3.1.1 Optimal Transport with Structured Data 
+ 3.1.2 Video Alignment Optimal Transport 
+ 3.1.3 Self-Supervised Learning 
+
+ 3.2 Joint Self-Supervised Video Alignment and Action Segmentation 
+
+ 3.2.1 Self-Supervised Video Alignment vs. Action Segmentation 
+ 3.2.2 Self-Supervised Multi-Task Learning 
+
+ 4 Experiments 
+
+ 4.1 Ablation Analysis Results 
+ 4.2 Sensitivity Analysis Results 
+ 4.3 State-of-the-Art Comparison Results 
+
+ 5 Conclusion 
+ A Supplementary Material 
+
+ A.1 Implementation Details 
+ A.2 Ablation Analysis Results 
+ A.3 Sensitivity Analysis Results 
+ A.4 Multi-Action Video Alignment Results 
+ A.5 Per-Video Action Segmentation Results 
+ A.6 Qualitative Results 
+ A.7 Complexity Comparison Results 
+
+ References 
+
+ License: arXiv.org perpetual non-exclusive license
+
+arXiv:2503.16832v3 [cs.CV] 05 Dec 2025 
+
+## Joint Self-Supervised Video Alignment and Action Segmentation
+
+ Ali Shah Ali †      Syed Ahmed Mahmood †      Mubin Saeed     Andrey Konin
+
+ Affiliation:  M. Zeeshan Zia     Quoc-Huy Tran
+
+ Affiliation:  Retrocausal, Inc., Redmond, WA
+
+ Affiliation:  www.retrocausal.ai 
+
+## Abstract
+
+ We introduce a novel approach for simultaneous self-supervised video alignment and action segmentation based on a unified optimal transport framework. In particular, we first tackle self-supervised video alignment by developing a fused Gromov-Wasserstein optimal transport formulation with a structural prior, which trains efficiently on GPUs and needs only a few iterations for solving the optimal transport problem. Our single-task method achieves the state-of-the-art performance on multiple video alignment benchmarks and outperforms VAVA, which relies on a traditional Kantorovich optimal transport formulation with an optimality prior. Furthermore, we extend our approach by proposing a unified optimal transport framework for joint self-supervised video alignment and action segmentation, which requires training and storing a single model and saves both time and memory consumption as compared to two different single-task models. Extensive evaluations on several video alignment and action segmentation datasets demonstrate that our multi-task method achieves comparable video alignment yet superior action segmentation results over previous methods in video alignment and action segmentation respectively. Finally, to the best of our knowledge, this is the first work to unify video alignment and action segmentation into a single model. Our code is available on our research website: https://retrocausal.ai/research/ . 
+
+## 1 Introduction
+
+ 0 0 footnotetext: † indicates joint first author.
+ {alishah,ahmed,mubin,andrey,zeeshan,huy}@retrocausal.ai. 
+
+ Figure 1 : (a) Our self-supervised video alignment method (VAOT) based on a fused Gromov-Wasserstein optimal transport with structural priors { C x , C y } \{\textbf{C}^{x},\textbf{C}^{y}\} . (b) Our joint self-supervised video alignment and action segmentation method (VASOT) based on a unified optimal transport with structural priors { C x , C y } \{\textbf{C}^{x},\textbf{C}^{y}\} for video alignment and { C x , C a } \{\textbf{C}^{x},\textbf{C}^{a}\} and { C y , C a } \{\textbf{C}^{y},\textbf{C}^{a}\} for action segmentation. 
+
+ Though the past decade has witnessed remarkable progress in human activity understanding in videos, the majority of the research efforts have been invested in action recognition  [ 8 , 69 , 76 , 21 ] , which categorizes simple actions in short videos. In this paper, we study the two less-explored problems, i.e., temporal video alignment ( frame-to-frame assignment), which establishes framewise correspondences between long videos recording a complex activity, and temporal action segmentation ( frame-to-action assignment), which assigns frames of long videos capturing a multi-phase activity to phase/action labels. Since acquiring per-frame annotations for supervised training is generally difficult and costly, we are interested in self-supervised approaches for video alignment and action segmentation. 
+
+ One popular group of self-supervised video alignment methods rely on global alignment techniques widely used in time series literature. For example, LAV  [ 26 ] utilizes dynamic time warping  [ 11 ] by assuming monotonic orderings and no background/redundant frames. VAVA  [ 45 ] relaxes the above assumptions by incorporating an optimality prior into a standard Kantorovich optimal transport framework  [ 12 ] , along with an inter-video contrastive term and an intra-video contrastive term. However, it is challenging to balance multiple losses as well as handle repeated actions. Similarly, self-supervised action segmentation methods based on optimal transport have been introduced, including TOT  [ 35 ] and UFSA  [ 71 ] which may suffer in cases of order variations, unbalanced segmentation, and repeated actions. ASOT  [ 80 ] addresses these drawbacks via a fused Gromov-Wasserstein optimal transport framework with a structural prior, which outperforms previous works in self-supervised action segmentation. Lastly, though both self-supervised video align and action segmentation require fine-grained temporal understanding of videos, their interaction in a multi-task learning setup has not been explored. 
+
+ Motivated by the above observations, we first propose VAOT (see Fig.  1 (a)), a novel self-supervised video alignment approach based on a fused Gromov-Wasserstein optimal transport formulation with a structural prior, which tackles order variations, background/redundant frames, and repeated actions in a single global alignment framework. Our single-task model trains efficiently on GPUs and requires few iterations to derive the optimal transport solution, while outperforming previous methods, including VAVA  [ 45 ] , on video alignment datasets. Moreover, we develop VASOT (see Fig.  1 (b)), a joint self-supervised video alignment and action segmentation approach by exploring the relationship between self-supervised video alignment and action segmentation via a unified optimal transport framework. Our multi-task model performs on par with prior works on video alignment benchmarks yet establishes the new state of the art on action segmentation benchmarks. In addition, our joint model requires training and storing a single model and saves both time and memory consumption as compared to two separate single-task models. Lastly, we observe in Sec.  4.3 that, in a multi-task learning setting, action segmentation provides little boost to video alignment results, whereas video alignment increases action segmentation performance significantly. 
+
+ In summary, our contributions include: 
+
+ • 
+
+ We propose a fused Gromov-Wasserstein optimal transport formulation with a structural prior for self-supervised video alignment, outperforming previous methods. Our single-task method learns efficiently on GPUs, needing few iterations to obtain the optimal transport solution. 
+
+ • 
+
+ We develop a unified optimal transport-based approach for simultaneous self-supervised video alignment and action segmentation, yielding comparable video alignment but superior action segmentation results over previous methods. Our joint approach requires training and storing a single model, saving both time and memory usage. 
+
+ • 
+
+ We conduct extensive experiments on several video alignment and action segmentation datasets, i.e., Pouring, Penn Action, IKEA ASM, 50 Salads, YouTube Instructions, Breakfast, and Desktop Assembly, to validate the advantages of our single-task and multi-task methods. To our best knowledge, our work is the first to combine video alignment with action segmentation. 
+
+## 2 Related Work
+
+ Self-Supervised Learning. 
+Early self-supervised learning methods focus on designing image-based pretext tasks with pseudo-labels as supervision signals for learning representations such as image colorization  [ 37 , 38 ] , object counting  [ 50 , 46 ] , predicting rotations  [ 24 ] , solving puzzles  [ 5 , 31 ] , image inpainting  [ 28 ] , and image clustering  [ 6 , 7 ] . The above image-based approaches mostly extract spatial cues from the image content. Recently, significant efforts have been invested in video-based self-supervised learning methods, which exploit both spatial and temporal information. Examples of video-based pretext tasks include forecasting future frames  [ 61 , 74 , 1 , 15 ] , enforcing temporal coherence  [ 49 , 84 , 25 ] , predicting temporal order  [ 48 , 39 , 23 , 78 ] , arrow of time  [ 53 , 77 ] , and pace  [ 4 , 75 , 81 ] , and utilizing contrastive learning  [ 22 , 27 , 54 , 13 ] . More recently, skeleton-based self-supervised learning methods with skeleton-based pretext tasks, e.g., skeleton inpainting  [ 83 ] , motion prediction  [ 63 ] , skeleton sequence alignment  [ 36 , 70 ] , and utilizing neighborhood consistency  [ 59 ] , motion continuity  [ 64 ] , and multiple pretext tasks  [ 44 ] , have been introduced. These skeleton-based approaches may suffer from human pose estimation errors and missing context details. Here, we leverage video alignment and/or action segmentation as our video-based pretext tasks. 
+
+ Video Alignment. 
+Self-supervised video alignment has attracted a great amount of research interest in recent years. TCC  [ 19 ] enforces cycle consistencies between corresponding frames across videos for learning representations. Recently, GTCC  [ 17 ] extends TCC  [ 19 ] by proposing multi-cycle consistencies for tackling repeated actions. Both TCC  [ 19 ] and GTCC  [ 17 ] perform local alignment by aligning each frame separately. Motivated by global alignment techniques for time series, methods which align the video as a whole have been introduced. LAV  [ 26 ] which assumes monotonic orderings and no background/redundant frames relies on dynamic time warping  [ 11 ] . To handle non-monotonic orderings and background/redundant frames, VAVA  [ 45 ] employs a traditional Kantorovich optimal transport formulation  [ 12 ] with an optimality prior. In this work, we propose a fused Gromov-Wasserstein optimal transport formulation with a structural prior which handles order variations, background/redundant frames, and repeated actions in a single global alignment framework. In addition, we develop a unified optimal transport-based approach for joint video alignment and action segmentation. 
+
+ Action Segmentation. 
+Initial works in self-supervised action segmentation perform representation learning and offline clustering as disjoint steps. Please see Ding et al.  [ 16 ] for a recent survey. CTE  [ 34 ] trains a temporal embedding first and then employs K-Means to cluster the embedded representations. To enhance CTE  [ 34 ] , VTE  [ 73 ] and ASAL  [ 43 ] introduce a visual embedding and an action embedding respectively. The above methods separate representation learning and offline clustering, prohibiting effective communications between the two modules. Recently, methods which jointly conduct representation learning and online clustering have been developed, e.g., UDE  [ 65 ] , TOT  [ 35 ] , and UFSA  [ 71 ] . However, their performance may deteriorate in cases of order variations, unbalanced segmentation, and repeated actions. To overcome these limitations, ASOT  [ 80 ] introduces a fused Gromov-Wasserstein optimal transport formulation with a structural prior. Here, we propose a similar optimal transport formulation for video alignment, outperforming previous methods on video alignment datasets, and extend it to a joint video alignment and action segmentation model, establishing the new state of the art on action segmentation benchmarks. 
+
+ Optimal Transport with Structured Data. 
+Optimal transport underpins several computer vision and machine learning applications. A comprehensive review of optimal transport and its applications in machine learning is presented in Khamis et al.  [ 30 ] . Optimal transport applications in computer vision include keypoint matching  [ 47 , 56 ] , point set registration  [ 58 ] , object detection  [ 14 ] , object tracking  [ 40 ] , video alignment  [ 45 ] , and procedure learning  [ 10 ] . For problems with structured data, a Gromov-Wasserstein optimal transport with a structural prior is frequently employed, e.g., graph matching  [ 79 ] , brain image registration  [ 67 ] , and action segmentation  [ 80 ] . In this paper, we develop a Gromov-Wasserstein optimal transport with a structural prior for video alignment and extend it to joint video alignment and action segmentation. To our best knowledge, our work is the first to incorporate video alignment and action segmentation into a unified optimal transport framework. 
+
+## 3 Our Approach
+
+ We describe in this section our main contributions, namely a self-supervised video alignment approach (VAOT) in Sec.  3.1 and a joint self-supervised video alignment and action segmentation approach (VASOT) in Sec.  3.2 . 
+
+ Notations. 
+First of all, ⟨ 𝐀 , 𝐁 ⟩ = ∑ i , j A i ​ j ​ B i ​ j \langle\mathbf{A},\mathbf{B}\rangle=\sum_{i,j}A_{ij}B_{ij} denotes the dot product of 𝐀 , 𝐁 ∈ ℝ n × m \mathbf{A},\mathbf{B}\in\mathbb{R}^{n\times m} , 𝟏 n ∈ ℝ n \mathbf{1}_{n}\in\mathbb{R}^{n} models a vector of ones, and [ n ] = { 1 , … , n } [n]=\{1,\dots,n\} represents a discrete set of n n elements. Next, Δ m ⊂ ℝ m \Delta_{m}\subset\mathbb{R}^{m} denotes the ( m − 1 ) (m-1) dimensional probability simplex, while Δ m n ⊂ ℝ m × n \Delta_{m}^{n}\subset\mathbb{R}^{m\times n} models the Cartesian product space consisting of n n such simplexes. Furthermore, X = { x 1 , … , x N } X=\{x_{1},\dots,x_{N}\} and Y = { y 1 , … , y M } Y=\{y_{1},\dots,y_{M}\} denote two input videos of N N and M M frames respectively. Let f 𝜽 f_{\bm{\theta}} with learnable parameters 𝜽 \bm{\theta} be the embedding function, frame-level embeddings of X X and Y Y are expressed as 𝐗 = f 𝜽 ​ ( X ) ∈ ℝ N × D \mathbf{X}=f_{\bm{\theta}}(X)\in\mathbb{R}^{N\times D} and 𝐘 = f 𝜽 ​ ( Y ) ∈ ℝ M × D \mathbf{Y}=f_{\bm{\theta}}(Y)\in\mathbb{R}^{M\times D} , where D D is the embedding vector length. Lastly, K K learnable action centroids are expressed by 𝐀 = [ 𝐚 1 , … , 𝐚 K ] ∈ ℝ D × K \mathbf{A}=\left[\mathbf{a}_{1},\dots,\mathbf{a}_{K}\right]\in\mathbb{R}^{D\times K} . 
+
+## 3.1 Self-Supervised Video Alignment
+
+## 3.1.1 Optimal Transport with Structured Data
+
+ Kantorovich Optimal Transport. 
+We briefly describe the conventional optimal transport formulation, also known as Kantorovich optiomal transport (KOT)  [ 66 ] , in the discrete setting. The KOT problem aims to find the minimum-cost coupling 𝐓 ⋆ \mathbf{T}^{\star} between histograms 𝐩 ∈ Δ n \mathbf{p}\in\Delta_{n} and 𝐪 ∈ Δ m \mathbf{q}\in\Delta_{m} with a ground cost 𝐂 ∈ ℝ + n × m \mathbf{C}\in\mathbb{R}^{n\times m}_{+} and is written as: 
+
+ | 
+ argmin 𝐓 ∈ 𝒯 𝐩 , 𝐪 ℱ KOT ​ ( 𝐂 , 𝐓 ) = ⟨ 𝐂 , 𝐓 ⟩ , \operatornamewithlimits{argmin}_{\mathbf{T}\in\mathcal{T}_{\mathbf{p},\mathbf{q}}}~~~\mathcal{F}_{\text{KOT}}(\mathbf{C},\mathbf{T})=\langle\mathbf{C},\mathbf{T}\rangle, | 
+ | 
+ (1) | 
+
+ with 𝒯 𝐩 , 𝐪 = { 𝐓 ∈ ℝ + n × m ∣ 𝐓𝟏 m = 𝐩 , 𝐓 ⊤ 𝟏 n = 𝐪 } \mathcal{T}_{\mathbf{p},\mathbf{q}}=\{\mathbf{T}\in\mathbb{R}_{+}^{n\times m}\mid\mathbf{T}\mathbf{1}_{m}=\mathbf{p},\mathbf{T}^{\top}\mathbf{1}_{n}=\mathbf{q}\} . The coupling 𝐓 \mathbf{T} is regarded as the soft assignment between elements in the supports of 𝐩 \mathbf{p} and 𝐪 \mathbf{q} , i.e., discrete sets [ n ] [n] and [ m ] [m] . For video alignment, 𝐓 ∈ ℝ + N × M \mathbf{T}\in\mathbb{R}_{+}^{N\times M} represents the assignment between frames of X X and Y Y . 
+
+ Gromov-Wasserstein Optimal Transport. 
+For histograms defined over incomparable spaces, Gromov-Wasserstein (GW) optimal transport  [ 52 ] is typically employed as: 
+
+ | 
+ argmin 𝐓 ∈ 𝒯 𝐩 , 𝐪 ℱ GW ​ ( 𝐂 x , 𝐂 y , 𝐓 ) = ∑ i , k ∈ [ n ] j , l ∈ [ m ] L ⁡ ( 𝐂 i ​ k x , 𝐂 j ​ l y ) ​ 𝐓 i ​ j ​ 𝐓 k ​ l . \operatornamewithlimits{argmin}_{\mathbf{T}\in\mathcal{T}_{\mathbf{p},\mathbf{q}}}~~~\mathcal{F}_{\text{GW}}(\mathbf{C}^{x},\mathbf{C}^{y},\mathbf{T})=\sum_{\begin{subarray}{c}i,k\in[n]\\
+j,l\in[m]\end{subarray}}L(\mathbf{C}_{ik}^{x},\mathbf{C}_{jl}^{y})\mathbf{T}_{ij}\mathbf{T}_{kl}. | 
+ | 
+ (2) | 
+
+ Here, ( 𝐂 x , 𝐩 ) ∈ ℝ n × n × Δ n (\mathbf{C}^{x},\mathbf{p})\in\mathbb{R}^{n\times n}\times\Delta_{n} and ( 𝐂 y , 𝐪 ) ∈ ℝ m × m × Δ m (\mathbf{C}^{y},\mathbf{q})\in\mathbb{R}^{m\times m}\times\Delta_{m} represent two (metric, measure) pairs respectively, while distance matrices 𝐂 x \mathbf{C}^{x} and 𝐂 y \mathbf{C}^{y} describe metrics defined over supports [ n ] [n] and [ m ] [m] respectively. Note that there is no metric defined between supports [ n ] [n] and [ m ] [m] in the GW setting. L : ℝ × ℝ → ℝ L:\mathbb{R}\times\mathbb{R}\rightarrow\mathbb{R} denotes a cost function minimizing discrepancies between distance matrix elements. We utilize the GW formulation to impose structural priors 𝐂 x \mathbf{C}^{x} and 𝐂 y \mathbf{C}^{y} on the transport map for video alignment (i.e., temporal consistency), which we will describe in the next section. 
+
+ Fused Gromov-Wasserstein Optimal Transport. 
+Fused Gromov-Wasserstein (FGW) optimal transport  [ 68 , 72 ] which merges KOT and GW formulations is often used for problems with known ground cost and structural prior. Let α ∈ [ 0 , 1 ] \alpha\in[0,1] , the FGW problem is expressed as: 
+
+ | 
+ argmin 𝐓 ∈ 𝒯 𝐩 , 𝐪 ℱ FGW ​ ( 𝐂 , 𝐂 x , 𝐂 y , 𝐓 ) = ( 1 − α ) ​ ℱ KOT ​ ( 𝐂 , 𝐓 ) + α ​ ℱ GW ​ ( 𝐂 x , 𝐂 y , 𝐓 ) . \operatornamewithlimits{argmin}_{\mathbf{T}\in\mathcal{T}_{\mathbf{p},\mathbf{q}}}~~~\mathcal{F}_{\text{FGW}}(\mathbf{C},\mathbf{C}^{x},\mathbf{C}^{y},\mathbf{T})=(1-\alpha)\mathcal{F}_{\text{KOT}}(\mathbf{C},\mathbf{T})+\\
+\alpha\mathcal{F}_{\text{GW}}(\mathbf{C}^{x},\mathbf{C}^{y},\mathbf{T}). | 
+ | 
+ (3) | 
+
+ For video alignment, the KOT objective encourages visual similarity between corresponding frames of X X and Y Y , while the GW objective enforces structural properties on the resulting alignment (i.e., temporal consistency). 
+
+ Balanced Optimal Transport. 
+The above optimal transport problems impose balanced assignment constraints 𝐓 ∈ 𝒯 𝐩 , 𝐪 = { 𝐓 ∈ ℝ + n × m ∣ 𝐓𝟏 m = 𝐩 , 𝐓 ⊤ 𝟏 n = 𝐪 } \mathbf{T}\in\mathcal{T}_{\mathbf{p},\mathbf{q}}=\{\mathbf{T}\in\mathbb{R}_{+}^{n\times m}\mid\mathbf{T}\mathbf{1}_{m}=\mathbf{p},\mathbf{T}^{\top}\mathbf{1}_{n}=\mathbf{q}\} . Recent works have relaxed these constraints by replacing (one  [ 80 ] or both  [ 67 ] ) marginal constraints on 𝐓 \mathbf{T} with penalty terms in the objective, yielding ( partial   [ 80 ] or full   [ 67 ] ) unbalanced assignment constraints. For video alignment, we adopt the full unbalanced formulation  [ 67 ] but the results are worse than those of the balanced formulation, as we will show later in Sec.  4.1 . This is likely because it is difficult to balance multiple losses (the full unbalanced formulation yields two extra penalty terms) and video alignment is generally more balanced than action segmentation (the number of frames is much larger than the number of actions). 
+
+## 3.1.2 Video Alignment Optimal Transport
+
+ Here, we adapt the above balanced FGW optimal transport in Eq.  3 for video alignment, yielding our proposed video alignment optimal transport (VAOT). Let us denote 𝐩 = 1 N ​ 𝟏 N \mathbf{p}=\frac{1}{N}\mathbf{1}_{N} and 𝐪 = 1 M ​ 𝟏 M \mathbf{q}=\frac{1}{M}\mathbf{1}_{M} as histograms defined over the sets of N N frames in X X and M M frames in Y Y , represented by [ N ] [N] and [ M ] [M] respectively. The solution 𝐓 ⋆ ∈ ℝ + N × M \mathbf{T}^{\star}\in\mathbb{R}_{+}^{N\times M} between [ N ] [N] and [ M ] [M] represents the soft assignment between frames of X X and Y Y . For a frame x i x_{i} in X X , the corresponding frame y j ⋆ y_{j^{\star}} in Y Y is specified by j ⋆ = argmax j 𝐓 i ​ j ⋆ j^{\star}=\operatornamewithlimits{argmax}_{j}\mathbf{T}_{ij}^{\star} . Below we will discuss our cost matrices { 𝐂 , 𝐂 x , 𝐂 y } \{\mathbf{C},\mathbf{C}^{x},\mathbf{C}^{y}\} for the FGW problem in Eq.  3 , deriving the solution 𝐓 ⋆ \mathbf{T}^{\star} efficiently, and handling background/redundant frames. 
+
+ Visual Cue. 
+The KOT subproblem in Eq.  3 includes the cost matrix 𝐂 \mathbf{C} which measures the difference in visual content of X X and Y Y and is defined as 𝐂 i ​ j = 1 − 𝐱 i ⊤ ​ 𝐲 j ‖ 𝐱 i ‖ 2 ​ ‖ 𝐲 j ‖ 2 \mathbf{C}_{ij}=1-\frac{\mathbf{x}_{i}^{\top}\mathbf{y}_{j}}{\|\mathbf{x}_{i}\|_{2}\|\mathbf{y}_{j}\|_{2}} , with frame embeddings 𝐱 i = f 𝜽 ​ ( x i ) \mathbf{x}_{i}=f_{\bm{\theta}}(x_{i}) and 𝐲 j = f 𝜽 ​ ( y j ) \mathbf{y}_{j}=f_{\bm{\theta}}(y_{j}) . 
+
+ Structural Prior. 
+For the GW subproblem in Eq.  3 , we define L ⁡ ( a , b ) = a ​ b L(a,b)=ab and cost matrices 𝐂 x ∈ ℝ + N × N \mathbf{C}^{x}\in\mathbb{R}_{+}^{N\times N} over frames of X X and 𝐂 y ∈ ℝ + M × M \mathbf{C}^{y}\in\mathbb{R}_{+}^{M\times M} over frames of Y Y as: 
+
+ | 
+ 𝐂 i ​ k x = { 1 r 1 ≤ δ i ​ k ≤ N ​ r 0 otherwise , 𝐂 j ​ l y = { 0 1 ≤ δ j ​ l ≤ M ​ r 1 otherwise . \mathbf{C}^{x}_{ik}=\begin{cases}\frac{1}{r}&1\leq\delta_{ik}\leq Nr\\
+0&\text{otherwise}\end{cases},\mathbf{C}^{y}_{jl}=\begin{cases}0&1\leq\delta_{jl}\leq Mr\\
+1&\text{otherwise}\end{cases}. | 
+ | 
+ (4) | 
+
+ Here, δ i ​ k = | i − k | \delta_{ik}=|i-k| , δ j ​ l = | j − l | \delta_{jl}=|j-l| , and a radius parameter r ∈ ( 0 , 1 ] r\in(0,1] . The GW component encourages temporal consistency over 𝐓 \mathbf{T} . In particular, assigning temporally nearby frames in X X ( δ i ​ k ≤ N ​ r \delta_{ik}\leq Nr ) to temporally distant frames in Y Y ( δ j ​ l > M ​ r \delta_{jl}>Mr ) incurs a cost ( L ⁡ ( 𝐂 i ​ k x , 𝐂 j ​ l y ) = 1 r L(\mathbf{C}^{x}_{ik},\mathbf{C}^{y}_{jl})=\frac{1}{r} ), whereas mapping temporally nearby frames in X X ( δ i ​ k ≤ N ​ r \delta_{ik}\leq Nr ) to temporally adjacent frames in Y Y ( δ j ​ l ≤ M ​ r \delta_{jl}\leq Mr ) or mapping temporally distant frames in X X ( δ i ​ k > N ​ r \delta_{ik}>Nr ) to temporally remote frames in Y Y ( δ j ​ l > M ​ r \delta_{jl}>Mr ) incurs no cost ( L ⁡ ( 𝐂 i ​ k x , 𝐂 j ​ l y ) = 0 L(\mathbf{C}^{x}_{ik},\mathbf{C}^{y}_{jl})=0 ). The GW component is capable of handling order variations and repeated actions, as shown in ASOT  [ 80 ] . 
+
+ Fast Numerical Solver for VAOT. 
+The GW component in Eq.  3 can be computed efficiently as ℱ GW ​ ( 𝐂 x , 𝐂 y , 𝐓 ) = ⟨ 𝐂 x ​ 𝐓𝐂 y , 𝐓 ⟩ \mathcal{F}_{\text{GW}}(\mathbf{C}^{x},\mathbf{C}^{y},\mathbf{T})=\langle\mathbf{C}^{x}\mathbf{T}\mathbf{C}^{y},\mathbf{T}\rangle since the cost function L ⁡ ( a , b ) = a ​ b L(a,b)=ab can be factorized  [ 52 ] . In addition, by adding an entropy regularization term − ϵ ​ H ​ ( 𝐓 ) -\epsilon H(\mathbf{T}) , with H ( 𝐓 ) = − ∑ i , j T i ​ j log T i ​ j H(\mathbf{T})=-\sum_{i,j}T_{ij}\log T_{ij} and ϵ > 0 \epsilon>0 , to the FGW formulation in Eq.  3 , we can obtain the solution 𝐓 ⋆ \mathbf{T}^{\star} efficiently via projected mirror descent  [ 52 ] , which can be run on GPUs. Our solver often converges in less than 25 25 iterations. By exploiting the sparse structures of 𝐂 x \mathbf{C}^{x} and 𝐂 y \mathbf{C}^{y} , each iteration has O ⁡ ( N ​ M ) O(NM) time complexity. 
+
+ Background/Redundant Frame Handling. 
+To tackle background/redundant frames, we follow VAVA  [ 45 ] to add a virtual frame to X X and Y Y so that background/redundant frames are explicitly assigned to it. Specifically, we append an extra row and column to 𝐓 \mathbf{T} and expand other variables accordingly. If the assignment probability of x i x_{i} ( i ≤ N i\leq N ) with every y j y_{j} ( j ≤ M j\leq M ) is smaller than a threshold parameter ζ \zeta , we match x i x_{i} with the virtual frame y M + 1 y_{M+1} . Similarly, if the assignment probability of y j y_{j} ( j ≤ M j\leq M ) with every x i x_{i} ( i ≤ N i\leq N ) is smaller than ζ \zeta , we match y j y_{j} with x N + 1 x_{N+1} . Note that virtual frames and their associated frames are excluded from computing the losses. As shown in Sec.  4.1 , handling background/redundant frames leads to performance gain. 
+
+ Figure 2 : (a) Our self-supervised video alignment method (VAOT). (b) Our joint self-supervised video alignment and action segmentation method (VASOT). Learnable parameters are shown in red. Arrows denote computation/gradient flows (blue and green represent video alignment and action segmentation respectively). 
+
+## 3.1.3 Self-Supervised Learning
+
+ We now present our self-supervised learning framework for video alignment in Fig.  2 (a). We utilize the above VAOT module to compute pseudo-labels as supervision signals for training the frame encoder. We learn the parameters 𝜽 \bm{\theta} of the frame encoder by minimizing the cross-entropy loss between normalized similarities 𝐏 \mathbf{P} (computed based on frame embeddings 𝐗 \mathbf{X} and 𝐘 \mathbf{Y} ) and pseudo-labels 𝐓 ⋆ \mathbf{T}^{\star} (obtained by VAOT). We first define normalized similarities 𝐏 ∈ Δ M N \mathbf{P}\in\Delta_{M}^{N} as: 
+
+ | 
+ 𝐏 i ​ j = exp ⁡ ( 𝐗𝐘 ⊤ / τ ) i ​ j ∑ l exp ⁡ ( 𝐗𝐘 ⊤ / τ ) i ​ l , \mathbf{P}_{ij}=\frac{\exp(\mathbf{X}\mathbf{Y}^{\top}/\tau)_{ij}}{\sum_{l}\exp(\mathbf{X}\mathbf{Y}^{\top}/\tau)_{il}}, | 
+ | 
+ (5) | 
+
+ with τ > 0 \tau>0 denoting a temperature scaling parameter. In addition, pseudo-labels 𝐓 ⋆ \mathbf{T}^{\star} are obtained by solving the balanced FGW problem in Eq.  3 but with the augmented KOT cost matrix 𝐂 ~ = 𝐂 + ρ ​ 𝐑 \tilde{\mathbf{C}}=\mathbf{C}+\rho\mathbf{R} , with ρ ≥ 0 \rho\geq 0 . Here, we follow VAVA  [ 45 ] to impose the temporal prior 𝐑 \mathbf{R} , defined as 𝐑 i ​ j = | i / N − j / M | \mathbf{R}_{ij}=\left|i/N-j/M\right| , which encourages the coupling 𝐓 \mathbf{T} to have a banded diagonal shape and temporally nearby frames in X X to be matched with temporally adjacent frames in Y Y , yielding improved performance as seen in Sec.  4.1 . Finally, our self-supervised learning loss is written as: 
+
+ | 
+ ℒ = − ∑ i = 1 N ∑ j = 1 M 𝐓 ⋆ i ​ j log 𝐏 i ​ j . \mathcal{L}=-\sum_{i=1}^{N}\sum_{j=1}^{M}\mathbf{T}^{\star}_{ij}\log\mathbf{P}_{ij}. | 
+ | 
+ (6) | 
+
+ Note we do not back-propagate gradients through 𝐓 ⋆ \mathbf{T}^{\star} . 
+
+## 3.2 Joint Self-Supervised Video Alignment and Action Segmentation
+
+## 3.2.1 Self-Supervised Video Alignment vs. Action Segmentation
+
+ Sec.  3.1 presents our self-supervised video alignment approach (VAOT) developed based on an FGW optimal transport formulation with a structural prior, which has previously been adopted for self-supervised action segmentation by ASOT  [ 80 ] . Below we discuss differences between self-supervised video alignment and action segmentation, which lead to distinct design choices for VAOT and ASOT  [ 80 ] . Firstly, as illustrated in Fig.  1 , video alignment performs finer-grained frame-to-frame assignment, as compared to coarser-grained frame-to-action assignment in action segmentation, which causes our removal of 𝐀 \mathbf{A} and our cost matrices { 𝐂 , 𝐂 x , 𝐂 y } \{\mathbf{C},\mathbf{C}^{x},\mathbf{C}^{y}\} in Sec.  3.1 to be different from ASOT  [ 80 ] . Secondly, video alignment generally has a more balanced assignment than action segmentation (the number of frames is much larger than the number of actions) and it is hard to balance multiple losses (the full unbalanced formulation adds two extra penalty terms). Thus, a balanced FGW formulation performs the best for VAOT, whereas a partial unbalanced FGW formulation is preferred in ASOT  [ 80 ] . Thirdly, a background action class, to which background/redundant frames are assigned, is typically included in the K K actions for action segmentation, whereas it is not already defined for video alignment. Thus, VAOT adds a virtual frame to tackle background/redundant frames. 
+
+## 3.2.2 Self-Supervised Multi-Task Learning
+
+ Since both self-supervised video alignment and action segmentation exploit fine-grained temporal information in videos, we propose a self-supervised multi-task learning framework for joint video alignment and action segmentation. In particular, we combine our VAOT module for video alignment with ASOT  [ 80 ] for action segmentation into a unified optimal transport-based approach (VASOT), which is illustrated in Fig.  2 (b). Here, we update variable names in VAOT from { 𝐂 , 𝐏 , 𝐓 ⋆ , ℒ \mathbf{C},\mathbf{P},\mathbf{T}^{\star},\mathcal{L} } to { 𝐂 x ​ y , 𝐏 x ​ y , 𝐓 x y ⋆ , ℒ x ​ y \mathbf{C}^{xy},\mathbf{P}^{xy},\mathbf{T}^{xy\star},\mathcal{L}_{xy} } respectively for video alignment between X X and Y Y , while introducing new variables { 𝐂 x ​ a , 𝐏 x ​ a , 𝐓 x a ⋆ , ℒ x ​ a \mathbf{C}^{xa},\mathbf{P}^{xa},\mathbf{T}^{xa\star},\mathcal{L}_{xa} } and { 𝐂 y ​ a , 𝐏 y ​ a , 𝐓 y a ⋆ , ℒ y ​ a \mathbf{C}^{ya},\mathbf{P}^{ya},\mathbf{T}^{ya\star},\mathcal{L}_{ya} } for action segmentation on X X and Y Y respectively. The parameters 𝜽 \bm{\theta} of the frame encoder and the action embeddings 𝐀 \mathbf{A} are trained by using the below combination of self-supervised learning losses: 
+
+ | 
+ ℒ j ​ o ​ i ​ n ​ t = w a ​ l ​ i ​ g ​ n ​ ℒ x ​ y + w s ​ e ​ g ​ ( ℒ x ​ a + ℒ y ​ a ) , \mathcal{L}_{joint}=w_{align}\mathcal{L}_{xy}+w_{seg}(\mathcal{L}_{xa}+\mathcal{L}_{ya}), | 
+ | 
+ (7) | 
+
+ where w a ​ l ​ i ​ g ​ n ≥ 0 w_{align}\geq 0 and w s ​ e ​ g ≥ 0 w_{seg}\geq 0 denote the weights for the video alignment loss ℒ x ​ y \mathcal{L}_{xy} and the action segmentation losses ℒ x ​ a \mathcal{L}_{xa} and ℒ y ​ a \mathcal{L}_{ya} respectively, ℒ x ​ y \mathcal{L}_{xy} is the cross-entropy loss between normalized similarities 𝐏 x ​ y \mathbf{P}^{xy} (computed between 𝐗 \mathbf{X} and 𝐘 \mathbf{Y} ) and pseudo-labels 𝐓 x y ⋆ \mathbf{T}^{xy\star} (obtained by VAOT), while ℒ x ​ a \mathcal{L}_{xa} is the cross-entropy loss between normalized similarities 𝐏 x ​ a \mathbf{P}^{xa} (computed based on 𝐗 \mathbf{X} and 𝐀 \mathbf{A} ) and pseudo-labels 𝐓 x a ⋆ \mathbf{T}^{xa\star} (derived by ASOT  [ 80 ] ) and ℒ y ​ a \mathcal{L}_{ya} is the cross-entropy loss between normalized similarities 𝐏 y ​ a \mathbf{P}^{ya} (computed between 𝐘 \mathbf{Y} and 𝐀 \mathbf{A} ) and pseudo-labels 𝐓 y a ⋆ \mathbf{T}^{ya\star} (obtained by ASOT  [ 80 ] ). This is in contrast with VAOT or ASOT  [ 80 ] , where 𝜽 {\bm{\theta}} is solely learned by using either ℒ x ​ y \mathcal{L}_{xy} or ℒ x ​ a \mathcal{L}_{xa} and ℒ y ​ a \mathcal{L}_{ya} respectively. We find balancing w a ​ l ​ i ​ g ​ n = w s ​ e ​ g = 1 w_{align}=w_{seg}=1 yields good results for both video alignment and action segmentation, as seen in Sec.  4.2 . Our joint model requires training and storing a single model, saving both time and memory usage as compared to two single-task models. As we observe in Sec.  4.3 , in a multi-task learning setting, action segmentation offers little benefit to video alignment performance, while video alignment boosts action segmentation results substantially. 
+
+## 4 Experiments
+
+ | 
+ Method | 
+ Acc@0.1 | 
+ Acc@0.5 | 
+ Acc@1.0 | 
+ Progress | 
+ τ \tau | 
+ AP@5 | 
+ AP@10 | 
+ AP@15 | 
+
+ IKEA ASM 
+ | 
+ w/o Structural Prior | 
+ 30.29 | 
+ 35.52 | 
+ 37.81 | 
+ - | 
+ - | 
+ 27.54 | 
+ 27.33 | 
+ 27.15 | 
+
+ w/o Temporal Prior | 
+ 17.84 | 
+ 17.84 | 
+ 17.84 | 
+ - | 
+ - | 
+ 15.63 | 
+ 15.64 | 
+ 15.56 | 
+
+ w/o Balanced Assignment | 
+ 17.84 | 
+ 20.71 | 
+ 25.24 | 
+ - | 
+ - | 
+ 15.49 | 
+ 15.69 | 
+ 15.78 | 
+
+ w/o Virtual Frame | 
+ 30.16 | 
+ 34.49 | 
+ 36.10 | 
+ - | 
+ - | 
+ 29.57 | 
+ 29.24 | 
+ 28.87 | 
+
+ All | 
+ 33.73 | 
+ 36.42 | 
+ 38.64 | 
+ - | 
+ - | 
+ 31.49 | 
+ 31.92 | 
+ 32.01 | 
+
+ Table 1 : Ablation analysis results. Bold and underline denote the best and second best respectively. 
+
+ Datasets. 
+We benchmark our VAOT and VASOT approaches for video alignment using three datasets, including monotonic datasets, i.e., Pouring  [ 57 ] and Penn Action  [ 82 ] , and in-the-wild dataset, i.e., IKEA ASM  [ 3 ] . Pouring includes videos of humans pouring liquids and Penn Action comprises of videos of humans playing sports, while IKEA ASM videos capture humans assembling furniture. All methods have the same training and validation splits. Moreover, for action segmentation evaluation, we use four datasets, including in-the-wild datasets, i.e., Breakfast  [ 33 ] , 50 Salads  [ 62 ] , and YouTube Instructions  [ 2 ] , and monotonic dataset, i.e., Desktop Assembly  [ 35 ] . Breakfast and 50 Salads videos show cooking activities, while YouTube Instructions consists of instructional videos and Desktop Assembly includes videos of an assembly activity. All methods are trained and tested on the same set of videos. For 50 Salads, we evaluate at two action granularity levels, i.e., Mid with 19 actions and Eval with 12 actions. Finally, for datasets with many activities, i.e., Penn Action, Breakfast, and YouTube Instructions, we train and test the methods per activity and report the average results. 
+
+ Implementation Details. 
+For fair comparison purposes, our VAOT and VASOT approaches for video alignment utilize the same ResNet-50 encoder as recent self-supervised video alignment methods  [ 19 , 26 , 45 , 17 ] . Similarly, our VASOT approach for action segmentation employs the same MLP encoder as state-of-the-art self-supervised action segmentation methods  [ 34 , 35 , 80 ] . Action embeddings 𝐀 \mathbf{A} are initialized via K K -Means, while the number of clusters K K is set to the ground truth value. We implement our methods in PyTorch  [ 51 ] and use ADAM optimization  [ 32 ] . Please refer to our supplementary material for more details. 
+
+ Competing Methods. 
+We compare our VAOT and VASOT approaches against prior self-supervised video alignment methods, namely SAL  [ 48 ] , TCN  [ 57 ] , TCC  [ 19 ] , LAV  [ 26 ] , VAVA  [ 45 ] , and GTCC  [ 17 ] . VAVA  [ 45 ] , which integrates an optimality prior into a classical Kantorovich optimal transport, is the closest to our VAOT approach. Also, we test our VASOT approach against previous self-supervised action segmentation methods, namely CTE  [ 34 ] , VTE  [ 73 ] , UDE  [ 65 ] , ASAL  [ 43 ] , TOT  [ 35 ] , UFSA  [ 71 ] , ASOT  [ 80 ] , and HVQ  [ 60 ] . ASOT  [ 80 ] is the single-task baseline for action segmentation, which we adopt in Sec.  3.2 for our multi-task VASOT approach. 
+
+ Evaluation Metrics. 
+To evaluate our VAOT and VASOT approaches for video alignment, we compute four metrics on the validation set, i.e., phase classification ( Acc@ { 0.1,0.5,1.0 } ), phase progression ( Progress ), video alignment ( τ \tau ), and fine-grained frame retrieval ( AP@ { 5,10,15 } ). Prior to that, we train the model on the training set and freeze it, and then train an SVM classifier or linear regressor on top of frozen features. Note that as mentioned in  [ 19 , 26 , 45 , 17 ] , Progress and τ \tau are only defined for monotonic datasets and hence are not computed for IKEA ASM. Also, to test our VASOT approach for action segmentation, we calculate three metrics, i.e., mean over frames ( MoF ), F1 score ( F1 ), and mean intersection over union ( mIoU ). Before that, we train the model, obtain predicted action segments, and perform Hungarian matching between predicted and ground truth action clusters. 
+
+## 4.1 Ablation Analysis Results
+
+ We first study the impacts of design choices in VAOT in Sec.  3.1 . We show the IKEA ASM results in Tab.  1 . Please see our supplementary material for the Pouring results. 
+
+ Effect of Structural Prior. 
+The structural priors { 𝐂 x , 𝐂 y } \{\mathbf{C}^{x},\mathbf{C}^{y}\} defined in Eq.  4 are used to encourage temporal consistency on the transport map 𝐓 \mathbf{T} . We analyze the impact of the structural priors by removing the GW subproblem in Eq.  3 (via setting α = 0 \alpha=0 ), yields worse results, as reported in Tab.  1 . This demonstrates the importance of the structural priors and temporal consistency in our VAOT approach. 
+
+ Effect of Temporal Prior. 
+Removing the temporal prior 𝐑 \mathbf{R} described in Sec.  3.1.3 (by setting ρ = 0 \rho=0 ), leading to notable performance drops in Tab.  1 . This validates the contribution of the temporal prior in our VAOT approach. 
+
+ Effect of Balanced Assignment. 
+When the balanced assignment formulation is replaced by the full unbalanced assignment formulation, the performance degrades significantly, as shown in Tab.  1 . This indicates that the balanced assignment formulation is preferred for the video alignment problem, as we discussed previously in Sec.  3.1.1 . 
+
+ Effect of Virtual Frame. 
+Virtual frames (described in Sec.  3.1.2 ) are used to tackle background/redundant frames. From Tab.  1 , removing virtual frames negatively affects the robustness and hence performance of our VAOT approach. 
+
+## 4.2 Sensitivity Analysis Results
+
+ (a) Structural prior radius r r . 
+
+ (b) Gromov-Wasserstein weight α \alpha . 
+
+ (c) Temporal prior weight ρ \rho . 
+
+ (d) Virtual frame threshold ζ \zeta . 
+
+ (e) Segmentation loss weight w s ​ e ​ g w_{seg} (here, w a ​ l ​ i ​ g ​ n = 1 w_{align}=1 ). 
+
+ (f) Alignment loss weight w a ​ l ​ i ​ g ​ n w_{align} (here, w s ​ e ​ g = 1 w_{seg}=1 ). 
+
+ Figure 3 : Sensitivity analysis results. Note that (a-d) are for VAOT, while (e-f) are for VASOT. 
+
+ Here, we conduct sensitivity analyses on hyperparameters of VAOT and VASOT. Fig.  3 shows the results. We use Pouring in Figs.  3 (a-e) and Desktop Assembly in Fig.  3 (f). The results of ϵ \epsilon are provided in our supplementary material. 
+
+ Effect of r r and α \alpha . 
+From Fig.  3 (a), Acc@1.0 remains stable and Progress shows small variation across all studied values of r r , whereas τ \tau is the most sensitive metric, peaking at r = 0.02 r=0.02 and decreasing as r r increases. Similar observations can be made for α \alpha in Fig.  3 (b), where Acc@1.0 and Progress are mostly stable, whereas τ \tau fluctuates the most, performing the best with α = 0.3 \alpha=0.3 . Furthermore, we find that r = 0.02 r=0.02 and α = 0.3 \alpha=0.3 also work the best for the remaining datasets. 
+
+ Effect of ρ \rho and ζ \zeta . 
+For ρ \rho in Fig.  3 (c), it can be seen that Acc@1.0 and Progress remain mostly stable, whereas τ \tau varies the most, performing the best at ρ = 0.35 \rho=0.35 . Similarly, for ζ \zeta in Fig.  3 (d), we observe that τ \tau is the most sensitive metric, peaking at ζ = 0.5 \zeta=0.5 , whereas Acc@1.0 and Progress remain steady across the analyzed value range of ζ \zeta . Moreover, we notice that ρ = 0.35 \rho=0.35 and ζ = 0.5 \zeta=0.5 also yield the best results for the remaining datasets. 
+
+ Effect of w s ​ e ​ g w_{seg} and w a ​ l ​ i ​ g ​ n w_{align} . 
+We study the relationship between action segmentation and video alignment in our multi-task VASOT approach by varying their weights w s ​ e ​ g w_{seg} and w a ​ l ​ i ​ g ​ n w_{align} in Eq.  7 . In particular, we report alignment results with various w s ​ e ​ g w_{seg} values (while keeping w a ​ l ​ i ​ g ​ n = 1 w_{align}=1 ) in Fig.  3 (e), and segmentation results with various w a ​ l ​ i ​ g ​ n w_{align} values (while keeping w s ​ e ​ g = 1 w_{seg}=1 ) in Fig.  3 (f). It can be seen from Fig.  3 (e) that alignment results drop as w s ​ e ​ g w_{seg} increases and the best overall alignment performance is obtained with w s ​ e ​ g = 1 w_{seg}=1 . In contrast, it is clear from Fig.  3 (f) that segmentation results improve as w a ​ l ​ i ​ g ​ n w_{align} increases and become steady after w a ​ l ​ i ​ g ​ n w_{align} reaches 1 1 . Therefore, in a multi-task learning setup, action segmentation provides little boost to video alignment results, whereas video alignment increases action segmentation performance notably. Moreover, with balancing w s ​ e ​ g = w a ​ l ​ i ​ g ​ n = 1 w_{seg}=w_{align}=1 , VASOT achieves good results for both video alignment and action segmentation. For the next section, we set w s ​ e ​ g = w a ​ l ​ i ​ g ​ n = 1 w_{seg}=w_{align}=1 for VASOT. 
+
+## 4.3 State-of-the-Art Comparison Results
+
+ | 
+ Method | 
+ Acc@0.1 | 
+ Acc@0.5 | 
+ Acc@1.0 | 
+ Progress | 
+ τ \tau | 
+ AP@5 | 
+ AP@10 | 
+ AP@15 | 
+
+ Pouring 
+ | 
+ SAL  [ 48 ] | 
+ 85.68 | 
+ 87.84 | 
+ 88.02 | 
+ 74.51 | 
+ 73.31 | 
+ 84.05 | 
+ 83.77 | 
+ 83.79 | 
+
+ TCN  [ 57 ] | 
+ 89.19 | 
+ 90.39 | 
+ 90.35 | 
+ 80.57 | 
+ 86.69 | 
+ 83.56 | 
+ 83.31 | 
+ 83.01 | 
+
+ TCC  [ 19 ] | 
+ 89.23 | 
+ 91.43 | 
+ 91.82 | 
+ 80.30 | 
+ 85.16 | 
+ 87.16 | 
+ 86.68 | 
+ 86.54 | 
+
+ LAV  [ 26 ] | 
+ 91.61 | 
+ 92.82 | 
+ 92.84 | 
+ 80.54 | 
+ 85.61 | 
+ 89.13 | 
+ 89.13 | 
+ 89.22 | 
+
+ VAVA  [ 45 ] | 
+ 91.65 | 
+ 91.79 | 
+ 92.45 | 
+ 83.61 | 
+ 87.55 | 
+ 90.05 | 
+ 89.92 | 
+ 90.17 | 
+
+ GTCC  [ 17 ] | 
+ 71.20 | 
+ 89.20 | 
+ 93.50 | 
+ 85.80 | 
+ 88.10 | 
+ - | 
+ - | 
+ - | 
+
+ VAOT (Ours) | 
+ 91.80 | 
+ 92.88 | 
+ 94.63 | 
+ 91.63 | 
+ 88.28 | 
+ 91.34 | 
+ 90.56 | 
+ 90.29 | 
+
+ VASOT (Ours) | 
+ 91.93 | 
+ 92.12 | 
+ 93.04 | 
+ 91.71 | 
+ 88.64 | 
+ 91.03 | 
+ 90.44 | 
+ 90.21 | 
+
+ Penn Action 
+ | 
+ SAL  [ 48 ] | 
+ 74.87 | 
+ 78.26 | 
+ 79.96 | 
+ 59.43 | 
+ 63.36 | 
+ 76.04 | 
+ 75.77 | 
+ 75.61 | 
+
+ TCN  [ 57 ] | 
+ 81.99 | 
+ 83.67 | 
+ 84.04 | 
+ 67.62 | 
+ 73.28 | 
+ 77.84 | 
+ 77.51 | 
+ 77.28 | 
+
+ TCC  [ 19 ] | 
+ 81.26 | 
+ 83.35 | 
+ 84.45 | 
+ 67.26 | 
+ 73.53 | 
+ 76.74 | 
+ 76.27 | 
+ 75.88 | 
+
+ LAV  [ 26 ] | 
+ 83.56 | 
+ 83.95 | 
+ 84.25 | 
+ 66.13 | 
+ 80.47 | 
+ 79.13 | 
+ 78.98 | 
+ 78.90 | 
+
+ VAVA  [ 45 ] | 
+ 83.89 | 
+ 84.23 | 
+ 84.48 | 
+ 70.91 | 
+ 80.53 | 
+ 81.52 | 
+ 80.47 | 
+ 80.67 | 
+
+ GTCC  [ 17 ] | 
+ 78.30 | 
+ 81.20 | 
+ 81.30 | 
+ 70.80 | 
+ 88.30 | 
+ - | 
+ - | 
+ - | 
+
+ VAOT (Ours) | 
+ 83.96 | 
+ 85.35 | 
+ 86.92 | 
+ 84.31 | 
+ 88.99 | 
+ 81.62 | 
+ 81.03 | 
+ 80.68 | 
+
+ VASOT (Ours) | 
+ 84.17 | 
+ 85.54 | 
+ 87.66 | 
+ 83.39 | 
+ 88.70 | 
+ 78.85 | 
+ 78.38 | 
+ 78.03 | 
+
+ IKEA ASM 
+ | 
+ SAL  [ 48 ] | 
+ 22.94 | 
+ 23.43 | 
+ 25.46 | 
+ - | 
+ - | 
+ 14.28 | 
+ 14.04 | 
+ 14.10 | 
+
+ TCN  [ 57 ] | 
+ 22.51 | 
+ 25.47 | 
+ 25.88 | 
+ - | 
+ - | 
+ 17.37 | 
+ 17.03 | 
+ 16.96 | 
+
+ TCC  [ 19 ] | 
+ 22.70 | 
+ 25.04 | 
+ 25.63 | 
+ - | 
+ - | 
+ 18.03 | 
+ 17.53 | 
+ 17.20 | 
+
+ LAV  [ 26 ] | 
+ 23.19 | 
+ 25.47 | 
+ 25.54 | 
+ - | 
+ - | 
+ 20.14 | 
+ 19.35 | 
+ 19.21 | 
+
+ VAVA  [ 45 ] | 
+ 29.12 | 
+ 29.95 | 
+ 29.10 | 
+ - | 
+ - | 
+ 26.42 | 
+ 25.73 | 
+ 25.80 | 
+
+ VAOT (Ours) | 
+ 33.73 | 
+ 36.42 | 
+ 38.64 | 
+ - | 
+ - | 
+ 31.49 | 
+ 31.92 | 
+ 32.01 | 
+
+ VASOT (Ours) | 
+ 29.96 | 
+ 30.78 | 
+ 31.02 | 
+ - | 
+ - | 
+ 30.29 | 
+ 30.37 | 
+ 30.42 | 
+
+ Table 2 : Video alignment comparison results. Bold and underline denote the best and second best respectively. 
+
+ | 
+ Method | 
+ Breakfast | 
+ YouTube Instructions | 
+ 50 Salads (Mid) | 
+ 50 Salads (Eval) | 
+ Desktop Assembly | 
+
+ | 
+ MoF / F1 / mIoU | 
+ MoF / F1 / mIoU | 
+ MoF / F1 / mIoU | 
+ MoF / F1 / mIoU | 
+ MoF / F1 / mIoU | 
+
+ Full-Dataset Evaluation 
+ | 
+ CTE*  [ 34 ] | 
+ 41.8 / 26.4 / - | 
+ 39.0 / 28.3 / - | 
+ 30.2 / - / - | 
+ 35.5 / - / - | 
+ 47.6 / 44.9 / - | 
+
+ CTE†  [ 34 ] | 
+ 47.2 / 27.0 / 14.9 | 
+ 35.9 / 28.0 / 9.9 | 
+ 30.1 / 25.5 / 17.9 | 
+ 35.0 / 35.5 / 21.6 | 
+ - / - / - | 
+
+ VTE  [ 73 ] | 
+ 48.1 / - / - | 
+ - / 29.9 / - | 
+ 24.2 / - / - | 
+ 30.6 / - / - | 
+ - / - / - | 
+
+ UDE  [ 65 ] | 
+ 47.4 / 31.9 / - | 
+ 43.8 / 29.6 / - | 
+ - / - / - | 
+ 42.2 / 34.4 / - | 
+ - / - / - | 
+
+ ASAL  [ 43 ] | 
+ 52.5 / 37.9 / - | 
+ 44.9 / 32.1 / - | 
+ 34.4 / - / - | 
+ 39.2 / - / - | 
+ - / - / - | 
+
+ TOT  [ 35 ] | 
+ 47.5 / 31.0 / - | 
+ 40.6 / 30.0 / - | 
+ 31.8 / - / - | 
+ 47.4 / 42.8 / - | 
+ 56.3 / 51.7 / - | 
+
+ TOT+  [ 35 ] | 
+ 39.0 / 30.3 / - | 
+ 45.3 / 32.9 / - | 
+ 34.3 / - / - | 
+ 44.5 / 48.2 / - | 
+ 58.1 / 53.4 / - | 
+
+ UFSA (M)  [ 71 ] | 
+ - / - / - | 
+ 43.2 / 30.5 / - | 
+ - / - / - | 
+ 47.8 / 34.8 / - | 
+ - / - / - | 
+
+ UFSA (T)  [ 71 ] | 
+ 52.1 / 38.0 / - | 
+ 49.6 / 32.4 / - | 
+ 36.7 / 30.4 / - | 
+ 55.8 / 50.3 / - | 
+ 65.4 / 63.0 / - | 
+
+ ASOT  [ 80 ] | 
+ 56.1 / 38.3 / 18.6 | 
+ 52.9 / 35.1 / 24.7 | 
+ 46.2 / 37.4 / 24.9 | 
+ 59.3 / 53.6 / 30.1 | 
+ 70.4 / 68.0 / 45.9 | 
+
+ HVQ  [ 60 ] | 
+ 54.4 / 39.7 / - | 
+ 50.3 / 35.1 / - | 
+ - / - / - | 
+ - / - / - | 
+ - / - / - | 
+
+ | 
+ VASOT (Ours) | 
+ 57.5 / 39.0 / 18.8 | 
+ 53.2 / 35.7 / 25.2 | 
+ 47.2 / 41.3 / 26.1 | 
+ 60.6 / 57.4 / 34.5 | 
+ 70.9 / 75.1 / 49.3 | 
+
+ Table 3 : Action segmentation comparison results. Bold and underline denote the best and second best respectively. 
+
+ Figure 4 : Fine-grained frame retrieval results on Penn Action. The query image is on the left, while on the right are the top 5 matching images retrieved by VAOT (blue box) and LAV (red box). 
+
+ Figure 5 : Action segmentation results on Breakfast (top) and YouTube Instructions (bottom). 
+
+ Video Alignment Comparison Results. 
+We now benchmark our VAOT and VASOT approaches against previous self-supervised video alignment methods and present quantitative results in Tab.  2 . Firstly, it is evident from Tab.  2 that our VAOT approach achieves the best overall performance across all datasets, outperforming all competing methods, i.e., SAL  [ 48 ] , TCN  [ 57 ] , TCC  [ 19 ] , LAV  [ 26 ] , VAVA  [ 45 ] , and GTCC  [ 17 ] . Especially, VAOT shows major improvements over VAVA  [ 45 ] on the in-the-wild IKEA ASM dataset. The results confirm the advantage of our FGW formulation with a structural prior over the classical Kantorovich formulation with an optimality prior in VAVA  [ 45 ] . Next, Fig.  4 shows some qualitative results, where VAOT retrieves all 5 correct frames with the same action ( Hands at shoulder ) as the query image, while LAV  [ 26 ] obtains 3 incorrect frames ( Hands above head ), highlighted by red ovals. Lastly, similar to Fig.  3 (e), we find that action segmentation offers little benefit to video alignment in a multi-task learning setup, and our multi-task VASOT approach performs mostly similarly to our single-task VAOT approach in Tab.  2 . This is likely because video alignment is a more complex problem involving finer-grained frame-to-frame assignment, as compared to coarser-grained frame-to-action assignment in action segmentation. Nevertheless, VASOT obtains mostly favorable results over prior works. 
+
+ Action Segmentation Comparison Results. 
+We test our VASOT approach against state-of-the-art self-supervised action segmentation methods and include quantitative results in Tab.  3 . Firstly, from Tab.  3 , VASOT consistently achieves the best results across all metrics and datasets, outperforming all competing methods, i.e., CTE  [ 34 ] , VTE  [ 73 ] , UDE  [ 65 ] , ASAL  [ 43 ] , TOT  [ 35 ] , UFSA  [ 71 ] , ASOT  [ 80 ] , and HVQ  [ 60 ] . While our multi-task VASOT approach shows small gains over the single-task ASOT baseline  [ 80 ] on Breakfast and YouTube Instructions, our improvements on 50 Salads and Desktop Assembly are substantial. The results validate the benefit of fusing video alignment with action segmentation and demonstrate that video alignment boosts action segmentation results notably in a multi-task learning setup. Moreover, Fig.  5 shows some qualitative results, where VASOT predicts segmentations which capture action boundaries more accurately and are more closely aligned with ground truth than ASOT  [ 80 ] . 
+
+## 5 Conclusion
+
+ This paper presents a novel approach for joint self-supervised video alignment and action segmentation. We first develop a fused Gromov-Wasserstein optimal transport with a structural prior for self-supervised video alignment, outperforming prior works. Our single-task method trains efficiently on GPUs and needs few iterations to derive the optimal transport solution. Next, we extend our approach to a unified optimal transport framework for joint self-supervised video alignment and action segmentation, yielding similar video alignment yet better action segmentation results than prior works. Our multi-task method requires training and storing a single model and saves both time and memory usage. To our best knowledge, our work is the first to explore the relationship between video alignment and action segmentation. Our future works will explore deep supervision  [ 41 , 42 ] , complex weighting in multi-task learning  [ 29 , 9 ] , and other potential applications (e.g., joint keypoint matching and clustering  [ 20 , 56 ] ). 
+
+## Appendix A Supplementary Material
+
+ In this supplementary material, we first provide the implementation details of our VAOT and VASOT approaches in Sec.  A.1 . Next, our ablation analysis results on the Pouring dataset are included in Sec.  A.2 , while our sensitivity analysis results of the entropy regularization weight ϵ \epsilon are presented in Sec.  A.3 . Furthermore, our multi-action video alignment results and our per-video action segmentation results are included in Secs.  A.4 and  A.5 respectively. Finally, we present some qualitative results in Sec.  A.6 and complexity comparison results in Sec.  A.7 . 
+
+## A.1 Implementation Details
+
+ Hyperparameter | 
+ VAOT | 
+ VASOT | 
+
+ Number of sampled frames | 
+ 40 (P), 20 (PA, IA) | 
+ 40 (P), 20 (PA, IA) | 
+
+ Learning rate | 
+ 10 − 5 10^{-5} | 
+ 10 − 4 10^{-4} (P), 10 − 5 10^{-5} (PA, IA) | 
+
+ Weight decay | 
+ 10 − 5 10^{-5} | 
+ 10 − 5 10^{-5} | 
+
+ Batch size | 
+ 2 videos | 
+ 2 videos | 
+
+ Entropy regularization weight ϵ \epsilon | 
+ 0.07 | 
+ 0.07 | 
+
+ Virtual frame threshold ζ \zeta | 
+ 0.5 | 
+ 0.5 | 
+
+ Gromov-Wasserstein weight α \alpha | 
+ 0.3 | 
+ 0.3 | 
+
+ Structural prior radius r r | 
+ 0.02 | 
+ 0.02 | 
+
+ Temporal prior weight ρ \rho | 
+ 0.35 | 
+ 0.35 | 
+
+ Table 4 : Hyperparameter settings of our VAOT and VASOT approaches for state-of-the-art video alignment comparison. Note that P, PA, and IA represent Pouring, Penn Action, and IKEA ASM respectively. 
+
+ Hyperparameter | 
+ VASOT | 
+
+ Number of sampled frames | 
+ 256 | 
+
+ Learning rate | 
+ 10 − 3 10^{-3} (B, M, E, DA), 10 − 4 10^{-4} (YTI) | 
+
+ Weight decay | 
+ 10 − 4 10^{-4} (B, M, E, DA), 10 − 5 10^{-5} (YTI) | 
+
+ Batch size | 
+ 2 videos | 
+
+ Entropy regularization weight ϵ \epsilon | 
+ 0.07 | 
+
+ Virtual frame threshold ζ \zeta | 
+ 0.5 | 
+
+ Gromov-Wasserstein weight α \alpha | 
+ 0.3 (YTI, M, E, DA), 0.5 (B) | 
+
+ Structural prior radius r r | 
+ 0.02 (DA), 0.04 (B, YTI, M, E) | 
+
+ Temporal prior weight ρ \rho | 
+ 0.15 (M, E), 0.2 (B, YTI, DA) | 
+
+ Number of epochs | 
+ 30 (YTI, E), 50 (B), 100 (M, DA) | 
+
+ Table 5 : Hyperparameter settings of our VASOT approach for state-of-the-art action segmentation comparison. Note that B, YTI, M, E, and DA denotes Breakfast, YouTube Instructions, 50 Salads (Mid), 50 Salads (Eval), and Desktop Assembly respectively. 
+
+ For fair comparisons with previous self-supervised video alignment methods  [ 19 , 26 , 45 , 17 ] , our VAOT and VASOT approaches for video alignment utilize a ResNet-50 encoder network. Please refer to Dwibedi et al.  [ 19 ] for additional details on the encode network. We provide the hyperparameter settings of our VAOT and VASOT approaches for video alignment in Tab.  4 . Note that our VASOT approach for video alignment includes both VAOT and ASOT  [ 80 ] modules, which share the same hyperparameter settings shown in the VASOT column in Tab.  4 . 
+
+ In addition, following state-of-the-art self-supervised action segmentation methods  [ 34 , 35 , 80 ] , our VASOT approach for action segmentation employs a 2-layer MLP encoder network for fair comparison purposes. Please see Kukleva et al.  [ 34 ] for more details on the encoder network. The hyperparameter settings of our VASOT approach for action segmentation are included in Tab.  5 . Note that both VAOT and ASOT  [ 80 ] components in our VASOT approach for action segmentation have the same hyperparameter settings presented in the VASOT column in Tab.  5 . 
+
+## A.2 Ablation Analysis Results
+
+ | 
+ Method | 
+ Acc@0.1 | 
+ Acc@0.5 | 
+ Acc@1.0 | 
+ Progress | 
+ τ \tau | 
+ AP@5 | 
+ AP@10 | 
+ AP@15 | 
+
+ Pouring 
+ | 
+ w/o Structural Prior | 
+ 62.13 | 
+ 88.28 | 
+ 93.68 | 
+ 90.28 | 
+ 72.49 | 
+ 84.45 | 
+ 84.45 | 
+ 84.41 | 
+
+ w/o Temporal Prior | 
+ 71.57 | 
+ 90.51 | 
+ 91.47 | 
+ 86.94 | 
+ 78.11 | 
+ 86.17 | 
+ 86.29 | 
+ 86.24 | 
+
+ w/o Balanced Assignment | 
+ 63.29 | 
+ 88.57 | 
+ 92.38 | 
+ 85.73 | 
+ 68.78 | 
+ 82.83 | 
+ 82.71 | 
+ 82.49 | 
+
+ w/o Virtual Frame | 
+ 86.32 | 
+ 87.22 | 
+ 93.24 | 
+ 88.11 | 
+ 82.65 | 
+ 86.99 | 
+ 86.74 | 
+ 86.56 | 
+
+ All | 
+ 91.80 | 
+ 92.88 | 
+ 94.63 | 
+ 91.63 | 
+ 88.28 | 
+ 91.34 | 
+ 90.56 | 
+ 90.29 | 
+
+ Table 6 : Ablation analysis results. Bold and underline denote the best and second best respectively. 
+
+ In addition to the results on IKEA ASM in Sec. 4.1 of the main paper, we present the ablation analysis results of our VAOT approach on the Pouring dataset in Tab.  6 . 
+
+ Effect of Structural Prior. 
+The structural prior imposes temporal consistency on the transport map. Removing it significantly degrades performance across all metrics, highlighting its critical role in our VAOT approach. 
+
+ Effect of Temporal Prior. 
+Excluding the temporal prior results in performance drops across all metrics, confirming its positive impact on video alignment. 
+
+ Effect of Balanced Assignment. 
+Using a full unbalanced assignment formulation causes a substantial decrease in performance. This demonstrates the importance of balanced assignment in our VAOT approach. 
+
+ Effect of Virtual Frame. 
+Virtual frames are added for tackling background/redundant frames and improving robustness. Removing virtual frames results in minor performance drops across all metrics, which is expected given the monotonic nature of the Pouring dataset. 
+
+## A.3 Sensitivity Analysis Results
+
+ Figure 6 : Sensitivity analysis results. 
+
+ Sec. 4.2 of the main paper performs sensitivity analyses on different hyperparameters such as r r , α \alpha , ρ \rho , ζ \zeta , w s ​ e ​ g w_{seg} , and w a ​ l ​ i ​ g ​ n w_{align} . We now plot the results of the entropy regularization weight ϵ \epsilon in Fig.  6 . We use our VAOT approach and the Pouring dataset for this experiment. From the results, Acc@1.0 remains stable across the studied value range of ϵ \epsilon . Progress exhibits small fluctuations, whereas τ \tau is the most sensitive metric, steadily increasing from ϵ = 0.05 \epsilon=0.05 , peaking at ϵ = 0.07 \epsilon=0.07 , and declining thereafter. Furthermore, we find that ϵ = 0.07 \epsilon=0.07 also yields the best results for the remaining datasets. 
+
+## A.4 Multi-Action Video Alignment Results
+
+ | 
+ Method | 
+ Acc@1.0 | 
+ Progress | 
+ τ \tau | 
+
+ Penn Action 
+ | 
+ SAL  [ 48 ] | 
+ 68.15 | 
+ 39.03 | 
+ 47.44 | 
+
+ TCN  [ 57 ] | 
+ 68.09 | 
+ 38.34 | 
+ 54.17 | 
+
+ TCC  [ 19 ] | 
+ 74.39 | 
+ 59.14 | 
+ 64.08 | 
+
+ LAV  [ 26 ] | 
+ 78.68 | 
+ 62.52 | 
+ 68.35 | 
+
+ VAVA  [ 45 ] | 
+ 80.25 | 
+ 64.82 | 
+ 76.20 | 
+
+ GTCC  [ 17 ] | 
+ 73.90 | 
+ 69.70 | 
+ 60.70 | 
+
+ VAOT (Ours) | 
+ 83.49 | 
+ 79.23 | 
+ 77.68 | 
+
+ Table 7 : Multi-action video alignment results. Bold and underline denote the best and second best respectively. 
+
+ In Sec. 4.3 of the main paper, we train a separate encoder for each action of the Penn Action dataset and report the average results across all 13 13 actions of the Penn Action dataset, which is not efficient both in terms of time and memory consumption. In this section, we train only a single encoder for all actions of Penn Action and report the multi-action video alignment results in Tab.  7 . This is a challenging experiment setting since the shared encoder needs to jointly extract useful features for all actions. We use our VAOT approach for this experiment. It is evident from Tab.  7 that our VAOT approach achieves the best results across all metrics, outperforming all competing methods in this experiment setting. Especially, on Progress, VAOT outperforms previous works by significant margins. 
+
+## A.5 Per-Video Action Segmentation Results
+
+ | 
+ Method | 
+ Breakfast | 
+ YouTube Instructions | 
+ 50 Salads (Mid) | 
+ 50 Salads (Eval) | 
+ Desktop Assembly | 
+
+ | 
+ MoF / F1 / mIoU | 
+ MoF / F1 / mIoU | 
+ MoF / F1 / mIoU | 
+ MoF / F1 / mIoU | 
+ MoF / F1 / mIoU | 
+
+ Per-Video 
+ | 
+ TWF  [ 55 ] | 
+ 62.7 / 49.8 / 42.3 | 
+ 56.7 / 48.2 / - | 
+ 66.8 / 56.4 / 48.7 | 
+ 71.7 / - / - | 
+ 73.3 / 67.7 / 57.7 | 
+
+ ABD  [ 18 ] | 
+ 64.0 / 52.3 / - | 
+ 67.2 / 49.2 / - | 
+ 71.8 / - / - | 
+ 71.22 / - / - | 
+ - / - / - | 
+
+ ASOT  [ 80 ] | 
+ 63.3 / 53.5 / 35.9 | 
+ 71.2 / 63.3 / 47.8 | 
+ 64.3 / 51.1 / 33.4 | 
+ 64.5 / 58.9 / 33.0 | 
+ 73.0 / 68.4 / 47.6 | 
+
+ VASOT (Ours) | 
+ 64.5 / 54.3 / 35.8 | 
+ 70.1 / 67.5 / 53.0 | 
+ 64.7 / 64.2 / 45.1 | 
+ 55.1 / 59.5 / 37.7 | 
+ 72.1 / 77.2 / 53.2 | 
+
+ Table 8 : Per-video action segmentation results. Bold and underline denote the best and second best respectively. 
+
+ We perform Hungarian matching over the entire dataset to obtain the full-dataset action segmentation results in Tab. 3 of the main paper. In the following, we benchmark our VASOT approach against previous unsupervised action segmentation methods  [ 55 , 18 ] which conduct Hungarian matching and evaluate per video. Per-video matching and evaluation do not require clusters across all videos and hence tend to yield better results. Tab.  8 presents the results in the per-video matching and evaluation setting. It can be seen from the results that our VASOT approach achieves the best overall performance in this experiment setting. Especially, on F1 score, our VASOT approach consistently performs the best across all datasets. 
+
+## A.6 Qualitative Results
+
+ Figure 7 : Fine-grained frame retrieval results on Penn Action. The query image is on the left, while on the right are the top 5 matching images retrieved by VAOT (blue box) and LAV (red box). 
+
+ (a) LAV 
+
+ (b) VAOT (Ours) 
+
+ Figure 8 : t-SNE visualizations of learned frame embeddings of two Pouring videos (green and red). The color opacity represents the temporal frame index from the first frame to the last frame. 
+
+ Figure 9 : Action segmentation results on Desktop Assembly (top) and YouTube Instructions (bottom). 
+
+ We provide some qualitative results in this section. Firstly, Fig.  7 presents the frame retrieval results of our VAOT approach and LAV  [ 26 ] on Penn Action. From Fig.  7 , our VAOT approach retrieves all 5 correct frames with the same action ( Bat swung back fully ) as the query image, whereas LAV  [ 26 ] retrieves all incorrect frames ( Bat hits ball ), highlighted by red ovals. 
+
+ Secondly, Fig.  8 illustrates the t-SNE visualizations of the learned frame embeddings of two Pouring videos by our VAOT approach and LAV  [ 26 ] . In Fig.  8 (a), the embeddings by LAV  [ 26 ] form locally continuous but globally fragmented trajectories, with visible gaps in earlier and later frames. In contrast, for our VAOT approach in Fig.  8 (b), the embeddings of corresponding frames from both videos are spatially closer and follow smoother trajectories. This suggests that our VAOT approach can effectively capture both local and global temporal information, resulting in more temporally consistent embeddings. 
+
+ Lastly, Fig.  9 shows the action segmentation results by our VASOT approach and ASOT  [ 80 ] on a Desktop Assembly video and a YouTube Instructions video. The Desktop Assembly dataset is relatively balanced, with actions of more uniform durations, whereas the YouTube Instructions dataset is more unbalanced, with some actions being significantly longer or shorter than others. From Fig.  9 , our VASOT approach can effectively handle both cases, yielding segmentations which align more closely with ground truth than ASOT  [ 80 ] . 
+
+## A.7 Complexity Comparison Results
+
+ We compare the complexity (in terms of model size and training time) of our multi-task VASOT approach and the separate single-task models (VAOT+ASOT) on an Nvidia 3090Ti GPU. Using a ResNet-50 encoder on Pouring, VASOT needs ( 108 108 MB, 116 116 mins) vs. ( 216 216 MB, 162 162 mins) of VAOT+ASOT. Using an MLP encoder on Desktop Assembly, VASOT needs ( 287 287 KB, 15 15 mins) vs. ( 571 571 KB, 21 21 mins) of VAOT+ASOT. The results validate that our multi-task VASOT approach saves both memory and training time as compared to the separate single-task models (VAOT+ASOT). 
+
+## References
+
+ [1] 
+ U. Ahsan, C. Sun, and I. Essa (2018) 
+
+ Discrimnet: semi-supervised action recognition from videos using generative adversarial networks .
+
+ arXiv preprint .
+
+ Cited by: §2 .
+
+ [2] 
+ J. Alayrac, P. Bojanowski, N. Agrawal, J. Sivic, I. Laptev, and S. Lacoste-Julien (2016) 
+
+ Unsupervised learning from narrated instruction videos .
+
+ In Proceedings of the IEEE conference on computer vision and pattern recognition ,
+
+ pp. 4575–4583 .
+
+ Cited by: §4 .
+
+ [3] 
+ Y. Ben-Shabat, X. Yu, F. Saleh, D. Campbell, C. Rodriguez-Opazo, H. Li, and S. Gould (2021) 
+
+ The ikea asm dataset: understanding people assembling furniture through actions, objects and pose .
+
+ In Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision ,
+
+ pp. 847–859 .
+
+ Cited by: §4 .
+
+ [4] 
+ S. Benaim, A. Ephrat, O. Lang, I. Mosseri, W. T. Freeman, M. Rubinstein, M. Irani, and T. Dekel (2020) 
+
+ Speednet: learning the speediness in videos .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 9922–9931 .
+
+ Cited by: §2 .
+
+ [5] 
+ F. M. Carlucci, A. D’Innocente, S. Bucci, B. Caputo, and T. Tommasi (2019) 
+
+ Domain generalization by solving jigsaw puzzles .
+
+ In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 2229–2238 .
+
+ Cited by: §2 .
+
+ [6] 
+ M. Caron, P. Bojanowski, A. Joulin, and M. Douze (2018) 
+
+ Deep clustering for unsupervised learning of visual features .
+
+ In Proceedings of the European Conference on Computer Vision (ECCV) ,
+
+ pp. 132–149 .
+
+ Cited by: §2 .
+
+ [7] 
+ M. Caron, P. Bojanowski, J. Mairal, and A. Joulin (2019) 
+
+ Unsupervised pre-training of image features on non-curated data .
+
+ In Proceedings of the IEEE/CVF International Conference on Computer Vision ,
+
+ pp. 2959–2968 .
+
+ Cited by: §2 .
+
+ [8] 
+ J. Carreira and A. Zisserman (2017) 
+
+ Quo vadis, action recognition? a new model and the kinetics dataset .
+
+ In proceedings of the IEEE Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 6299–6308 .
+
+ Cited by: §1 .
+
+ [9] 
+ Z. Chen, V. Badrinarayanan, C. Lee, and A. Rabinovich (2018) 
+
+ Gradnorm: gradient normalization for adaptive loss balancing in deep multitask networks .
+
+ In International conference on machine learning ,
+
+ pp. 794–803 .
+
+ Cited by: §5 .
+
+ [10] 
+ S. S. Chowdhury, S. Chandra, and K. Roy (2024) 
+
+ OPEL: optimal transport guided procedure learning .
+
+ In The Thirty-eighth Annual Conference on Neural Information Processing Systems ,
+
+ Cited by: §2 .
+
+ [11] 
+ M. Cuturi and M. Blondel (2017) 
+
+ Soft-dtw: a differentiable loss function for time-series .
+
+ In International conference on machine learning ,
+
+ pp. 894–903 .
+
+ Cited by: §1 ,
+ §2 .
+
+ [12] 
+ M. Cuturi (2013) 
+
+ Sinkhorn distances: lightspeed computation of optimal transport .
+
+ Advances in neural information processing systems 26 .
+
+ Cited by: §1 ,
+ §2 .
+
+ [13] 
+ I. Dave, R. Gupta, M. N. Rizve, and M. Shah (2022) 
+
+ Tclr: temporal contrastive learning for video representation .
+
+ Computer Vision and Image Understanding 219 , pp. 103406 .
+
+ Cited by: §2 .
+
+ [14] 
+ H. De Plaen, P. De Plaen, J. A. Suykens, M. Proesmans, T. Tuytelaars, and L. Van Gool (2023) 
+
+ Unbalanced optimal transport: a unified framework for object detection .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 3198–3207 .
+
+ Cited by: §2 .
+
+ [15] 
+ A. Diba, V. Sharma, L. V. Gool, and R. Stiefelhagen (2019) 
+
+ Dynamonet: dynamic action and motion network .
+
+ In Proceedings of the IEEE International Conference on Computer Vision ,
+
+ pp. 6192–6201 .
+
+ Cited by: §2 .
+
+ [16] 
+ G. Ding, F. Sener, and A. Yao (2023) 
+
+ Temporal action segmentation: an analysis of modern techniques .
+
+ IEEE Transactions on Pattern Analysis and Machine Intelligence .
+
+ Cited by: §2 .
+
+ [17] 
+ G. Donahue and E. Elhamifar (2024) 
+
+ Learning to predict activity progress by self-supervised video alignment .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 18667–18677 .
+
+ Cited by: §A.1 ,
+ Table 7 ,
+ §2 ,
+ §4.3 ,
+ Table 2 ,
+ Table 2 ,
+ §4 ,
+ §4 ,
+ §4 .
+
+ [18] 
+ Z. Du, X. Wang, G. Zhou, and Q. Wang (2022) 
+
+ Fast and unsupervised action boundary detection for action segmentation .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 3323–3332 .
+
+ Cited by: §A.5 ,
+ Table 8 .
+
+ [19] 
+ D. Dwibedi, Y. Aytar, J. Tompson, P. Sermanet, and A. Zisserman (2019) 
+
+ Temporal cycle-consistency learning .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) ,
+
+ Cited by: §A.1 ,
+ Table 7 ,
+ §2 ,
+ §4.3 ,
+ Table 2 ,
+ Table 2 ,
+ Table 2 ,
+ §4 ,
+ §4 ,
+ §4 .
+
+ [20] 
+ F. J. Estrada, P. Fua, V. Lepetit, and S. Susstrunk (2009) 
+
+ Appearance-based keypoint clustering .
+
+ In 2009 IEEE Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 1279–1286 .
+
+ Cited by: §5 .
+
+ [21] 
+ C. Feichtenhofer, H. Fan, J. Malik, and K. He (2019) 
+
+ Slowfast networks for video recognition .
+
+ In Proceedings of the IEEE/CVF international conference on computer vision ,
+
+ pp. 6202–6211 .
+
+ Cited by: §1 .
+
+ [22] 
+ C. Feichtenhofer, H. Fan, B. Xiong, R. Girshick, and K. He (2021) 
+
+ A large-scale study on unsupervised spatiotemporal representation learning .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 3299–3309 .
+
+ Cited by: §2 .
+
+ [23] 
+ B. Fernando, H. Bilen, E. Gavves, and S. Gould (2017) 
+
+ Self-supervised video representation learning with odd-one-out networks .
+
+ In Proceedings of the IEEE conference on computer vision and pattern recognition ,
+
+ pp. 3636–3645 .
+
+ Cited by: §2 .
+
+ [24] 
+ S. Gidaris, P. Singh, and N. Komodakis (2018) 
+
+ Unsupervised representation learning by predicting image rotations .
+
+ In International Conference on Learning Representations ,
+
+ External Links: Link 
+
+ Cited by: §2 .
+
+ [25] 
+ R. Goroshin, J. Bruna, J. Tompson, D. Eigen, and Y. LeCun (2015) 
+
+ Unsupervised learning of spatiotemporally coherent metrics .
+
+ In Proceedings of the IEEE international conference on computer vision ,
+
+ pp. 4086–4093 .
+
+ Cited by: §2 .
+
+ [26] 
+ S. Haresh, S. Kumar, H. Coskun, S. N. Syed, A. Konin, Z. Zia, and Q. Tran (2021) 
+
+ Learning by aligning videos in time .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 5548–5558 .
+
+ Cited by: §A.1 ,
+ §A.6 ,
+ §A.6 ,
+ Table 7 ,
+ §1 ,
+ §2 ,
+ §4.3 ,
+ Table 2 ,
+ Table 2 ,
+ Table 2 ,
+ §4 ,
+ §4 ,
+ §4 .
+
+ [27] 
+ K. Hu, J. Shao, Y. Liu, B. Raj, M. Savvides, and Z. Shen (2021) 
+
+ Contrast and order representations for video self-supervised learning .
+
+ In Proceedings of the IEEE/CVF International Conference on Computer Vision ,
+
+ pp. 7939–7949 .
+
+ Cited by: §2 .
+
+ [28] 
+ S. Jenni, H. Jin, and P. Favaro (2020) 
+
+ Steering self-supervised feature learning beyond local pixel statistics .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 6408–6417 .
+
+ Cited by: §2 .
+
+ [29] 
+ A. Kendall, Y. Gal, and R. Cipolla (2018) 
+
+ Multi-task learning using uncertainty to weigh losses for scene geometry and semantics .
+
+ In Proceedings of the IEEE conference on computer vision and pattern recognition ,
+
+ pp. 7482–7491 .
+
+ Cited by: §5 .
+
+ [30] 
+ A. Khamis, R. Tsuchida, M. Tarek, V. Rolland, and L. Petersson (2024) 
+
+ Scalable optimal transport methods in machine learning: a contemporary survey .
+
+ IEEE Transactions on Pattern Analysis and Machine Intelligence .
+
+ Cited by: §2 .
+
+ [31] 
+ D. Kim, D. Cho, and I. S. Kweon (2019) 
+
+ Self-supervised video representation learning with space-time cubic puzzles .
+
+ In Proceedings of the AAAI Conference on Artificial Intelligence ,
+
+ Vol. 33 , pp. 8545–8552 .
+
+ Cited by: §2 .
+
+ [32] 
+ D. P. Kingma and J. Ba (2014) 
+
+ Adam: a method for stochastic optimization .
+
+ arXiv preprint arXiv:1412.6980 .
+
+ Cited by: §4 .
+
+ [33] 
+ H. Kuehne, A. Arslan, and T. Serre (2014) 
+
+ The language of actions: recovering the syntax and semantics of goal-directed human activities .
+
+ In Proceedings of the IEEE conference on computer vision and pattern recognition ,
+
+ pp. 780–787 .
+
+ Cited by: §4 .
+
+ [34] 
+ A. Kukleva, H. Kuehne, F. Sener, and J. Gall (2019) 
+
+ Unsupervised learning of action classes with continuous temporal embedding .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 12066–12074 .
+
+ Cited by: §A.1 ,
+ §2 ,
+ §4.3 ,
+ Table 3 ,
+ Table 3 ,
+ §4 ,
+ §4 .
+
+ [35] 
+ S. Kumar, S. Haresh, A. Ahmed, A. Konin, M. Z. Zia, and Q. Tran (2022) 
+
+ Unsupervised action segmentation by joint representation learning and online clustering .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 20174–20185 .
+
+ Cited by: §A.1 ,
+ §1 ,
+ §2 ,
+ §4.3 ,
+ Table 3 ,
+ Table 3 ,
+ §4 ,
+ §4 ,
+ §4 .
+
+ [36] 
+ T. Kwon, B. Tekin, S. Tang, and M. Pollefeys (2022) 
+
+ Context-aware sequence alignment using 4d skeletal augmentation .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 8172–8182 .
+
+ Cited by: §2 .
+
+ [37] 
+ G. Larsson, M. Maire, and G. Shakhnarovich (2016) 
+
+ Learning representations for automatic colorization .
+
+ In European conference on computer vision ,
+
+ pp. 577–593 .
+
+ Cited by: §2 .
+
+ [38] 
+ G. Larsson, M. Maire, and G. Shakhnarovich (2017) 
+
+ Colorization as a proxy task for visual understanding .
+
+ In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 6874–6883 .
+
+ Cited by: §2 .
+
+ [39] 
+ H. Lee, J. Huang, M. Singh, and M. Yang (2017) 
+
+ Unsupervised representation learning by sorting sequences .
+
+ In Proceedings of the IEEE International Conference on Computer Vision ,
+
+ pp. 667–676 .
+
+ Cited by: §2 .
+
+ [40] 
+ S. Lee, J. Park, R. Timofte, and J. Kwon (2024) 
+
+ SOTA: sequential optimal transport approximation for visual tracking in wild scenario .
+
+ IEEE Access .
+
+ Cited by: §2 .
+
+ [41] 
+ C. Li, M. Zeeshan Zia, Q. Tran, X. Yu, G. D. Hager, and M. Chandraker (2017) 
+
+ Deep supervision with shape concepts for occlusion-aware 3d object parsing .
+
+ In Proceedings of the IEEE conference on computer vision and pattern recognition ,
+
+ pp. 5465–5474 .
+
+ Cited by: §5 .
+
+ [42] 
+ C. Li, M. Z. Zia, Q. Tran, X. Yu, G. D. Hager, and M. Chandraker (2018) 
+
+ Deep supervision with intermediate concepts .
+
+ IEEE transactions on pattern analysis and machine intelligence 41 ( 8 ), pp. 1828–1843 .
+
+ Cited by: §5 .
+
+ [43] 
+ J. Li and S. Todorovic (2021) 
+
+ Action shuffle alternating learning for unsupervised action segmentation .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 12628–12636 .
+
+ Cited by: §2 ,
+ §4.3 ,
+ Table 3 ,
+ §4 .
+
+ [44] 
+ L. Lin, S. Song, W. Yang, and J. Liu (2020) 
+
+ Ms2l: multi-task self-supervised learning for skeleton based action recognition .
+
+ In Proceedings of the 28th ACM International Conference on Multimedia ,
+
+ pp. 2490–2498 .
+
+ Cited by: §2 .
+
+ [45] 
+ W. Liu, B. Tekin, H. Coskun, V. Vineet, P. Fua, and M. Pollefeys (2022) 
+
+ Learning to align sequential actions in the wild .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 2181–2191 .
+
+ Cited by: §A.1 ,
+ Table 7 ,
+ §1 ,
+ §1 ,
+ §2 ,
+ §2 ,
+ §3.1.2 ,
+ §3.1.3 ,
+ §4.3 ,
+ Table 2 ,
+ Table 2 ,
+ Table 2 ,
+ §4 ,
+ §4 ,
+ §4 .
+
+ [46] 
+ X. Liu, J. Van De Weijer, and A. D. Bagdanov (2018) 
+
+ Leveraging unlabeled data for crowd counting by learning to rank .
+
+ In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 7661–7669 .
+
+ Cited by: §2 .
+
+ [47] 
+ Y. Liu, L. Zhu, M. Yamada, and Y. Yang (2020) 
+
+ Semantic correspondence as an optimal transport problem .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 4463–4472 .
+
+ Cited by: §2 .
+
+ [48] 
+ I. Misra, C. L. Zitnick, and M. Hebert (2016) 
+
+ Shuffle and learn: unsupervised learning using temporal order verification .
+
+ In European Conference on Computer Vision ,
+
+ pp. 527–544 .
+
+ Cited by: Table 7 ,
+ §2 ,
+ §4.3 ,
+ Table 2 ,
+ Table 2 ,
+ Table 2 ,
+ §4 .
+
+ [49] 
+ H. Mobahi, R. Collobert, and J. Weston (2009) 
+
+ Deep learning from temporal coherence in video .
+
+ In Proceedings of the 26th Annual International Conference on Machine Learning ,
+
+ pp. 737–744 .
+
+ Cited by: §2 .
+
+ [50] 
+ M. Noroozi, H. Pirsiavash, and P. Favaro (2017) 
+
+ Representation learning by learning to count .
+
+ In Proceedings of the IEEE International Conference on Computer Vision ,
+
+ pp. 5898–5906 .
+
+ Cited by: §2 .
+
+ [51] 
+ A. Paszke, S. Gross, S. Chintala, G. Chanan, E. Yang, Z. DeVito, Z. Lin, A. Desmaison, L. Antiga, and A. Lerer (2017) 
+
+ Automatic differentiation in pytorch .
+
+ Cited by: §4 .
+
+ [52] 
+ G. Peyré, M. Cuturi, and J. Solomon (2016) 
+
+ Gromov-wasserstein averaging of kernel and distance matrices .
+
+ In International conference on machine learning ,
+
+ pp. 2664–2672 .
+
+ Cited by: §3.1.1 ,
+ §3.1.2 .
+
+ [53] 
+ L. C. Pickup, Z. Pan, D. Wei, Y. Shih, C. Zhang, A. Zisserman, B. Scholkopf, and W. T. Freeman (2014) 
+
+ Seeing the arrow of time .
+
+ In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 2035–2042 .
+
+ Cited by: §2 .
+
+ [54] 
+ R. Qian, T. Meng, B. Gong, M. Yang, H. Wang, S. Belongie, and Y. Cui (2021) 
+
+ Spatiotemporal contrastive video representation learning .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 6964–6974 .
+
+ Cited by: §2 .
+
+ [55] 
+ S. Sarfraz, N. Murray, V. Sharma, A. Diba, L. Van Gool, and R. Stiefelhagen (2021) 
+
+ Temporally-weighted hierarchical clustering for unsupervised action segmentation .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 11225–11234 .
+
+ Cited by: §A.5 ,
+ Table 8 .
+
+ [56] 
+ P. Sarlin, D. DeTone, T. Malisiewicz, and A. Rabinovich (2020) 
+
+ Superglue: learning feature matching with graph neural networks .
+
+ In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition ,
+
+ pp. 4938–4947 .
+
+ Cited by: §2 ,
+ §5 .
+
+ [57] 
+ P. Sermanet, C. Lynch, Y. Chebotar, J. Hsu, E. Jang, S. Schaal, S. Levine, and G. Brain (2018) 
+
+ Time-contrastive networks: self-supervised learning from video .
+
+ In 2018 IEEE international conference on robotics and automation (ICRA) ,
+
+ pp. 1134–1141 .
+
+ Cited by: Table 7 ,
+ §4.3 ,
+ Table 2 ,
+ Table 2 ,
+ Table 2 ,
+ §4 ,
+ §4 .
+
+ [58] 
+ Z. Shen, J. Feydy, P. Liu, A. H. Curiale, R. San Jose Estepar, R. San Jose Estepar, and M. Niethammer (2021) 
+
+ Accurate point cloud registration with robust optimal transport .
+
+ Advances in Neural Information Processing Systems 34 , pp. 5373–5389 .
+
+ Cited by: §2 .
+
+ [59] 
+ C. Si, X. Nie, W. Wang, L. Wang, T. Tan, and J. Feng (2020) 
+
+ Adversarial self-supervised learning for semi-supervised 3d action recognition .
+
+ In Computer Vision–ECCV 2020: 16th European Conference, Glasgow, UK, August 23–28, 2020, Proceedings, Part VII 16 ,
+
+ pp. 35–51 .
+
+ Cited by: §2 .
+
+ [60] 
+ F. Spurio, E. Bahrami, G. Francesca, and J. Gall (2024) 
+
+ Hierarchical vector quantization for unsupervised action segmentation .
+
+ arXiv preprint arXiv:2412.17640 .
+
+ Cited by: §4.3 ,
+ Table 3 ,
+ §4 .
+
+ [61] 
+ N. Srivastava, E. Mansimov, and R. Salakhudinov (2015) 
+
+ Unsupervised learning of video representations using lstms .
+
+ In International conference on machine learning ,
+
+ pp. 843–852 .
+
+ Cited by: §2 .
+
+ [62] 
+ S. Stein and S. J. McKenna (2013) 
+
+ Combining embedded accelerometers with computer vision for recognizing food preparation activities .
+
+ In Proceedings of the 2013 ACM international joint conference on Pervasive and ubiquitous computing ,
+
+ pp. 729–738 .
+
+ Cited by: §4 .
+
+ [63] 
+ K. Su, X. Liu, and E. Shlizerman (2020) 
+
+ Predict & cluster: unsupervised skeleton based action recognition .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 9631–9640 .
+
+ Cited by: §2 .
+
+ [64] 
+ Y. Su, G. Lin, and Q. Wu (2021) 
+
+ Self-supervised 3d skeleton action representation learning with motion consistency and continuity .
+
+ In Proceedings of the IEEE/CVF international conference on computer vision ,
+
+ pp. 13328–13338 .
+
+ Cited by: §2 .
+
+ [65] 
+ S. Swetha, H. Kuehne, Y. S. Rawat, and M. Shah (2021) 
+
+ Unsupervised discriminative embedding for sub-action learning in complex activities .
+
+ In 2021 IEEE International Conference on Image Processing (ICIP) ,
+
+ pp. 2588–2592 .
+
+ Cited by: §2 ,
+ §4.3 ,
+ Table 3 ,
+ §4 .
+
+ [66] 
+ M. Thorpe (2018) 
+
+ Introduction to optimal transport .
+
+ Notes of Course at University of Cambridge .
+
+ Cited by: §3.1.1 .
+
+ [67] 
+ A. Thual, Q. H. Tran, T. Zemskova, N. Courty, R. Flamary, S. Dehaene, and B. Thirion (2022) 
+
+ Aligning individual brains with fused unbalanced gromov wasserstein .
+
+ Advances in neural information processing systems 35 , pp. 21792–21804 .
+
+ Cited by: §2 ,
+ §3.1.1 .
+
+ [68] 
+ V. Titouan, N. Courty, R. Tavenard, and R. Flamary (2019) 
+
+ Optimal transport for structured data with application on graphs .
+
+ In International Conference on Machine Learning ,
+
+ pp. 6275–6284 .
+
+ Cited by: §3.1.1 .
+
+ [69] 
+ D. Tran, H. Wang, L. Torresani, J. Ray, Y. LeCun, and M. Paluri (2018) 
+
+ A closer look at spatiotemporal convolutions for action recognition .
+
+ In Proceedings of the IEEE conference on Computer Vision and Pattern Recognition ,
+
+ pp. 6450–6459 .
+
+ Cited by: §1 .
+
+ [70] 
+ Q. Tran, M. Ahmed, M. Popattia, M. H. Ahmed, A. Konin, and M. Z. Zia (2024) 
+
+ Learning by aligning 2d skeleton sequences and multi-modality fusion .
+
+ In European Conference on Computer Vision ,
+
+ pp. 141–161 .
+
+ Cited by: §2 .
+
+ [71] 
+ Q. Tran, A. Mehmood, M. Ahmed, M. Naufil, A. Zafar, A. Konin, and Z. Zia (2024) 
+
+ Permutation-aware activity segmentation via unsupervised frame-to-segment alignment .
+
+ In Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision ,
+
+ pp. 6426–6436 .
+
+ Cited by: §1 ,
+ §2 ,
+ §4.3 ,
+ Table 3 ,
+ Table 3 ,
+ §4 .
+
+ [72] 
+ T. Vayer, L. Chapel, R. Flamary, R. Tavenard, and N. Courty (2020) 
+
+ Fused gromov-wasserstein distance for structured objects .
+
+ Algorithms 13 ( 9 ), pp. 212 .
+
+ Cited by: §3.1.1 .
+
+ [73] 
+ R. G. VidalMata, W. J. Scheirer, A. Kukleva, D. Cox, and H. Kuehne (2021) 
+
+ Joint visual-temporal embedding for unsupervised learning of actions in untrimmed sequences .
+
+ In Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision ,
+
+ pp. 1238–1247 .
+
+ Cited by: §2 ,
+ §4.3 ,
+ Table 3 ,
+ §4 .
+
+ [74] 
+ C. Vondrick, H. Pirsiavash, and A. Torralba (2016) 
+
+ Generating videos with scene dynamics .
+
+ In Advances in neural information processing systems ,
+
+ pp. 613–621 .
+
+ Cited by: §2 .
+
+ [75] 
+ J. Wang, J. Jiao, and Y. Liu (2020) 
+
+ Self-supervised video representation learning by pace prediction .
+
+ In Computer Vision–ECCV 2020: 16th European Conference, Glasgow, UK, August 23–28, 2020, Proceedings, Part XVII 16 ,
+
+ pp. 504–521 .
+
+ Cited by: §2 .
+
+ [76] 
+ X. Wang, R. Girshick, A. Gupta, and K. He (2018) 
+
+ Non-local neural networks .
+
+ In Proceedings of the IEEE conference on computer vision and pattern recognition ,
+
+ pp. 7794–7803 .
+
+ Cited by: §1 .
+
+ [77] 
+ D. Wei, J. J. Lim, A. Zisserman, and W. T. Freeman (2018) 
+
+ Learning and using the arrow of time .
+
+ In Proceedings of the IEEE conference on computer vision and pattern recognition ,
+
+ pp. 8052–8060 .
+
+ Cited by: §2 .
+
+ [78] 
+ D. Xu, J. Xiao, Z. Zhao, J. Shao, D. Xie, and Y. Zhuang (2019) 
+
+ Self-supervised spatiotemporal learning via video clip order prediction .
+
+ In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 10334–10343 .
+
+ Cited by: §2 .
+
+ [79] 
+ H. Xu, D. Luo, H. Zha, and L. C. Duke (2019) 
+
+ Gromov-wasserstein learning for graph matching and node embedding .
+
+ In International conference on machine learning ,
+
+ pp. 6932–6941 .
+
+ Cited by: §2 .
+
+ [80] 
+ M. Xu and S. Gould (2024) 
+
+ Temporally consistent unbalanced optimal transport for unsupervised action segmentation .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 14618–14627 .
+
+ Cited by: §A.1 ,
+ §A.1 ,
+ §A.6 ,
+ Table 8 ,
+ §1 ,
+ §2 ,
+ §2 ,
+ §3.1.1 ,
+ §3.1.2 ,
+ §3.2.1 ,
+ §3.2.2 ,
+ §3.2.2 ,
+ §4.3 ,
+ Table 3 ,
+ §4 ,
+ §4 .
+
+ [81] 
+ Y. Yao, C. Liu, D. Luo, Y. Zhou, and Q. Ye (2020) 
+
+ Video playback rate perception for self-supervised spatio-temporal representation learning .
+
+ In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition ,
+
+ pp. 6548–6557 .
+
+ Cited by: §2 .
+
+ [82] 
+ W. Zhang, M. Zhu, and K. G. Derpanis (2013) 
+
+ From actemes to action: a strongly-supervised representation for detailed action understanding .
+
+ In Proceedings of the IEEE international conference on computer vision ,
+
+ pp. 2248–2255 .
+
+ Cited by: §4 .
+
+ [83] 
+ N. Zheng, J. Wen, R. Liu, L. Long, J. Dai, and Z. Gong (2018) 
+
+ Unsupervised representation learning with long-term dynamics for skeleton based action recognition .
+
+ In Proceedings of the AAAI Conference on Artificial Intelligence ,
+
+ Vol. 32 .
+
+ Cited by: §2 .
+
+ [84] 
+ W. Y. Zou, A. Y. Ng, and K. Yu (2011) 
+
+ Unsupervised learning of visual invariance with temporal coherence .
+
+ In NIPS 2011 workshop on deep learning and unsupervised feature learning ,
+
+ Vol. 3 .
+
+ Cited by: §2 .
+
+ Experimental support, please
+ view the build logs 
+ for errors. Generated by
+
+ L
+ A 
+ T
+ E 
+
+ xml 
+
+ .
+
+## Instructions for reporting errors
+
+ We are continuing to improve HTML versions of papers, and your feedback helps enhance accessibility and mobile
+ support. To report errors in the HTML that will help us improve conversion and rendering, choose any of the
+ methods listed below: 
+
+ Click the "Report Issue" ( 
+
+ ) button, located in the page header. 
+
+ Tip: You can select the relevant text first, to include it in your report. 
+ Our team has already identified the following issues . We appreciate your time reviewing and reporting rendering errors we
+ may not have found yet. Your efforts will help us improve the HTML versions for all readers, because disability
+ should not be a barrier to accessing research. Thank you for your continued support in championing open access for
+ all. 
+ Have a free development cycle? Help support accessibility at arXiv! Our collaborators at LaTeXML maintain a list of packages that need conversion , and welcome developer contributions . 
+
+ We gratefully acknowledge support from
+ our major funders ,
+ member institutions , ,
+ and all contributors.
+
+ About 
+ · 
+ Help 
+ · 
+ Contact 
+ · 
+ Subscribe 
+ · 
+ Copyright 
+ · 
+ Privacy 
+ · 
+ Accessibility 
+ · 
+ Operational Status (opens in new tab) 
+
+ Major funding support from 
+

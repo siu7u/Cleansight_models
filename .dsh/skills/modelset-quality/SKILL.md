@@ -220,6 +220,37 @@ Before finishing YAML-related work, compare the documentation with
 `git ls-files '*.yaml' '*.yml'`. An unlisted tracked YAML file, a stale entry, or a
 broken link means the change is incomplete.
 
+## 周工作目录（`docs/weeks/`）
+
+**约定（2026-09-28 起生效）**：每一周的工作在 `docs/weeks/` 下**建一个文件夹**，
+该周产生的过程性文档、简报与实验记录都放在里面。
+
+- **一周 = 周六 ~ 次周五**（不是自然周 Monday–Sunday）。
+- 文件夹名 = `<起始周六>_<结束周五>`，格式 `YYYY-MM-DD_YYYY-MM-DD`，可直接按名称排序。
+- **建文件夹前先用 `date` 确认当天落在哪一周，不要凭推算**：
+
+  ```bash
+  date "+%Y-%m-%d %A"                 # 今天是星期几
+  date -d "last saturday" +%Y-%m-%d   # 本周起始周六
+  ```
+
+文件夹内容与维护方式：
+
+| 文件 | 作用 | 维护方式 |
+|---|---|---|
+| `README.md` | **本周简报**：本周结论、改了什么、遗留与下周计划 | **即时更新**——每完成一项就追加，不要攒到最后 |
+| 主题文档 | 该周新增的过程性文档（实验设计、机制说明、探针结果等） | 每份在简报里登记一行 |
+
+**判定一条内容该不该进周文件夹**：看它的生命周期。
+
+- 生命周期 **≤ 一周**（过程记录、当日结论、调试笔记）→ 放周文件夹。
+- **长期有效、会被跨周引用**（`EXPERIMENT_REPORT_*.md`、`docs/EVAL.md`、
+  `docs/MODELSET_OVERVIEW.md` 等）→ 仍放 `docs/` 根或既有位置，**由周简报索引**，
+  避免跨周链接失效。
+
+新增周文件夹后，在 `docs/weeks/README.md` §3 的索引表登记一行。
+约定建立之前产生的文档**不回填**，保留原位。
+
 ## Backend Integration Rules
 
 Before claiming a model is integrated into `CleanSightBackend`, verify:

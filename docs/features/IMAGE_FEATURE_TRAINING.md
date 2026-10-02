@@ -121,7 +121,7 @@ GPU 口径（2026-09-04，RTX 4060 Laptop，数据根 `-lhh`，同配方同 seed
 >    可流式部署）；**离线轨道**（全序列，双向非因果）当前最佳是 **`mstcn2` `s4l10 h128`（331 万参）**，
 >    edit 51.47 / 逐 seed 摆幅 0.64，显著优于 `mstcn` h128（41.79）与 GRU（42.40、摆幅 14.5）。
 >    **`mstcn2` 不能用于在线**（`causal=False`，滑窗流水线会拒绝）。选型按部署形态决定，不是精度排序。
->    依据：[`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](../EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md) §2.3。
+>    依据：[`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](../experiments/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md) §2.3。
 > 2. **选点口径建议由 `val_f1_0.5` 改为 `val_edit`**：同配方 8 seed 配对，edit **+9.63（p=0.0107）**、
 >    insert 召回 **+5.46（p=0.0214）**；现行默认 `val_f1_0.5` 与 test 的 Spearman ρ 仅 **0.199**
 >    （326 run 体检），即选点近乎随机。代价是 acc −0.66，需业务侧确认取舍。同上报告 §2.4。
@@ -200,7 +200,7 @@ bbox 特征通道（ROI 网格 144 或基线 40）—— 位置/数量/类别（
 6. 训练配置（E1~E3 各一）+ 一键矩阵扩展策略表 —— E1 配置已落地；E2/E3 与矩阵策略表待正式轮
 7. 单测（帧缺失/解码失败/维度/确定性）+ validate 门禁 —— **已落地**（§3.5，`test_image_embed_features.py` + `validate_testsets.py`）
 8. 结论写入本文档与 FEATURE_STRATEGY_COMPARE.md —— 机制床 E1 结论见 §4.2 与
-   `docs/EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md`；正式结论待图像源就绪
+   `docs/experiments/EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md`；正式结论待图像源就绪
 
 ### 4.4 部署影响（重大架构决策，提前知会）
 

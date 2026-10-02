@@ -1,6 +1,6 @@
 # MS-TCN 容量与规模研究
 
-> **正式报告：[`../EXPERIMENT_REPORT_MSTCN_CAPACITY_20260922.md`](../EXPERIMENT_REPORT_MSTCN_CAPACITY_20260922.md)**（按仓库实验报告惯例的 6 节骨架，含汇总图）。
+> **正式报告：[`../EXPERIMENT_REPORT_MSTCN_CAPACITY_20260922.md`](../experiments/EXPERIMENT_REPORT_MSTCN_CAPACITY_20260922.md)**（按仓库实验报告惯例的 6 节骨架，含汇总图）。
 > **详细版：[`MSTCN_CAPACITY_STUDY.md`](./MSTCN_CAPACITY_STUDY.md)**（结论速览 + 六个部分详述 + 复跑命令 + 代码改动清单）。原 `PARAMS_INVENTORY.md` / `PARAMS_VS_INPUT_DIM.md` / `CAPACITY_EXPERIMENT.md` /
 > `CAPACITY_LR_FOLLOWUP.md` / `GAP_FILLING.md` 已并入该文件，并于 2026-09-22 删除。
 

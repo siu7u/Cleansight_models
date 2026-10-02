@@ -5,9 +5,9 @@
 > 与单测门禁，并在机制床上跑通 **E0（40 维 bbox）vs E1（40 bbox + 576 图像 embedding）**
 > 的三 seed 段级对照。
 >
-> 相关文档：[特征提取方案索引](features/README.md)（§1.7 契约详述）、
-> [`IMAGE_FEATURE_TRAINING.md`](features/IMAGE_FEATURE_TRAINING.md)（§3.5 接入现状、§4 E 系列）、
-> [`FEATURE_STRATEGY_COMPARE.md`](FEATURE_STRATEGY_COMPARE.md)（bbox 系对照与坍缩分析）。
+> 相关文档：[特征提取方案索引](../features/README.md)（§1.7 契约详述）、
+> [`IMAGE_FEATURE_TRAINING.md`](../features/IMAGE_FEATURE_TRAINING.md)（§3.5 接入现状、§4 E 系列）、
+> [`FEATURE_STRATEGY_COMPARE.md`](../FEATURE_STRATEGY_COMPARE.md)（bbox 系对照与坍缩分析）。
 
 ## 1. 结论先行
 

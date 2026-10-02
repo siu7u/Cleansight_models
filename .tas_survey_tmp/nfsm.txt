@@ -1,0 +1,1738 @@
+ 
+
+ Neural Finite-State Machines for Surgical Phase Recognition 
+
+## Report GitHub Issue
+
+ × 
+
+ Title: 
+
+ Content selection saved. Describe the issue below: 
+
+ Description: 
+
+ Submit without GitHub 
+ Submit in GitHub 
+
+ arXiv is now an independent nonprofit! 
+ Learn more 
+ × 
+
+ Back to arXiv 
+
+ Why HTML? 
+
+ Report Issue 
+
+ Back to Abstract 
+
+ Download PDF 
+
+ Abstract 
+ 1 Introduction 
+ 2 Related Work 
+
+ Deep Learning Models. 
+ Hidden Markov Models. 
+
+ 3 Method 
+
+ 3.1 Architecture 
+ 3.2 Encoder & Decoder 
+ 3.3 Neural Finite-State Machine (NFSM) 
+
+ Structure. 
+ Transition-aware Training. 
+ Transition-aware Inference. 
+ As an Addon Module. 
+
+ 4 Experiments 
+
+ 4.1 Experimental Settings 
+ 4.2 Benchmark Results 
+ 4.3 Ablation Study 
+
+ 5 Conclusion 
+ References 
+ A Offline Adaptation of NFSM 
+ B Pseudo-Code for NFSM Module 
+ C Extended Experimental Analysis 
+
+ C.1 Phase-Wise Ablation Study 
+ C.2 Non-Surgical (Breakfast) Generalizability 
+ C.3 Interpretability via Transition Tables 
+ C.4 Embedding Design Choice 
+
+ License: arXiv.org perpetual non-exclusive license
+
+arXiv:2411.18018v1 [eess.IV] 27 Nov 2024 
+
+## Neural Finite-State Machines for Surgical Phase Recognition
+
+ Hao Ding
+
+ Affiliation:  United Imaging Intelligence, Boston MA, USA
+
+ Affiliation:  Johns Hopkins University, Baltimore, MD, USA
+
+ Zhongpai Gao
+
+ Affiliation:  United Imaging Intelligence, Boston MA, USA
+
+ Benjamin Planche
+
+ Affiliation:  United Imaging Intelligence, Boston MA, USA
+
+ Tianyu Luan
+
+ Affiliation:  State University of New York at Buffalo, Buffalo, NY, USA
+
+ Abhishek Sharma
+
+ Affiliation:  United Imaging Intelligence, Boston MA, USA
+
+ Meng Zheng
+
+ Affiliation:  United Imaging Intelligence, Boston MA, USA
+
+ Ange Lou
+
+ Affiliation:  Vanderbilt University, Nashville, TN, USA {hding15,uberath}@jhu.edu, {zhongpai.gao,ziyan.wu}@uii-ai.com 
+
+ Terrence Chen
+
+ Affiliation:  United Imaging Intelligence, Boston MA, USA
+
+ Mathias Unberath
+
+ Affiliation:  Johns Hopkins University, Baltimore, MD, USA
+
+ Ziyan Wu
+
+ Affiliation:  United Imaging Intelligence, Boston MA, USA
+
+## Abstract
+
+ Surgical phase recognition is essential for analyzing procedure-specific surgical videos. While recent transformer-based architectures have advanced sequence processing capabilities, they struggle with maintaining consistency across lengthy surgical procedures. Drawing inspiration from classical hidden Markov models’ finite-state interpretations, we introduce the neural finite-state machine (NFSM) module, which bridges procedural understanding with deep learning approaches. NFSM combines procedure-level understanding with neural networks through global state embeddings, attention-based dynamic transition tables, and transition-aware training and inference mechanisms for offline and online applications. When integrated into our future-aware architecture, NFSM improves video-level accuracy, phase-level precision, recall, and Jaccard indices on Cholec80 datasets by 2.3, 3.2, 3.0, and 4.8 percentage points respectively. As an add-on module to existing state-of-the-art models like Surgformer, NFSM further enhances performance, demonstrating its complementary value. Extended experiments on non-surgical datasets validate NFSM’s generalizability beyond surgical domains. Comprehensive experiments demonstrate that incorporating NSFM into deep learning frameworks enables more robust and consistent phase recognition across long procedural videos. 
+
+ Figure 1 : (a) Visualization of phase recognition consistency in surgical videos. While baseline methods misclassify isolated movements as phase transitions, our neural finite-state machine maintains phase coherence across longer durations. (b) Architecture overview showing the integration of our neural finite-state module with decoder embeddings for improved phase recognition. 
+
+ † † footnotetext: * This work was primarily carried out during the internship of Hao Ding at United Imaging Intelligence, Boston MA, USA. † † footnotetext: † \dagger Corresponding author. 
+
+## 1 Introduction
+
+ Phase recognition is fundamental to analyzing structured procedural videos, particularly in surgical operations. Accurate identification of procedure phases enables critical applications including surgical workflow optimization, performance assessment, and real-time intervention guidance. We focus on surgical phase recognition (SPR), an increasingly important challenge at the intersection of computer vision and surgical data science. 
+
+ Existing methods  [ 14 , 26 , 33 , 15 , 21 , 37 , 9 ] have achieved remarkable results by leveraging Transformer networks  [ 35 ] to extract features directly from complex surgical videos. However, modeling long-term dependencies remains a fundamental challenge in learning-based video understanding. This limitation becomes particularly acute in surgical videos, which often span several hours, making it difficult for current approaches to maintain consistent phase recognition. Figure  1 a illustrates this challenge, where baseline methods (second bar) exhibit fragmented predictions within the surgical phase of packaging (P5), misclassifying temporary movements as phase transitions. While this reflects the difficulty in maintaining temporal consistency, we observe that surgical procedures follow well-defined workflows with predictable phase transitions. Drawing inspiration from classical HMM-based approaches  [ 3 , 2 , 5 , 28 , 4 , 29 ] , we recognize that modeling state transition priors can capture essential long-term procedural understanding. 
+
+ We introduce a neural finite-state machine (NFSM) to enhance long-term consistency in surgical phase recognition (SPR). Our approach augments existing methods through systematic procedural understanding via several key components. First, we utilize learnable global embeddings to distinguish between surgical phases, essentially creating unique phase identifiers that capture specific characteristics of each phase. Second, through an attention-based mechanism, these embeddings generate a dynamic transition table that predicts phase-to-phase transitions as surgery progresses. Third, this dynamic table actively interacts with surgical video samples, allowing the model to adapt its focus based on phase-specific information during training and inference. 
+
+ For online applications, we develop transition-aware training and inference strategies integrated into a future-aware architecture. This consists of a short-term transformer encoder and a long-term decoder. We innovatively use repeated current frame padding as pseudo embeddings for future frames, enabling the model to learn and anticipate phase transitions in ongoing surgeries. During inference, the model combines predicted probabilities with transition probabilities computed from the dynamic transition tables to enhance prediction accuracy. 
+
+ Notably, our NFSM module is also designed as a plug-and-play component that seamlessly integrates with state-of-the-art models through an addition attention block for future forecasting.
+This modular design enhances both feature representation accuracy and phase transition understanding in surgical videos while maintaining computational efficiency. 
+
+ Our evaluation on surgical benchmarks—Cholec80  [ 32 ] and AutoLaparo  [ 36 ] —demonstrates state-of-the-art performance across comprehensive metrics. Through comparisons between traditional statistical-based and our dynamically generated transition tables, we showcase the NFSM module’s interpretability and innovative capabilities and validate the advantage of our dynamic, sequence-specific transition table generation approach. 
+
+ To validate generalizability, we extend our evaluation to non-surgical domains, specifically analyzing cereal-making sequences in breakfast datasets  [ 22 , 23 ] . The consistent performance improvements in these diverse contexts demonstrate our framework’s versatility and suggest broader applicability across various video understanding tasks beyond surgical phase recognition.
+This work’s primary contributions are summarized as: 
+
+ • 
+
+ We propose a neural finite-state machine (NFSM) that enhances surgical phase recognition through learnable global state embeddings and dynamic transition tables, bridging classical finite-state machines with modern neural architectures. 
+
+ • 
+
+ We develop transition-aware training and inference mechanisms that leverage future phase transitions to improve predictive accuracy, supporting both online and offline applications. 
+
+ • 
+
+ We design NFSM as a plug-and-play module that integrates with existing methods through a single additional layer, requiring no fine-tuning of base models while improving performance. 
+
+ • 
+
+ Experiments demonstrate state-of-the-art performance on surgical phase recognition benchmarks and validate our approach on non-surgical tasks, establishing the framework’s versatility across different video understanding domains. 
+
+## 2 Related Work
+
+## Deep Learning Models.
+
+ The evolution of surgical phase recognition has been marked by increasingly sophisticated neural architectures. EndoNet  [ 32 ] pioneered CNN-based feature extraction with hierarchical hidden Markov models for temporal modeling. MTRCNet-CL  [ 18 ] advanced this by correlating tool presence with surgical phases, though requiring additional annotations.
+LSTM-based approaches  [ 17 , 38 , 13 ] successfully integrated spatial-temporal information, but faced vanishing gradient issues with lengthy surgical videos. To address this, TMRNet  [ 19 ] introduced non-local bank operators, while TeCNO  [ 7 ] employed temporal convolutional networks  [ 24 , 12 ] for long-term temporal modeling. 
+
+ The advent of transformers  [ 34 ] and ViT  [ 10 ] enabled parallel processing of longer sequences. This led to various architectures: TAPIR  [ 33 ] with MViT  [ 11 ] , Trans-SVNet  [ 14 ] combining transformers with TCNs, and Surgformer  [ 37 ] introducing Hierarchical Temporal Attention. Pelphix  [ 21 ] adapted transformers for X-ray phase prediction, while Ding et al.  [ 9 ] enhanced Surgformer’s robustness through digital twin representation. LoViT  [ 26 ] employs informer  [ 41 ] for memory-efficient encoding, while SKiT  [ 27 ] introduces key-reordering with temporal max-pooling. While these approaches advance architectural efficiency, our NFSM takes an orthogonal approach by incorporating transition learning to develop procedural understanding. 
+
+## Hidden Markov Models.
+
+ Before the deep learning era, surgical phase recognition primarily relied on statistical models, particularly hidden Markov models (HMMs)  [ 3 , 2 , 5 , 28 , 4 , 29 , 8 ] . These approaches modeled surgical procedures as finite-state machines, defining transitions between predefined states and their observations.
+Early methods faced challenges with visual feature extraction. Padoy et al. [ 28 ] relied on hand-crafted features like hue histograms and tool-specific colors, while Blum et al. [ 4 ] employed canonical correlation analysis to correlate visual features with manual annotations. Dergachyova et al.  [ 8 ] advanced this through ensemble AdaBoost classifiers for phase distinction based on visual features. Many approaches  [ 4 , 29 , 1 , 16 , 28 ] required supplementary information from instrument annotations or additional sensors, with transition probabilities typically derived through statistical methods  [ 28 , 4 , 8 ] . In contrast to these static, statistically-derived transitions, our NFSM learns dynamic transition tables specific to each input sequence, while leveraging powerful deep learning features instead of hand-crafted ones. 
+
+## 3 Method
+
+ Figure 2 : Overview of the Architecture: The short-term encoder processes raw images within a local window to extract localized features, forming a feature embedding. To prepare inputs for the long-term decoder, we concatenate the previous n n embeddings with the repeated embedding of the current frame, creating m m pseudo-future embeddings. The long-term decoder then processes these concatenated embeddings to predict the phase of the current frame. Finally, the output features from the long-term decoder are fed into the NFSM module, which generates dynamic transition tables and computes transition state probabilities for both historical transitions and future predictions. 
+
+ In this section, we present our approach in three parts. First, we provide an overview of our streamlined architecture that integrates an encoder-decoder framework with our neural finite-state machine (NFSM) module. Second, we detail our non-hierarchical, future-aware encoder-decoder design for phase recognition. Finally, we introduce the NFSM module, which enhances surgical phase recognition through learnable global state embeddings and dynamic transition tables. 
+
+## 3.1 Architecture
+
+ Our architecture integrates three key components: a short-term encoder, a long-term decoder, and the NFSM module (Figure  2 ). The short-term encoder processes a sequence of video frames t − l + 1 , t − l + 2 , … , t {t-l+1,t-l+2,\ldots,t} , where l l represents the short-term window length. Using a transformer backbone, it extracts spatio-temporal features and produces a short-term embedding e ∈ ℝ d e\in\mathbb{R}^{d} through global pooling across the spatial and temporal dimensions. 
+
+ For comprehensive temporal modeling, we combine two embedding types: a history embedding constructed from n n previous frames’ short-term embeddings ( ( n × d ) (n\times d) -dimensional), and a pseudo-future embedding created by duplicating the current frame’s embedding m m times ( ( m × d ) (m\times d) -dimensional). This pseudo-future embedding enables dynamic transition table generation for future state prediction and supports both online and offline applications. 
+
+ The long-term decoder processes the concatenated history and pseudo-future embeddings, supporting parallel training and sequential inference. It outputs a long-term embedding e t ∈ ℝ ( n + m ) × d e_{t}\in\mathbb{R}^{(n+m)\times d} and generates two predictions: current frame state probabilities p ^ t ∈ ℝ 1 × s \hat{p}_{t}\in\mathbb{R}^{1\times s} via temporal global pooling, and dynamic state embeddings e d ​ t ∈ ℝ ( n + m ) × s ⋅ d e_{dt}\in\mathbb{R}^{(n+m)\times s\cdot d} reshaped to e d ​ t ∈ ℝ ( n + m ) × s × d e_{dt}\in\mathbb{R}^{(n+m)\times s\times d} , with s s the total states. 
+
+ The NFSM module processes these dynamic state embeddings using global state embeddings e g ∈ ℝ s × d e_{g}\in\mathbb{R}^{s\times d} . Through attention between e d ​ t e_{dt} and e g e_{g} , it generates dynamic transition tables T t = T t t − n + 1 , T t t − n + 2 , … , T t t + m ∈ ℝ ( n + m ) × s × s T_{t}={T_{t}^{t-n+1},T_{t}^{t-n+2},\ldots,T_{t}^{t+m}}\in\mathbb{R}^{(n+m)\times s\times s} capturing both past and future transitions. Combining p ^ t \hat{p}_{t} with T t T_{t} yields transition state probabilities p ~ t = p ~ t t − n + 1 , p ~ t t − n + 2 , … , p ~ t t + m ∈ ℝ ( n + m ) × s \tilde{p}_{t}={\tilde{p}_{t}^{t-n+1},\tilde{p}_{t}^{t-n+2},\ldots,\tilde{p}_{t}^{t+m}}\in\mathbb{R}^{(n+m)\times s} . Due to memory constraints, we employ two-stage training: first optimizing the transformer-based encoder with a prediction head, then freezing it while training the long-term decoder and NFSM module. 
+
+## 3.2 Encoder & Decoder
+
+ The short-term encoder is built upon MViTv2  [ 25 ] for short-term feature extraction, utilizing its multi-head self-attention layers with pooling and residual connections. The encoder processes a sequence of l l consecutive frames, denoted as f t − l + 1 , f t − l + 2 , … , f t {f_{t-l+1},f_{t-l+2},\dots,f_{t}} . Each frame is segmented into patches of dimensions h × w h\times w . These patches are then flattened along with the temporal dimension, resulting in a one-dimensional array of tokens that serve as input to the MViTv2  [ 25 ] backbone. To facilitate feature aggregation for the training of the first stage, a classification token is appended to the sequence of flattened tokens. 
+
+ The long-term decoder leverages RetNet architecture  [ 31 ] to analyze embeddings from past n n frames while predicting long-term embeddings for future m m frames. RetNet’s key innovation lies in replacing traditional multi-head attention with a retention mechanism that supports both parallel and recurrent computation modes.
+In parallel mode, queries, keys, and values are modulated by temporal matrices and weighted by a decay matrix that prioritizes recent information. For real-time applications, the retention mechanism can be reformulated into a recurrent form, enabling efficient parallel training and effective online inference. The decoder outputs a long-term embedding e t e_{t} and generates two predictions: phase state probabilities p ^ t \hat{p}_{t} for the current frame and dynamic state embedding e d ​ t e_{dt} for the NFSM module. 
+
+## 3.3 Neural Finite-State Machine (NFSM)
+
+## Structure.
+
+ The NFSM module, depicted in Figure  2 , incorporates information from both the dynamic state embeddings and a set of learnable global state embeddings, denoted as e g e_{g} , representing each state’s unique characteristics. Specifically, it utilizes the long-term embedding e t e_{t} from the long-term decoder. This embedding is processed through an MLP, effectively mapping the decoder’s output into a dynamic state embedding, e d ​ t e_{dt} . 
+
+ For each frame i i in the input sequence { t − n + 1 , t − n + 2 , … , t + m } \{t-n+1,t-n+2,\dots,t+m\} , the module leverages the dynamic state embedding e d ​ t i e_{dt}^{i} and the global state embedding e g e_{g} to compute dynamic transition tables T t i T_{t}^{i} via the following relation: 
+
+ | 
+ T t i = softmax ​ ( e d ​ t i ⋅ e g d ) , T_{t}^{i}=\text{softmax}(\frac{e_{dt}^{i}\cdot e_{g}}{\sqrt{d}}), | 
+ | 
+ (1) | 
+
+ where the softmax function is applied to normalize the calculated values, ensuring they represent valid transition probabilities. The dynamic transition tables facilitate the computation of transition state probabilities for both historical and future frames relative to the current frame. This computation is performed by multiplying these transition tables T t i T_{t}^{i} with the phase prediction probabilities p ^ t \hat{p}_{t} of the current frame, yielding a comprehensive set of transition state probabilities p t ~ = { p ~ t t − n + 1 , p ~ t t − n + 2 , … , p ~ t t + m } \tilde{p_{t}}=\{\tilde{p}_{t}^{t-n+1},\tilde{p}_{t}^{t-n+2},\dots,\tilde{p}_{t}^{t+m}\} . 
+
+ The NFSM’s design encapsulates an attention-like mechanism wherein e g e_{g} captures the overall attributes of each state and e d ​ t i e_{dt}^{i} focuses on frame-specific nuances. The calculation in Equation  1 leverages feature similarity (via dot product) between the dynamic state embedding and the global state embeddings to ascertain transition state probabilities, enabling the model to predict the evolution of surgical phases with heightened accuracy and context sensitivity. 
+
+## Transition-aware Training.
+
+ In the training phase, we apply dual supervisions: one on the direct prediction of state probabilities p ^ t \hat{p}_{t} and another on the transition state probabilities p t ~ \tilde{p_{t}} generated by the NFSM. First, the loss ℒ c \mathcal{L}_{c} for the prediction state probabilities of the current frame is computed using the Kullback-Leibler (KL) divergence between the prediction state probabilities p ^ t \hat{p}_{t} and the one-hot encoded ground truth label y t y_{t} , formalized as 
+
+ | 
+ ℒ c = ∑ j = 1 s − y t [ j ] log ( p ^ t [ j ] ) . \displaystyle\mathcal{L}_{c}=\sum_{j=1}^{s}-y_{t}[j]\log(\hat{p}_{t}[j]). | 
+ | 
+ (2) | 
+
+ Second, we leverage future frame labels { f t + 1 , f t + 2 , … , f t + m } \{f_{t+1},f_{t+2},\dots,f_{t+m}\} to serve as guidance to learn predictive capabilities based on the history and current frames. The loss ℒ t ​ r ​ a ​ n ​ s \mathcal{L}_{trans} for the transition state probabilities is defined as 
+
+ | 
+ ℒ t ​ r ​ a ​ n ​ s = 1 n + m ∑ i = t − n + 1 t + m ∑ j = 1 s − y i [ j ] log ( p ~ t i [ j ] ) . \mathcal{L}_{trans}=\frac{1}{n+m}\sum_{i=t-n+1}^{t+m}\sum_{j=1}^{s}-y_{i}[j]\log(\tilde{p}_{t}^{i}[j]). | 
+ | 
+
+ The final loss ℒ \mathcal{L} is then calculated as a weighted sum of these components, ℒ = ℒ t + α ​ ℒ t ​ r ​ a ​ n ​ s \mathcal{L}=\mathcal{L}_{t}+\alpha\mathcal{L}_{trans} , where α \alpha is a weighting factor balancing the contributions of direct prediction and transition state predictions. This strategy not only guides the NFSM to capture accurate phase-level representations by optimizing the alignment between the dynamic state and global state embeddings based on historical frames but also fosters the model’s ability to project these embeddings into future frames, ensuring a comprehensive understanding and anticipation of surgical phase transitions. 
+
+## Transition-aware Inference.
+
+ Leveraging the learned transition dynamics, we introduce a transition-aware inference strategy. During inference at given time t t , the model processes a sequence of frames f t − n + 1 , f t − n + 2 , … , f t {f_{t-n+1},f_{t-n+2},\dots,f_{t}} , forecasting not only the current frame’s prediction state probabilities p ^ t \hat{p}_{t} but also the future m m frames’ transition state probabilities p ~ t t + 1 , p ~ t t + 2 , … , p ~ t t + m {\tilde{p}_{t}^{t+1},\tilde{p}_{t}^{t+2},\dots,\tilde{p}_{t}^{t+m}} through the NFSM. This approach stores the transitioning state probabilities from the current state to future states, which also means we can aggregate the transition state probabilities from past m m frames to the current frame (note that the current frame is the future of the past m m frames) into a consolidated transition state probability p ~ t \tilde{p}^{t} for the current frame. 
+
+ Specifically, p ~ t \tilde{p}^{t} is calculated as the average of transition state probabilities from the past m m frames: p ~ t = 1 m ​ ∑ j = 1 m p ~ t − j t \tilde{p}^{t}=\frac{1}{m}\sum_{j=1}^{m}\tilde{p}_{t-j}^{t} . The final prediction p t p_{t} for frame t t merges these insights, normalizing the element-wise multiplication of the direct prediction state probabilities p ^ t \hat{p}_{t} and the aggregated transition state probabilities p ~ t \tilde{p}^{t} , as p t = normalized ​ ( p ^ t ⊙ p ~ t ) p_{t}=\text{normalized}(\hat{p}_{t}\odot\tilde{p}^{t}) . In this manner, the model harnesses all relevant transition probabilities for frame t t , enriching the final prediction with a comprehensive temporal context. 
+
+ Datasets | 
+ Methods | 
+
+ Relaxed 
+
+ Metric 
+ | 
+
+ Video-level 
+
+ Accuracy 
+ | 
+ Phase-level | 
+
+ Precision | 
+ Recall | 
+ Jaccard | 
+
+ | 
+ SV-RCNet   [ 17 ] | 
+ ✓ | 
+ 85.3 ± 7.3 85.3\pm 7.3 | 
+ 80.7 80.7 | 
+ 83.5 83.5 | 
+ − - | 
+
+ | 
+ TMRNet   [ 19 ] | 
+ ✓ | 
+ 90.1 ± 7.6 90.1\pm 7.6 | 
+ 90.3 90.3 | 
+ 89.5 89.5 | 
+ 79.1 79.1 | 
+
+ | 
+ TeCNO   [ 7 ] | 
+ ✓ | 
+ 88.6 ± 7.8 88.6\pm 7.8 | 
+ 86.5 86.5 | 
+ 87.6 87.6 | 
+ 75.1 75.1 | 
+
+ | 
+ Trans-SVNet  [ 14 ] | 
+ ✓ | 
+ 90.3 ± 7.1 90.3\pm 7.1 | 
+ 90.7 90.7 | 
+ 88.8 88.8 | 
+ 79.3 79.3 | 
+
+ | 
+ Not End-to-End  [ 39 ] | 
+ ✓ | 
+ 91.5 ± 7.1 91.5\pm 7.1 | 
+ − - | 
+ 86.8 86.8 | 
+ 77.2 77.2 | 
+
+ | 
+ LoViT  [ 26 ] | 
+ ✓ | 
+ 92.4 ± 6.3 92.4\pm 6.3 | 
+ 89.9 89.9 | 
+ 90.6 90.6 | 
+ 81.2 81.2 | 
+
+ | 
+ SKiT  [ 27 ] | 
+ ✓ | 
+ 93.4 ± 5.2 \pagecolor{lightbrown}93.4\pm 5.2 | 
+ 90.9 90.9 | 
+ 91.8 91.8 | 
+ 82.6 82.6 | 
+
+ | 
+ Encoder-Decoder | 
+ ✓ | 
+ 89.6 ± 7.6 89.6\pm 7.6 | 
+ 87.5 87.5 | 
+ 88.0 88.0 | 
+ 76.6 76.6 | 
+
+ | 
+ Encoder-Decoder + NFSM ( Ours ) | 
+ ✓ | 
+ 92.3 ± 5.0 92.3\pm 5.0 (+2.7) | 
+ 90.4 90.4 (+2.9) | 
+ 90.5 90.5 (+2.5) | 
+ 80.9 (+3.3) | 
+
+ | 
+ Surgformer  [ 37 ] | 
+ ✓ | 
+ 93.3 ± 6.2 93.3\pm 6.2 | 
+ 91.8 91.8 | 
+ 92.3 92.3 | 
+ 84.3 84.3 | 
+
+ Cholec80  [ 32 ] | 
+ Surgformer + NFSM ( Ours ) | 
+ ✓ | 
+ 93.7 ± \pm 5.5 (+0.4) | 
+ 93.0 (+1.2) | 
+ 92.7 (+0.4) | 
+ 85.2 (+0.9) | 
+
+ | 
+ AVT  [ 15 ] | 
+ | 
+ 86.7 ± 7.0 86.7\pm 7.0 | 
+ 77.3 77.3 | 
+ 82.1 82.1 | 
+ 66.4 66.4 | 
+
+ | 
+ TeSTra  [ 40 ] | 
+ | 
+ 90.1 ± 7.6 90.1\pm 7.6 | 
+ 82.8 82.8 | 
+ 83.8 83.8 | 
+ 71.6 71.6 | 
+
+ | 
+ Trans-SVNet  [ 14 ] | 
+ | 
+ 89.1 ± 6.6 89.1\pm 6.6 | 
+ 84.7 84.7 | 
+ 83.6 83.6 | 
+ 72.5 72.5 | 
+
+ | 
+ LoViT  [ 26 ] | 
+ | 
+ 91.5 ± 6.1 91.5\pm 6.1 | 
+ 83.1 83.1 | 
+ 86.5 86.5 | 
+ 74.2 74.2 | 
+
+ | 
+ SKiT  [ 27 ] | 
+ | 
+ 92.5 ± \pm 5.1 | 
+ 84.6 84.6 | 
+ 88.5 | 
+ 76.7 76.7 | 
+
+ | 
+ Encoder-Decoder | 
+ | 
+ 88.8 ± 7.5 88.8\pm 7.5 | 
+ 82.6 82.6 | 
+ 83.0 83.0 | 
+ 70.8 70.8 | 
+
+ | 
+ Encoder-Decoder + NFSM ( Ours ) | 
+ | 
+ 91.1 ± 5.1 91.1\pm 5.1 (+2.3) | 
+ 85.8 85.8 (+3.2) | 
+ 86.0 86.0 (+3.0) | 
+ 75.6 (+4.8) | 
+
+ | 
+ Surgformer  [ 37 ] | 
+ | 
+ 92.3 ± 6.2 92.3\pm 6.2 | 
+ 87.1 87.1 | 
+ 87.6 87.6 | 
+ 77.8 77.8 | 
+
+ | 
+ Surgformer + NFSM ( Ours ) | 
+ | 
+ 92.3 ± 5.4 92.3\pm 5.4 (+0.0) | 
+ 87.3 (+0.2) | 
+ 87.7 87.7 (+0.1) | 
+ 78.0 (+0.2) | 
+
+ | 
+ SV-RCNet   [ 17 ] | 
+ | 
+ 75.6 75.6 | 
+ 64.0 64.0 | 
+ 59.7 59.7 | 
+ 47.2 47.2 | 
+
+ | 
+ TMRNet   [ 19 ] | 
+ | 
+ 78.2 78.2 | 
+ 66.0 66.0 | 
+ 61.5 61.5 | 
+ 49.6 49.6 | 
+
+ | 
+ TeCNO   [ 7 ] | 
+ | 
+ 77.3 77.3 | 
+ 66.9 66.9 | 
+ 64.6 64.6 | 
+ 50.7 50.7 | 
+
+ | 
+ AVT  [ 15 ] | 
+ | 
+ 77.8 77.8 | 
+ 64.2 64.2 | 
+ 62.1 62.1 | 
+ 50.7 50.7 | 
+
+ AutoLaparo  [ 36 ] | 
+ Trans-SVNet  [ 14 ] | 
+ | 
+ 78.3 78.3 | 
+ 68.0 68.0 | 
+ 62.2 62.2 | 
+ 50.7 50.7 | 
+
+ | 
+ LoViT  [ 26 ] | 
+ | 
+ 81.4 ± 7.6 81.4\pm 7.6 | 
+ 85.1 | 
+ 65.9 65.9 | 
+ 55.9 55.9 | 
+
+ | 
+ SKiT  [ 27 ] | 
+ | 
+ 82.9 ± 6.8 82.9\pm 6.8 | 
+ 81.8 | 
+ 70.1 70.1 | 
+ 59.9 59.9 | 
+
+ | 
+ Encoder-Decoder | 
+ | 
+ 81.8 ± 7.3 81.8\pm 7.3 | 
+ 76.5 76.5 | 
+ 66.2 66.2 | 
+ 56.2 56.2 | 
+
+ | 
+ Encoder-Decoder + NFSM ( Ours ) | 
+ | 
+ 84.0 ± 7.2 84.0\pm 7.2 (+2.2) | 
+ 74.9 74.9 | 
+ 66.8 66.8 (+0.6) | 
+ 58.1 (+1.9) | 
+
+ | 
+ Surgformer  [ 37 ] | 
+ | 
+ 86.1 ± 7.3 86.1\pm 7.3 | 
+ 81.5 | 
+ 70.8 | 
+ 62.4 | 
+
+ | 
+ Surgformer + NFSM ( Ours ) | 
+ | 
+ 86.7 ± \pm 7.2 (+0.6) | 
+ 84.8 (+3.3) | 
+ 71.1 (+0.3) | 
+ 63.2 (+0.8) | 
+
+ Table 1 : Benchmark results for online surgical phase recognition. Note that, higher numbers reported in the original Surgformer paper  [ 37 ] used a different unrelaxed metric calculation, which has been adapted with metric implementations in SKiT  [ 27 ] for a fair comparison. 
+
+## As an Addon Module.
+
+ The NFSM module is designed for seamless integration with existing architectures like Surgformer  [ 37 ] . The integration process begins by taking feature representations from the model’s final layer. To enable future prediction, we implement an approach where current frame features are repeated to create pseudo-future embeddings, which are then concatenated with historical embeddings to form an expanded temporal sequence. 
+
+ This expanded representation undergoes processing through a dedicated attention block that anticipates future states based on historical context. The processed embedding then feeds into the NFSM module, which performs dual-directional analysis: predicting transitions from current to historical frames while also anticipating future transitions using the pseudo-future embeddings. This design ensures enhanced temporal understanding without requiring significant modifications to the base architecture’s core components, making NFSM a practical solution for improving surgical phase recognition systems. 
+
+## 4 Experiments
+
+## 4.1 Experimental Settings
+
+ We quantitatively and qualitatively evaluate our method on various public benchmarks. Additional results and implementation details are provided in the supplementary.
+
+ Datasets. 
+
+We conduct experiments on three surgical datasets: Cholec80  [ 32 ] and Autolaparo  [ 36 ] for surgical phase recognition and one non-surgical dataset, Breakfast  [ 22 , 23 ] , to validate the proposed method’s generalizability to non-surgical domains. The details of these datasets are presented below: 
+
+ • 
+
+ Cholec80   [ 32 ] includes 80 cholecystectomy videos divided into 7 phases, with a mean duration of 39min. It is evenly split for training/validation and testing. 
+
+ • 
+
+ AutoLaparo   [ 36 ] comprises 21 hysterectomy videos, averaging 66 minutes and divided into 7 phases. We use 10/4/7 videos for training/validation/testing. 
+
+ • 
+
+ Breakfast-Cereals   [ 22 , 23 ] contains 45 videos averaging 349.6 frames, used to validate generalizability. We train/validate on 34 videos and test on 11. 
+
+ All surgical videos are captured at 25 25 frames per second (FPS) and subsequently downsampled to 1 1 FPS to enable surgeons to accurately annotate specific surgical phases. The Breakfast-Cereals videos undergo downsampling with a rate of 2 2 . To maintain experimental consistency with the research community, we strictly follow the data splits established in previous studies  [ 32 , 17 , 19 , 7 , 14 , 33 ] . For robust hyperparameter tuning, we carefully select 10 videos from the Cholec80 training set and 13 videos from the Breakfast-Cereals training set to serve as validation sets. After completing the hyperparameter optimization process, we train our final models using the original training sets. 
+
+ Evaluation Metrics. We employ four distinct metrics for surgical phase recognition evaluation. The primary metric is video-level accuracy , which calculates the mean percentage of correctly recognized frames on a per-video basis. Additionally, to address the inherent class imbalance in surgical phase recognition, we incorporate three phase-level metrics: precision , recall , and Jaccard . Specifically, precision measures the ratio of true positive predictions to total predictions, recall computes the ratio of true positives to total ground truth instances, and the Jaccard index represents the ratio of true positives to the union of predictions and ground truths. 
+
+ Following the evaluation protocol established by SKiT  [ 27 ] , we implement both relaxed and unrelaxed metric calculations. For Cholec80  [ 32 ] , we utilize relaxed metrics, employing the evaluation code from TMRNet  [ 19 ] to ensure consistent calculation. For unrelaxed metrics, which we apply across all datasets, we first concatenate the predictions and ground truth labels from all videos into a single continuous sequence. We then compute the average performance per phase, implementing a specific strategy to handle missing phases in certain videos for phase-level metric calculations. This comprehensive evaluation approach ensures a thorough and fair assessment of our model’s performance across different scenarios and datasets. 
+
+ Dataset | 
+ Online | 
+ Relaxed | 
+ NFSM | 
+ NFSM | 
+ Video-level | 
+ Phase-level | 
+
+ Metric | 
+ Training | 
+ Inference | 
+ Accuracy | 
+ Precision | 
+ Recall | 
+ Jaccard | 
+
+ Cholec80 
+
+   [ 32 ] 
+
+ | 
+ ✓ | 
+ ✓ | 
+ | 
+ | 
+ 89.6 89.6 | 
+ 87.5 87.5 | 
+ 88.0 88.0 | 
+ 76.6 76.6 | 
+
+ ✓ | 
+ ✓ | 
+ ✓ | 
+ | 
+ 91.8 91.8 ( + 2.2 ) (+2.2) | 
+ 89.5 89.5 ( + 2.4 ) (+2.4) | 
+ 90.8 90.8 ( + 2.8 ) (+2.8) | 
+ 80.2 80.2 ( + 3.6 ) (+3.6) | 
+
+ ✓ | 
+ ✓ | 
+ ✓ | 
+ ✓ | 
+ 92.3 92.3 ( + 0.5 ) (+0.5) | 
+ 90.4 90.4 ( + 0.9 ) (+0.9) | 
+ 90.5 90.5 ( − 0.3 ) (-0.3) | 
+ 80.9 80.9 ( + 0.7 ) (+0.7) | 
+
+ ✓ | 
+ | 
+ | 
+ | 
+ 88.8 88.8 | 
+ 82.6 82.6 | 
+ 83.0 83.0 | 
+ 70.8 70.8 | 
+
+ ✓ | 
+ | 
+ ✓ | 
+ | 
+ 90.7 90.7 ( + 2.9 ) (+2.9) | 
+ 84.7 84.7 ( + 2.1 ) (+2.1) | 
+ 86.3 86.3 ( + 3.3 ) (+3.3) | 
+ 74.9 74.9 ( + 4.1 ) (+4.1) | 
+
+ ✓ | 
+ | 
+ ✓ | 
+ ✓ | 
+ 91.1 91.1 ( + 0.4 ) (+0.4) | 
+ 85.8 85.8 ( + 1.1 ) (+1.1) | 
+ 86.0 86.0 ( − 0.3 ) (-0.3) | 
+ 75.6 75.6 ( + 0.7 ) (+0.7) | 
+
+ | 
+ ✓ | 
+ | 
+ | 
+ 91.8 91.8 | 
+ 89.3 89.3 | 
+ 91.0 91.0 | 
+ 81.1 81.1 | 
+
+ | 
+ ✓ | 
+ ✓ | 
+ | 
+ 92.3 92.3 ( + 0.5 ) (+0.5) | 
+ 89.9 89.9 ( + 0.6 ) (+0.6) | 
+ 92.2 92.2 ( + 1.2 ) (+1.2) | 
+ 82.7 82.7 ( + 1.6 ) (+1.6) | 
+
+ | 
+ ✓ | 
+ ✓ | 
+ ✓ | 
+ 92.2 92.2 ( − 0.1 ) (-0.1) | 
+ 89.5 89.5 ( − 0.4 ) (-0.4) | 
+ 91.9 91.9 ( − 0.3 ) (-0.3) | 
+ 81.8 81.8 ( − 0.9 ) (-0.9) | 
+
+ | 
+ | 
+ | 
+ | 
+ 91.0 91.0 | 
+ 85.2 85.2 | 
+ 87.5 87.5 | 
+ 76.0 76.0 | 
+
+ | 
+ | 
+ ✓ | 
+ | 
+ 91.7 91.7 ( + 0.7 ) (+0.7) | 
+ 85.4 85.4 ( + 0.2 ) (+0.2) | 
+ 89.6 89.6 ( + 2.1 ) (+2.1) | 
+ 77.9 77.9 ( + 3.9 ) (+3.9) | 
+
+ | 
+ | 
+ ✓ | 
+ ✓ | 
+ 91.7 91.7 ( + 0.0 ) (+0.0) | 
+ 85.4 85.4 ( + 0.0 ) (+0.0) | 
+ 89.3 89.3 ( − 0.3 ) (-0.3) | 
+ 77.5 77.5 ( − 0.4 ) (-0.4) | 
+
+ AutoLaparo 
+
+   [ 36 ] 
+
+ | 
+ ✓ | 
+ | 
+ | 
+ | 
+ 81.7 81.7 | 
+ 76.5 76.5 | 
+ 66.2 66.2 | 
+ 56.2 56.2 | 
+
+ ✓ | 
+ | 
+ ✓ | 
+ | 
+ 83.2 83.2 ( + 1.5 ) (+1.5) | 
+ 73.9 73.9 ( − 2.6 ) (-2.6) | 
+ 66.4 66.4 ( + 0.2 ) (+0.2) | 
+ 57.2 57.2 ( + 1.0 ) (+1.0) | 
+
+ ✓ | 
+ | 
+ ✓ | 
+ ✓ | 
+ 84.0 84.0 ( + 0.8 ) (+0.8) | 
+ 74.9 74.9 ( + 1.0 ) (+1.0) | 
+ 66.8 66.8 ( + 0.4 ) (+0.4) | 
+ 58.1 58.1 ( + 0.9 ) (+0.9) | 
+
+ | 
+ | 
+ | 
+ | 
+ 82.8 82.8 | 
+ 70.5 70.5 | 
+ 67.6 67.6 | 
+ 57.8 57.8 | 
+
+ | 
+ | 
+ ✓ | 
+ | 
+ 84.1 84.1 ( + 1.3 ) (+1.3) | 
+ 73.0 73.0 ( + 2.5 ) (+2.5) | 
+ 68.4 68.4 ( + 0.8 ) (+0.8) | 
+ 59.1 59.1 ( + 1.3 ) (+1.3) | 
+
+ | 
+ | 
+ ✓ | 
+ ✓ | 
+ 84.3 84.3 ( + 0.2 ) (+0.2) | 
+ 85.9 85.9 ( + 12.9 ) (+12.9) | 
+ 67.9 67.9 ( + 0.3 ) (+0.3) | 
+ 59.3 59.3 ( + 0.2 ) (+0.2) | 
+
+ Breakfast- 
+
+ Cereals  [ 22 , 23 ] 
+
+ | 
+ ✓ | 
+ | 
+ | 
+ | 
+ 75.3 75.3 | 
+ 69.3 69.3 | 
+ 61.4 61.4 | 
+ 49.0 49.0 | 
+
+ ✓ | 
+ | 
+ ✓ | 
+ | 
+ 76.2 76.2 ( + 0.9 ) (+0.9) | 
+ 67.4 67.4 ( − 1.9 ) (-1.9) | 
+ 66.3 66.3 ( + 4.9 ) (+4.9) | 
+ 52.9 52.9 ( + 3.9 ) (+3.9) | 
+
+ ✓ | 
+ | 
+ ✓ | 
+ ✓ | 
+ 77.3 77.3 ( + 1.1 ) (+1.1) | 
+ 68.7 68.7 ( + 1.3 ) (+1.3) | 
+ 66.6 66.6 ( + 0.3 ) (+0.3) | 
+ 53.6 53.6 ( + 0.7 ) (+0.7) | 
+
+ | 
+ | 
+ | 
+ | 
+ 81.2 81.2 | 
+ 76.7 76.7 | 
+ 71.5 71.5 | 
+ 60.0 60.0 | 
+
+ | 
+ | 
+ ✓ | 
+ | 
+ 80.9 80.9 ( − 0.3 ) (-0.3) | 
+ 77.4 77.4 ( + 0.7 ) (+0.7) | 
+ 72.5 72.5 ( + 1.9 ) (+1.9) | 
+ 61.2 61.2 ( + 1.2 ) (+1.2) | 
+
+ | 
+ | 
+ ✓ | 
+ ✓ | 
+ 82.4 82.4 ( + 1.5 ) (+1.5) | 
+ 78.7 78.7 ( + 1.3 ) (+1.3) | 
+ 74.1 74.1 ( + 1.6 ) (+1.6) | 
+ 63.0 63.0 ( + 1.8 ) (+1.8) | 
+
+ Table 2 : Effectiveness of the proposed components for surgical phase recognition. The differences are w.r.t to the preceding rows. Green shows an increase and red shows a decrease. The NFSM training and NFSM Inference correspond to the transition-aware training and transition-aware inference in the NFSM module. 
+
+ Implementation Details. 
+We implement our model using the PyTorch  [ 30 ] framework, with all experiments conducted on two NVIDIA A40 GPUs. For frame encoding, we employ MViTv2-S/16  [ 25 ] pre-trained on the kinetic-400 dataset  [ 20 ] as the backbone for RetNet  [ 31 ] . Input images are resized to 224 × 224 224\times 224 pixels, producing embeddings with dimension d = 768 d=768 . 
+
+ For optimization, we utilize SGD with momentum, setting the base learning rate to 0.01 0.01 and weight decay to 1 ​ e − 4 1e-4 . The transition loss weight α \alpha is fixed at 1.0 1.0 . The MViTv2 encoder processes input sequences of length l = 16 l=16 . For surgical datasets (Cholec80 and Autolaparo), we configure the RetNet decoder with history length n = 256 n=256 and future window m = 128 m=128 . Both the encoder and decoder undergo training for e = 30 e=30 epochs, incorporating a 5-epoch warm-up period with cosine-annealed learning rate decay. The Breakfast-Cereals dataset uses modified parameters: n = 48 n=48 , m = 16 m=16 , and e = 100 e=100 epochs. 
+
+ For the Surgformer  [ 37 ] baseline, we strictly follow their published training and testing protocols using their official implementation. When integrating NFSM as an addon module to Surgformer, we augment the architecture with one additional attention block matching the configuration of Surgformer’s final block to enable future anticipation. This addon module is fine-tuned for 5 epochs with a learning rate of 5 × 10 − 6 5\times 10^{-6} and includes a 1-epoch warm-up period. 
+
+## 4.2 Benchmark Results
+
+ We evaluate NFSM in two scenarios: 1) integrated with our proposed encoder-decoder architecture trained from scratch and 2) as an addon module for Surgformer  [ 37 ] . 
+
+ We benchmark against state-of-the-art methods for online surgical phase recognition using both relaxed and unrelaxed metrics on Cholec80, and unrelaxed metrics on AutoLaparo. Results for Surgformer  [ 37 ] are obtained using their official implementation and checkpoints, while other baseline results are from published papers or reproductions in  [ 27 ] . For formatting clarity, we omit standard deviations across multiple runs, which were consistently minor ( < 0.5 <0.5 ). 
+
+ As demonstrated in Table  1 , NFSM enhances performance across most metrics for both datasets. The improvement is particularly pronounced when NFSM is integrated with our encoder-decoder architecture using pseudo-future embeddings, highlighting the effectiveness of future state forecasting during training. Furthermore, Surgformer augmented with NFSM as an addon module achieves state-of-the-art performance across most metrics on both datasets, validating both NFSM’s generalizability and its capacity to enhance existing architectures. 
+
+ Figure 3 : Qualitative comparison for the ablation study. Samples from left to right are randomly selected video samples from Cholec80  [ 32 ] , AutoLaparo  [ 36 ] , and Breakfast-Cereals  [ 22 , 23 ] . The left top corner shows the correspondence between colors and phases. 
+
+ Solutions | 
+ Relaxed Metric | 
+ UnRelaxed Metric | 
+
+ Video-level | 
+ Phase-level | 
+ Video-level | 
+ Phase-level | 
+
+ Accuracy | 
+ Precision | 
+ Recall | 
+ Jaccard | 
+ Accuracy | 
+ Precision | 
+ Recall | 
+ Jaccard | 
+
+ Baseline | 
+ 88.8 88.8 | 
+ 82.6 82.6 | 
+ 83.0 83.0 | 
+ 70.8 70.8 | 
+ 90.4 90.4 | 
+ 89.2 89.2 | 
+ 90.3 90.3 | 
+ 79.3 79.3 | 
+
+ + STT infer. | 
+ 89.1 89.1 ( + 0.3 ) (+0.3) | 
+ 83.6 83.6 ( + 1.0 ) (+1.0) | 
+ 83.1 83.1 ( + 0.1 ) (+0.1) | 
+ 71.6 71.6 ( + 0.8 ) (+0.8) | 
+ 90.8 90.8 ( + 0.4 ) (+0.4) | 
+ 89.9 89.9 ( + 0.7 ) (+0.7) | 
+ 90.4 90.4 + ( 0.1 ) +(0.1) | 
+ 80.0 80.0 ( + 0.7 ) (+0.7) | 
+
+ NFSM | 
+ 90.7 90.7 | 
+ 84.7 84.7 | 
+ 86.3 86.3 | 
+ 74.9 74.9 | 
+ 92.4 92.4 | 
+ 91.1 91.1 | 
+ 92.0 92.0 | 
+ 82.2 82.2 | 
+
+ + STT infer. | 
+ 90.9 90.9 ( + 0.2 ) (+0.2) | 
+ 85.4 85.4 ( + 0.7 ) (+0.7) | 
+ 86.4 86.4 ( + 0.1 ) (+0.1) | 
+ 75.5 75.5 ( + 0.6 ) (+0.6) | 
+ 92.7 92.7 ( + 0.3 ) (+0.3) | 
+ 91.6 91.6 ( + 0.5 ) (+0.5) | 
+ 92.0 92.0 ( + 0.0 ) (+0.0) | 
+ 82.7 82.7 ( + 0.5 ) (+0.5) | 
+
+ + DTT infer. | 
+ 91.1 91.1 ( + 0.2 ) (+0.2) | 
+ 85.8 85.8 ( + 0.4 ) (+0.4) | 
+ 86.0 86.0 ( − 0.4 ) (-0.4) | 
+ 75.6 75.6 ( + 0.1 ) (+0.1) | 
+ 92.9 92.9 ( + 0.2 ) (+0.2) | 
+ 91.8 91.8 ( + 0.2 ) (+0.2) | 
+ 91.7 91.7 ( − 0.3 ) (-0.3) | 
+ 82.9 82.9 ( + 0.2 ) (+0.2) | 
+
+ Table 3 : Ablation study on transition tables. “+ STT infer.” and “+ DTT infer.” means applying statistical / dynamic transition tables. 
+
+## 4.3 Ablation Study
+
+ In this section, we carry out experiments to verify the effectiveness of the proposed method in the NFSM module: transition-aware training, transition-aware inference, and dynamic transition table. 
+
+ For the NFSM module, We start with a baseline model consisting only of the short-term encoder and long-term decoder and take the prediction state probabilities p ^ t \hat{p}_{t} as the final prediction for the current frame t t . We gradually add transition-aware training and transition-aware inference to this baseline, to verify the effectiveness of each design. This study is conducted on Cholec80, AutoLaparo, and also the Breakfast-Cereals dataset to verify our method’s generalizability to non-surgical domains. We include the offline version of the architecture and verify the NFSM module’s effectiveness for offline applications. We use the same metrics as the Section  4.2 for Cholec80 and AutoLaparo and use AutoLaparo’s unrelaxed metric for the Breakfast-Cereals dataset. We show qualitative results of randomly selected videos for online settings. 
+
+ The quantitative results in Table  2 reveal consistent improvements across most metrics and scenarios when implementing NFSM training, highlighting the efficacy of the transition-aware training approach facilitated by the NFSM in enhancing feature representation for accurate current frame probability predictions. Incorporating transition-aware inference additionally boosts performance in the majority of metrics and contexts, suggesting the model’s capability to utilize current and past embeddings effectively for future prediction, thus elevating overall performance. 
+
+ There are, however, some instances of performance dips when contrasted with models trained using transition-aware strategies, often resulting from the balancing act between phase-level precision and recall. Nonetheless, in such cases, the overall phase-level Jaccard score exhibits growth. Notably, the NFSM’s impact appears more pronounced and consistent in online scenarios, attributed to the distinct advantage of future-aware transitions during training and inference that enrich the model’s insight—a feature especially beneficial in online environments and less pronounced in offline settings.
+Overall, the quantitative results show that when applying the whole NFSM module, the improvement is significant and consistent. This verifies the effectiveness of the NFSM module.
+We also visualized qualitative results in Figure  3 . The comparison shows that with NFSM training and inference, results generated by models are more continuous within the phases and robust to local perturbations. 
+
+ Furthermore, we evaluate the effectiveness of the dynamic transition table in our NFSM module. This study is performed on the Cholec80 dataset. We incorporate future-aware inference based on the dynamic transition table from NFSM and static transition table derived directly from training set statistics into baseline and NFSM-trained models, we observe performance enhancements in all cases, as detailed in Table  3 . This improvement underscores the value of integrating transition dynamics from finite-state machines into the prediction process. Moreover, leveraging dynamic transition tables for transition-aware inference surpasses the outcomes with statistical tables, indicating that dynamic tables offer richer, more nuanced transition information. Such findings confirm that NFSM’s contributions and the model’s anticipatory capabilities extend beyond mere statistical mimicry, enabling a deeper, procedure-level sequence comprehension. 
+
+## 5 Conclusion
+
+ This work introduces the neural finite-state machine (NFSM) module, bridging traditional finite-state machine concepts with modern deep learning architectures for surgical phase recognition. Through learnable global state embeddings and dynamic transition tables, NFSM captures procedure-level understanding while enabling effective online prediction via transition-aware mechanisms. When integrated into our future-aware architecture with short-term encoders and long-term decoders, NFSM significantly improves phase recognition by incorporating both immediate predictions and learned transitions. Extensive experiments on surgical video benchmarks demonstrate NFSM’s effectiveness, achieving state-of-the-art results both as a standalone architecture and as an addon module. Our ablation studies validate each component’s contribution, while successful applications to non-surgical tasks highlight its generalizability. By combining the interpretability of finite-state machines with the power of neural networks, NFSM opens new possibilities for robust procedure-specific video analysis and establishes a promising direction for incorporating structured procedural knowledge into deep learning frameworks.
+
+## References
+
+ [1] 
+
+Jakob E. Bardram, Afsaneh Doryab, Rune Møller Jensen, Poul M. Lange, Kristian L. G. Nielsen, and Soren T. Petersen.
+
+ Phase recognition during surgical procedures using embedded and body-worn sensors.
+
+ In In Proc. PerCom , 2011.
+
+ [2] 
+
+Beenish Bhatia, Tim Oates, Yan Xiao, and Peter Fu-Ming Hu.
+
+ Real-time identification of operating room state from video.
+
+ In In Proc. AAAI , 2007.
+
+ [3] 
+
+Tobias Blum, Nicolas Padoy, Hubertus Feußner, and Nassir Navab.
+
+ Modeling and online recognition of surgical phases using hidden markov models.
+
+ In In Proc. MICCAI , 2008.
+
+ [4] 
+
+Tobias Blum, Hubertus Feußner, and Nassir Navab.
+
+ Modeling and segmentation of surgical workflow from laparoscopic video.
+
+ In In Proc. MICCAI , 2010.
+
+ [5] 
+
+Rémi Cadène, Thomas Robert, Nicolas Thome, and Matthieu Cord.
+
+ M2CAI workflow challenge: Convolutional neural networks with time smoothing and hidden markov model for video frames classification.
+
+ CoRR , abs/1610.05541, 2016.
+
+ [6] 
+
+Haomin Chen, Catalina Gómez Caballero, Chien-Ming Huang, and Mathias Unberath.
+
+ Explainable medical imaging AI needs human-centered design: guidelines and evidence from a systematic review.
+
+ npj Digit. Medicine , 2022.
+
+ [7] 
+
+Tobias Czempiel, Magdalini Paschali, Matthias Keicher, Walter Simson, Hubertus Feussner, Seong Tae Kim, and Nassir Navab.
+
+ Tecno: Surgical phase recognition with multi-stage temporal convolutional networks.
+
+ In In Proc. MICCAI , 2020.
+
+ [8] 
+
+Olga Dergachyova, David Bouget, Arnaud Huaulmé, Xavier Morandi, and Pierre Jannin.
+
+ Automatic data-driven real-time segmentation and recognition of surgical workflow.
+
+ Int. J. Comput. Assist. Radiol. Surg. , 2016.
+
+ [9] 
+
+Hao Ding, Yuqian Zhang, Hongchao Shu, Xu Lian, Ji Woong Kim, Axel Krieger, and Mathias Unberath.
+
+ Towards robust algorithms for surgical phase recognition via digital twin-based scene representation.
+
+ arXiv preprint arXiv:2410.20026 , 2024.
+
+ [10] 
+
+Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Sylvain Gelly, Jakob Uszkoreit, and Neil Houlsby.
+
+ An image is worth 16x16 words: Transformers for image recognition at scale.
+
+ In In Proc. ICLR , 2021.
+
+ [11] 
+
+Haoqi Fan, Bo Xiong, Karttikeya Mangalam, Yanghao Li, Zhicheng Yan, Jitendra Malik, and Christoph Feichtenhofer.
+
+ Multiscale vision transformers.
+
+ In In Proc. ICCV , 2021.
+
+ [12] 
+
+Yazan Abu Farha and Jürgen Gall.
+
+ MS-TCN: multi-stage temporal convolutional network for action segmentation.
+
+ In In Proc. CVPR , 2019.
+
+ [13] 
+
+Xiaojie Gao, Yueming Jin, Qi Dou, and Pheng-Ann Heng.
+
+ Automatic gesture recognition in robot-assisted surgery with reinforcement learning and tree search.
+
+ In In Proc. ICRA , 2020.
+
+ [14] 
+
+Xiaojie Gao, Yueming Jin, Yonghao Long, Qi Dou, and Pheng-Ann Heng.
+
+ Trans-svnet: Accurate phase recognition from surgical videos via hybrid embedding aggregation transformer.
+
+ In In Proc. MICCAI , 2021.
+
+ [15] 
+
+Rohit Girdhar and Kristen Grauman.
+
+ Anticipative video transformer.
+
+ In In Proc. ICCV , 2021.
+
+ [16] 
+
+Matthew Stephen Holden, Tamas Ungi, Derek Sargent, Robert C. McGraw, Elvis C. S. Chen, Sugantha Ganapathy, Terry M. Peters, and Gabor Fichtinger.
+
+ Feasibility of real-time workflow segmentation for tracked needle interventions.
+
+ IEEE Trans. Biomed. Eng. , 2014.
+
+ [17] 
+
+Yueming Jin, Qi Dou, Hao Chen, Lequan Yu, Jing Qin, Chi-Wing Fu, and Pheng-Ann Heng.
+
+ Sv-rcnet: Workflow recognition from surgical videos using recurrent convolutional network.
+
+ IEEE Trans. Medical Imaging , 2018.
+
+ [18] 
+
+Yueming Jin, Huaxia Li, Qi Dou, Hao Chen, Jing Qin, Chi-Wing Fu, and Pheng-Ann Heng.
+
+ Multi-task recurrent convolutional network with correlation loss for surgical video analysis.
+
+ Medical Image Anal. , 2020.
+
+ [19] 
+
+Yueming Jin, Yonghao Long, Cheng Chen, Zixu Zhao, Qi Dou, and Pheng-Ann Heng.
+
+ Temporal memory relation network for workflow recognition from surgical video.
+
+ IEEE Trans. Medical Imaging , 2021.
+
+ [20] 
+
+Will Kay, João Carreira, Karen Simonyan, Brian Zhang, Chloe Hillier, Sudheendra Vijayanarasimhan, Fabio Viola, Tim Green, Trevor Back, Paul Natsev, Mustafa Suleyman, and Andrew Zisserman.
+
+ The kinetics human action video dataset.
+
+ CoRR , abs/1705.06950, 2017.
+
+ [21] 
+
+Benjamin D. Killeen, Han Zhang, Jan Mangulabnan, Mehran Armand, Russell H. Taylor, Greg Osgood, and Mathias Unberath.
+
+ Pelphix: Surgical phase recognition from x-ray images in percutaneous pelvic fixation.
+
+ In In Proc. MICCAI , 2023.
+
+ [22] 
+
+H. Kuehne, A. B. Arslan, and T. Serre.
+
+ The language of actions: Recovering the syntax and semantics of goal-directed human activities.
+
+ In In Proc. CVPR , 2014.
+
+ [23] 
+
+Hilde Kuehne, Juergen Gall, and Thomas Serre.
+
+ An end-to-end generative framework for video segmentation and recognition.
+
+ In In Proc. WACV , 2016.
+
+ [24] 
+
+Colin Lea, René Vidal, Austin Reiter, and Gregory D. Hager.
+
+ Temporal convolutional networks: A unified approach to action segmentation.
+
+ In ECCV Workshops , 2016.
+
+ [25] 
+
+Yanghao Li, Chao-Yuan Wu, Haoqi Fan, Karttikeya Mangalam, Bo Xiong, Jitendra Malik, and Christoph Feichtenhofer.
+
+ Mvitv2: Improved multiscale vision transformers for classification and detection.
+
+ In In Proc. CVPR , 2022.
+
+ [26] 
+
+Yang Liu, Maxence Boels, Luis C. García-Peraza-Herrera, Tom Vercauteren, Prokar Dasgupta, Alejandro Granados, and Sébastien Ourselin.
+
+ Lovit: Long video transformer for surgical phase recognition.
+
+ CoRR , abs/2305.08989, 2023a.
+
+ [27] 
+
+Yang Liu, Jiayu Huo, Jingjing Peng, Rachel Sparks, Prokar Dasgupta, Alejandro Granados, and Sebastien Ourselin.
+
+ Skit: a fast key information video transformer for online surgical phase recognition.
+
+ In Proc. ICCV , 2023b.
+
+ [28] 
+
+Nicolas Padoy, Tobias Blum, Hubertus Feußner, Marie-Odile Berger, and Nassir Navab.
+
+ On-line recognition of surgical activity for monitoring in the operating room.
+
+ In In Proc. AAAI , 2008.
+
+ [29] 
+
+Nicolas Padoy, Tobias Blum, Seyed-Ahmad Ahmadi, Hubertus Feußner, Marie-Odile Berger, and Nassir Navab.
+
+ Statistical modeling and recognition of surgical workflow.
+
+ Medical Image Anal. , 2012.
+
+ [30] 
+
+Adam Paszke, Sam Gross, Francisco Massa, Adam Lerer, James Bradbury, Gregory Chanan, Trevor Killeen, Zeming Lin, Natalia Gimelshein, Luca Antiga, Alban Desmaison, Andreas Kopf, Edward Yang, Zachary DeVito, Martin Raison, Alykhan Tejani, Sasank Chilamkurthy, Benoit Steiner, Lu Fang, Junjie Bai, and Soumith Chintala.
+
+ PyTorch: An Imperative Style, High-Performance Deep Learning Library.
+
+ In In Proc. NIPS , 2019.
+
+ [31] 
+
+Yutao Sun, Li Dong, Shaohan Huang, Shuming Ma, Yuqing Xia, Jilong Xue, Jianyong Wang, and Furu Wei.
+
+ Retentive network: A successor to transformer for large language models.
+
+ CoRR , abs/2307.08621, 2023.
+
+ [32] 
+
+Andru Putra Twinanda, Sherif Shehata, Didier Mutter, Jacques Marescaux, Michel de Mathelin, and Nicolas Padoy.
+
+ Endonet: A deep architecture for recognition tasks on laparoscopic videos.
+
+ IEEE Trans. Medical Imaging , 2017.
+
+ [33] 
+
+Natalia Valderrama, Paola Ruiz Puentes, Isabela Hernández, Nicolás Ayobi Mathilde Verlyk, Jessica Santander, Juan Caicedo, Nicolás Fernández, and Pablo Arbeláes.
+
+ Towards holistic surgical scene understanding.
+
+ In In Proc. MICCAI , 2022.
+
+ [34] 
+
+Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, and Illia Polosukhin.
+
+ Attention is all you need.
+
+ In In Proc. NIPS , 2017a.
+
+ [35] 
+
+Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Łukasz Kaiser, and Illia Polosukhin.
+
+ Attention is all you need.
+
+ Advances in neural information processing systems , 30, 2017b.
+
+ [36] 
+
+Ziyi Wang, Bo Lu, Yonghao Long, Fangxun Zhong, Tak-Hong Cheung, Qi Dou, and Yunhui Liu.
+
+ Autolaparo: A new dataset of integrated multi-tasks for image-guided surgical automation in laparoscopic hysterectomy.
+
+ In In Proc. MICCAI , 2022.
+
+ [37] 
+
+Shu Yang, Luyang Luo, Qiong Wang, and Hao Chen.
+
+ Surgformer: Surgical transformer with hierarchical temporal attention for surgical phase recognition.
+
+ In In Proc. MICCAI , 2024.
+
+ [38] 
+
+Fangqiu Yi and Tingting Jiang.
+
+ Hard frame detection and online mapping for surgical phase recognition.
+
+ In In Proc. MICCAI , 2019.
+
+ [39] 
+
+Fangqiu Yi, Yanfeng Yang, and Tingting Jiang.
+
+ Not end-to-end: Explore multi-stage architecture for online surgical phase recognition.
+
+ In Proceedings of the Asian Conference on Computer Vision , pages 2613–2628, 2022.
+
+ [40] 
+
+Yue Zhao and Philipp Krähenbühl.
+
+ Real-time online video detection with temporal smoothing transformers.
+
+ In Proc, ECCV , 2022.
+
+ [41] 
+
+Haoyi Zhou, Shanghang Zhang, Jieqi Peng, Shuai Zhang, Jianxin Li, Hui Xiong, and Wancai Zhang.
+
+ Informer: Beyond efficient transformer for long sequence time-series forecasting.
+
+ In In Proc. AAAI , 2021.
+
+## Appendix
+
+## Appendix A Offline Adaptation of NFSM
+
+ Algorithm 1 Pseudo-code for NFSM module 
+
+ input: 
+ e t ⁡ [ ( m + n ) × d ] e_{t{\color[rgb]{0,0.5,1}[(m+n)\times d]}} , e g ⁡ [ s × d ] e_{g{\color[rgb]{0,0.5,1}[s\times d]}} , p ^ t ⁡ [ 1 × s ] \hat{p}_{t{\color[rgb]{0,0.5,1}[1\times s]}} , y [ ( m + n ) × d ] y_{{\color[rgb]{0,0.5,1}[(m+n)\times d]}} , α [ 1 ] \alpha_{{\color[rgb]{0,0.5,1}[1]}} 
+
+ e d ​ t ​ [ ( m + n ) × s × d ] = e t ⁡ [ ( m + n ) × d ¯ ] ⋅ W d ​ t ​ [ d ¯ × s × d ] e_{dt{\color[rgb]{0,0.5,1}[(m+n)\times s\times d]}}=e_{t{\color[rgb]{0,0.5,1}[(m+n)\times\underline{d}]}}\cdot W_{dt{\color[rgb]{0,0.5,1}[\underline{d}\times s\times d]}} ⊳ \triangleright Linear transform
+
+ T t ⁡ [ ( m + n ) × s × s ] = e d ​ t ​ [ ( m + n ) × s × d ¯ ] ⋅ e g ⁡ [ s × d ¯ ] T_{t{\color[rgb]{0,0.5,1}[(m+n)\times s\times s]}}=e_{dt{\color[rgb]{0,0.5,1}[(m+n)\times s\times\underline{d}]}}\cdot e_{g{\color[rgb]{0,0.5,1}[s\times\underline{d}]}} ⊳ \triangleright Dynamic Table
+
+ p ~ t ⁡ [ ( m + n ) × s ] = p ^ t ⁡ [ 1 × s ¯ ] ⋅ T t ⁡ [ ( m + n ) × s × s ¯ ] \tilde{p}_{t{\color[rgb]{0,0.5,1}[(m+n)\times s]}}=\hat{p}_{t{\color[rgb]{0,0.5,1}[1\times\underline{s}]}}\cdot T_{t{\color[rgb]{0,0.5,1}[(m+n)\times s\times\underline{s}]}} ⊳ \triangleright Transition state probabilities
+
+ Transition-aware training: 
+
+ ℒ c = ∑ j = 1 s − y t [ j ] log ( p ^ t [ j ] ) \mathcal{L}_{c}=\sum_{j=1}^{s}-y_{t}[j]\log(\hat{p}_{t}[j]) ⊳ \triangleright Prediction loss
+
+ ℒ t ​ r ​ a ​ n ​ s = 1 n + m ∑ i = t − n + 1 t + m ∑ j = 1 s − y i [ j ] log ( p ~ t i [ j ] ) . \mathcal{L}_{trans}=\frac{1}{n+m}\sum_{i=t-n+1}^{t+m}\sum_{j=1}^{s}-y_{i}[j]\log(\tilde{p}_{t}^{i}[j]). 
+ ⊳ \triangleright Transition loss
+
+ ℒ = ℒ c + α ​ ℒ t ​ r ​ a ​ n ​ s \mathcal{L}=\mathcal{L}_{c}+\alpha\mathcal{L}_{trans} ⊳ \triangleright Final Loss
+
+ Transition-aware inference: 
+
+ p ~ [ 1 × s ] t = ∑ j = 1 m p ~ t − j ⁡ [ 1 × s ] t \tilde{p}^{t}_{{\color[rgb]{0,0.5,1}[1\times s]}}=\sum_{j=1}^{m}\tilde{p}_{t-j{\color[rgb]{0,0.5,1}[1\times s]}}^{t} ⊳ \triangleright Average transition state proabilities
+
+ p t ⁡ [ 1 × s ] = p ^ t ⁡ [ 1 × s ] ⊙ p ~ [ 1 × s ] t p_{t{\color[rgb]{0,0.5,1}[1\times s]}}=\hat{p}_{t{\color[rgb]{0,0.5,1}[1\times s]}}\odot\tilde{p}^{t}_{{\color[rgb]{0,0.5,1}[1\times s]}} ⊳ \triangleright Final state probabilities
+
+ The Neural Finite-State Machine (NFSM) is designed to seamlessly adapt to offline analysis by leveraging the full temporal context available in sequential data. This adaptation involves several targeted modifications to enhance the model’s ability to process past and future frames holistically. 
+
+ First, the input window for the short-term encoder is restructured to balance temporal context. In the online setting, the encoder processes sequential frames leading up to the current frame, specifically { f t − l + 1 , f t − l + 2 , … , f t } \{f_{t-l+1},f_{t-l+2},\dots,f_{t}\} . For offline analysis, this window is adjusted to a centered configuration, { f t − l / 2 , … , f t , … , f t + l / 2 − 1 } \{f_{t-l/2},\dots,f_{t},\dots,f_{t+l/2-1}\} , which incorporates both preceding and subsequent frames relative to the current frame t t . This adjustment provides the encoder with a symmetrical and enriched temporal view, which is crucial for accurate phase recognition. 
+
+ Next, the long-term decoder, which integrates temporal features over extended sequences, undergoes a key enhancement. During online training and inference, pseudo-future embeddings are used to approximate future frame information. In the offline setting, these pseudo-future embeddings are replaced with actual embeddings derived from the genuine future frames, { f t + 1 , … , f t + m } \{f_{t+1},\dots,f_{t+m}\} . This substitution enables the decoder to capture realistic temporal dynamics, improving its ability to model transitions and predict future states with higher precision. 
+
+ Furthermore, the model computes transition state probabilities across both temporal directions to comprehensively understand the current frame’s context. For future frames, these probabilities are { p ~ t t + 1 , p ~ t t + 2 , … , p ~ t t + m } \{\tilde{p}_{t}^{t+1},\tilde{p}_{t}^{t+2},\dots,\tilde{p}_{t}^{t+m}\} , while for past frames, they are { p ~ t t − n + 1 , p ~ t t − n + 2 , … , p ~ t t − 1 } \{\tilde{p}_{t}^{t-n+1},\tilde{p}_{t}^{t-n+2},\dots,\tilde{p}_{t}^{t-1}\} . This bidirectional computation ensures that the model fully utilizes the information from both preceding and succeeding frames. 
+
+ To derive the final prediction for the current frame t t , the model aggregates multiple sources of temporal information. Transition probabilities from past frames, { p ~ t − m t , p ~ t − m + 1 t , … , p ~ t − 1 t } \{\tilde{p}_{t-m}^{t},\tilde{p}_{t-m+1}^{t},\dots,\tilde{p}_{t-1}^{t}\} , and future frames, { p ~ t + 1 t , p ~ t + 2 t , … , p ~ t + n − 1 t } \{\tilde{p}_{t+1}^{t},\tilde{p}_{t+2}^{t},\dots,\tilde{p}_{t+n-1}^{t}\} , are combined with the direct prediction p ^ t \hat{p}_{t} for the frame. This aggregation enables the model to produce a robust and contextually aware prediction by synthesizing insights from the entire temporal spectrum. 
+
+ This offline adaptation strategy allows the NFSM to fully exploit the temporal continuity inherent in sequential data. By providing a holistic view of each frame’s context, the model achieves improved consistency and accuracy in phase recognition tasks, ensuring its applicability across a wide range of video understanding scenarios. 
+
+## Appendix B Pseudo-Code for NFSM Module
+
+ To facilitate the implementation of the NFSM module for both training and inference phases, we provide the pseudo-code in Algorithm  1 . The pseudo-code adheres to the notations established in our study for consistency and ease of understanding. Tensor dimensions are explicitly indicated in blue using Einstein notation to provide clarity regarding the shapes and transformations involved in the computations. This detailed breakdown ensures that the implementation of NFSM can be seamlessly reproduced and integrated into related applications. 
+
+## Appendix C Extended Experimental Analysis
+
+## C.1 Phase-Wise Ablation Study
+
+ To thoroughly evaluate the performance of NFSM, we conducted a detailed phase-wise ablation study on the Cholec80 and AutoLaparo datasets. The results, summarized in Table  4 , demonstrate the effectiveness of both NFSM training and inference across most phases. Notably, the integration of NFSM mostly improves performance metrics, highlighting its ability to enhance phase recognition by leveraging temporal transitions. These findings underline the robustness and general applicability of NFSM in modeling phase-specific dynamics within sequential data. 
+
+ dataset | 
+ Phase name | 
+ + NFSM Training | 
+ + NFSM Inference | 
+
+ | 
+ Precision | 
+ Recall | 
+ Jaccard | 
+ Precision | 
+ Recall | 
+ Jaccard | 
+
+ Cholec80  [ 32 ] 
+
+ | 
+ Preparation | 
+ 87.9 87.9 ( − 6.5 ) (-6.5) | 
+ 87.7 87.7 ( + 11.2 ) (+11.2) | 
+ 78.3 78.3 ( + 5.1 ) (+5.1) | 
+ 90.5 90.5 ( + 2.6 ) (+2.6) | 
+ 86.3 86.3 ( − 1.4 ) (-1.4) | 
+ 79.1 79.1 ( + 0.8 ) (+0.8) | 
+
+ Calot Triangle Dissection | 
+ 96.6 96.6 ( + 2.6 ) (+2.6) | 
+ 91.3 91.3 ( + 0.8 ) (+0.8) | 
+ 88.5 88.5 ( + 2.9 ) (+2.9) | 
+ 96.1 96.1 ( − 0.5 ) (-0.5) | 
+ 93.0 93.0 ( + 1.7 ) (+1.7) | 
+ 89.6 89.6 ( + 1.1 ) (+1.1) | 
+
+ Clipping Cutting | 
+ 79.6 79.6 ( − 1.1 ) (-1.1) | 
+ 83.8 83.8 ( + 6.1 ) (+6.1) | 
+ 69.0 69.0 ( + 3.5 ) (+3.5) | 
+ 82.4 82.4 ( + 2.8 ) (+2.8) | 
+ 82.8 82.8 ( − 1.0 ) (-1.0) | 
+ 70.3 70.3 ( + 1.3 ) (+1.3) | 
+
+ Gallbladder Dissection | 
+ 90.0 90.0 ( + 0.9 ) (+0.9) | 
+ 94.4 94.4 ( + 2.9 ) (+2.9) | 
+ 85.5 85.5 ( + 2.3 ) (+2.3) | 
+ 90.8 90.8 ( + 0.8 ) (+0.8) | 
+ 94.8 94.8 ( + 0.4 ) (+0.4) | 
+ 86.5 86.5 ( + 1.0 ) (+1.0) | 
+
+ Gallbladder Packaging | 
+ 76.4 76.4 ( + 4.8 ) (+4.8) | 
+ 85.2 85.2 ( + 4.4 ) (+4.4) | 
+ 67.4 67.4 ( + 6.2 ) (+6.2) | 
+ 78.5 78.5 ( + 2.1 ) (+2.1) | 
+ 81.1 81.1 ( − 4.1 ) (-4.1) | 
+ 66.4 66.4 ( − 1.0 ) (-1.0) | 
+
+ Cleaning Coagulation | 
+ 83.0 83.0 ( + 9.1 ) (+9.1) | 
+ 75.7 75.7 ( − 6.0 ) (-6.0) | 
+ 65.6 65.6 ( + 2.2 ) (+2.2) | 
+ 83.5 83.5 ( + 0.5 ) (+0.5) | 
+ 77.3 77.3 ( + 1.6 ) (+1.6) | 
+ 67.0 67.0 ( + 1.4 ) (+1.4) | 
+
+ Gallbladder Retraction | 
+ 79.2 79.2 ( + 4.8 ) (+4.8) | 
+ 85.8 85.8 ( + 3.4 ) (+3.4) | 
+ 70.0 70.0 ( + 5.8 ) (+5.8) | 
+ 78.9 78.9 ( − 0.3 ) (-0.3) | 
+ 86.5 86.5 ( + 0.7 ) (+0.7) | 
+ 70.2 70.2 ( + 0.2 ) (+0.2) | 
+
+ AutoLaparo  [ 36 ] 
+
+ | 
+ Preparation | 
+ 97.4 97.4 ( + 2.9 ) (+2.9) | 
+ 27.4 27.4 ( + 2.2 ) (+2.2) | 
+ 27.2 27.2 ( + 2.4 ) (+2.4) | 
+ 100 100 ( + 2.6 ) (+2.6) | 
+ 27.5 27.5 ( + 0.1 ) (+0.1) | 
+ 27.5 27.5 ( + 0.3 ) (+0.3) | 
+
+ Dividing L., P. | 
+ 71.0 71.0 ( + 0.5 ) (+0.5) | 
+ 94.9 94.9 ( + 4.9 ) (+4.9) | 
+ 68.3 68.3 ( + 2.9 ) (+2.9) | 
+ 72.0 72.0 ( + 1.0 ) (+1.0) | 
+ 96.6 96.6 ( + 1.7 ) (+1.7) | 
+ 70.2 70.2 ( + 1.9 ) (+1.9) | 
+
+ Dividing U., V., L. | 
+ 89.4 89.4 ( + 3.6 ) (+3.6) | 
+ 80.0 80.0 ( − 0.6 ) (-0.6) | 
+ 73.0 73.0 ( + 1.9 ) (+1.9) | 
+ 90.6 90.6 ( + 1.2 ) (+1.2) | 
+ 82.1 82.1 ( + 2.1 ) (+2.1) | 
+ 75.7 75.7 ( + 2.7 ) (+2.7) | 
+
+ Transecting the Vagina | 
+ 91.3 91.3 ( + 8.7 ) (+8.7) | 
+ 88.9 88.9 ( − 1.0 ) (-1.0) | 
+ 82.0 82.0 ( + 5.8 ) (+5.8) | 
+ 92.0 92.0 ( + 0.7 ) (+0.7) | 
+ 87.9 87.9 ( − 1.0 ) (-1.0) | 
+ 81.7 81.7 ( − 0.3 ) (-0.3) | 
+
+ Specimen Removal | 
+ 0.0 0.0 ( − 32.5 ) (-32.5) | 
+ 0.0 0.0 ( − 10.3 ) (-10.3) | 
+ 0.0 0.0 ( − 8.5 ) (-8.5) | 
+ 0.0 0.0 ( + 0.0 ) (+0.0) | 
+ 0.0 0.0 ( + 0.0 ) (+0.0) | 
+ 0.0 0.0 ( + 0.0 ) (+0.0) | 
+
+ Suturing | 
+ 97.1 97.1 ( + 2.0 ) (+2.0) | 
+ 89.6 89.6 ( − 1.4 ) (-1.4) | 
+ 87.3 87.3 ( + 0.3 ) (+0.3) | 
+ 96.9 96.9 ( − 1.1 ) (-1.1) | 
+ 91.1 91.1 ( + 1.5 ) (+1.5) | 
+ 87.9 87.9 ( + 0.6 ) (+0.6) | 
+
+ Washing | 
+ 71.2 71.2 ( − 3.7 ) (-3.7) | 
+ 83.4 83.4 ( + 7.7 ) (+7.7) | 
+ 62.7 62.7 ( + 2.4 ) (+2.4) | 
+ 74.0 74.0 ( + 2.8 ) (+2.8) | 
+ 82.5 82.5 ( − 0.9 ) (-0.9) | 
+ 64.0 64.0 ( + 1.3 ) (+1.3) | 
+
+ Table 4 : Ablation study results for individual phases. “Dividing L., P.” refers to dividing the Ligament and Peritoneum, while “Dividing U., V., L.” refers to dividing the Uterine Vessels and Ligament. 
+
+## C.2 Non-Surgical (Breakfast) Generalizability
+
+ To evaluate the generalizability of NFSM beyond surgical applications, we conducted an ablation study on the Breakfast dataset  [ 22 , 23 ] , which encompasses various everyday activities. Due to page limitations, we present an exemplary ablation study on the “cereal” subset in the main paper. In this section, we perform comprehensive experiments across all procedures within the dataset. 
+
+ The results, detailed in Table  5 , indicate that while the magnitude of improvement varies among different procedures, the NFSM module consistently enhances the performance of the baseline model across all tasks. This consistent positive impact demonstrates the adaptability and effectiveness of NFSM in diverse temporal modeling scenarios beyond the surgical domain, reinforcing its potential for broader applications in sequential data analysis. 
+
+ Dataset | 
+ NFSM | 
+ NFSM | 
+ Video-level | 
+ Phase-level | 
+
+ Training | 
+ Inference | 
+ Accuracy | 
+ Precision | 
+ Recall | 
+ Jaccard | 
+
+ Breakfast-Cereals | 
+ ✓ | 
+ | 
+ 76.2 76.2 ( + 0.9 ) (+0.9) | 
+ 67.4 67.4 ( − 1.9 ) (-1.9) | 
+ 66.3 66.3 ( + 4.9 ) (+4.9) | 
+ 52.9 52.9 ( + 3.9 ) (+3.9) | 
+
+ ✓ | 
+ ✓ | 
+ 77.3 77.3 ( + 2.0 ) (+2.0) | 
+ 68.7 68.7 ( − 0.6 ) (-0.6) | 
+ 66.6 66.6 ( + 5.2 ) (+5.2) | 
+ 53.6 53.6 ( + 4.6 ) (+4.6) | 
+
+ Breakfast-Coffee | 
+ ✓ | 
+ | 
+ 65.5 65.5 ( − 2.4 ) (-2.4) | 
+ 74.1 74.1 ( − 3.4 ) (-3.4) | 
+ 79.3 79.3 ( + 1.6 ) (+1.6) | 
+ 63.1 63.1 ( + 2.3 ) (+2.3) | 
+
+ ✓ | 
+ ✓ | 
+ 69.3 69.3 ( + 1.4 ) (+1.4) | 
+ 76.1 76.1 ( − 1.4 ) (-1.4) | 
+ 81.3 81.3 ( + 3.6 ) (+3.6) | 
+ 65.9 65.9 ( + 5.1 ) (+5.1) | 
+
+ Breakfast-Friedegg | 
+ ✓ | 
+ | 
+ 52.7 52.7 ( + 4.2 ) (+4.2) | 
+ 34.1 34.1 ( + 0.8 ) (+0.8) | 
+ 31.9 31.9 ( + 0.2 ) (+0.2) | 
+ 19.5 19.5 ( + 0.7 ) (+0.7) | 
+
+ ✓ | 
+ ✓ | 
+ 63.3 63.3 ( + 14.8 ) (+14.8) | 
+ 45.5 45.5 ( + 12.2 ) (+12.2) | 
+ 40.7 40.7 ( + 4.7 ) (+4.7) | 
+ 27.6 27.6 ( + 6.0 ) (+6.0) | 
+
+ Breakfast-Juice | 
+ ✓ | 
+ | 
+ 73.5 73.5 ( − 0.3 ) (-0.3) | 
+ 50.5 50.5 ( − 7.4 ) (-7.4) | 
+ 50.4 50.4 ( + 2.8 ) (+2.8) | 
+ 37.3 37.3 ( + 1.1 ) (+1.1) | 
+
+ ✓ | 
+ ✓ | 
+ 74.8 74.8 ( + 1.0 ) (+1.0) | 
+ 51.5 51.5 ( − 6.4 ) (-6.4) | 
+ 50.7 50.7 ( + 3.1 ) (+3.1) | 
+ 38.1 38.1 ( + 1.9 ) (+1.9) | 
+
+ Breakfast-Milk | 
+ ✓ | 
+ | 
+ 73.2 73.2 ( + 1.7 ) (+1.7) | 
+ 68.8 68.8 ( + 3.4 ) (+3.4) | 
+ 73.0 73.0 ( + 5.5 ) (+5.5) | 
+ 54.7 54.7 ( + 4.7 ) (+4.7) | 
+
+ ✓ | 
+ ✓ | 
+ 73.2 73.2 ( + 1.7 ) (+1.7) | 
+ 68.6 68.6 ( + 3.2 ) (+3.2) | 
+ 72.3 72.3 ( + 4.8 ) (+4.8) | 
+ 54.2 54.2 ( + 4.2 ) (+4.2) | 
+
+ Breakfast-Pancake | 
+ ✓ | 
+ | 
+ 55.2 55.2 ( + 1.9 ) (+1.9) | 
+ 43.1 43.1 ( + 0.0 ) (+0.0) | 
+ 43.2 43.2 ( + 4.3 ) (+4.3) | 
+ 29.3 29.3 ( + 1.7 ) (+1.7) | 
+
+ ✓ | 
+ ✓ | 
+ 61.1 61.1 ( + 7.8 ) (+7.8) | 
+ 45.7 45.7 ( + 2.6 ) (+2.6) | 
+ 44.8 44.8 ( + 5.9 ) (+5.9) | 
+ 31.0 31.0 ( + 3.4 ) (+3.4) | 
+
+ Breakfast-Salat | 
+ ✓ | 
+ | 
+ 58.8 58.8 ( + 1.7 ) (+1.7) | 
+ 35.3 35.3 ( + 5.3 ) (+5.3) | 
+ 35.4 35.4 ( + 5.8 ) (+5.8) | 
+ 22.4 22.4 ( + 2.7 ) (+2.7) | 
+
+ ✓ | 
+ ✓ | 
+ 59.9 59.9 ( + 2.8 ) (+2.8) | 
+ 35.4 35.4 ( + 5.4 ) (+5.4) | 
+ 35.9 35.9 ( + 6.3 ) (+6.3) | 
+ 22.5 22.5 ( + 2.8 ) (+2.8) | 
+
+ Breakfast-Sandwich | 
+ ✓ | 
+ | 
+ 56.4 56.4 ( + 2.1 ) (+2.1) | 
+ 61.7 61.7 ( − 0.8 ) (-0.8) | 
+ 59.4 59.4 ( + 4.2 ) (+4.2) | 
+ 43.4 43.4 ( + 2.4 ) (+2.4) | 
+
+ ✓ | 
+ ✓ | 
+ 58.9 58.9 ( + 4.6 ) (+4.6) | 
+ 64.3 64.3 ( + 1.8 ) (+1.8) | 
+ 61.8 61.8 ( + 6.6 ) (+6.6) | 
+ 45.5 45.5 ( + 4.5 ) (+4.5) | 
+
+ Breakfast-Scrambledegg | 
+ ✓ | 
+ | 
+ 49.1 49.1 ( − 1.6 ) (-1.6) | 
+ 54.1 54.1 ( − 4.2 ) (-4.2) | 
+ 49.8 49.8 ( − 2.8 ) (-2.8) | 
+ 33.4 33.4 ( − 5.3 ) (-5.3) | 
+
+ ✓ | 
+ ✓ | 
+ 55.9 55.9 ( + 5.2 ) (+5.2) | 
+ 63.6 63.6 ( + 5.3 ) (+5.3) | 
+ 57.0 57.0 ( + 4.4 ) (+4.4) | 
+ 41.0 41.0 ( + 2.3 ) (+2.3) | 
+
+ Breakfast-tea | 
+ ✓ | 
+ | 
+ 56.9 56.9 ( − 2.2 ) (-2.2) | 
+ 63.7 63.7 ( + 4.5 ) (+4.5) | 
+ 60.6 60.6 ( − 0.4 ) (-0.4) | 
+ 41.7 41.7 ( + 0.1 ) (+0.1) | 
+
+ ✓ | 
+ ✓ | 
+ 59.3 59.3 ( + 0.2 ) (+0.2) | 
+ 65.6 65.6 ( + 6.4 ) (+6.4) | 
+ 62.8 62.8 ( + 1.8 ) (+1.8) | 
+ 43.4 43.4 ( + 1.8 ) (+1.8) | 
+
+ Average | 
+ | 
+ | 
+ 61.3 61.3 | 
+ 55.7 55.7 | 
+ 52.8 52.8 | 
+ 38.6 38.6 | 
+
+ ✓ | 
+ | 
+ 61.8 61.8 ( + 0.5 ) (+0.5) | 
+ 55.9 55.9 ( + 0.2 ) (+0.2) | 
+ 54.9 54.9 ( + 2.1 ) (+2.1) | 
+ 39.7 39.7 ( + 1.1 ) (+1.1) | 
+
+ ✓ | 
+ ✓ | 
+ 65.3 65.3 ( + 4.0 ) (+4.0) | 
+ 58.5 58.5 ( + 2.8 ) (+2.8) | 
+ 57.4 57.4 ( + 4.6 ) (+4.6) | 
+ 42.3 42.3 ( + 3.7 ) (+3.7) | 
+
+ Table 5 : Ablation study results on complete breakfast benchmark (online setting) 
+
+ Figure 4 : Visualization for the generated mean dynamic transition tables (DTT) and statistical transition tables (STT) of different frame intervals. Colors represent the relative magnitude among the transition probabilities where from red to green means from large to small. The probabilities are represented in three decimal places. 
+
+ Solutions | 
+ NFSM | 
+ Relaxed | 
+ Video-level | 
+ Phase-level | 
+
+ Metric | 
+ Accuracy | 
+ Precision | 
+ Recall | 
+ Jaccard | 
+
+ Repeat Padding | 
+ | 
+ ✓ | 
+ 92.9 92.9 | 
+ 91.9 91.9 | 
+ 91.7 91.7 | 
+ 82.8 82.8 | 
+
+ ✓ | 
+ ✓ | 
+ 93.9 93.9 ( + 1.0 ) (+1.0) | 
+ 93.7 93.7 ( + 1.8 ) (+1.8) | 
+ 92.0 92.0 ( + 0.3 ) (+0.3) | 
+ 85.0 85.0 ( + 2.2 ) (+2.2) | 
+
+ | 
+ | 
+ 91.4 91.4 | 
+ 86.4 86.4 | 
+ 85.1 85.1 | 
+ 74.4 74.4 | 
+
+ ✓ | 
+ | 
+ 92.1 92.1 ( + 0.7 ) (+0.7) | 
+ 88.2 88.2 ( + 1.8 ) (+1.8) | 
+ 85.7 85.7 ( + 0.6 ) (+0.6) | 
+ 76.6 76.6 ( + 2.2 ) (+2.2) | 
+
+ Zero Padding | 
+ | 
+ ✓ | 
+ 87.5 87.5 | 
+ 86.9 86.9 | 
+ 84.6 84.6 | 
+ 72.1 72.1 | 
+
+ ✓ | 
+ ✓ | 
+ 90.2 90.2 ( + 2.7 ) (+2.7) | 
+ 89.3 89.3 ( + 2.4 ) (+2.4) | 
+ 86.1 86.1 ( + 1.5 ) (+1.5) | 
+ 76.6 76.6 ( + 4.5 ) (+4.5) | 
+
+ | 
+ | 
+ 85.8 85.8 | 
+ 78.3 78.3 | 
+ 77.2 77.2 | 
+ 65.5 65.5 | 
+
+ ✓ | 
+ | 
+ 88.0 88.0 ( + 2.2 ) (+2.2) | 
+ 81.1 81.1 ( + 2.8 ) (+2.8) | 
+ 79.3 79.3 ( + 2.1 ) (+2.1) | 
+ 66.8 66.8 ( + 3.3 ) (+3.3) | 
+
+ Table 6 : Ablation study on design choices for pseudo-future embeddings. 
+
+## C.3 Interpretability via Transition Tables
+
+ To further explore the interpretability of the NFSM module, we conducted a study on the Cholec80  [ 32 ] , AutoLaparo  [ 36 ] , and Breakfast-cereal  [ 22 , 23 ] dataset. 
+
+ To highlight the interpretability of NFSM, we compared the visualizations of the average dynamic transition tables (DTTs) generated by the model against the transition tables derived directly from the training set statistics, focusing on various frame intervals. These visualizations, shown in Figure  4 , reveal that the distributions within the DTTs closely align with those from the statistical tables. This alignment underscores the reliability of NFSM in capturing realistic temporal transitions. 
+
+ The ability to align the DTTs with statistical insights allows for an intuitive comparison with clinical observations, enhancing the interpretability of the model. This property is critical for explainable AI applications in the medical domain, as suggested by Chen et al.   [ 6 ] . By offering a transparent view of the transition dynamics, the NFSM module provides valuable insights into phase transitions, fostering trust and utility in practical settings. 
+
+## C.4 Embedding Design Choice
+
+ To determine the design strategy for pseudo-future embeddings, we compared two approaches: zero padding and the repetition of the current frame’s embedding. The results of this investigation, presented in Table  6 , demonstrate that duplicating the most recent frame’s embedding yields significantly superior outcomes compared to zero padding. This finding underscores the importance of preserving temporal consistency when constructing pseudo-future embeddings. 
+
+ Notably, the NFSM module consistently enhances performance under both configurations. This robustness highlights the NFSM’s ability to effectively model temporal transitions regardless of the pseudo-future embedding design choice, further validating its generalizability and utility across diverse temporal modeling scenarios. 
+
+ Experimental support, please
+ view the build logs 
+ for errors. Generated by
+
+ L
+ A 
+ T
+ E 
+
+ xml 
+
+ .
+
+## Instructions for reporting errors
+
+ We are continuing to improve HTML versions of papers, and your feedback helps enhance accessibility and mobile
+ support. To report errors in the HTML that will help us improve conversion and rendering, choose any of the
+ methods listed below: 
+
+ Click the "Report Issue" ( 
+
+ ) button, located in the page header. 
+
+ Tip: You can select the relevant text first, to include it in your report. 
+ Our team has already identified the following issues . We appreciate your time reviewing and reporting rendering errors we
+ may not have found yet. Your efforts will help us improve the HTML versions for all readers, because disability
+ should not be a barrier to accessing research. Thank you for your continued support in championing open access for
+ all. 
+ Have a free development cycle? Help support accessibility at arXiv! Our collaborators at LaTeXML maintain a list of packages that need conversion , and welcome developer contributions . 
+
+ We gratefully acknowledge support from
+ our major funders ,
+ member institutions , ,
+ and all contributors.
+
+ About 
+ · 
+ Help 
+ · 
+ Contact 
+ · 
+ Subscribe 
+ · 
+ Copyright 
+ · 
+ Privacy 
+ · 
+ Accessibility 
+ · 
+ Operational Status (opens in new tab) 
+
+ Major funding support from 
+

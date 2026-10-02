@@ -30,9 +30,9 @@
 
 ### 2.1 主结果：参数量 vs test 段级指标
 
-![容量-段级指标](mstcn-capacity/figures/capacity_vs_segmental.png)
+![容量-段级指标](../mstcn-capacity/figures/capacity_vs_segmental.png)
 
-图由 [`tools/plot_capacity_curves.py`](../tools/plot_capacity_curves.py) 从各 run 的
+图由 [`tools/plot_capacity_curves.py`](../../tools/plot_capacity_curves.py) 从各 run 的
 `eval*/evaluation.json` + checkpoint meta 直接生成（折线 = seed 中位数，误差棒 = 跨 seed 最小–最大；
 虚线 = 逐帧线性探针下界 / 全 idle 基线）；机读数据在同一目录的 `capacity_vs_segmental.json`。
 

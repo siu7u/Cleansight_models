@@ -155,14 +155,21 @@ spec 版本全部来自唯一注册表
 [`framework/cleansight_eval/core/metrics.py`](../framework/cleansight_eval/core/metrics.py) 的
 `TEMPORAL_METRIC_SPECS`（声明了 `training_key` 的项即可用于选点）。
 
-> **选型提醒（2026-09-24）**：选点口径决定"留哪个 epoch 的权重"，**是一等口径参数**——同一次训练
-> 换它能移动 headline **9.63 分**（配对 p=0.0107）。8 seed 实测 `val_edit` 优于现行默认 `val_f1_0.5`
-> （edit +9.63、insert 召回 +5.46，代价 acc −0.66）；326 个 run 的迁移体检显示默认口径与 test 的
-> Spearman ρ 仅 **0.199**（近乎随机），`val_acc`（val−test 差 +14.76）与 `val_loss` 均不可用于选点。
-> 因此**报告里的任何指标都必须与选点口径一起写明**。完整建议见
+> **选型提醒（2026-09-24，默认值已于 2026-09-25 落地）**：选点口径决定"留哪个 epoch 的权重"，
+> **是一等口径参数**——同一次训练换它能移动 headline **9.63 分**（配对 p=0.0107）。8 seed 实测
+> `val_edit` 优于旧默认 `val_f1_0.5`（edit +9.63、insert 召回 +5.46，代价 acc −0.66）；326 个 run
+> 的迁移体检显示旧默认与 test 的 Spearman ρ 仅 **0.199**（近乎随机），`val_acc`（val−test 差 +14.76）
+> 与 `val_loss` 均不可用于选点。因此**报告里的任何指标都必须与选点口径一起写明**。完整建议见
 > [`usage/YAML_CONFIG.md`](../usage/YAML_CONFIG.md) 的 `train.best_metric` 条目、
-> [`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md) §2.4 与
+> [`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](experiments/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md) §2.4 与
 > [`figures/fig4_selection_metric.png`](figures/fig4_selection_metric.png)。
+>
+> **默认口径的唯一事实源**：`framework/cleansight_eval/temporal/util.py` 的 `DEFAULT_BEST_METRIC`
+> （= `val_edit`），由 `resolve_best_metric()` 统一解析；两条训练管线、矩阵工具与实验 YAML 都指回
+> 它，`tests/test_metric_consistency.py` 会把分歧钉红。**修复前**曾有 4 个入口 3 个默认值
+> （YAML `val_f1_0.5` / 代码兜底 `val_acc` / 工具常量 `val_f1_0.5`），同一份实验换个入口跑会
+> 静默存下不同的 `best.pt`；2026-09-23 之前的 run 仍是旧口径，比较时必须核对 `status.json`
+> 里的 `best_metric.name`，不能假定是当前默认。
 
 | 训练侧（`history.csv` 列 / `train.best_metric`） | 评测侧（`metrics.summary` 键） | 单位 | spec |
 |---|---|---|---|
@@ -215,6 +222,17 @@ spec 版本全部来自唯一注册表
   `best_metric_mode` 给出（`val_loss` 越小越好，其余越大越好）。缺省仍是 `val_loss`，与历史行为一致；
   未注册的值在 `validate_config` 阶段直接报错。时序侧不含 `val_loss`（其时序指标是选点口径，
   早停另按 val_loss），分类侧保留它是为了兼容既有配方——这是两处唯一的有意差异。
+- **评测口径（2026-09-27 起必须分开报）**：ROI 分类有**两种不可比**的评估口径——
+  **① in-sample（历史默认）**：ROI 缓存由 train+val 的 GT 框裁剪构成，评估用缓存整体（或缓存内随机
+  切分）。同一源帧的近重复裁剪会同时落在训练与评估两侧，读数显著偏乐观（实测 recall=1.0 /
+  exact_match=0.9981），**不能作为泛化能力引用**。
+  **② 留出集**：`data.eval_split` 指定 YOLO 分组数据集的 `test` 目录，只从该目录现算 ROI，
+  不落缓存、不碰 train+val 缓存，得到跨批次读数（配置样例
+  [`framework/experiments/roi-fusion-heldout.yaml`](../framework/experiments/roi-fusion-heldout.yaml)）。
+  两个口径的实测差距见 [`EXPERIMENT_REPORT_ROI_EVAL_PROTOCOL_20260927.md`](experiments/EXPERIMENT_REPORT_ROI_EVAL_PROTOCOL_20260927.md)。
+  **报告里引用 ROI 分类数字时必须写明口径**，否则等同本文档 §3.4 禁止的"不写选点口径"。
+- **留出集可复现性**：负样本是随机裁剪，`build_roi_dataset` 未播种时每次重建结果都不同
+  （2026-09-27 修复：新增 `seed` 参数，默认 0，`stats` 里记录 `splits`/`seed`）。
 - **端到端实测（2026-09-20）**：合成 ROI 数据集（33 个裁剪、2 类）跑真实 CLI——
   `train.best_metric=val_f1` 时 `history.json` 记录 `val_precision/val_recall/val_f1/val_exact_match`
   与旧别名 `val_acc`（同值），`status.json`/checkpoint meta 记录

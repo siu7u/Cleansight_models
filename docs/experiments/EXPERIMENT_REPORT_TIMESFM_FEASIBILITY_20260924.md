@@ -26,7 +26,7 @@
 
 - 本报告是本周"这些手段值不值得投入"工作流的**第三条线**，与另两条线并列，但**性质不同**：
   容量轴（`docs/mstcn-capacity/MSTCN_CAPACITY_STUDY.md`）与特征/精度杠杆轴
-  （`docs/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`）给出的是**少数被验证有效的杠杆**
+  （`docs/experiments/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`）给出的是**少数被验证有效的杠杆**
   （`mstcn2` / h128 / `roi-grid-144` / `best_metric=val_edit`）；本报告给出的是一条**被否掉的路线**，
   价值在于**阻止后续重复投入**。
 - 判定为**不采纳**，因此本报告**不进入 `registry/`**、**不改 `framework/` 与 `benchmark/`**、
@@ -232,5 +232,5 @@ $V tmp/tsfm_probe/plot_probe.py --npz tmp/tsfm_probe/out/probe_52d2541c__activit
   明确将"时序分类/聚类"列在**不适用**清单内，建议改用 `aeon`）
 - 论文：A decoder-only foundation model for time-series forecasting（ICML 2024），<https://arxiv.org/abs/2310.10688>
 - 权重许可说明：≤2.5 为 Apache-2.0；3.0 权重为 `timesfm-non-commercial-license-v1.0`
-- 仓库内相关先验：`docs/EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md`、
+- 仓库内相关先验：`docs/experiments/EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md`、
   `docs/mstcn-capacity/MSTCN_CAPACITY_STUDY.md`、`docs/INFERENCE_CHAIN_PERF.md`

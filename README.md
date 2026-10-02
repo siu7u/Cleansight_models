@@ -469,7 +469,7 @@ checkpoint + checkpoint metadata + CARD.md + pin.yaml
 
 ## 文档索引
 
-> **完整分类索引见 [`docs/README.md`](docs/README.md)**（按入口 / 架构 / 手册 / 评测 / 特征 / 实验报告 / 协作约定分组，
+> **完整分类索引见 [`docs/README.md`](docs/experiments/frame-acc/README.md)**（按入口 / 架构 / 手册 / 评测 / 特征 / 实验报告 / 协作约定分组，
 > 含全部实验报告与周报）；下面只列最常用的入口。
 
 - [架构简述](docs/ARCHITECTURE_OVERVIEW.md)：用目录和数据流快速说明当前仓库结构。
