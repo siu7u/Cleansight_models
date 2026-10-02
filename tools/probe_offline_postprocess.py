@@ -144,7 +144,8 @@ def probe_on_split(config_glob: str, split_key: str) -> tuple[dict, list[str]]:
 def select_threshold_on_val(config_glob: str, median_ks, mindur_ds, split_key: str = "split_val"):
     """在 **val** 上挑后处理参数（避免用 test 选参），返回 (kind, value, val_edit) 与候选曲线。
 
-    与模型侧对称：模型也是按 val 指标选 checkpoint（`train.best_metric=val_f1_0.5`）。
+    与模型侧对称：模型也是按 val 指标选 checkpoint（默认 ``DEFAULT_BEST_METRIC``，见
+    ``framework/cleansight_eval/temporal/util.py``）。
     """
     runs, labels = probe_on_split(config_glob, split_key)
     if not runs:

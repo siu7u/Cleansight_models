@@ -27,6 +27,11 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BACKEND_PY = REPO_ROOT / "../CleanSightBackend/.venv/bin/python"
+# 选点口径的**唯一事实源在框架层**（framework/cleansight_eval/temporal/util.py）：本工具不再
+# 自行定义默认值，否则同一份实验走 YAML / 走矩阵工具会存下不同的 best.pt（2026-09 修复）。
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from framework.cleansight_eval.temporal.util import DEFAULT_BEST_METRIC  # noqa: E402
 # 策略名 → 实验配置（特征提取范围/编码矩阵：模型与超参固定，只变特征契约）
 STRATEGIES: dict[str, str] = {
     "bbox-40-global": "gru-actionmixed-auto.yaml",
@@ -44,7 +49,7 @@ DEFAULT_WD = 0.0001
 DEFAULT_DROPOUT = 0.2
 DEFAULT_PATIENCE = 4
 DEFAULT_EPOCHS = 20
-DEFAULT_BEST_METRIC = "val_f1_0.5"  # 段级指标，避免 val_acc 偏爱 idle 坍缩解
+# DEFAULT_BEST_METRIC 由框架层导入（见文件头），此处不再重复定义。
 
 
 def run_cli(args: list[str]) -> None:

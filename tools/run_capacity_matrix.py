@@ -16,7 +16,8 @@
   14/4/8 个视频（train/val/test），容量差异小于摆幅时不可判读为"容量效应"。
 
 ``best.pt`` 与 ``last.pt`` 都评估（``--no-eval-last`` 可关）：val 只有 4 个视频，
-``best_metric=val_f1_0.5`` 的选点本身带噪声，固定预算下的 last.pt 是不经选点的对照。
+选点本身带噪声（默认口径 ``val_edit`` 见 ``DEFAULT_BEST_METRIC``），固定预算下的 last.pt
+是不经选点的对照。
 last 的评估产物写在 ``<runs-dir>/_eval_last/<run>/``，不覆盖 run 自己的 ``evals/``。
 
 训练/评估/探针原语复用 ``tools/run_strategy_matrix.py``（同一套 ``benchmark.cli.eval``
@@ -190,7 +191,67 @@ def read_metrics(eval_path: Path) -> dict:
         "labels": testset.get("labels") or [],
         "num_params": (data.get("model") or {}).get("num_params"),
         "testset": testset,
+        # 供 read_trivial_baseline 反查同一 run 的 predictions artifact（下界须与官方同口径）。
+        "eval_path": str(eval_path),
     }
+
+
+def read_trivial_baseline(eval_path: Path, tolerance: float = 0.05) -> dict | None:
+    """算「全 idle 常数预测器」的指标下界，并从同一 artifact 自检口径一致。
+
+    "永远输出 idle" 的常数预测器只依赖**真值序列**、与模型无关，因此是这份数据上的
+    **白送地板**：模型读数若与之齐平，说明该指标没测到任何非 idle 能力。2026-09 实测
+    （`runs/mstcn2-cap-s4l10h128` 3 seed）：旗舰 acc 中位 55.25 **恰好等于**该下界，
+    而 edit 51.47 ≈ 3.8 倍下界 13.70 —— 同一次评测里 acc 无区分力而 edit 有。
+
+    下界必须与官方评测**完全同口径**才可并排读：这里用注册表里的 ``temporal_metrics``
+    对 predictions artifact 重算模型自身指标，与 ``evaluation.json`` 比对，最大偏差超过
+    ``tolerance``（百分数点）就返回 None，宁可不报也不把不可比的下界写进报告。
+
+    :param eval_path: ``evals/*.evaluation.json`` 路径（artifact 路径由它反查）。
+    :return: ``{"acc", "edit", "f1_025"}``（百分数）或 None（artifact 缺失/口径不自洽）。
+    """
+
+    from framework.cleansight_eval.core.metrics import temporal_metrics
+
+    data = json.loads(eval_path.read_text(encoding="utf-8"))
+    relative = ((data.get("artifacts") or {}).get("predictions") or {}).get("path")
+    if not relative:
+        return None
+    artifact_path = eval_path.parent.parent / relative
+    if not artifact_path.is_file():
+        return None
+
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    labels = [entry["name"] for entry in artifact["labels"]]
+    idle = next((entry["name"] for entry in artifact["labels"] if entry["name"] == "idle"), None)
+    if idle is None:
+        return None
+
+    truth = {key: item["truth_labels"] for key, item in artifact["items"].items()}
+    model = {key: item["predicted_labels"] for key, item in artifact["items"].items()}
+    constant = {key: [idle] * len(sequence) for key, sequence in truth.items()}
+
+    def summarize(pred_by_item: dict) -> dict:
+        raw = temporal_metrics(pred_by_item, truth, labels=labels)
+        return {
+            "acc": raw["frame"]["accuracy"] * 100,
+            "edit": raw["segment"]["edit"] * 100,
+            "f1_025": raw["segment"]["f1_at_iou"]["0.25"] * 100,
+        }
+
+    floor = summarize(constant)
+    recomputed = summarize(model)
+    official = data["metrics"]["summary"]
+    drift = max(
+        abs(recomputed["acc"] - official["acc"]["value"]),
+        abs(recomputed["edit"] - official["edit"]["value"]),
+        abs(recomputed["f1_025"] - official["f1@0.25"]["value"]),
+    )
+    if drift > tolerance:
+        print(f"[warn] {eval_path.name}: 重算指标与 evaluation.json 差 {drift:.3f}pp，跳过下界", flush=True)
+        return None
+    return {**floor, "self_check_max_drift": drift}
 
 
 def discover_runs(runs_dir: Path, config_name: str) -> list[tuple[int, int, Path]]:
@@ -198,10 +259,15 @@ def discover_runs(runs_dir: Path, config_name: str) -> list[tuple[int, int, Path
 
     hidden 取 run 的 ``config.resolved.json``（= 实际生效值），seed 取 ``env.json``；
     与源配置文件名不符的 run 一律跳过，避免把别的批次混进容量对照。
+
+    通配用 ``mstcn*`` 而非 ``mstcn-*``：run 目录名取自 ``model.type``，``mstcn2`` 的目录是
+    ``mstcn2-<时间戳>``，旧的 ``mstcn-*`` 通配匹配不到它（2026-09 修复：此前
+    ``--skip-train`` 对 mstcn2 批次会汇总出空表）。真正的批次隔离由上面的 ``source_path``
+    文件名比对保证，通配只用来排除非 mstcn 族的 run 目录。
     """
 
     found: dict[tuple[int, int], Path] = {}
-    for run_dir in sorted(path for path in runs_dir.glob("*/mstcn-*")
+    for run_dir in sorted(path for path in runs_dir.glob("*/mstcn*")
                           if (path / "config.resolved.json").is_file()):
         cfg = json.loads((run_dir / "config.resolved.json").read_text(encoding="utf-8"))
         source = ((cfg.get("_config_provenance") or {}).get("source_path") or "")
@@ -258,7 +324,7 @@ def render_summary(args, rows: list[dict], probe: dict | None, runs_dir: Path) -
         f"- 评估口径：`benchmark.cli.eval` 正式评估（全序列模型无因果平滑，md 不适用）",
         f"- 运行目录：`{runs_dir}`",
         "- 判读规则：容量点之间的差异必须大于同容量点的**跨 seed 摆幅**（噪声地板）才可判读为容量效应；",
-        "  `best.pt` 由 val（4 个视频）的 `val_f1_0.5` 选出，本身带选点噪声，故同时给出 `last.pt` 对照。",
+        "  `best.pt` 由 val（4 个视频）的选点指标选出，本身带选点噪声，故同时给出 `last.pt` 对照。",
         "",
         "## 1. test 指标（best.pt，按 val 选点）",
         "",
@@ -348,8 +414,10 @@ def render_summary(args, rows: list[dict], probe: dict | None, runs_dir: Path) -
         "## 4. 噪声地板（同容量点跨 seed 摆幅）与容量读数",
         "",
         "> 摆幅 = 同容量点跨 seed 的 max−min，是**该点的噪声地板**：容量点之间的中位数差小于它就不",
-        "> 可判读为容量效应。`acc 下界（全 idle）` = test 里 idle 帧占比（多数类基线）；正式评估的",
-        "> acc 若与之齐平，说明模型退化为「全 idle」，段级指标才是有效读数。",
+        "> 可判读为容量效应。`下界（全 idle 常数预测器）` = 永远输出 idle 的常数预测器在 acc/edit/",
+        "> F1@0.25 上的读数（只依赖真值序列，与模型无关，故为**白送地板**）；模型读数与之齐平说明该",
+        "> 指标没测到非 idle 能力——2026-09 实测旗舰 acc 中位恰好等于该下界，而 edit 是它的 3.8 倍，",
+        "> 同一次评测里两个指标的区分力完全不同，故 acc 不可单独用于判读。",
         "",
         "| 容量 | 参数量 | acc 中位 | acc 摆幅 | edit 中位 | edit 摆幅 | F1@0.25 中位 | F1@0.25 摆幅 |",
         "|---|---:|---:|---:|---:|---:|---:|---:|",
@@ -377,7 +445,14 @@ def render_summary(args, rows: list[dict], probe: dict | None, runs_dir: Path) -
         support = first_test["per_class_support"]
         total = sum(value for value in support.values() if isinstance(value, int))
         idle_support = support.get((first_test["labels"] or ["idle"])[0])
-        if total and isinstance(idle_support, int):
+        floor = read_trivial_baseline(Path(first_test["eval_path"])) if first_test.get("eval_path") else None
+        if floor:
+            lines.append(
+                f"| 下界（全 idle 常数预测器） | — | {fmt(floor['acc'])} | — | {fmt(floor['edit'])} "
+                f"| — | {fmt(floor['f1_025'])} | — |"
+            )
+        elif total and isinstance(idle_support, int):
+            # predictions artifact 缺失时退化为只报 acc 下界（帧占比 = 多数类基线）
             lines.append(
                 f"| acc 下界（全 idle，多数类） | — | {fmt(idle_support / total * 100)} | — | — | — | — | — |"
             )
