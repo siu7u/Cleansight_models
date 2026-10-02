@@ -11,7 +11,11 @@ from __future__ import annotations
 
 import torch.nn as nn
 
+from .actionness import ActionnessMSTCN2
+from .boxset import BoxSetMSTCN2
+from .asformer import ASFormerNet
 from .clean_offline import CleanASFormer, CleanBiGRU, CleanMSTCNBiLSTM
+from .fact import FACTNet
 from .gru import GRUClassifier
 from .legacy_causal import LegacyCausalTCN, LegacyCausalTransformer
 from .mstcn import MSTCN
@@ -59,6 +63,25 @@ def _build_legacy_causal_transformer(cfg: dict) -> nn.Module:
         nhead=cfg.get("nhead", 4),
         num_layers=cfg.get("num_layers", 3),
         dim_feedforward=cfg.get("dim_feedforward", 256),
+    )
+
+
+def _build_boxset_mstcn2(cfg: dict) -> nn.Module:
+    """框集合编码器 + MS-TCN++（输入是 `actionmixed-boxset-v1` 的填充张量）。"""
+
+    return BoxSetMSTCN2(
+        input_dim=cfg["input_dim"],
+        classes=cfg["num_classes"],
+        hidden=cfg.get("hidden", 128),
+        num_stages=cfg.get("num_stages", 4),
+        num_layers=cfg.get("num_layers", 10),
+        dropout=cfg.get("dropout", 0.3),
+        tmse_weight=cfg.get("tmse_weight", 0.15),
+        tmse_clip=cfg.get("tmse_clip", 4.0),
+        num_slots=cfg.get("num_slots", 8),
+        slot_dim=cfg.get("slot_dim", 12),
+        slot_embed=cfg.get("slot_embed", 64),
+        sequence_normalization=cfg.get("sequence_normalization", "none"),
     )
 
 
@@ -122,9 +145,60 @@ def _build_clean_mstcn_bilstm(cfg: dict) -> nn.Module:
     )
 
 
+def _build_asformer(cfg: dict) -> nn.Module:
+    return ASFormerNet(
+        input_dim=cfg["input_dim"],
+        num_classes=cfg["num_classes"],
+        hidden=cfg.get("hidden", 128),
+        heads=cfg.get("heads", 4),
+        num_encoders=cfg.get("num_encoders", 5),
+        num_decoders=cfg.get("num_decoders", 3),
+        dropout=cfg.get("dropout", 0.3),
+        tmse_weight=cfg.get("tmse_weight", 0.15),
+        tmse_clip=cfg.get("tmse_clip", 4.0),
+        sequence_normalization=cfg.get("sequence_normalization", "none"),
+    )
+
+
+def _build_fact(cfg: dict) -> nn.Module:
+    return FACTNet(
+        input_dim=cfg["input_dim"],
+        num_classes=cfg["num_classes"],
+        d_model=cfg.get("d_model", 64),
+        nhead=cfg.get("nhead", 4),
+        num_blocks=cfg.get("num_blocks", 3),
+        num_tokens=cfg.get("num_tokens", 32),
+        frame_layers=cfg.get("frame_layers", 3),
+        dropout=cfg.get("dropout", 0.3),
+        matching_weight=cfg.get("matching_weight", 1.0),
+        temporal_weight=cfg.get("temporal_weight", 1.0),
+        no_object_weight=cfg.get("no_object_weight", 0.1),
+        output_mode=cfg.get("output_mode", "frame"),
+        sequence_normalization=cfg.get("sequence_normalization", "none"),
+    )
+
+
+def _build_actionness_tcn(cfg: dict) -> nn.Module:
+    return ActionnessMSTCN2(
+        in_dim=cfg["input_dim"],
+        classes=cfg["num_classes"],
+        hidden=cfg.get("hidden", 128),
+        num_stages=cfg.get("num_stages", 4),
+        num_layers=cfg.get("num_layers", 10),
+        dropout=cfg.get("dropout", 0.3),
+        tmse_weight=cfg.get("tmse_weight", 0.15),
+        tmse_clip=cfg.get("tmse_clip", 4.0),
+        actionness_aux_weight=cfg.get("actionness_aux_weight", 0.0),
+        sequence_normalization=cfg.get("sequence_normalization", "none"),
+    )
+
+
 # type -> {build: cfg->nn.Module, causal: bool}
 _MODELS = {
+    "actionness_tcn": {"build": _build_actionness_tcn, "causal": False},
+    "asformer": {"build": _build_asformer, "causal": False},
     "clean_asformer": {"build": _build_clean_asformer, "causal": False},
+    "fact": {"build": _build_fact, "causal": False},
     "clean_bigru": {"build": _build_clean_bigru, "causal": False},
     "clean_mstcn_bilstm": {"build": _build_clean_mstcn_bilstm, "causal": False},
     "gru": {"build": _build_gru, "causal": True},
@@ -136,6 +210,7 @@ _MODELS = {
     },
     "mstcn": {"build": _build_mstcn, "causal": False},
     "mstcn2": {"build": _build_mstcn2, "causal": False},
+    "boxset_mstcn2": {"build": _build_boxset_mstcn2, "causal": False},
     "transformer": {"build": _build_transformer, "causal": False},
 }
 
@@ -157,10 +232,10 @@ def build_model(model_cfg: dict) -> nn.Module:
     # 序列级归一化需要看到整段序列，只有全序列离线模型支持；其余类型显式报错，
     # 避免"配了却没生效"的静默对照（同 image_dim 的处理）。
     sequence_normalization = str(model_cfg.get("sequence_normalization") or "none").lower()
-    if sequence_normalization != "none" and t not in {"mstcn", "mstcn2"}:
+    if sequence_normalization != "none" and t not in {"mstcn", "mstcn2", "asformer", "actionness_tcn", "fact"}:
         raise ValueError(
             f"model.sequence_normalization={sequence_normalization!r} 只在全序列模型 "
-            f"mstcn/mstcn2 上实现，{t!r} 不支持（因果/滑窗模型看不到整段序列）"
+            f"mstcn/mstcn2/asformer/actionness_tcn/fact 上实现，{t!r} 不支持（因果/滑窗模型看不到整段序列）"
         )
     return _MODELS[t]["build"](model_cfg)
 
