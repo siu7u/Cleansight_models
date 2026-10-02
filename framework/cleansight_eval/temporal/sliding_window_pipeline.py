@@ -33,6 +33,7 @@ from ..core.integrity import check_feature_schema
 from ..core.pipeline import Pipeline
 from ..core.run import RunContext
 from .data import (
+    apply_sequence_augmentation,
     apply_target_mask_augmentation,
     assert_resume_dataset_compatible,
     build_dataset_provenance,
@@ -41,6 +42,7 @@ from .data import (
     resolve_image_feature_dim,
     resolve_mask_target_ids,
     resolve_external_temporal_meta,
+    resolve_sequence_augmentation,
     resolve_target_mask_augmentation,
     resolve_train_video_fraction,
     resolve_train_video_limit,
@@ -50,9 +52,9 @@ from .external import configure_external_model
 from .models import build_model, is_causal
 from .training_validation import summarize_training_metrics
 from .util import (
-    VALID_BEST_METRICS,
     causal_decision,
     compute_class_weights,
+    resolve_best_metric,
     resolve_class_weight_clip,
 )
 
@@ -154,14 +156,12 @@ class SlidingWindowTemporalPipeline(Pipeline):
         resolve_mask_target_ids(data, cfg.get("feature_schema"))
         resolve_image_feature_dim(model, cfg.get("feature_schema"))
         resolve_target_mask_augmentation(data, cfg.get("augmentation"))
+        # 滑窗窗口长度固定，temporal_scale 重采样会破坏逐窗口对齐 → 早校验直接报错
+        resolve_sequence_augmentation(data, cfg.get("augmentation"))
         resolve_train_video_fraction(data)  # 校验 (0, 1] 范围，非法值直接报错
         resolve_class_weight_clip((cfg.get("train") or {}).get("class_weight_clip"))  # 早校验
         train = cfg.get("train", {})
-        best_metric = train.get("best_metric", "val_acc")
-        if best_metric not in VALID_BEST_METRICS:
-            raise ValueError(
-                f"train.best_metric 必须是 {sorted(VALID_BEST_METRICS)} 之一，实际 {best_metric!r}"
-            )
+        resolve_best_metric(train)  # 只做校验：非法选点口径在训练前直接报错
         patience = train.get("patience")
         if patience is not None and (not isinstance(patience, int) or patience < 1):
             raise ValueError("train.patience 必须是 ≥1 的整数（按 val_loss 早停，缺省关闭）")
@@ -199,6 +199,15 @@ class SlidingWindowTemporalPipeline(Pipeline):
                 seed=seed,
                 feature_schema=cfg.get("feature_schema"),
             )
+            # 序列级增强只允许 feature_jitter（窗口长度固定，temporal_scale 被禁）
+            features, truths = apply_sequence_augmentation(
+                features,
+                truths,
+                cfg["data"],
+                cfg.get("augmentation"),
+                seed=seed,
+                allow_temporal_scale=False,
+            )
             problems = check_feature_schema(features[0].shape[1], cfg.get("feature_schema"))
             if problems:
                 raise ValueError("特征 schema 与配置不兼容:\n  - " + "\n  - ".join(problems))
@@ -235,7 +244,7 @@ class SlidingWindowTemporalPipeline(Pipeline):
             )
             grad_clip = train_cfg.get("grad_clip")
             start_epoch = 1
-            best_metric = {"name": train_cfg.get("best_metric", "val_acc"), "mode": "max", "value": None, "epoch": None}
+            best_metric = {"name": resolve_best_metric(train_cfg), "mode": "max", "value": None, "epoch": None}
 
             if resume_path:
                 expected = {"type": model_cfg["type"], "input_dim": model_cfg["input_dim"], "num_classes": model_cfg["num_classes"]}
@@ -290,7 +299,7 @@ class SlidingWindowTemporalPipeline(Pipeline):
             # best checkpoint 指标与早停（2026-09 配方修复：指标可配置避免 val_acc
             # 挑中 idle 坍缩解；patience 按 val_loss 早停，val_loss 从 ep1 飙升 = 过拟合
             # 信号，见 docs/FEATURE_STRATEGY_COMPARE.md 坍缩分析）。
-            best_metric_name = train_cfg.get("best_metric", "val_acc")
+            best_metric_name = resolve_best_metric(train_cfg)
             patience = train_cfg.get("patience")
             no_improve_epochs = 0
             best_val_loss = float("inf")

@@ -49,13 +49,25 @@ from .features import (
     EMBED_BBOX_DIM,
     GLOBAL_HAND_BBOX_VERSION,
     HAND_BBOX_VERSION,
+    ROI_DELTA_VERSION,
     ROI_FEATURE_VERSION,
     ROI_GRID_V2_VERSION,
+    ROI_GRID_V3_VERSION,
+    ROI_GRID_V4_VERSION,
+    ROI_GRID_V5_VERSION,
+    BOXSET_VERSION,
+    COMBO_VERSION,
     ROI_PRESENCE_VERSION,
     build_clean_bbox_features,
     build_hand_frame_features,
     build_roi_frame_features,
     build_roi_grid_v2_frame_features,
+    build_roi_grid_v3_frame_features,
+    build_roi_grid_v4_frame_features,
+    build_roi_grid_v5_frame_features,
+    build_boxset_frame_features,
+    build_combo_frame_features,
+    build_roi_grid_delta_features,
     build_roi_presence_frame_features,
     block_dims_for_version,
     is_image_embed_version,
@@ -167,6 +179,9 @@ def resolve_mask_target_ids(data_cfg: dict, feature_schema: dict | None) -> froz
     return frozenset(resolved)
 
 
+AUGMENTATION_KEYS = frozenset({"target_mask", "feature_jitter", "temporal_scale"})
+
+
 def resolve_target_mask_augmentation(data_cfg: dict, augmentation: dict | None) -> dict | None:
     """校验并解析 train-only 目标随机遮罩配置。
 
@@ -179,7 +194,7 @@ def resolve_target_mask_augmentation(data_cfg: dict, augmentation: dict | None) 
         return None
     if not isinstance(augmentation, dict):
         raise ValueError("augmentation 必须是映射")
-    unknown_augmentation = sorted(set(augmentation) - {"target_mask"})
+    unknown_augmentation = sorted(set(augmentation) - AUGMENTATION_KEYS)
     if unknown_augmentation:
         raise ValueError(f"augmentation 包含未知字段: {unknown_augmentation}")
     raw = augmentation.get("target_mask")
@@ -299,6 +314,139 @@ def apply_target_mask_augmentation(
             masked[dropped, start : start + width] = 0.0
         augmented.append(masked)
     return augmented
+
+
+def resolve_sequence_augmentation(data_cfg: dict, augmentation: dict | None) -> dict | None:
+    """校验并解析 train-only 序列级增强（第 13 轮新增，缺省**关闭** = 逐位等同历史行为）。
+
+    目前两项，均为「不改变 ROI 语义」的扰动（依据见
+    ``docs/weeks/2026-09-26_2026-10-02/TOPIC_02_AUGMENTATION_*.md``）：
+
+    - ``feature_jitter``：对**非零**特征元素乘 ``1 + N(0, sigma)``（下截断到 0），
+      模拟检测器在不同批次上的计数/面积/尺寸抖动；
+    - ``temporal_scale``：沿时间轴按对数均匀倍率 ``exp(U(-log(1+s), log(1+s)))``
+      重采样整段（特征线性插值、标签最近邻），模拟两批次**帧率/动作速度**差异。
+
+    刻意**不实现**网格镜像/翻转：第 12 轮的镜像检验已证明翻转破坏 ROI 方向语义
+    （把已训练模型跑在镜像 test 特征上 −2.96pp），放大这种扰动属于把假设空间做错。
+
+    返回值仅供运行时使用，不写入配置；两项都关闭时返回 ``None``。
+    """
+
+    if augmentation is None:
+        return None
+    if not isinstance(augmentation, dict):
+        raise ValueError("augmentation 必须是映射")
+    unknown_augmentation = sorted(set(augmentation) - AUGMENTATION_KEYS)
+    if unknown_augmentation:
+        raise ValueError(f"augmentation 包含未知字段: {unknown_augmentation}")
+
+    jitter_sigma = 0.0
+    raw = augmentation.get("feature_jitter")
+    if raw is not None:
+        if not isinstance(raw, dict):
+            raise ValueError("augmentation.feature_jitter 必须是映射")
+        unknown = sorted(set(raw) - {"enabled", "sigma"})
+        if unknown:
+            raise ValueError(f"augmentation.feature_jitter 包含未知字段: {unknown}")
+        enabled = raw.get("enabled", True)
+        if not isinstance(enabled, bool):
+            raise ValueError("augmentation.feature_jitter.enabled 必须是布尔值")
+        sigma = raw.get("sigma", 0.0)
+        if isinstance(sigma, bool) or not isinstance(sigma, (int, float)):
+            raise ValueError("augmentation.feature_jitter.sigma 必须是数值")
+        sigma = float(sigma)
+        if not (sigma >= 0.0 and sigma == sigma and sigma != float("inf")):
+            raise ValueError("augmentation.feature_jitter.sigma 必须 ≥0 且有限")
+        if enabled:
+            jitter_sigma = sigma
+
+    temporal_scale = 0.0
+    raw = augmentation.get("temporal_scale")
+    if raw is not None:
+        if not isinstance(raw, dict):
+            raise ValueError("augmentation.temporal_scale 必须是映射")
+        unknown = sorted(set(raw) - {"enabled", "max_rate"})
+        if unknown:
+            raise ValueError(f"augmentation.temporal_scale 包含未知字段: {unknown}")
+        enabled = raw.get("enabled", True)
+        if not isinstance(enabled, bool):
+            raise ValueError("augmentation.temporal_scale.enabled 必须是布尔值")
+        max_rate = raw.get("max_rate", 0.0)
+        if isinstance(max_rate, bool) or not isinstance(max_rate, (int, float)):
+            raise ValueError("augmentation.temporal_scale.max_rate 必须是数值")
+        max_rate = float(max_rate)
+        if not (0.0 <= max_rate < 1.0):
+            raise ValueError("augmentation.temporal_scale.max_rate 必须在 [0, 1)")
+        if enabled:
+            temporal_scale = max_rate
+
+    if jitter_sigma == 0.0 and temporal_scale == 0.0:
+        return None
+    return {"jitter_sigma": jitter_sigma, "temporal_scale": temporal_scale}
+
+
+def apply_sequence_augmentation(
+    features: list[np.ndarray],
+    truths: list[np.ndarray],
+    data_cfg: dict,
+    augmentation: dict | None,
+    *,
+    seed: int,
+    allow_temporal_scale: bool = True,
+) -> tuple[list[np.ndarray], list[np.ndarray]]:
+    """对训练集 ``[T, F]`` 特征与 ``[T]`` 标签应用可复现的序列级增强。
+
+    逐序列用一个由 ``seed`` 与序列下标派生的 RNG，故**同 seed + 同输入顺序**逐位可复现。
+    随机流与 ``apply_target_mask_augmentation`` 的 ``default_rng(seed)`` 显式错开
+    （``default_rng([seed, 2])``），避免两项同时启用时共享同一批均匀数。
+
+    ``temporal_scale`` 会改变序列长度，因此**返回标签**；滑窗流水线的窗口长度固定，
+    故在那里禁用该分量：``allow_temporal_scale=False`` 时若配置了它直接报错，不静默忽略。
+    未启用时原样返回输入对象本身（不复制）。
+    """
+
+    spec = resolve_sequence_augmentation(data_cfg, augmentation)
+    if spec is None:
+        return features, truths
+    if spec["temporal_scale"] > 0.0 and not allow_temporal_scale:
+        raise ValueError(
+            "augmentation.temporal_scale 只支持整段（非因果）流水线："
+            "滑窗流水线的窗口长度固定，重采样会破坏逐窗口对齐"
+        )
+    if len(features) != len(truths):
+        raise ValueError(f"特征与标签条数不一致: {len(features)} vs {len(truths)}")
+
+    new_features: list[np.ndarray] = []
+    new_truths: list[np.ndarray] = []
+    sigma = spec["jitter_sigma"]
+    max_rate = spec["temporal_scale"]
+    for index, (sequence, labels) in enumerate(zip(features, truths)):
+        x = np.asarray(sequence)
+        y = np.asarray(labels)
+        if x.ndim != 2:
+            raise ValueError(f"序列级增强要求 [T, F] 特征，实际 shape={x.shape}")
+        rng = np.random.default_rng([seed, 2, index])
+        x = x.astype(np.float32, copy=True)
+        if sigma > 0.0:
+            gain = 1.0 + rng.normal(0.0, sigma, size=x.shape).astype(np.float32)
+            # 只在「有检测」的位置抖动：零 = 该类在该区域缺席，抖动它属于伪造证据。
+            x = np.where(x != 0.0, x * gain, x).astype(np.float32)
+            np.clip(x, 0.0, None, out=x)
+        if max_rate > 0.0 and x.shape[0] > 1:
+            span = float(np.log1p(max_rate))
+            rate = float(np.exp(rng.uniform(-span, span)))
+            new_len = max(1, int(round(x.shape[0] * rate)))
+            if new_len != x.shape[0]:
+                pos = np.linspace(0.0, x.shape[0] - 1, new_len)
+                lo = np.floor(pos).astype(np.int64)
+                hi = np.minimum(lo + 1, x.shape[0] - 1)
+                frac = (pos - lo)[:, None].astype(np.float32)
+                x = (x[lo] * (1.0 - frac) + x[hi] * frac).astype(np.float32)
+                y = y[np.rint(pos).astype(np.int64)]
+        new_features.append(x)
+        new_truths.append(y)
+    return new_features, new_truths
 
 
 def resolve_image_feature_dim(model_cfg: dict, feature_schema: dict | None) -> int:
@@ -555,7 +703,13 @@ def load_split(
     embed_dim = resolve_embed_dim(feature_schema) if image_embed_recipe else 0
     roi_recipe = feature_version == ROI_FEATURE_VERSION
     roi_presence_recipe = feature_version == ROI_PRESENCE_VERSION
+    roi_delta_recipe = feature_version == ROI_DELTA_VERSION
     roi_v2_recipe = feature_version == ROI_GRID_V2_VERSION
+    roi_v3_recipe = feature_version == ROI_GRID_V3_VERSION
+    roi_v4_recipe = feature_version == ROI_GRID_V4_VERSION
+    roi_v5_recipe = feature_version == ROI_GRID_V5_VERSION
+    boxset_recipe = feature_version == BOXSET_VERSION
+    combo_recipe = feature_version == COMBO_VERSION
     hand_recipe = feature_version == HAND_BBOX_VERSION
     global_hand_recipe = feature_version == GLOBAL_HAND_BBOX_VERSION
     clean_recipe = feature_version in CLEAN_FEATURE_DIMS
@@ -617,17 +771,47 @@ def load_split(
                     for path in frame_paths
                 ]
             ).astype(np.float32)
-        elif roi_presence_recipe:
-            feats = np.stack(
-                [
-                    build_roi_presence_frame_features(path, mask_target_ids=mask_target_ids)
-                    for path in frame_paths
-                ]
+        elif roi_delta_recipe:
+            # Δ 契约需要整段序列（前向差分），因此一次性传入全部帧路径而不是逐帧调用。
+            feats = build_roi_grid_delta_features(
+                frame_paths, mask_target_ids=mask_target_ids
             ).astype(np.float32)
         elif roi_v2_recipe:
             feats = np.stack(
                 [
                     build_roi_grid_v2_frame_features(path, mask_target_ids=mask_target_ids)
+                    for path in frame_paths
+                ]
+            ).astype(np.float32)
+        elif roi_v3_recipe:
+            feats = np.stack(
+                [
+                    build_roi_grid_v3_frame_features(path, mask_target_ids=mask_target_ids)
+                    for path in frame_paths
+                ]
+            ).astype(np.float32)
+        elif roi_v4_recipe:
+            feats = np.stack(
+                [
+                    build_roi_grid_v4_frame_features(path, mask_target_ids=mask_target_ids)
+                    for path in frame_paths
+                ]
+            ).astype(np.float32)
+        elif roi_v5_recipe:
+            feats = np.stack(
+                [
+                    build_roi_grid_v5_frame_features(path, mask_target_ids=mask_target_ids)
+                    for path in frame_paths
+                ]
+            ).astype(np.float32)
+        elif boxset_recipe:
+            feats = np.stack(
+                [build_boxset_frame_features(path) for path in frame_paths]
+            ).astype(np.float32)
+        elif combo_recipe:
+            feats = np.stack(
+                [
+                    build_combo_frame_features(path, mask_target_ids=mask_target_ids)
                     for path in frame_paths
                 ]
             ).astype(np.float32)

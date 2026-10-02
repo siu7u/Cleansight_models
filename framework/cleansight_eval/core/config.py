@@ -47,6 +47,14 @@ KNOWN_SECTION_KEYS = {
         "hidden", "num_layers", "num_stages", "dropout", "tmse_weight", "tmse_clip",
         "d_model", "nhead", "dim_feedforward", "max_len", "lstm_layers", "tcn_layers",
         "refine_stages", "hidden_dims",
+        # 架构调研新增：asformer（heads / num_encoders / num_decoders）与
+        # actionness_tcn（类别无关动作性分支的附加监督权重 actionness_aux_weight）
+        "heads", "num_encoders", "num_decoders", "actionness_aux_weight",
+        # fact（frame-action 交叉注意力 + 段匹配损失）
+        "num_blocks", "num_tokens", "frame_layers", "matching_weight", "temporal_weight",
+        # boxset_mstcn2（框集合编码器）：槽位数 / 槽宽 / 槽嵌入宽度
+        "num_slots", "slot_dim", "slot_embed",
+        "no_object_weight", "output_mode",
         # 形态 B（图像 embedding 契约）：图像块宽度 + 线性投影头宽度
         "image_dim", "image_proj_dim",
         # 输入归一化口径（P2a）：none/zscore + 可选截断
@@ -70,7 +78,11 @@ KNOWN_SECTION_KEYS = {
         "dim", "version", "class_order", "layout", "normalization", "mask_targets",
         "detection_confidence_default",
     },
-    "augmentation": {"target_mask"},
+    "augmentation": {
+        "target_mask",
+        # 序列级增强（第 13 轮）：检测尺度抖动 / 时间轴节奏抖动
+        "feature_jitter", "temporal_scale",
+    },
     "evaluation": {
         "mode", "testset_id", "save_predictions", "measure_latency", "latency_warmup",
         "latency_runs", "limits", "conf", "iou", "max_det", "agnostic_nms",
@@ -81,6 +93,12 @@ KNOWN_SECTION_KEYS = {
         "weight_decay", "resume", "best_metric",
         # 类别权重截断区间（活动量旋钮）：[lo, hi] 或 "lo,hi"
         "class_weight_clip",
+        # 转移级代价敏感（transition-level）：按训练集转移稀缺度对逐帧加权；0 = 关闭
+        "transition_loss_weight",
+        # 学习率调度（全序列流水线）：constant（默认，历史口径）/ cosine + warmup
+        "lr_schedule", "warmup_epochs", "min_lr_ratio",
+        # 标签平滑（全序列流水线）：0 = 关闭（历史口径）
+        "label_smoothing",
     } | YOLO_TRAIN_HPARAMS,
 }
 

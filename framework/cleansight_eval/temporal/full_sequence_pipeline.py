@@ -17,6 +17,7 @@ T-MSE），流水线仍把类别加权 CE 作为监督口径传入。缺钩子�
 
 from __future__ import annotations
 
+import math
 import time
 
 import numpy as np
@@ -38,6 +39,7 @@ from ..core.integrity import check_feature_schema
 from ..core.pipeline import Pipeline
 from ..core.run import RunContext
 from .data import (
+    apply_sequence_augmentation,
     apply_target_mask_augmentation,
     assert_resume_dataset_compatible,
     build_dataset_provenance,
@@ -46,6 +48,7 @@ from .data import (
     resolve_image_feature_dim,
     resolve_mask_target_ids,
     resolve_external_temporal_meta,
+    resolve_sequence_augmentation,
     resolve_target_mask_augmentation,
     resolve_train_video_fraction,
     resolve_train_video_limit,
@@ -54,7 +57,63 @@ from .data import (
 from .external import configure_external_model
 from .models import build_model
 from .training_validation import summarize_training_metrics
-from .util import VALID_BEST_METRICS, compute_class_weights, resolve_class_weight_clip
+from .util import (
+    TransitionWeightedCE,
+    compute_class_weights,
+    estimate_transition_rarity,
+    resolve_best_metric,
+    resolve_class_weight_clip,
+)
+
+
+VALID_LR_SCHEDULES = ("constant", "cosine")
+
+
+def resolve_lr_schedule(train_cfg: dict) -> tuple[str, int, float]:
+    """解析学习率调度配置 → ``(schedule, warmup_epochs, min_lr_ratio)``。
+
+    - ``train.lr_schedule``：``constant``（默认，等价于历史行为，**不改既有口径**）或 ``cosine``；
+    - ``train.warmup_epochs``：前若干轮从 ``lr/warmup`` 线性升到 ``lr``（0 = 不 warmup）；
+    - ``train.min_lr_ratio``：余弦衰减的下界比例（0 = 衰减到 0）。
+
+    非法值立即报错，不静默退回默认——避免"配了调度却没生效"的静默对照污染。
+    """
+
+    raw = str((train_cfg or {}).get("lr_schedule") or "constant").lower()
+    if raw not in VALID_LR_SCHEDULES:
+        raise ValueError(f"train.lr_schedule 必须是 {sorted(VALID_LR_SCHEDULES)} 之一，实际 {raw!r}")
+    try:
+        warmup = int((train_cfg or {}).get("warmup_epochs") or 0)
+        min_ratio = float((train_cfg or {}).get("min_lr_ratio") or 0.0)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("train.warmup_epochs / train.min_lr_ratio 必须是数字") from exc
+    if warmup < 0:
+        raise ValueError(f"train.warmup_epochs 不能为负，实际 {warmup}")
+    if not (0.0 <= min_ratio <= 1.0):
+        raise ValueError(f"train.min_lr_ratio 必须在 [0, 1]，实际 {min_ratio}")
+    return raw, warmup, min_ratio
+
+
+def lr_factor(schedule: str, epoch: int, epochs: int, warmup_epochs: int, min_lr_ratio: float) -> float:
+    """第 ``epoch`` 轮（1-based）的学习率**倍率**。
+
+    ``constant`` 恒为 1.0；``cosine`` 先线性 warmup（若配置），再按余弦从 1 衰减到
+    ``min_lr_ratio``。写成显式函数（而非 ``LambdaLR`` 的状态机）是为了**与 resume 天然兼容**：
+    倍率只依赖轮号，不依赖调度器内部状态。
+
+    **衰减区间口径（固定，不随实现漂移）**：余弦跨度为 ``(warmup_epochs, epochs]``，
+    即 ``progress = (epoch - warmup_epochs) / (epochs - warmup_epochs)``——
+    第 ``warmup_epochs`` 轮为峰值 1.0、末轮恰为 ``min_lr_ratio``。
+    因此 ``warmup_epochs=0`` 时首轮已是 ``cos(π/epochs)`` 而非 1.0（``epochs=10`` 时 ≈0.976）。
+    """
+
+    if schedule == "constant":
+        return 1.0
+    if warmup_epochs and epoch <= warmup_epochs:
+        return max(1e-8, epoch / float(warmup_epochs))
+    span = max(1, epochs - warmup_epochs)
+    progress = min(max((epoch - warmup_epochs) / float(span), 0.0), 1.0)
+    return min_lr_ratio + (1.0 - min_lr_ratio) * 0.5 * (1.0 + math.cos(math.pi * progress))
 
 
 def _load_eval_model(cfg: dict, ckpt: str, device):
@@ -183,14 +242,24 @@ class FullSequenceTemporalPipeline(Pipeline):
         resolve_mask_target_ids(data, cfg.get("feature_schema"))
         resolve_image_feature_dim(model, cfg.get("feature_schema"))
         resolve_target_mask_augmentation(data, cfg.get("augmentation"))
+        resolve_sequence_augmentation(data, cfg.get("augmentation"))  # 早校验：非法 sigma/max_rate
         resolve_train_video_fraction(data)  # 校验 (0, 1] 范围，非法值直接报错
         resolve_class_weight_clip((cfg.get("train") or {}).get("class_weight_clip"))  # 早校验
         train = cfg.get("train", {})
-        best_metric = train.get("best_metric", "val_acc")
-        if best_metric not in VALID_BEST_METRICS:
-            raise ValueError(
-                f"train.best_metric 必须是 {sorted(VALID_BEST_METRICS)} 之一，实际 {best_metric!r}"
-            )
+        # 转移级代价敏感的权重必须是非负有限数（0 = 关闭），非法值在训练前直接报错。
+        raw_transition = train.get("transition_loss_weight")
+        if raw_transition is not None:
+            try:
+                value = float(raw_transition)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"train.transition_loss_weight 必须是数字（0 = 关闭），实际 {raw_transition!r}"
+                ) from exc
+            if not (value >= 0 and value == value and value != float("inf")):
+                raise ValueError(
+                    f"train.transition_loss_weight 必须 ≥0 且有限，实际 {raw_transition!r}"
+                )
+        resolve_best_metric(train)  # 只做校验：非法选点口径在训练前直接报错
         patience = train.get("patience")
         if patience is not None and (not isinstance(patience, int) or patience < 1):
             raise ValueError("train.patience 必须是 ≥1 的整数（按 val_loss 早停，缺省关闭）")
@@ -227,6 +296,15 @@ class FullSequenceTemporalPipeline(Pipeline):
                 seed=seed,
                 feature_schema=cfg.get("feature_schema"),
             )
+            # 序列级增强（feature_jitter / temporal_scale）在目标遮罩之后：前者按「非零元素」
+            # 判定有无检测，遮罩产生的零不参与抖动。
+            features, truths = apply_sequence_augmentation(
+                features,
+                truths,
+                cfg["data"],
+                cfg.get("augmentation"),
+                seed=seed,
+            )
             problems = check_feature_schema(features[0].shape[1], cfg.get("feature_schema"))
             if problems:
                 raise ValueError("特征 schema 与配置不兼容:\n  - " + "\n  - ".join(problems))
@@ -250,17 +328,51 @@ class FullSequenceTemporalPipeline(Pipeline):
                 train_loader, num_classes=model_cfg["num_classes"],
                 clip=train_cfg.get("class_weight_clip"),
             )
-            criterion = nn.CrossEntropyLoss(
-                weight=torch.tensor([weights[i] for i in sorted(weights)], dtype=torch.float32).to(device)
-            )
+            class_weight_tensor = torch.tensor(
+                [weights[i] for i in sorted(weights)], dtype=torch.float32
+            ).to(device)
+            # 转移级代价敏感（可选）：逐帧权重只依赖真值，封装成 criterion 即可让模型自持配方
+            # （如 mstcn2 的多 stage 深监督 + T-MSE）一并带上，无需改动任何模型文件。
+            transition_strength = float(train_cfg.get("transition_loss_weight") or 0.0)
+            if transition_strength > 0:
+                criterion = TransitionWeightedCE(
+                    class_weight_tensor,
+                    estimate_transition_rarity(truths, model_cfg["num_classes"]),
+                    transition_strength,
+                    single_sequence=True,  # 全序列流水线固定 batch_size=1（见上方 DataLoader）
+                )
+                run.write_status(
+                    "running", stage="criterion",
+                    transition_loss_weight=transition_strength,
+                )
+            else:
+                # 标签平滑（train.label_smoothing，默认 0 = 与历史行为逐位一致）：
+                # LS timeline 标注本身有噪声，平滑可抑制过度自信、改善泛化。
+                criterion = nn.CrossEntropyLoss(
+                    weight=class_weight_tensor,
+                    label_smoothing=float(train_cfg.get("label_smoothing") or 0.0),
+                )
+            base_lr = float(train_cfg.get("lr", 1e-3))
             optimizer = torch.optim.Adam(
                 model.parameters(),
-                lr=train_cfg.get("lr", 1e-3),
+                lr=base_lr,
                 weight_decay=train_cfg.get("weight_decay", 0.0),
             )
+            # 学习率调度：默认 constant（与历史行为逐位一致）；cosine 为可选改进。
+            lr_schedule, warmup_epochs, min_lr_ratio = resolve_lr_schedule(train_cfg)
+            label_smoothing = float(train_cfg.get("label_smoothing") or 0.0)
+            if not (0.0 <= label_smoothing < 1.0):
+                raise ValueError(f"train.label_smoothing 必须在 [0, 1)，实际 {label_smoothing}")
+            if label_smoothing and transition_strength:
+                # 两条路径互斥：TransitionWeightedCE 不接受 label_smoothing，
+                # 同时开会让平滑被静默忽略——按仓库纪律直接报错而不是"配了没生效"。
+                raise ValueError(
+                    "train.label_smoothing 与 train.transition_loss_weight 不能同时开启"
+                    "（transition 路径的 criterion 不支持标签平滑）"
+                )
             grad_clip = train_cfg.get("grad_clip")  # 值驱动：缺省则不裁剪
             start_epoch = 1
-            best_metric = {"name": train_cfg.get("best_metric", "val_acc"), "mode": "max", "value": None, "epoch": None}
+            best_metric = {"name": resolve_best_metric(train_cfg), "mode": "max", "value": None, "epoch": None}
 
             if resume_path:
                 expected = {"type": model_cfg["type"], "input_dim": model_cfg["input_dim"], "num_classes": model_cfg["num_classes"]}
@@ -303,7 +415,7 @@ class FullSequenceTemporalPipeline(Pipeline):
 
             epochs = train_cfg.get("epochs", 20)
             # best checkpoint 指标与早停（与滑窗流水线同口径，2026-09 配方修复）
-            best_metric_name = train_cfg.get("best_metric", "val_acc")
+            best_metric_name = resolve_best_metric(train_cfg)
             patience = train_cfg.get("patience")
             no_improve_epochs = 0
             best_val_loss = float("inf")
@@ -320,6 +432,11 @@ class FullSequenceTemporalPipeline(Pipeline):
             for epoch in tqdm(range(start_epoch, epochs + 1), desc="train"):
                 current_epoch = epoch
                 epoch_start = time.perf_counter()
+                # 逐轮设置学习率：倍率只依赖轮号，故 resume 后仍落在同一条曲线上。
+                if lr_schedule != "constant":
+                    scheduled = base_lr * lr_factor(lr_schedule, epoch, epochs, warmup_epochs, min_lr_ratio)
+                    for group in optimizer.param_groups:
+                        group["lr"] = scheduled
                 model.train()
                 losses: list[float] = []
                 for x, y in train_loader:
