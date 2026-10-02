@@ -167,7 +167,7 @@ def fig2_architecture_vs_metrics():
     fig.tight_layout()
     _save(fig, "fig2_architecture_vs_metrics",
           "Architecture comparison and seed stability",
-          "docs/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md §2.3（统一配方，CPU，3~8 seed）",
+          "docs/experiments/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md §2.3（统一配方，CPU，3~8 seed）",
           {"arms": arms, "metrics": metrics, "seed_swing": swing, "gru_md5_reference": extra})
 
 
@@ -196,7 +196,7 @@ def fig3_feature_contract_gap():
                 arrowprops=dict(arrowstyle="->", lw=1))
     _save(fig, "fig3_feature_contract_gap",
           "insert recall deficit of alternative feature contracts vs roi-grid-144",
-          "docs/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md §2.2（mstcn2 s2l5 h128，3 seed，配对 Wilcoxon）",
+          "docs/experiments/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md §2.2（mstcn2 s2l5 h128，3 seed，配对 Wilcoxon）",
           {"contracts": [c.replace("\n", " ") for c in contracts], "dim": [40, 40, 96, 80, 48],
            "insert_recall_delta_pp": delta, "paired_p": pval, "baseline": "roi-grid-144 (dim 144)"})
 
@@ -232,7 +232,7 @@ def fig4_selection_metric():
                 xy=(-0.26, 49.13), xytext=(1.15, 45.6), fontsize=8, color=C_BAD)
     _save(fig, "fig4_selection_metric",
           "Checkpoint selection metric comparison",
-          "docs/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md §2.4（8 seed 配对；rho 来自 326 run 迁移体检）",
+          "docs/experiments/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md §2.4（8 seed 配对；rho 来自 326 run 迁移体检）",
           {"metrics": metrics,
            "arms": {k: v[0] for k, v in arms.items()},
            "val_edit_vs_default": {"edit_delta": 9.63, "p_edit": 0.0107,
@@ -305,7 +305,7 @@ def fig5_timesfm_probe():
     fig.tight_layout()
     _save(fig, "fig5_timesfm_probe",
           "TimesFM zero-shot probe: four questions with baselines",
-          "docs/EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md §4（timesfm-2.5-200m 零样本，4 val 视频，CPU）",
+          "docs/experiments/EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md §4（timesfm-2.5-200m 零样本，4 val 视频，CPU）",
           {"a_point_forecast_mae": {"timesfm": 0.6694, "persistence": 0.843, "constant": 0.6802},
            "b_interval_coverage": {"series": [s.replace("\n", " ") for s in series], "coverage": cov,
                                    "nominal": 0.80},
@@ -356,7 +356,7 @@ def fig6_serving_latency():
                 arrowprops=dict(arrowstyle="->", color=C_BAD, lw=1))
     _save(fig, "fig6_serving_latency",
           "Serving latency: TimesFM vs existing GRU tick and frame budget",
-          "docs/EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md §4.5（单序列 0.287-0.376 s、批处理折算 69 ms；"
+          "docs/experiments/EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md §4.5（单序列 0.287-0.376 s、批处理折算 69 ms；"
           "本机 CPU 实测）+ docs/INFERENCE_CHAIN_PERF.md（GRU 1.49 ms、帧预算 133 ms）",
           {"unit_note": "报告原文按 s 记录（TimesFM 折算 0.069 s、单序列 0.287-0.376 s；"
                         "GRU 1.49 ms、帧预算 133 ms），本图统一换算为 ms 呈现",
@@ -391,10 +391,228 @@ def fig7_image_embed_e0_e1():
                     fontweight="bold")
     _save(fig, "fig7_image_embed_e0_e1",
           "E0 vs E1: effect of adding frozen image embeddings",
-          "docs/EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md §4（机制床 9,532 帧，CPU，3 seed 中位数）",
+          "docs/experiments/EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md §4（机制床 9,532 帧，CPU，3 seed 中位数）",
           {"metrics": [m.replace("\n", " ") for m in metrics], "E0_bbox40": e0,
            "E1_bbox_plus_embed616": e1,
            "delta": [round(b - a, 2) for a, b in zip(e0, e1)]})
+
+
+def _load_acc_by_seed(patterns):
+    """读 run 的 ``evals/*.evaluation.json`` → ``{seed: acc}``（seed 取 ``env.json``）。
+
+    供 fig9/fig10 直接读**真实 run 级数据**（同 fig1 的例外口径：不复制、不转抄报告数字）。
+    """
+
+    out = {}
+    for pat in patterns:
+        for ev in sorted(Path(".").glob(pat)):
+            run = ev.parent.parent
+            envf = run / "env.json"
+            if not envf.is_file():
+                continue
+            seed = json.loads(envf.read_text())["seed"]
+            s = json.loads(ev.read_text())["metrics"]["summary"]["acc"]
+            out[seed] = float(s["value"] if isinstance(s, dict) else s)
+    return out
+
+
+def _load_per_class(patterns):
+    """读 run 的逐类 frame 指标 → ``{class: {recall:[...], precision:[...], f1:[...]}}``。"""
+
+    acc = {}
+    for pat in patterns:
+        for ev in sorted(Path(".").glob(pat)):
+            pc = json.loads(ev.read_text())["metrics"]["details"]["temporal"]["frame"]["per_class"]
+            for cls, d in pc.items():
+                slot = acc.setdefault(cls, {"recall": [], "precision": [], "f1": []})
+                for k in slot:
+                    v = d.get(k)
+                    # None = 该 run 没有任何该类预测（precision/F1 不可定义）→ 记 0，
+                    # 与 tmp/deepdive/score_audit.py 的逐类口径一致；跳过会偏高中位数。
+                    slot[k].append(100.0 * (0.0 if v is None else float(v)))
+    return acc
+
+
+def fig8_acc_vs_action_budget():
+    """同动作帧预算下的 6 类准确率（把"决策点偏移"从"判别力"里剥离）。"""
+
+    src = json.loads(Path("tmp/deepdive/score_audit.json").read_text(encoding="utf-8"))
+    gated = src["fixed_rate"]["gated_6class"]
+    r = np.array([g["r"] for g in gated])
+    v1 = np.array([g["v1"] for g in gated])
+    v4 = np.array([g["v4"] for g in gated])
+    d = np.array([g["d"] for g in gated])       # 配对中位差（与 p 值同源），不是"中位数之差"
+    p = np.array([g["p"] for g in gated])
+
+    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(11.2, 4.4), gridspec_kw={"width_ratios": [1.55, 1]})
+    ax.plot(r, v1, marker="o", ms=5, lw=1.7, color=C_BASE, label="roi-grid-v1 (144d), n=32 seeds")
+    ax.plot(r, v4, marker="D", ms=5, lw=1.7, color=C_MODEL, label="roi-grid-v4 (128d), n=32 seeds")
+    ax.axvline(44.75, ls="--", lw=1.1, color=C_ACCENT)
+    ax.set_ylim(37.5, 64.5)
+    ax.annotate("truth action rate 44.75%\n(gain vanishes: +0.98pp n.s.)",
+                xy=(44.75, 46.6), xytext=(48.0, 41.2), fontsize=8, color=C_ACCENT,
+                arrowprops=dict(arrowstyle="->", color=C_ACCENT, lw=1))
+    ax.annotate("each arm's own argmax point (20-24%):\nΔ = +3.6pp, p < 1e-6",
+                xy=(22.2, 57.0), xytext=(9.5, 62.0), fontsize=8, color=C_MODEL,
+                arrowprops=dict(arrowstyle="->", color=C_MODEL, lw=1))
+    ax.set_xlabel("action-frame budget  r  (%)  — matched for both arms", fontsize=9)
+    _style(ax, "Frame accuracy depends on the decision point\n(6-class acc at a MATCHED action budget)",
+           "frame accuracy (%)")
+    ax.legend(fontsize=8, loc="lower left")
+
+    sig = ["*" if pi < 0.05 else "" for pi in p]
+    bars = ax2.bar([f"{x:.0f}" for x in r], d, color=[C_GOOD if x > 0 else C_BAD for x in d])
+    ax2.bar_label(bars, labels=[f"{x:+.2f}{s}" for x, s in zip(d, sig)], fontsize=8, padding=2)
+    ax2.axhline(0, lw=0.8, color="k")
+    ax2.set_xlabel("action-frame budget r (%)", fontsize=9)
+    _style(ax2, "v4 − v1 at each budget\n(* = paired Wilcoxon p < 0.05)", "Δ frame accuracy (pp)")
+    ax2.set_ylim(min(-1.0, float(d.min()) - 1.2), float(d.max()) + 1.8)
+
+    _save(fig, "fig8_acc_vs_action_budget",
+          "Frame accuracy at a matched action-frame budget (v1 vs v4)",
+          "runs/acc-push/acc-roiv{1,4}* 缓存 logits，32 对 seed（tmp/deepdive/score_audit.py → score_audit.json；"
+          "口径见 docs/weeks/2026-09-26_2026-10-02/DEEP_DIVE_11_TOPICS_20261001.md §1.2）",
+          {"action_budget_pct": r.tolist(), "v1_acc": np.round(v1, 2).tolist(),
+           "v4_acc": np.round(v4, 2).tolist(), "delta": np.round(d, 2).tolist(),
+           "paired_p": [None if np.isnan(x) else round(float(x), 6) for x in p],
+           "win_lose": [f"{g['win']}/{g['lose']}" for g in gated],
+           "truth_action_rate_pct": 44.75, "n_seeds": 32,
+           "note": "两臂在同一动作帧预算下比较；预算 = 预测非 idle 帧占比。"
+                   "两臂 argmax 各自落在 23.97% / 20.06%（不同预算），故 argmax 差 +4.47pp 含工作点效应。"})
+
+
+def fig9_per_class_change():
+    """逐类 F1 / recall：v1 → v4 的重分配（insert 大涨、flush 归零）。"""
+
+    v1 = _load_per_class(["runs/gpu-batch/recheck-flagship/h*/*/evals/*.evaluation.json",
+                          "runs/acc-push/acc-roiv1-seedB/h*/*/evals/*.evaluation.json",
+                          "runs/acc-push/acc-roiv1-seedC/h*/*/evals/*.evaluation.json"])
+    v4 = _load_per_class(["runs/acc-push/acc-roiv4/h*/*/evals/*.evaluation.json",
+                          "runs/acc-push/acc-roiv4-seedB/h*/*/evals/*.evaluation.json",
+                          "runs/acc-push/acc-roiv4-seedC/h*/*/evals/*.evaluation.json"])
+    order = [c for c in ("long_brush_insert", "long_brush_withdraw", "short_brush_cleaning", "flush")
+             if c in v1 and c in v4]
+    names = [c.replace("long_brush_", "long_brush\n").replace("_", " ") for c in order]
+
+    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(11.0, 4.6), sharey=True)
+    data = {}
+    for axi, key, title in ((ax, "f1", "F1"), (ax2, "recall", "recall")):
+        for i, c in enumerate(order):
+            a = float(np.median(v1[c][key]))
+            b = float(np.median(v4[c][key]))
+            col = C_GOOD if b >= a else C_BAD
+            axi.plot([a, b], [i, i], lw=2.0, color=col, zorder=2)
+            axi.scatter([a], [i], s=52, facecolor="white", edgecolor=C_BASE, zorder=3,
+                        label="v1 (144d)" if i == 0 else None)
+            axi.scatter([b], [i], s=58, color=C_MODEL, zorder=3,
+                        label="v4 (128d)" if i == 0 else None)
+            axi.annotate(f"{b - a:+.1f}", xy=(max(a, b), i), xytext=(4, 0), textcoords="offset points",
+                         fontsize=8.5, va="center", color=col, fontweight="bold")
+            data.setdefault(c, {})[f"v1_{key}"] = round(a, 2)
+            data[c][f"v4_{key}"] = round(b, 2)
+        axi.set_yticks(range(len(order)))
+        axi.set_yticklabels(names if axi is ax else [], fontsize=8.5)
+        axi.set_xlim(-3, 62)
+        _style(axi, f"per-class {title} (median of 32 paired seeds)", f"{title} (%)")
+    ax.legend(fontsize=8, loc="lower right")
+    ax2.annotate("flush collapses to 0:\nno flush frame is ever predicted",
+                 xy=(0.5, 3), xytext=(10.0, 2.30), fontsize=8, color=C_BAD,
+                 arrowprops=dict(arrowstyle="->", color=C_BAD, lw=1))
+    ax.annotate("insert / withdraw gain most\n(shape channels w,h)",
+                xy=(41.4, 0), xytext=(19.0, 0.42), fontsize=8, color=C_GOOD,
+                arrowprops=dict(arrowstyle="->", color=C_GOOD, lw=1))
+
+    _save(fig, "fig9_per_class_change",
+          "v1 → v4 is a class reallocation, not a uniform gain",
+          "runs/acc-push/acc-roiv{1,4}* 的 evals/*.evaluation.json 逐类 frame 指标（32 对 seed；"
+          "口径见 DEEP_DIVE_11_TOPICS_20261001.md §1.3）",
+          {"classes": order, "per_class": data, "n_seeds": 32,
+           "note": "water_injection 在 test 上 support=0，不可评估；short_brush_cleaning support=51 帧。"})
+
+
+def fig10_arch_fairness_grid():
+    """架构公平性网格：每族 1~7 个配置点，仍无一接近 mstcn2 参考线。"""
+
+    fam_label = {
+        "ca": "clean_asformer (never trained before)", "cb": "clean_bigru (never trained before)",
+        "t": "transformer", "a": "asformer", "f": "fact", "b": "clean_mstcn_bilstm",
+        "m": "mstcn (single-stage)", "g": "gru (full_sequence, causal)",
+    }
+    fam_order = ["m", "f", "t", "ca", "a", "g", "cb", "b"]
+    A_SEEDS = [1, 2, 3, 4, 5, 7, 42, 2026]     # 与参考线、与原配置点同一批 seed
+    by_point = {}                              # 配置点 → {seed: acc}（跨目录合并，同点名合并）
+    for d in sorted(Path("runs/arch-fair").glob("*/h*")):
+        raw_name = d.parent.name
+        if raw_name.startswith("smoke") or raw_name.startswith("ref-"):
+            continue
+        for ev in sorted(d.glob("*/evals/*.evaluation.json")):
+            envf = ev.parent.parent / "env.json"
+            if not envf.is_file():
+                continue
+            seed = json.loads(envf.read_text())["seed"]
+            if seed not in A_SEEDS:
+                continue
+            s = json.loads(ev.read_text())["metrics"]["summary"]["acc"]
+            by_point.setdefault(raw_name.replace("-s16", ""), {})[seed] = float(
+                s["value"] if isinstance(s, dict) else s)
+    pts = {}
+    for name, seeds in by_point.items():
+        fam = name.split("-")[0]
+        if fam in fam_label and seeds:
+            pts.setdefault(fam, []).append((name, float(np.median(list(seeds.values()))), len(seeds)))
+
+    orig = {
+        "t": _load_acc_by_seed(["runs/acc-push/acc-roiv4-transformer/h*/*/evals/*.evaluation.json"]),
+        "a": _load_acc_by_seed(["runs/acc-push/acc-roiv4-asformer/h*/*/evals/*.evaluation.json"]),
+        "f": _load_acc_by_seed(["runs/acc-push/acc-roiv4-fact/h*/*/evals/*.evaluation.json"]),
+        "b": _load_acc_by_seed(["runs/acc-push/acc-roiv4-mstcnbilstm/h*/*/evals/*.evaluation.json"]),
+        "m": _load_acc_by_seed(["runs/acc-push/acc-roiv4-mstcn/h*/*/evals/*.evaluation.json"]),
+    }
+    ref = _load_acc_by_seed(["runs/acc-push/acc-roiv4/h*/*/evals/*.evaluation.json"])
+    ref_med = float(np.median([ref[s] for s in A_SEEDS if s in ref]))
+
+    fig, ax = plt.subplots(figsize=(9.6, 4.8))
+    data = {"reference_acc_median_A8": round(ref_med, 2), "families": {}}
+    for i, fam in enumerate(fam_order):
+        if fam not in pts:
+            continue
+        vals = pts[fam]
+        xs = [v[1] for v in vals]
+        best = max(vals, key=lambda v: v[1])
+        ax.scatter(xs, [i] * len(xs), s=34, color="#bbbbbb", zorder=2,
+                   label="each config point tried" if fam == fam_order[0] else None)
+        ax.scatter([best[1]], [i], s=78, color=C_MODEL, zorder=3, marker="D",
+                   label="best point per family" if fam == fam_order[0] else None)
+        o = orig.get(fam)
+        fam_data = {"best_point": best[0], "best_acc": round(best[1], 2),
+                    "n_config_points": len(vals), "all_acc": [round(x, 2) for x in sorted(xs)],
+                    "seeds_per_point": sorted({v[2] for v in vals})}
+        if o:
+            ov = float(np.median([o[s] for s in A_SEEDS if s in o]))
+            ax.scatter([ov], [i], s=74, facecolor="white", edgecolor=C_ACCENT, lw=1.8, zorder=4,
+                       marker="o", label="the single point in the old report" if fam == fam_order[0] else None)
+            fam_data["original_point_acc"] = round(ov, 2)
+            best_seeds = by_point[best[0]]
+            pair = [best_seeds[s] - o[s] for s in A_SEEDS if s in o and s in best_seeds]
+            fam_data["paired_delta_best_minus_orig"] = round(float(np.median(pair)), 2) if pair else None
+            fam_data["paired_n"] = len(pair)
+        data["families"][fam_label[fam]] = fam_data
+    ax.axvline(ref_med, lw=1.6, color=C_BAD)
+    ax.set_ylim(-0.6, 7.95)
+    ax.text(ref_med + 0.18, 7.62, f"mstcn2 reference {ref_med:.2f}\n(same 8 seeds, roi-grid-v4)",
+            fontsize=8.5, color=C_BAD, va="center", ha="left", fontweight="bold")
+    ax.set_yticks(range(len(fam_order)))
+    ax.set_yticklabels([fam_label[f] for f in fam_order], fontsize=8.5)
+    ax.set_xlim(44, 60)
+    ax.set_xlabel("test frame accuracy (%), median over seeds", fontsize=9)
+    _style(ax, "27 config points / 216 runs: tuning an architecture does not close the gap", "")
+    ax.legend(fontsize=8, loc="lower left")
+    _save(fig, "fig10_arch_fairness_grid", "Architecture fairness grid (lr x capacity per family)",
+          "runs/arch-fair/*（本网格实跑）+ runs/acc-push/acc-roiv4*（参考与原配置点）；"
+          "口径见 DEEP_DIVE_11_TOPICS_20261001.md §2⑤⑧(f)",
+          dict(data, note="全部读数只用 A 批 seed（42,7,2026,1,2,3,4,5），与参考线同一批，"
+                          "故每族内的点、以及与原配置点之间都可逐 seed 配对；补种的 B 批结果见报告 (f4)。"
+                          "180 轮同预算对照见同节 (f3)。"))
 
 
 FIGURES = {
@@ -405,6 +623,9 @@ FIGURES = {
     "fig5_timesfm_probe": fig5_timesfm_probe,
     "fig6_serving_latency": fig6_serving_latency,
     "fig7_image_embed_e0_e1": fig7_image_embed_e0_e1,
+    "fig8_acc_vs_action_budget": fig8_acc_vs_action_budget,
+    "fig9_per_class_change": fig9_per_class_change,
+    "fig10_arch_fairness_grid": fig10_arch_fairness_grid,
 }
 
 

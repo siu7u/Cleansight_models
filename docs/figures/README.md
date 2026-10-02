@@ -16,6 +16,9 @@
 | [`fig5_timesfm_probe.png`](fig5_timesfm_probe.png) | TimesFM 四问：点预测 MAE / 区间校准 / 切换点 F1 / 提前预警命中率 | TimesFM 报告 §4 |
 | [`fig6_serving_latency.png`](fig6_serving_latency.png) | 在线代价：TimesFM 单序列 vs 帧预算 vs GRU 单 tick（对数刻度） | TimesFM 报告 §4.5 + [`docs/INFERENCE_CHAIN_PERF.md`](../INFERENCE_CHAIN_PERF.md) |
 | [`fig7_image_embed_e0_e1.png`](fig7_image_embed_e0_e1.png) | 图像 embedding E0 vs E1（段级升、帧级降的混合结果） | E1 报告 §4 |
+| [`fig8_acc_vs_action_budget.png`](fig8_acc_vs_action_budget.png) | **同动作帧预算**下的 6 类准确率（v1 vs v4）+ 各预算的 Δ 与配对 p | `runs/acc-push/acc-roiv{1,4}*` 缓存 logits（32 对 seed），脚本 `tmp/deepdive/score_audit.py` |
+| [`fig9_per_class_change.png`](fig9_per_class_change.png) | 逐类 F1 / recall 的 v1→v4 **重分配**（insert 涨、**flush 归零**） | `runs/acc-push/acc-roiv{1,4}*` 的 `evals/*.evaluation.json` 逐类 frame 指标（32 对 seed） |
+| [`fig10_arch_fairness_grid.png`](fig10_arch_fairness_grid.png) | **架构公平性网格**：配置点分布 vs mstcn2 参考线（含"原文档那一个点"） | `runs/arch-fair/*`（本网格实跑）+ `runs/acc-push/acc-roiv4*`（**A 批 8 seed** 口径） |
 
 ## 2. 重新生成
 
@@ -46,7 +49,7 @@ MPLCONFIGDIR=$PWD/tmp/fig_mplcache PYTHONPATH=. $PY tools/plot_report_figures.py
 在 Markdown 报告中用相对路径引用即可：
 
 ```markdown
-![容量 vs 参数量](figures/fig1_capacity_vs_params.png)
+![容量 vs 参数量](fig1_capacity_vs_params.png)
 ```
 
 > 引用时**务必在图注里复述口径**（seed 数 / 选点口径 / 设备 / 数据 split），

@@ -1,0 +1,41 @@
+{
+  "figure": "fig9_per_class_change",
+  "title": "v1 → v4 is a class reallocation, not a uniform gain",
+  "source": "runs/acc-push/acc-roiv{1,4}* 的 evals/*.evaluation.json 逐类 frame 指标（32 对 seed；口径见 DEEP_DIVE_11_TOPICS_20261001.md §1.3）",
+  "data": {
+    "classes": [
+      "long_brush_insert",
+      "long_brush_withdraw",
+      "short_brush_cleaning",
+      "flush"
+    ],
+    "per_class": {
+      "long_brush_insert": {
+        "v1_f1": 31.92,
+        "v4_f1": 41.44,
+        "v1_recall": 24.89,
+        "v4_recall": 31.54
+      },
+      "long_brush_withdraw": {
+        "v1_f1": 6.67,
+        "v4_f1": 13.02,
+        "v1_recall": 4.63,
+        "v4_recall": 8.88
+      },
+      "short_brush_cleaning": {
+        "v1_f1": 0.0,
+        "v4_f1": 0.0,
+        "v1_recall": 0.0,
+        "v4_recall": 0.0
+      },
+      "flush": {
+        "v1_f1": 13.55,
+        "v4_f1": 0.0,
+        "v1_recall": 7.93,
+        "v4_recall": 0.0
+      }
+    },
+    "n_seeds": 32,
+    "note": "water_injection 在 test 上 support=0，不可评估；short_brush_cleaning support=51 帧。"
+  }
+}
