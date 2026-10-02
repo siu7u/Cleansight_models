@@ -12,7 +12,7 @@
 > ```
 
 本仓库负责 CleanSight 模型的训练、离线评估、benchmark、checkpoint 契约和交付清单，覆盖
-YOLO 单帧检测与 GRU / MS-TCN / MS-TCN++ / Transformer 时序模型，以及 ROI 图像分类（特征融合）。
+YOLO 单帧检测与 GRU / MS-TCN / MS-TCN++ / Transformer 时序模型；ROI 图像分类（特征融合）链已于 2026-10-02 评估为不采用（实现保留、配置已移除，见 `docs/MODELSET_OVERVIEW.md` §9.1）。
 
 线上视频流、推理服务、告警以及真实 pipeline/端到端延迟由相邻的 [`CleanSightBackend`](https://github.com/Jiadezhende/CleanSightBackend) 负责；
 本仓库只产出模型与评估事实，不自动决定发布或上线。
@@ -63,14 +63,14 @@ flowchart LR
 ```text
 Cleansight_models/
 ├── framework/
-│   ├── experiments/                   # 多条流水线的实验 YAML（含 roi-fusion.yaml）
+│   ├── experiments/                   # 多条流水线的实验 YAML
 │   ├── cleansight_eval/
 │   │   ├── cli/                       # train / sweep 入口
 │   │   ├── core/                      # 配置、run、checkpoint、执行环境、
 │   │   │                              #   数据契约 catalog、指标原语 metrics
 │   │   ├── detection/                 # 单帧检测 pipeline + YOLO adapter +
 │   │   │                              #   sweep 优化编排 + data_tools 裁剪
-│   │   ├── classification/            # ROI 图像分类（特征融合）pipeline
+│   │   ├── classification/            # ROI 图像分类（特征融合）pipeline（已停用，实现保留）
 │   │   └── temporal/
 │   │       ├── models/                # 当前模型与历史 checkpoint 兼容实现
 │   │       ├── sliding_window_pipeline.py
@@ -479,7 +479,7 @@ checkpoint + checkpoint metadata + CARD.md + pin.yaml
 - [模型集总览](docs/MODELSET_OVERVIEW.md)：现状、使用入口与汇报要点（合并原 STATUS/PRESENTATION/USAGE 三份）。
 - [项目流程](docs/PROJECT_FLOW.md)：数据、训练、评测与交付的流程关系。
 - [framework README](framework/README.md)：CLI、配置字段、resume 与扩展点。
-- [YOLO 优化工作流](docs/YOLO_OPTIMIZATION.md)：sweep / analyze / 特征融合的操作指南。
+- [YOLO 优化工作流](docs/YOLO_OPTIMIZATION.md)：sweep / analyze 的操作指南（特征融合替代方案已停用）。
 - [YOLO 自动标注工具](docs/AUTO_ANNOTATION.md)：视频 → legacy 标注 JSON → 时序训练数据，以及图片帧序列数据集 → 时序训练数据（frames/ + labels/）的完整使用指南（run / run-dataset / convert / 优化参数 / 训练链路 / 训练数据可视化 / 质量报告）。
 - [自动标注快速上手](docs/AUTO_ANNOTATION_QUICKSTART.md)：最小命令集，5 分钟跑通 run / run-dataset / convert 与常见报错排查。
 - [数据集构建要求（Label Studio）](docs/DATASET_BUILDING_GUIDE.md)：队友通过 Label Studio 构建/扩充训练数据的硬性契约与操作步骤（只需标动作标签，不画框；目标框由 YOLO 自动标注），以及后续数据维护的注意事项（类别覆盖/平衡、增量扩量、版本与登记联动）。

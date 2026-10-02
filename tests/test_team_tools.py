@@ -24,7 +24,7 @@ def test_list_models_contains_all():
     from framework.cleansight_eval.core.model_aliases import list_models
 
     text = list_models()
-    for name in ("yolo", "gru", "mstcn", "mstcn2", "transformer", "feature_fusion",
+    for name in ("yolo", "gru", "mstcn", "mstcn2", "transformer",
                  "yolo11n", "yolo11s", "yolo11m"):
         assert name in text
     assert "--group" in text

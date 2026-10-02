@@ -38,7 +38,7 @@ core/       配置、checkpoint、run、Pipeline 注册、PredictionOutput、
             数据契约 catalog、指标原语 metrics
 temporal/   时序数据、特征、模型、训练和预测
 detection/  YOLO 训练、checkpoint 加载、逐图预测、优化实验编排（sweep）、数据集裁剪（data_tools）
-classification/  ROI 图像分类（特征融合）：模型、ROI 数据集、训练/预测
+classification/  ROI 图像分类（特征融合）：模型、ROI 数据集、训练/预测（**已停用**，见 MODELSET_OVERVIEW §9.1）
 ```
 
 当前有四条 Pipeline：
@@ -48,7 +48,7 @@ classification/  ROI 图像分类（特征融合）：模型、ROI 数据集、�
 | `detection` | 单帧图像输入，运行 YOLO 检测。 |
 | `sliding_window_temporal` | `[B, window, F]` 因果窗口输入，面向实时/流式时序模型。 |
 | `full_sequence_temporal` | `[B, T, F]` 完整序列输入，面向离线时序模型。 |
-| `roi_classification` | ROI 图像块 + 多标签，小目标/稀有类的特征融合替代方案。 |
+| `roi_classification` | ROI 图像块 + 多标签，曾用于小目标/稀有类的特征融合替代方案；**2026-10-02 评估为不采用**（见 MODELSET_OVERVIEW §9.1），实现保留、配置与别名已移除。 |
 
 Pipeline 只负责训练和预测，输出统一的 `PredictionOutput`，不在内部定义正式指标。
 
@@ -178,7 +178,7 @@ python -m benchmark.cli.matrix --runs runs
 | 调整实验超参数 | `framework/experiments/*.yaml` |
 | YOLO 多方法优化实验（预设/grid） | `framework/cleansight_eval/detection/sweep.py` |
 | 小目标逐类分析/淘汰决策 | `benchmark/cli/analyze.py` + `benchmark/core/analysis.py` |
-| ROI 特征融合 | `framework/cleansight_eval/classification/` + `benchmark/evaluators/classification.py` |
+| ROI 特征融合（已停用） | `framework/cleansight_eval/classification/` + `benchmark/evaluators/classification.py`（实现保留，配置/别名已移除） |
 | 接入外部 checkpoint | `external_checkpoints/<model-id>/*.yaml` |
 | 新增时序网络 | `framework/cleansight_eval/temporal/models/` |
 | 修改时序特征 | `framework/cleansight_eval/temporal/features/` 和 feature version |

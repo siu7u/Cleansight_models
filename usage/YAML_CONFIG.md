@@ -51,8 +51,6 @@ Pipeline 校验并执行。
 | [`framework/experiments/transformer-actionmixed.yaml`](../framework/experiments/transformer-actionmixed.yaml) | Transformer 的表示维度、head、layer、FFN 和最大长度 | 使用完整上下文的非因果全序列实验。 |
 | [`framework/experiments/yolo-clean-large.yaml`](../framework/experiments/yolo-clean-large.yaml) | group1 大目标、YOLO11n、640 输入和 val testset | 大目标检测训练及探索性评估。 |
 | [`framework/experiments/yolo-clean-small.yaml`](../framework/experiments/yolo-clean-small.yaml) | group2 小目标、YOLO11n、640 输入和 val testset | 小目标检测训练及探索性评估，重点观察逐类召回。 |
-| [`framework/experiments/roi-fusion.yaml`](../framework/experiments/roi-fusion.yaml) | ROI 分类流水线（`feature_fusion`）、hidden_dim 等网络参数；`data.eval_split` 留空 = 历史 in-sample 口径 | 小目标/稀有类的 ROI 特征融合替代方案实验。 |
-| [`framework/experiments/roi-fusion-heldout.yaml`](../framework/experiments/roi-fusion-heldout.yaml) | 上条的**评测口径变体**：逐项一致，只多 `data.eval_split: test` | 用同一个 checkpoint 取**留出集**读数（只用 `images/test` 现算，不落缓存、不碰 train+val 缓存），与 in-sample 口径分开报；跨批次泛化只能引用这一口径。 |
 | [`framework/experiments/yolo11s-large-gl-eval.yaml`](../framework/experiments/yolo11s-large-gl-eval.yaml) | 队友 YOLO11s 大目标模型、group1_large test split、本地化 data_yaml | 队友模型在锁定 test split 上的正式评测配置。 |
 | [`framework/experiments/yolo11s-small-zyh-eval.yaml`](../framework/experiments/yolo11s-small-zyh-eval.yaml) | 队友 YOLO11s 小目标模型、group2_small test split、本地化 data_yaml | 队友模型在锁定 test split 上的正式评测配置。 |
 | [`framework/experiments/mstcn-autoannotate-smoke.yaml`](../framework/experiments/mstcn-autoannotate-smoke.yaml) | MS-TCN、40 维输入、6 类、10 epoch、`data.root` 指向自动标注转换数据 | 验证 YOLO 自动标注 → 时序训练全链路的 smoke 实验；数据未登记 dataset_ref，只允许 exploratory。 |

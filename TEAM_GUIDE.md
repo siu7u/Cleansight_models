@@ -9,7 +9,7 @@
 
 CleanSight 的**模型训练与评估仓库**。作为组员，你在这里做两件事：
 
-1. **训练模型**（YOLO 目标检测 / GRU / MS-TCN / Transformer / ROI 特征融合）
+1. **训练模型**（YOLO 目标检测 / GRU / MS-TCN / Transformer）
 2. **评测模型**（在固定测试集上出指标报告）
 
 > 仓库不负责在线推理和业务告警——那是 `CleanSightBackend` 的事。这里只产出模型与评估事实。
@@ -84,7 +84,7 @@ python -m framework.cleansight_eval.cli.train --list-models
 | **MS-TCN 全序列** | `python -m framework.cleansight_eval.cli.train --model mstcn` |
 | **MS-TCN++ 全序列** | `python -m framework.cleansight_eval.cli.train --model mstcn2` |
 | **Transformer 全序列** | `python -m framework.cleansight_eval.cli.train --model transformer` |
-| **ROI 特征融合** | `python -m framework.cleansight_eval.cli.train --model feature_fusion -S data.classes=<类名>` |
+| ~~ROI 特征融合~~ | **已停用（2026-10-02）**：模型别名与配置已移除，见 `docs/MODELSET_OVERVIEW.md` §9.1 |
 
 ### 4.3 调整训练参数（不用改文件）
 

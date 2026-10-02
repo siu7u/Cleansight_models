@@ -43,7 +43,7 @@
 | [`AUTO_ANNOTATION.md`](AUTO_ANNOTATION.md) | 自动标注完整指南：视频 → 标注 JSON → 时序训练数据（run / run-dataset / convert / 优化参数 / 可视化 / 质量报告） |
 | [`AUTO_ANNOTATION_QUICKSTART.md`](AUTO_ANNOTATION_QUICKSTART.md) | 自动标注最小命令集，5 分钟跑通与常见报错排查 |
 | [`MODEL_ONBOARDING.md`](MODEL_ONBOARDING.md) | 新模型接入手册：新增时序网络或检测器要改哪几处 |
-| [`YOLO_OPTIMIZATION.md`](YOLO_OPTIMIZATION.md) | YOLO 优化工作流：sweep / analyze / 特征融合 |
+| [`YOLO_OPTIMIZATION.md`](YOLO_OPTIMIZATION.md) | YOLO 优化工作流：sweep / analyze（特征融合方案已停用） |
 | [`YOLO_REVIEW_FLOW.md`](YOLO_REVIEW_FLOW.md) | YOLO 结果人工审核闭环：预标注 → 人工改框+标动作 → 导出 → convert |
 | [`TEMPORAL_DATASET_TRANSFORMATION_PLAN.md`](TEMPORAL_DATASET_TRANSFORMATION_PLAN.md) | 时序数据集改造计划（分阶段，含 Phase 0 验收项） |
 | [`../usage/YAML_CONFIG.md`](../usage/YAML_CONFIG.md) | **所有受跟踪 YAML 的文档索引**（内容 / 读取方 / 快速定位） |

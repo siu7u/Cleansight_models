@@ -129,6 +129,10 @@
   三份审计附录：[`AUDIT_TOPIC_03_04_20261001.md`](AUDIT_TOPIC_03_04_20261001.md)、
   [`AUDIT_TOPIC_06_07_20261001.md`](AUDIT_TOPIC_06_07_20261001.md)、
   [`AUDIT_TOPIC_09_11_20261001.md`](AUDIT_TOPIC_09_11_20261001.md)。
+- **短报告做法**：[`SHORT_REPORTS_HOWTO_20261001.md`](SHORT_REPORTS_HOWTO_20261001.md)
+  ——三条纪律 + 三种长度模板（3 行 / 半页 / 一页）+**本周可直接发的实例**+ 五个常见坑；
+  取数用新工具 [`tools/week_digest.py`](../../../tools/week_digest.py)（口径复用 `compare_runs.py`，
+  **强制标注 seed 级/视频级配对层级与样本量**，避免手抄数字过期与证据强度夸大）。
 - **数据集 v3.1 接入**：[`V31_DATA_UPDATE_20261001.md`](V31_DATA_UPDATE_20261001.md)
   ——上游 ModelScope `lhh010/cleansight-ActionMixed-auto` 更新到 v3.1（2026-09-28 标注修订）。
   按"数据变更=新版本"纪律接入：新目录 `datasets/cleansight-ActionMixed-auto-v31` + 新 manifest
@@ -1010,3 +1014,57 @@ fig9 flush 13.55→0.00 与 §1.3 一致；fig10 参考线 57.59 = mstcn2 A 批 
 ③ 段级下降作为独立问题跟踪；④ flush 专项（v3.1 移出了唯一的遮挡 flush 训练视频）。
 
 产物：`runs/v31/`（32 个 run）、脚本 `tmp/v31/{run_v31.sh,run_v31_b.sh,compare_v31.py}`。
+
+### 2026-10-02 · 短报告做法与取数工具（避免"手抄数字过期"）
+
+**动机**：本周素材到 14 份文档 / 5,000+ 行，而日常要发的是三五行的数字；
+且数据版本切到 v3.1 后**所有绝对读数都变了**——手抄的数字必然过期。
+
+**产出**：
+1. [`SHORT_REPORTS_HOWTO_20261001.md`](SHORT_REPORTS_HOWTO_20261001.md)：三条纪律
+   （结论先行 / 数字带口径·样本量·**统计层级** / 每篇只留一个待决策 / 附"没做什么"）、
+   三种长度模板（3 行 ≤120 字、半页 ~300 字、一页转 `WEEKLY_ONEPAGER`）、
+   **本周已填好的 3 行版与半页版**、五个常见坑（含混用协议、seed 级当视频级）。
+2. `tools/week_digest.py`：把「基线 vs 若干臂」的官方指标与配对检验渲染成可粘贴的短报告块，
+   `--style brief|short|page` 三档；统计口径**全部复用** `tools/compare_runs.py`
+   （`collect`/`median_of`/`paired`），本文件只做渲染，不新增口径。
+
+**一个被工具逼出来的纠正**：`acc` 这类帧级 micro 指标在产物里**没有逐视频记录**，
+视频级配对样本恒为 0 → 只能做 **seed 级**配对。因此工具分两张表输出
+（seed 级 / 逐 (seed,视频)×类），并在标题里写明层级；把 seed 级 p 值写成视频级，
+会把证据强度夸大约 **3 个数量级**（7.9e-07 vs 0.008~0.070）。
+
+**自检**：两处实跑输出与已核验结论逐位一致（v3：+4.47pp，32/0，p=7.9e-07；v3.1：+3.77pp，16/0，p=3.1e-05）；
+架构边界门禁仍为那 2 项预先存在失败，`week_digest.py` **不在** 25 项违规清单内。
+
+### 2026-10-02 · 停用 ROI 特征融合（`roi_classification`）→ **选项 B：实现保留、配置与别名移除、产物回收**
+
+**决策触发**：排查"这个分类器对时序模型有什么用"时确认——**它对时序模型没有任何作用，而且这条链自己也达不到目标**。
+必须先纠正一个前提：**它从来不是为时序模型服务的**（时序链吃的是 YOLO 检测框算出的统计特征，两条链互不相干），
+所以"对时序没用"不是删除理由。**真正的理由是三条实测**：
+
+1. **无法验收**：它要救的 `brush_tip_out` 在留出集只有 **21 个正样本**，precision 的 95% CI 宽达 **[0.38, 0.70]**；
+   `air_gun`（293 正样本、F1 0.975）站得住，但一个类撑不起一条链。
+2. **接不上真实推理（循环依赖）**：训练与评估都靠 **GT 框**裁剪，而它要救的类正是**检不出框**的类 → 必须先"去框化"。
+3. **它服务的决策从未执行**：`datasets/cleansight-yolo/` 下无 `group2_small_kept`，时序特征仍用全部 8 个检测类
+   → 这条链是给一个**没发生过的淘汰决策**准备的备胎。
+
+**处置（按仓库先例：判否 ≠ 删码——TimesFM / actionness_tcn / boxset 判否后实现都保留）**：
+
+| 项 | 处置 |
+|---|---|
+| 实验配置 | **删除** `framework/experiments/roi-fusion{,‑heldout}.yaml`；`usage/YAML_CONFIG.md` 同步移除（清单 51/51 对齐、无僵尸条目） |
+| 模型别名 | **移除** `feature_fusion`（`core/model_aliases.py`）→ `resolve_model` 现报"未知模型"，`cli.train --model` / `cli.sweep` 不可选 |
+| 实现与测试 | **保留**（`classification/`、`benchmark/evaluators/classification.py`、`test_classification_pipeline.py`） |
+| 实验产物 | **回收** `runs/feature_fusion/`（2.9 GB 裁剪缓存）+ `runs/roi-real-airgun-brushtip/`（44 MB） |
+| 决策记录 | `docs/MODELSET_OVERVIEW.md` **新增 §9.1**（背景 / 三条理由 / 处置表 / 若日后重启的前置条件） |
+| 决策依据 | `docs/experiments/EXPERIMENT_REPORT_ROI_EVAL_PROTOCOL_20260927.md` 顶部加"已归档·不采用"声明，**保留** |
+
+**文档同步（13 份）**：`MODELSET_OVERVIEW`（§9.1 + 配置表/命令块/缺口表）、`EVAL`（流水线表 + 已删配置引用）、
+`ARCHITECTURE_OVERVIEW`、`TEAM_GUIDE`×2、`TRAIN_EVAL_IMPLEMENTATION_STATUS`、`MODEL_ONBOARDING`、
+`README`+`docs/README`、`YOLO_OPTIMIZATION`（§4 整节改写为"已停用 + 理由"）、`YOLO_WORK_SUMMARY`、
+`mstcn-capacity/MSTCN_CAPACITY_STUDY`（附 C 标为历史记录）、`features/IMAGE_FEATURE_TRAINING`（D7 注）；
+另修 `benchmark/cli/analyze.py` 里**仍在提示用户去跑已删配置**的活引用。
+
+**验证**：全量 `pytest framework/tests tests -q` → **488 passed / 7 failed**（与改动前**同一批**预先存在失败）；
+`py_compile` 通过；`feature_fusion` 别名确认不可解析；无残留可执行悬空引用。

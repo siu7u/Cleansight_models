@@ -959,7 +959,11 @@ lr=0.0005、60 轮、3 seed、自带 dropout 0.3 + T-MSE 平滑 λ=0.15。
 5. **选点口径**：所有批次用 `train.best_metric=val_f1_0.5`；该词表已与正式评测口径统一（见 `docs/EVAL.md` §3.4），
    换成 `val_f1_0.25` 等只需改一个 `-S`。
 
-## 附 C · 分类（ROI）真实数据链路
+## 附 C · 分类（ROI）真实数据链路（**历史记录**）
+
+> ⚠️ **该链路已于 2026-10-02 评估为不采用**：配置与模型别名已移除、本节提到的 ROI 缓存
+> （`runs/feature_fusion/`，2.9 GiB）与 run 产物已回收；下方读数与复跑命令保留作历史记录，
+> 复跑前需先恢复配置。理由见 [`../MODELSET_OVERVIEW.md`](../MODELSET_OVERVIEW.md) §9.1。
 
 - 数据：`datasets/cleansight-yolo/group2_small`（train 14,916 / val 4,746 图）→ ROI 缓存
   `runs/feature_fusion/datasets/air_gun-brush_tip_out`（**20,394 个 224×224 裁剪，2.9 GiB**，

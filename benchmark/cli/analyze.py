@@ -6,6 +6,7 @@
   2. 多 conf 阈值扫描，观察各类别 recall 是否有挽救空间
   3. 输出 保留/边界/淘汰 三组决策
   4. 对淘汰类调用 framework ``detection.data_tools.build_trimmed_dataset`` 生成裁剪数据集
+     （注：淘汰类的 ROI 特征融合替代方案已于 2026-10-02 评估为**不采用**，见 docs/MODELSET_OVERVIEW.md）
 
 用法:
     python -m benchmark.cli.analyze --config framework/experiments/yolo-clean-small.yaml \
@@ -131,7 +132,7 @@ def generate_report(
         lines.append(f"- **{c}**: P={m.get('precision', 0):.4f} R={m.get('recall', 0):.4f} "
                      f"mAP50={m.get('map50', 0):.4f}")
 
-    lines += ["", f"### ❌ 淘汰 ({len(eliminate)} 类) - 转图像特征融合"]
+    lines += ["", f"### ❌ 淘汰 ({len(eliminate)} 类) - 暂无替代方案"]
     for c in eliminate:
         m = analysis["per_class"].get(c, {})
         note = m.get("note", "")
@@ -280,8 +281,8 @@ def main(argv=None) -> int:
         print(f"\n⚠️  建议行动:")
         print(f"  1. 用裁剪数据集训练: "
               f"python -m framework.cleansight_eval.cli.sweep --group {group}_kept --preset small_s_960")
-        print(f"  2. 对淘汰类 ({', '.join(eliminate)}) 训练特征融合: "
-              f"python -m framework.cleansight_eval.cli.train --config framework/experiments/roi-fusion.yaml")
+        print(f"  2. 淘汰类 ({', '.join(eliminate)})：**暂无替代方案**——原 ROI 特征融合方案已于 "
+              f"2026-10-02 评估为不采用（见 docs/MODELSET_OVERVIEW.md §9.1），配置与模型别名已移除")
 
     return 0
 

@@ -71,7 +71,7 @@ checkpoint 与 sidecar、testset manifest、prediction artifact 都记录 SHA-25
 | `detection` | 单帧目标检测 | `single_frame`，无状态逐图独立推理 | YOLO |
 | `sliding_window_temporal` | 实时行为分割 | `windowed_causal`，滑窗逐帧前进、取窗口末帧决策 | 因果模型（GRU） |
 | `full_sequence_temporal` | 离线行为分割 | `full_sequence`，整段一次前向 | 非因果模型（MS-TCN / MS-TCN++ / Transformer / CLEAN ASFormer、BiGRU、BiLSTM+MS-TCN），也可跑因果模型作离线上界 |
-| `roi_classification` | ROI 多标签分类 | `single_roi`，无状态逐 ROI 独立推理 | feature_fusion（CNN backbone + MLP 头），指标见 §3.5 |
+| `roi_classification`（**已停用**） | ROI 多标签分类 | `single_roi`，无状态逐 ROI 独立推理 | feature_fusion（CNN backbone + MLP 头），指标见 §3.5；2026-10-02 评估为不采用，见 `MODELSET_OVERVIEW.md` §9.1 |
 
 **滑窗 vs 全序列的意义**：同一种因果网络结构可以分别在两条流水线中建立独立实验——全序列用于
 观察完整上下文下的离线表现，滑窗用于评估只能看到历史窗口的在线语义。一个 checkpoint 的训练和
@@ -228,7 +228,7 @@ spec 版本全部来自唯一注册表
   exact_match=0.9981），**不能作为泛化能力引用**。
   **② 留出集**：`data.eval_split` 指定 YOLO 分组数据集的 `test` 目录，只从该目录现算 ROI，
   不落缓存、不碰 train+val 缓存，得到跨批次读数（配置样例
-  [`framework/experiments/roi-fusion-heldout.yaml`](../framework/experiments/roi-fusion-heldout.yaml)）。
+  原 `framework/experiments/roi-fusion-heldout.yaml`（**该配置已于 2026-10-02 随方案停用一并删除**，见 `MODELSET_OVERVIEW.md` §9.1））。
   两个口径的实测差距见 [`EXPERIMENT_REPORT_ROI_EVAL_PROTOCOL_20260927.md`](experiments/EXPERIMENT_REPORT_ROI_EVAL_PROTOCOL_20260927.md)。
   **报告里引用 ROI 分类数字时必须写明口径**，否则等同本文档 §3.4 禁止的"不写选点口径"。
 - **留出集可复现性**：负样本是随机裁剪，`build_roi_dataset` 未播种时每次重建结果都不同

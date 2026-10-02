@@ -8,8 +8,9 @@
 - **group1_large**（hand / scope_control_body / scope_mid_section）：通过多方法对比，把
   整体 Precision 与 Recall 提升到 **≥ 0.7**。
 - **group2_small**（syringe / air_gun / scope_distal_end / short_brush / brush_tip_out）：
-  逐类分析后，**P/R 无法超过 0.3 的类从 YOLO 淘汰**，改用 ROI 图像特征融合（
-  `roi_classification` 流水线）。
+  逐类分析后，**P/R 无法超过 0.3 的类从 YOLO 淘汰**。原先计划改用 ROI 图像特征融合
+  （`roi_classification`），该方案已于 **2026-10-02 评估为不采用**（理由见
+  [`MODELSET_OVERVIEW.md`](MODELSET_OVERVIEW.md) §9.1）——淘汰类目前**没有替代方案**。
 
 ## 1. 多方法优化实验（sweep）
 
@@ -67,7 +68,7 @@ python -m benchmark.cli.analyze \
 
 - 复用 framework `DetectionPipeline.predict` 的 native_metrics，不直接调 adapter。
 - 输出三类决策：**保留**（P≥阈值且 R≥阈值）、**边界**（0.5×阈值~阈值，可再优化）、
-  **淘汰**（<0.5×阈值 → 转特征融合）。
+  **淘汰**（<0.5×阈值 → 从检测器剔除；原计划的 ROI 特征融合替代方案已停用，见 §4）。
 - 对淘汰类自动调用 `framework/cleansight_eval/detection/data_tools.build_trimmed_dataset`
   生成裁剪数据集 `datasets/cleansight-yolo/<group>_kept/`（过滤淘汰类 labels、重映射 class id）。
 - 报告写入 `runs/small_analysis/analysis_<group>_<ts>.json|md`，含多 conf 扫描表。
@@ -79,20 +80,19 @@ python -m benchmark.cli.analyze \
 python -m framework.cleansight_eval.cli.sweep --group group2_small_kept --preset small_s_1280_p2
 ```
 
-## 4. 淘汰类走 ROI 特征融合（roi_classification）
+## 4. ~~淘汰类走 ROI 特征融合（roi_classification）~~ —— **已停用（2026-10-02）**
 
-编辑 `framework/experiments/roi-fusion.yaml`，把 `data.classes` 换成 analyze 输出的淘汰类
-（如 `[air_gun, brush_tip_out]`），然后：
+> **本方案已评估为不采用**，配置 `roi-fusion{,‑heldout}.yaml` 与模型别名 `feature_fusion` 均已移除，
+> 实验产物已回收；`framework/cleansight_eval/classification/` 实现保留以备"去框化"改造复用。
+>
+> **三条理由**（详见 [`MODELSET_OVERVIEW.md`](MODELSET_OVERVIEW.md) §9.1）：
+> ① **无法验收**——要救的 `brush_tip_out` 在留出集只有 **21 个正样本**，precision 的 95% CI 宽达
+> **[0.38, 0.70]**，撑不起任何性能声明；② **循环依赖**——训练/评估都靠 GT 框，而它要救的类正是
+> 检不出框的类，落地必须先"去框化"；③ **它服务的淘汰决策从未执行**——仓库里没有
+> `group2_small_kept`，时序特征仍在用全部 8 个检测类。
 
-```bash
-python -m framework.cleansight_eval.cli.train --config framework/experiments/roi-fusion.yaml
-python -m benchmark.cli.eval --config framework/experiments/roi-fusion.yaml --ckpt <checkpoint路径>
-```
-
-- 训练数据自动从 `data.group_dir` 的 GT 框裁剪 ROI（正样本）+ 随机背景（负样本）。
-- backbone 可选 `resnet18/34/50`、`efficientnet-b0/b1/b2`、`mobilenet-v3-small`。
-- checkpoint 带绑定 meta（classes/backbone/input_size），formal 评估前无需人工补填。
-- 当前以 `evaluation.mode: exploratory` 使用；淘汰类最终确定后再登记正式 testset。
+原操作步骤（保留备查）：把 `data.classes` 换成 analyze 输出的淘汰类（如 `[air_gun, brush_tip_out]`），
+从 `data.group_dir` 的 GT 框裁 ROI 正样本 + 随机背景负样本，训练 CNN backbone + MLP 多标签头。
 
 ## 5. 对比与验收
 
@@ -123,4 +123,4 @@ python tools/validate_testsets.py --catalog framework/testsets.yaml --json
 | analyze CLI | `benchmark/cli/analyze.py` |
 | ROI 分类模型 | `framework/cleansight_eval/classification/` |
 | 分类评估器 | `benchmark/evaluators/classification.py` |
-| 示例配置 | `framework/experiments/roi-fusion.yaml` |
+| 示例配置（已删除） | ~~`framework/experiments/roi-fusion.yaml`~~（2026-10-02 随方案停用移除） |

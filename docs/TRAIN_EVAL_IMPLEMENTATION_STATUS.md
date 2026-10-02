@@ -24,7 +24,7 @@
 
 - YOLO 优化实验编排：`framework/cleansight_eval/cli/sweep.py`（预设/grid，复用 YoloAdapter）。
 - 小目标逐类分析与淘汰决策：`benchmark/cli/analyze.py` + `benchmark/core/analysis.py`。
-- ROI 特征融合：`framework/cleansight_eval/classification/`（`roi_classification` pipeline）
+- ROI 特征融合：`framework/cleansight_eval/classification/`（`roi_classification` pipeline）——**2026-10-02 评估为不采用**：实现保留、配置与模型别名已移除（`MODELSET_OVERVIEW.md` §9.1）
   + `benchmark/evaluators/classification.py`。
 
 ### 2026-09-24 追记（本周新增）
@@ -46,7 +46,7 @@
 - 检测 artifact 只保存预测，复算指标仍需固定 testset 真值，因此 `recomputable` 不是纯单文件能力。
 - 旧无 schema metadata 只能用于 `exploratory`；重新训练或补写绑定 metadata 后才能进入 `formal`。
 - 混合精度和梯度累积仍按 P3 延后；训练曲线已由统一 ``history.csv`` 自动生成 PNG。
-- ROI 特征融合的正式 testset 登记暂缓：先以 `exploratory` 使用，淘汰类确定后再钉定。
+- ~~ROI 特征融合的正式 testset 登记暂缓~~ —— **已终止**：该方案 2026-10-02 评估为不采用（无法验收：目标类留出集仅 21 正样本；且依赖 GT 框、与"检不出框"的病灶循环；详见 `MODELSET_OVERVIEW.md` §9.1）。
 - **`--resume` 语义错位（已知未修，2026-09-22 记录）**：会导致"以为续训、实际未续训"，
   属**会污染实验结论**的隐患，不只是易用性问题。
 - **架构门禁红灯（2026-09-24）**：`tests/test_architecture_boundaries.py` 2 条失败，12 个违规文件中

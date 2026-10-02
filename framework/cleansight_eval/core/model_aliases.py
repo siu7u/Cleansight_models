@@ -38,8 +38,6 @@ MODELS: dict[str, dict] = {
                "desc": "MS-TCN++ 全序列时序"},
     "transformer": {"config": "transformer-actionmixed.yaml", "group": None, "dataset": "actionmixed",
                     "desc": "Transformer 全序列时序"},
-    "feature_fusion": {"config": "roi-fusion.yaml", "group": None, "dataset": "yolo",
-                       "desc": "ROI 特征融合（需 -S data.classes=<类名>）"},
 }
 
 # 供 --list-models 展示的规模别名

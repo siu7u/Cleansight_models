@@ -26,21 +26,21 @@
 `Cleansight_models` 已从零散模型整理成**可训练、可评估、可登记、可复现**的模型资产仓库：
 
 - **三条半流水线**：单帧检测（`detection` / YOLO）、全序列时序（`full_sequence_temporal`）、
-  历史滑窗时序（`sliding_window_temporal`）、ROI 图像分类（`roi_classification` / 特征融合）。
+  历史滑窗时序（`sliding_window_temporal`）、ROI 图像分类（`roi_classification` / 特征融合，**已评估不采用**）。
 - **训练/推理在 `framework/`，评测在 `benchmark/`**，依赖方向单向 `benchmark → framework`。
 - **数据契约**（`framework/testsets.yaml`）由 framework 的 catalog 层统一维护，训练与评测共用。
 - 当前处于**研发验证阶段**：YOLO 与时序模型指标均未达到生产晋升要求。
 
 一句话汇报版：仓库已完成基础架构、YOLO 分组训练、三类时序模型、模型卡、版本钉定、单模型
 benchmark、流式一致性 benchmark 和端到端评分器框架；当前重点是 YOLO 优化（large 组 P/R≥0.7、
-small 组淘汰 <0.3 的类走特征融合）并用新 YOLO 特征重训时序模型。
+small 组淘汰 <0.3 的类**暂无替代方案**——ROI 特征融合方案已评估不采用，见 §9.1）并用新 YOLO 特征重训时序模型。
 
 ## 2. 选择正确入口
 
 | 需求 | 推荐入口 |
 |---|---|
 | **组员快速上手（训练/数据/环境）** | **`docs/TEAM_GUIDE.md`**（一条命令一个模型） |
-| 训练一个 YOLO/GRU/MS-TCN/Transformer/特征融合 | `python -m framework.cleansight_eval.cli.train --model <别名>`（`--list-models` 查看；进阶用 `--config <yaml>`） |
+| 训练一个 YOLO/GRU/MS-TCN/Transformer | `python -m framework.cleansight_eval.cli.train --model <别名>`（`--list-models` 查看；进阶用 `--config <yaml>`） |
 | 一键下载训练数据集 / 校验就绪 | `python -m framework.cleansight_eval.cli.dataset --preset all` / `--check` |
 | 环境检查与安装 | `python tools/team_env.py` / `--setup` / `--setup-venv` |
 | YOLO 多方法优化实验（预设/grid） | `python -m framework.cleansight_eval.cli.sweep` |
@@ -91,7 +91,6 @@ export MPLCONFIGDIR=/tmp/matplotlib
 |---|---|---|
 | YOLO large | `framework/experiments/yolo-clean-large.yaml` | `detection` |
 | YOLO small | `framework/experiments/yolo-clean-small.yaml` | `detection` |
-| ROI 分类（特征融合） | `framework/experiments/roi-fusion.yaml` | `roi_classification` |
 | GRU | `framework/experiments/gru-actionmixed.yaml` | `sliding_window_temporal` |
 | GRU（ROI 空间特征） | `framework/experiments/gru-actionmixed-auto-roi.yaml` | `sliding_window_temporal` |
 | GRU（ROI 可见性重排 96 维） | `framework/experiments/gru-actionmixed-auto-roi-v2.yaml` | `sliding_window_temporal` |
@@ -126,8 +125,6 @@ recipe 见 `features/roi_bbox_v2.py`，依据 `docs/features/INPUT_DESIGN_PROPOS
 ```bash
 # YOLO 检测
 python -m framework.cleansight_eval.cli.train --config framework/experiments/yolo-clean-large.yaml
-# ROI 特征融合
-python -m framework.cleansight_eval.cli.train --config framework/experiments/roi-fusion.yaml
 # 时序
 python -m framework.cleansight_eval.cli.train --config framework/experiments/gru-actionmixed.yaml
 ```
@@ -146,9 +143,11 @@ python -m framework.cleansight_eval.cli.train --config framework/experiments/gru
 python -m framework.cleansight_eval.cli.sweep --group group1_large --preset large_baseline large_s
 # 2) 小目标逐类阈值分析 → 淘汰 <0.3 的类
 python -m benchmark.cli.analyze --config framework/experiments/yolo-clean-small.yaml --ckpt <best.pt>
-# 3) 淘汰类走 ROI 特征融合
-python -m framework.cleansight_eval.cli.train --config framework/experiments/roi-fusion.yaml
+# 3) 淘汰类：暂无自动替代方案（ROI 特征融合方案已评估不采用，见 §9.1）
 ```
+
+> 第 3 步原先指向 `roi-fusion.yaml`（ROI 特征融合）。该方案已于 2026-10-02 评估为**不采用**：
+> 配置与模型别名已移除、实验产物已回收，理由见 §9.1。
 
 ## 7. 评估
 
@@ -192,7 +191,7 @@ python -m benchmark.cli.matrix --runs runs
 
 ## 9. 当前最大缺口
 
-1. **YOLO 指标未达标**：large 组 P/R 需 ≥0.7；small 组 <0.3 的类转 ROI 特征融合。
+1. **YOLO 指标未达标**：large 组 P/R 需 ≥0.7；small 组 <0.3 的类原计划转 ROI 特征融合，该方案**已评估不采用**（§9.1）。
 2. ~~**新 YOLO 特征尚未闭环到时序**（旧 20 维 / 64 维叙事）~~ —— **已过期（2026-09-24 更新）**：
    时序输入早已切到 `actionmixed-roi-grid-v1`（144 维），特征轴也已探尽。**当前真实缺口是精度天花板**：
    最强模型上 **51.6% 的真值段连标签都认错**（flush 20/21、withdraw 25/27、sbc 18/18），
@@ -207,6 +206,36 @@ python -m benchmark.cli.matrix --runs runs
    （记录见 [`mstcn-capacity/MSTCN_CAPACITY_STUDY.md`](mstcn-capacity/MSTCN_CAPACITY_STUDY.md) §0.1）。
 4. **ModelScope 与复刻链路未完全落地**：本地上传目录已整理，仍需上传、回填地址/revision、
    完善 `pin.yaml` schema 与一键复刻脚本。
+
+### 9.1 已停用：ROI 特征融合（`roi_classification`）——2026-10-02 评估为**不采用**
+
+**背景**：`roi_classification`（模型别名 `feature_fusion`，配置文件原为 `roi-fusion.yaml`）是"**检测不达标的
+稀有类替补方案**"：`benchmark.cli.analyze` 逐类扫描后把 P/R < 0.3 的类从 YOLO 淘汰，改为在 GT 框上裁
+224×224 ROI 图、用预训练 CNN（torchvision resnet/efficientnet/mobilenet）+ MLP 多标签头做二次分类。
+**它从来不是时序模型的输入**——时序链消费的是 YOLO 检测框算出的统计特征，两条链互不相干。
+
+**不采用的三条理由**（均为实测）：
+
+1. **无法验收**：它要救的类恰恰没有足够样本验收。`brush_tip_out` 在留出集只有 **21 个正样本**，
+   precision 的 95% CI 宽达 **[0.38, 0.70]**——撑不起任何性能声明；`air_gun`（293 正样本，F1 0.975）站得住，
+   但一个类撑不起一条链。
+2. **接不上真实推理（循环依赖）**：训练与评估都用 **GT 框**裁剪，而它要救的类正是**检不出框**的类。
+   要落地必须先"去框化"（改成密集/滑窗分类器），那是**另一个形态**，本轮未试、也无证据。
+3. **它服务的决策从未执行**：`datasets/cleansight-yolo/` 下没有 `group2_small_kept`，当前时序特征仍使用
+   全部 8 个检测类（含 `air_gun` / `brush_tip_out`）——即这条链是给一个**没发生过的淘汰决策**准备的备胎。
+
+**本次处置（选项 B：停用保留）**：
+
+| 项 | 处置 |
+|---|---|
+| 实验配置 | **已删除** `framework/experiments/roi-fusion{,‑heldout}.yaml`（`usage/YAML_CONFIG.md` 同步移除） |
+| 模型别名 | **已移除** `feature_fusion`（`core/model_aliases.py`）→ `cli.train --model` / `cli.sweep` 不再能选到 |
+| 实现与测试 | **保留**（`framework/cleansight_eval/classification/`、`benchmark/evaluators/classification.py`、`framework/tests/test_classification_pipeline.py`），可回滚、可供"去框化"改造复用 |
+| 实验产物 | **已回收** `runs/feature_fusion/`（2.9 GB 裁剪缓存）与 `runs/roi-real-airgun-brushtip/`（44 MB） |
+| 决策依据 | 保留 [`experiments/EXPERIMENT_REPORT_ROI_EVAL_PROTOCOL_20260927.md`](experiments/EXPERIMENT_REPORT_ROI_EVAL_PROTOCOL_20260927.md)（in-sample vs 留出集的量化对照） |
+
+**若日后重启**：先做"去框化"（每帧对候选区域出概率）＋ **登记正式 testset** ＋ 把目标类的正样本补到
+几百量级，再谈验收；沿用现有的 `feature_fusion` 实现即可。
 
 ## 10. 流式 Benchmark 结论（历史）
 

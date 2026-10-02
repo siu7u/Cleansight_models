@@ -69,7 +69,7 @@
 - **冒烟链路跑通**：yolo11n 在 group1 上完成 train→val→test 全链路（2 epoch / imgsz 416 / 5% 采样），产物 `runs/cleansight-yolo/smoke-g1-cpu/`（results.csv、PR/mAP 曲线、best.pt）。
 - **优化工具 framework 化**：`tools/yolo_smoke.py` 等独立优化脚本已移植进 framework/benchmark
   —— `cli.sweep`（多预设/grid 实验）、`cli.analyze`（逐类淘汰决策）、`roi_classification` 流水线
-  （特征融合）；`tools/` 不再维护优化脚本（详见 `docs/YOLO_OPTIMIZATION.md`）。
+  （特征融合，**该方案 2026-10-02 已评估为不采用**）；`tools/` 不再维护优化脚本（详见 `docs/YOLO_OPTIMIZATION.md`）。
 - **benchmark 评测链路打通**（exploratory 模式）：`python -m benchmark.cli.eval --config ... --ckpt ...` 可产出含逐类 P/R 的评估报告。
 - **职责分离**：catalog（`framework/testsets.yaml` → `core/catalog.py`）与指标原语（`core/metrics.py`）
   下沉到 framework，依赖方向单向 `benchmark → framework`，framework 生产代码不再 import benchmark。
@@ -100,7 +100,7 @@
 4. **稀有类专项**：`copy_paste`/`mixup` 增强（`small_s_copy_paste`），对照逐类 recall。
 5. **模型规模对比**：sweep grid（models × resolutions）消融，记录参数量/速度/精度权衡。
 6. **淘汰决策**：`python -m benchmark.cli.analyze --config framework/experiments/yolo-clean-small.yaml --ckpt <best.pt>`，
-   P/R < 0.3 的类从 YOLO 淘汰 → `roi_classification` 特征融合（`framework/experiments/roi-fusion.yaml`）。
+   P/R < 0.3 的类从 YOLO 淘汰；原计划的 `roi_classification` 特征融合替代方案**已停用**（2026-10-02），淘汰类暂无替代方案。
 7. test split 仅在最终验收使用。
 
 ---
@@ -108,7 +108,7 @@
 ## 汇报口径速记
 
 - **30 秒版**：新数据集双轨就绪（5.6 万图 / 8 类，含独立 test），训练评测链路跑通；优化工具已
-  framework 化（sweep/analyze/roi_classification）；本周目标 —— 新基线重建 + 小目标/稀有类优化
+  framework 化（sweep/analyze/roi_classification，后者已停用）；本周目标 —— 新基线重建 + 小目标/稀有类优化
   + 淘汰决策。
 - **一页版**：见上文各节，核心数字取 §1.2 样本表、§2.3 指标表。
 - 所有指标标注"口径/条件"（采样比例、split、设备），避免新旧数据指标混比。

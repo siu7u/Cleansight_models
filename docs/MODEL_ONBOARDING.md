@@ -182,9 +182,9 @@ evaluation:
 
 # 三、多条流水线对照速查
 
-| | 全序列时序 | 滑窗时序 | YOLO 检测 | ROI 分类（特征融合） |
+| | 全序列时序 | 滑窗时序 | YOLO 检测 | ROI 分类（特征融合，**已停用**） |
 |--|----------|---------|-----------|---------------------|
-| `pipeline` | `full_sequence_temporal` | `sliding_window_temporal` | `detection` | `roi_classification` |
+| `pipeline` | `full_sequence_temporal` | `sliding_window_temporal` | `detection` | `roi_classification`（保留但不可选：2026-10-02 停用） |
 | 新增模型改动 | 加 `nn.Module` + 注册一行 | 同左（须 `causal: True`） | 只写配置 | 选 backbone + 写配置 |
 | 监督口径 | 逐帧 CE | 末帧 CE + 因果平滑 | ultralytics 自持 | 多标签 BCE |
 | data loader | `data.py` 统一（40 维特征序列） | 同左 | adapter 自持（读 data.yaml） | `classification/data.py`（ROI 裁剪） |
