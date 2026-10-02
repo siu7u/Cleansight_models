@@ -98,3 +98,34 @@
 
 *附：我方可供核查的资产——v3→v3.1 逐帧标签 diff 记录（session 归档）、双版本数据本地并存、
 nodep 5-seed 全部 checkpoint 与评测 JSON、LOVO 17 折 npz（GRU/TCN 双份）。*
+
+---
+
+## 6. 核查结果补记（2026-10-02 当日完成，A/B/C 三项）
+
+### 核查 A：split 一致性 ✅ 已排除
+
+对方 v31 的 train(14)/val(3)/test(8) 与我方 v3.1 **逐视频完全一致**——矛盾 2.1 的【split 差异】假设排除。
+剩余候选：模型-特征组合敏感性、edit 计算口径。
+
+### 核查 B：类权重隐藏混杂因子 ✅ 机制确认
+
+v3.1 删除 water（194 帧小样本）后，`compute_class_weights` 的归一化基准从 water 换成 withdraw，
+**全部动作类损失权重翻倍**：flush +116% / lb_insert +125% / lb_withdraw +125% / sb_clean +148%。
+这是 v3.1 变更中未被任何一侧意识到的混杂因子——insert 标签一帧未改，但有效训练权重 +125%。
+
+### 核查 C：冻结权重对照实验 ✅ 双向机制确认（GRU+nodep, seed42/7, v3.1）
+
+| 观察量 | auto 权重 | 冻结 v3 权重 | 判读 |
+|---|---:|---:|---|
+| insert 帧F1（seed42 test） | 0.282 | **0.328（+0.046）** | **对方 insert F1 回归的机制在我方模型上复现**——权重+125% 伤害 insert 精确率 |
+| flush 帧F1 | 0.180 | **0.000** | 冻结后 flush 权重减半 → 崩溃——v3.1 权重上移对 flush 是净收益 |
+| test edit 中位（2 seed） | ~29.4 | ~24.4 | auto 整体更好——权重翻倍对 GRU+nodep 是**净正** |
+
+**综合结论**：类权重偏移是【跨类的性能再分配】而非单纯伤害——动作类权重翻倍提升整体 edit
+（我方 +1.49 的部分来源）但过头伤 insert（对方 -11pp 的来源）。对对方的建议：**不必回退数据，
+用 `train.class_weights` 手调**（如 flush 维持 v3.1 水平、insert 回落 v3 水平）即可两头兼得；
+该选项已作为框架功能合入我方分支（commit 4b6e7b1）。
+
+> 执行注记：核查 C 驱动 `tmp/run_checkc.py`；冻结配置 `tmp/gru-nodep-wsl-fw.yaml`；
+> 逐类明细取自 evaluation.json 的 metrics/details/temporal/frame/per_class。
