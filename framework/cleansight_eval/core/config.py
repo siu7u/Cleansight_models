@@ -68,7 +68,7 @@ KNOWN_SECTION_KEYS = {
     },
     "train": {
         "epochs", "lr", "batch", "batch_size", "patience", "window", "grad_clip",
-        "weight_decay", "resume", "best_metric",
+        "weight_decay", "resume", "best_metric", "class_weights",
     } | YOLO_TRAIN_HPARAMS,
 }
 

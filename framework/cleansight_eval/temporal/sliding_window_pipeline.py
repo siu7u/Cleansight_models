@@ -207,10 +207,22 @@ class SlidingWindowTemporalPipeline(Pipeline):
             train_loader = DataLoader(train_ds, batch_size=train_cfg.get("batch_size", 32), shuffle=True)
             val_datasets = [SlidingWindowDataset(val_features[i], val_truths[i], window) for i in range(len(val_features))]
 
-            weights = compute_class_weights(train_loader, num_classes=model_cfg["num_classes"])
-            criterion = nn.CrossEntropyLoss(
-                weight=torch.tensor([weights[i] for i in sorted(weights)], dtype=torch.float32).to(device)
-            )
+            # 类别权重：默认按训练分布自动计算；train.class_weights 显式列表可冻结
+            # （用于数据版本变更时的对照实验——分布在版本间变化会隐式改变损失权重）。
+            frozen_weights = train_cfg.get("class_weights")
+            if frozen_weights is not None:
+                if len(frozen_weights) != model_cfg["num_classes"]:
+                    raise ValueError(
+                        f"train.class_weights 长度 {len(frozen_weights)} != num_classes {model_cfg['num_classes']}"
+                    )
+                criterion = nn.CrossEntropyLoss(
+                    weight=torch.tensor(frozen_weights, dtype=torch.float32).to(device)
+                )
+            else:
+                weights = compute_class_weights(train_loader, num_classes=model_cfg["num_classes"])
+                criterion = nn.CrossEntropyLoss(
+                    weight=torch.tensor([weights[i] for i in sorted(weights)], dtype=torch.float32).to(device)
+                )
             optimizer = torch.optim.Adam(
                 model.parameters(),
                 lr=train_cfg.get("lr", 1e-3),
