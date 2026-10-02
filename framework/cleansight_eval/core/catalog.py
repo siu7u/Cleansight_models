@@ -24,6 +24,15 @@ SPLIT_OVERLAP_POLICIES = {"error", "frame", "allow"}
 # ROI 空间特征映射（temporal/features/roi_bbox.py）：按 feature_layout 声明校验维度，
 # 不在此重复 recipe 实现；core 层不 import 任何流水线。
 ROI_FEATURE_MAPPING_PREFIX = "actionmixed-roi-"
+# 框集合契约（`actionmixed-boxset-*`）：每帧把**面积最大的前 N 个框**填充成定长张量，
+# 每槽 `[one-hot(检测类) | cx | cy | w | h]`，故期望维度 = 槽位数 × (检测类数 + 4)。
+# 槽位数由条目里的 `feature_slots` 声明，catalog 据此校验维度（与 ROI 分支同一模式：
+# recipe 不重复实现，catalog 只拦住"声明维度与实现维度不一致"的登记错误）。
+BOXSET_FEATURE_MAPPING_PREFIX = "actionmixed-boxset-"
+# 拼接契约（`actionmixed-combo-*`）：由若干**异构分段**顺序拼成，分段维度在条目里用
+# `feature_parts`（正整数列表）声明，catalog 校验「分部和 == input_dim」。
+# 与 ROI/boxset 分支同一模式：recipe 不重复实现，catalog 只拦登记错误。
+COMBO_FEATURE_MAPPING_PREFIX = "actionmixed-combo-"
 # 图像 embedding 拼接契约（temporal/features/image_embed.py）：按 feature_embed 声明校验
 # 「检测类数×5 + embedding 维度」并核对产物存在，同样不在此重复 recipe 实现。
 IMAGE_EMBED_FEATURE_MAPPING_PREFIX = "actionmixed-bbox-embed-"
@@ -613,6 +622,32 @@ def _validate_temporal(spec: TestsetSpec) -> list[str]:
                         errors.append(
                             f"embedding 产物缺失 {len(missing_embeddings)} 个"
                             f"（{embed_root}）：{preview}"
+                        )
+            elif str(spec.feature_mapping or "").startswith(COMBO_FEATURE_MAPPING_PREFIX):
+                parts = spec.raw.get("feature_parts")
+                ok_parts = (isinstance(parts, list) and parts
+                            and all(isinstance(v, int) and not isinstance(v, bool) and v > 0
+                                    for v in parts))
+                if not ok_parts:
+                    errors.append(
+                        f"拼接 feature_mapping={spec.feature_mapping!r} 缺少 feature_parts"
+                        f"（正整数列表，按顺序给各分段维度）"
+                    )
+                elif sum(parts) != spec.input_dim:
+                    errors.append(
+                        f"拼接 分部和={sum(parts)} 与 input_dim={spec.input_dim} 不一致"
+                    )
+            elif str(spec.feature_mapping or "").startswith(BOXSET_FEATURE_MAPPING_PREFIX):
+                slots = spec.raw.get("feature_slots")
+                if not isinstance(slots, int) or isinstance(slots, bool) or slots <= 0:
+                    errors.append(
+                        f"框集合 feature_mapping={spec.feature_mapping!r} 缺少 feature_slots（正整数）"
+                    )
+                else:
+                    expected = slots * (detection_count + 4)
+                    if expected != spec.input_dim:
+                        errors.append(
+                            f"框集合 槽位数×(检测类别数+4)={expected} 与 input_dim={spec.input_dim} 不一致"
                         )
             else:
                 blocks = spec.raw.get("feature_blocks", 1)  # 每类特征块数（全局+手部双通道=2）

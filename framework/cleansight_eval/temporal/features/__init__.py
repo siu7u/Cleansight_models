@@ -25,7 +25,10 @@ from .image_embed import (
 )
 from .roi_bbox import (
     ROI_CHANNELS,
+    ROI_DELTA_CHANNELS,
+    ROI_DELTA_DIM,
     ROI_FEATURE_DIM,
+    ROI_DELTA_VERSION,
     ROI_FEATURE_VERSION,
     ROI_GRID_COLS,
     ROI_GRID_ROWS,
@@ -33,6 +36,7 @@ from .roi_bbox import (
     ROI_PRESENCE_DIM,
     ROI_PRESENCE_VERSION,
     build_roi_frame_features,
+    build_roi_grid_delta_features,
     build_roi_presence_frame_features,
 )
 from .roi_bbox_v2 import (
@@ -47,6 +51,41 @@ from .roi_bbox_v2 import (
     ROI_GRID_V2_VERSION,
     build_roi_grid_v2_frame_features,
     roi_grid_v2_block_dims,
+)
+from .combo import COMBO_DIM, COMBO_VERSION, build_combo_frame_features
+from .boxset import (
+    BOXSET_DIM,
+    BOXSET_N_SLOTS,
+    BOXSET_SLOT_DIM,
+    BOXSET_VERSION,
+    build_boxset_frame_features,
+)
+from .roi_bbox_v5 import (
+    ROI_GRID_V5_DIM,
+    ROI_GRID_V5_HOT_BLOCK,
+    ROI_GRID_V5_HOT_CLASS_IDS,
+    ROI_GRID_V5_N_CLASSES,
+    ROI_GRID_V5_VERSION,
+    build_roi_grid_v5_frame_features,
+    roi_grid_v5_block_dims,
+)
+from .roi_bbox_v4 import (
+    ROI_GRID_V4_DIM,
+    ROI_GRID_V4_HOT_BLOCK,
+    ROI_GRID_V4_HOT_CLASS_IDS,
+    ROI_GRID_V4_N_CLASSES,
+    ROI_GRID_V4_VERSION,
+    build_roi_grid_v4_frame_features,
+    roi_grid_v4_block_dims,
+)
+from .roi_bbox_v3 import (
+    ROI_GRID_V3_DIM,
+    ROI_GRID_V3_HOT_BLOCK,
+    ROI_GRID_V3_HOT_CLASS_IDS,
+    ROI_GRID_V3_N_CLASSES,
+    ROI_GRID_V3_VERSION,
+    build_roi_grid_v3_frame_features,
+    roi_grid_v3_block_dims,
 )
 
 
@@ -68,6 +107,12 @@ def block_dims_for_version(version: str | None, n_classes: int) -> list[int] | N
 
     if version == ROI_GRID_V2_VERSION:
         return roi_grid_v2_block_dims(n_classes)
+    if version == ROI_GRID_V3_VERSION:
+        return roi_grid_v3_block_dims(n_classes)
+    if version == ROI_GRID_V4_VERSION:
+        return roi_grid_v4_block_dims(n_classes)
+    if version == ROI_GRID_V5_VERSION:
+        return roi_grid_v5_block_dims(n_classes)
     return None
 
 
@@ -83,7 +128,10 @@ __all__ = [
     "IMAGE_EMBED_VERSION",
     "IMAGE_EMBED_VERSION_PREFIX",
     "ROI_CHANNELS",
+    "ROI_DELTA_CHANNELS",
+    "ROI_DELTA_DIM",
     "ROI_FEATURE_DIM",
+    "ROI_DELTA_VERSION",
     "ROI_FEATURE_VERSION",
     "ROI_GRID_COLS",
     "ROI_GRID_ROWS",
@@ -96,6 +144,11 @@ __all__ = [
     "ROI_GRID_V2_HOT_ROWS",
     "ROI_GRID_V2_N_CLASSES",
     "ROI_GRID_V2_VERSION",
+    "ROI_GRID_V3_VERSION",
+    "ROI_GRID_V4_VERSION",
+    "ROI_GRID_V5_VERSION",
+    "BOXSET_VERSION",
+    "COMBO_VERSION",
     "ROI_N_REGIONS",
     "ROI_PRESENCE_DIM",
     "ROI_PRESENCE_VERSION",
@@ -105,6 +158,7 @@ __all__ = [
     "build_roi_frame_features",
     "build_roi_grid_v2_frame_features",
     "build_roi_presence_frame_features",
+    "build_roi_grid_delta_features",
     "clean_feature_names",
     "feature_names_for_version",
     "is_image_embed_version",
