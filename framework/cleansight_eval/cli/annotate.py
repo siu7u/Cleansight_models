@@ -173,7 +173,8 @@ def _cmd_convert(args) -> int:
         out_root = REPO_ROOT / out_root
 
     outputs = auto_annotate.convert_annotations(
-        annotation_dir, labels_export, out_root, split=args.split
+        annotation_dir, labels_export, out_root, split=args.split,
+        target_label_fps=args.target_label_fps,
     )
     print(f"[convert] 完成：{len(outputs)} 个视频写入 {out_root}（split={args.split}）")
     return 0
@@ -212,6 +213,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     convert_p = sub.add_parser("convert", help="标注 JSON + 人工导出 → 时序训练数据")
     convert_p.add_argument("--annotations", required=True, help="自动标注 JSON 目录")
+    convert_p.add_argument("--target-label-fps", type=float, default=None, help="标签抽样目标帧率（缺省 TARGET_LABEL_FPS=7.5；15fps 采样传 15）")
     convert_p.add_argument("--labels-export", required=True, help="人工 Label Studio 导出 JSON（取 timelinelabels 动作标签）")
     convert_p.add_argument("--out", required=True, help="训练数据根目录（labels/ + frames/）")
     convert_p.add_argument("--split", default="train", help="split 名（默认 train；可多次调用生成 train/val）")

@@ -53,16 +53,16 @@ python download_modelscope_dataset.py --preset yolo
 缓存（`.git/`、`.gitattributes`、各组下的 `.ms_upload_cache`），只保留数据与文档文件。注意
 `git lfs pull` 需要跑完，否则 train/val 图像不完整。
 
-## 当前划分快照（v3.1，2026-09-28 定稿 → **v3.2 fps 修正，2026-10-07**）
+## 当前划分快照（**v4.0，2026-10-08 定稿**：15fps + 时间轴修正 + 扩量）
 
 > 身份锁定：revision `c30f62f5`（train+val）/ `df99637f`（含 test），catalog 以 `framework/testsets.yaml` 为准；
 > ModelScope `lhh010/cleansight-ActionMixed-auto`（v3.1 已发布）。逐视频 LS task id 溯源见数据集内 `task_ids.yaml`。
 
 | split | 视频数 | 帧数 | idle | water | flush | lb_insert | lb_withdraw | sb_cleaning | 来源 |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| train | 14 | 9,646 | 6,546 | 0 | 930 | 1,289 | 437 | 444 | project-16 |
-| val | 3 | 3,140 | 2,080 | 0 | 184 | 495 | 206 | 175 | project-16 |
-| test | 8 | 2,639 | — | — | — | — | — | — | project-18（跨批次专项） |
+| train | **28** | **30,930** | 17,440 | 0 | 3,453 | 6,115 | 2,006 | 1,916 | project-16 |
+| val | **7** | **8,447** | 4,506 | 0 | 453 | 2,170 | 886 | 432 | project-16 |
+| test | 8 | 5,272 | 2,330 | 0 | 408 | 1,765 | 642 | 127 | project-18（跨批次专项） |
 
 **train（14，LS task id → 视频前缀）**：#192 4ace5352 · #193 4cc6a009 · #194 c1367d51 · #195 5b181b9b · #196 789d58df · #197 15311df5 · #201 39da2635 · #202 071eb2d6 · **#203 f809e944（v3.1 新入集，266 帧 flush 52）** · #204 67aa31ca · #206 4894e7ba · #208 349f2a55 · #210 9c0f89a1 · #211 8634f3bc
 

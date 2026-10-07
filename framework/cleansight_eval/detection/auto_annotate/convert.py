@@ -65,6 +65,7 @@ def convert_annotations(
     out_root: Path,
     *,
     split: str = "train",
+    target_label_fps: float | None = None,
 ) -> list[Path]:
     """自动标注 JSON + 人工 LS 导出 → 时序训练数据布局。
 
@@ -130,7 +131,8 @@ def convert_annotations(
             (max(1, round(start / scale)), min(frames_count, round(end / scale)), action)
             for start, end, action in manual_info["ranges"]
         ]
-        stride = max(1, round(real_fps / TARGET_LABEL_FPS)) if real_fps else 1
+        _fps = target_label_fps or TARGET_LABEL_FPS
+        stride = max(1, round(real_fps / _fps)) if real_fps else 1
         label_frames = list(range(1, frames_count + 1, stride))
 
         # sequence 按帧序排列（frame 1..framesCount），建 帧号 → [(类名, 有效检测)] 索引
