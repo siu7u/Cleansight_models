@@ -53,7 +53,7 @@ python download_modelscope_dataset.py --preset yolo
 缓存（`.git/`、`.gitattributes`、各组下的 `.ms_upload_cache`），只保留数据与文档文件。注意
 `git lfs pull` 需要跑完，否则 train/val 图像不完整。
 
-## 当前划分快照（v3.1，2026-09-28 定稿）
+## 当前划分快照（v3.1，2026-09-28 定稿 → **v3.2 fps 修正，2026-10-07**）
 
 > 身份锁定：revision `c30f62f5`（train+val）/ `df99637f`（含 test），catalog 以 `framework/testsets.yaml` 为准；
 > ModelScope `lhh010/cleansight-ActionMixed-auto`（v3.1 已发布）。逐视频 LS task id 溯源见数据集内 `task_ids.yaml`。
@@ -77,5 +77,10 @@ python download_modelscope_dataset.py --preset yolo
 | `occlusion/` | #198 | f173153a | 195 | train | 遮挡严重的 flush——特征源头缺失；留作遮挡专项改进后的回归用例 |
 | `deprecated/` | #207 | 152453e5 | 244 | val | 仅含废弃动作 water_injection（该类 train/val 已全部归零，id 位置保留） |
 
+> **v3.2（2026-10-07）**：发现 LS 时间轴 24fps 与视频实际 30fps 不一致（证据：14/37 task 标注上限精确贴 时长×24），
+> 全部标签帧号按 ×1.25 重标定（帧级 43.9% 变化、段结构不变、含隔离区）；split 成员与 revision 不变（revision 仅锁成员），
+> 逐类帧数 train [5798,0,1154,1603,543,548] / val [1830,0,226,612,255,217]。**v3.2 与 v3.1 及更早全部指标不可比**。
+> v3.3（待发）：#221-238 共 18 个新视频（检测中）将增补入 train/val。
+>
 > v3.1 相对 v3 的变更：#193/194/201/202/205 标注重生成（#201 大幅重标，water 帧归零）；#198/#207 隔离；#203 补录。
 > **v3.1 与 v3 指标不可比**——v3 口径的历史实验数字见 `docs/FEATURE_LAB.md`。
