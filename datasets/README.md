@@ -53,7 +53,7 @@ python download_modelscope_dataset.py --preset yolo
 缓存（`.git/`、`.gitattributes`、各组下的 `.ms_upload_cache`），只保留数据与文档文件。注意
 `git lfs pull` 需要跑完，否则 train/val 图像不完整。
 
-## 当前划分快照（**v4.0，2026-10-08 定稿**：15fps + 时间轴修正 + 扩量）
+## 当前划分快照（**v4.1，2026-10-08 定稿**：15fps + 时间轴修正 + 扩量 + 均衡重划分）
 
 > 身份锁定：revision `c30f62f5`（train+val）/ `df99637f`（含 test），catalog 以 `framework/testsets.yaml` 为准；
 > ModelScope `lhh010/cleansight-ActionMixed-auto`（v3.1 已发布）。逐视频 LS task id 溯源见数据集内 `task_ids.yaml`。
