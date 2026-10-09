@@ -103,7 +103,7 @@ ROW_H = 3.0  # 每折三行
 
 fig = plt.figure(figsize=(16, 22), dpi=115)
 ax = fig.add_axes([0.17, 0.05, 0.74, 0.89])
-
+ax.set_ylim(-0.3, N * ROW_H - 0.2)
 for i, (fold, vid8, ed, _edf, gt, pred, filt, names) in enumerate(records):
     y = (N - 1 - i) * ROW_H
     hl = fold in ("fold12", "fold09")
@@ -111,7 +111,6 @@ for i, (fold, vid8, ed, _edf, gt, pred, filt, names) in enumerate(records):
         ax.axhspan(y - 0.1, y + ROW_H - 0.25, color="#fdecea", zorder=0)
     elif i % 2 == 1:
         ax.axhspan(y - 0.1, y + ROW_H - 0.25, color="#f6f7f9", zorder=0)
-    # 三行：GT / 原始 / 过滤后
     for arr, y0 in ((gt, y + 2.0), (pred, y + 1.1), (filt, y + 0.2)):
         for s, e, ci in segments(arr):
             ax.add_patch(plt.Rectangle((s, y0), e - s, 0.66, facecolor=c4(names[ci]),
@@ -120,22 +119,20 @@ for i, (fold, vid8, ed, _edf, gt, pred, filt, names) in enumerate(records):
     if hl:
         ax.add_patch(plt.Rectangle((0, y - 0.1), len(gt), ROW_H - 0.15, facecolor="none",
                                    edgecolor="#d64550", lw=2.0, zorder=4, clip_on=False))
-    # 左右标签（fig.text，防截断/重叠）
-    fy = 0.09 + 0.82 * ((y + ROW_H / 2 - 0.2) / (N * ROW_H))
+    # 左右标签：transData 精确换算（此时 ylim 已设，坐标有效）
+    disp = ax.transData.transform((0, y + ROW_H / 2 - 0.2))
+    fy = disp[1] / (fig.get_size_inches()[1] * fig.dpi)
     gain = _edf - ed
     gcol = "#1e8e4e" if gain > 0 else ("#c0392b" if gain < 0 else "#888")
     fig.text(0.165, fy, f"{fold} · {vid8} · edit {ed:.1f}", ha="right", va="center", fontsize=9,
              color="#c0392b" if hl else "#333", fontweight="bold" if hl else "normal")
     fig.text(0.925, fy, f"→ {_edf:.1f} ({gain:+.1f})", ha="left", va="center", fontsize=9,
              color=gcol, fontweight="bold" if abs(gain) >= 20 else "normal")
-
-fig.text(0.165, 0.925, "折 / 视频 / 原始 edit", ha="right", fontsize=10, fontweight="bold")
-fig.text(0.925, 0.925, "过滤后 edit（Δ）", ha="left", fontsize=10, fontweight="bold")
 ax.set_xlim(0, maxT)
-ax.set_ylim(-0.3, N * ROW_H - 0.2)
-ax.set_yticks([]); ax.set_xticks([])
-ax.set_xlabel("帧号（各折长度不同；每折三行 = GT / 原始预测 / 条件过滤后(τ=3，中位 edit 50.00)）", fontsize=10.5)
-for s in ax.spines.values(): s.set_visible(False)
+_top = ax.transData.transform((0, (N - 1) * ROW_H + ROW_H / 2 + 0.35))
+_fy_top = _top[1] / (fig.get_size_inches()[1] * fig.dpi)
+fig.text(0.165, _fy_top, "折 / 视频 / 原始 edit", ha="right", fontsize=10, fontweight="bold")
+fig.text(0.925, _fy_top, "过滤后 edit（Δ）", ha="left", fontsize=10, fontweight="bold")
 ax.set_title("v4.1 LOVO 35 折：双向时长先验前后对比（15fps + 时间轴修正，按原始 edit 升序）", fontsize=14, fontweight="bold", loc="left", pad=14)
 handles = [plt.Rectangle((0,0),1,1, facecolor=c4(n)) for n in NAMES]
 fig.legend(handles, NAMES, fontsize=9.5, ncol=6, loc="lower center", bbox_to_anchor=(0.55, 0.012), frameon=False)
