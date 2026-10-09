@@ -53,6 +53,7 @@ KNOWN_SECTION_KEYS = {
     "data": {
         "name", "dataset_ref", "data_yaml", "eval_split", "root", "action_mapping", "labels_dir",
         "frames_dir", "split_train", "split_val", "split_eval", "names", "fps",
+        "feature_cache",
         # roi_classification（特征融合）
         "classes", "group_dir", "neg_ratio", "val_split", "dataset_dir",
     },

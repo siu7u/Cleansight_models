@@ -502,6 +502,15 @@ def load_split(
         (feature_schema or {}).get("detection_confidence_default", 1.0)
     )
 
+    # 特征缓存（opt-in）：data.feature_cache 指定目录时，按 (feature_version, 视频, 帧文件指纹) 缓存
+    # 每视频特征矩阵。LOVO/多次评测会对同一批帧重复构建特征（每个 run 数十分钟 CPU），
+    # 缓存后从磁盘直读。指纹含帧数与总字节，帧文件变化自动失效；缺省 None 时行为与历史完全一致。
+    cache_root = None
+    if data_cfg.get("feature_cache"):
+        cache_root = Path(data_cfg["feature_cache"]) / feature_version / split
+        cache_root.mkdir(parents=True, exist_ok=True)
+    cache_hit = cache_miss = 0
+
     features, truths = [], []
     for stem, frame_ids, action_ids in _iter_split_sequences(data_cfg, split, window):
         if max_videos is not None and len(features) >= max_videos:
@@ -512,6 +521,26 @@ def load_split(
             if window is not None and len(frame_ids) < window:
                 continue
         frame_paths = [frames_dir / f"{stem}-{frame_id:06d}.txt" for frame_id in frame_ids]
+        cached = None
+        cache_file = None
+        if cache_root is not None:
+            try:
+                sizes = [p.stat().st_size for p in frame_paths]
+            except FileNotFoundError:
+                sizes = None
+            if sizes is not None:
+                fp = f"{len(sizes)}:{sum(sizes)}:{fps}:{confidence_default}:{sorted(mask_target_ids)}"
+                import hashlib as _hl
+                cache_file = cache_root / f"{stem}-{_hl.sha1(fp.encode()).hexdigest()[:12]}.npz"
+                if cache_file.exists():
+                    cached = np.load(cache_file)["feats"]
+        if cached is not None:
+            features.append(cached)
+            truths.append(
+                np.asarray([action_id_remap[action_id] for action_id in action_ids], dtype=np.int64)
+            )
+            cache_hit += 1
+            continue
         if nodep_concat_recipe:
             feats, _names, actual_version = build_nodep_concat_features(
                 frame_paths,
@@ -651,10 +680,16 @@ def load_split(
                     for path in frame_paths
                 ]
             ).astype(np.float32)
+        if cache_file is not None:
+            np.savez(cache_file, feats=feats)
+            cache_miss += 1
         features.append(feats)
         truths.append(
             np.asarray([action_id_remap[action_id] for action_id in action_ids], dtype=np.int64)
         )
+
+    if cache_root is not None:
+        print(f"  [feature-cache] {split}: hit={cache_hit} miss={cache_miss} ({cache_root})")
 
     if not features:
         raise ValueError(f"{root / data_cfg.get('labels_dir', 'labels') / split} 下没有可用序列（可能都短于 window={window}）")
