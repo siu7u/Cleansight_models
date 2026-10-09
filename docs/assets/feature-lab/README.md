@@ -23,6 +23,11 @@
 
 | `fig6_lovo_summary_v31c.png` | 最终方案汇总：条件启用(碎段率>τ=3)过滤，中位 edit **50.00**，低碎段折保持 raw 零受损 |
 | `lovo_probs_v31c/foldXX_*.png` | 最终方案逐折图：条件启用版三行段条（碎段率≤3 的折第三行=原始预测） |
+
+以下为 **v4.1 版**（§16，2026-10-09：15fps 重采样 + LS 时间轴 ×1.25 修正 + 均衡划分）：
+
+| `fig7_lovo_summary_v41.png` | v4.1 LOVO **35 折**汇总：GT/原始/双向过滤(min+max) 三行段条，按原始 edit 升序；中位 edit **47.83 → 56.25** |
+| `lovo_probs_v41/foldXX_*.png` | v4.1 逐折概率图（35 张）：15fps 采样，概率曲线 + 三行段条
 | `lovo_probs/foldXX_*.png` | 每折 held-out 视频的"各标签概率-时间"图：上=6 类 softmax 概率曲线 + GT 背景色带，下=GT vs 预测段条 |
 
 ## 生成方式（scripts/）
