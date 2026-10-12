@@ -95,6 +95,22 @@ PRESETS: Dict[str, dict] = {
         "cos_lr": True,
         "label_smoothing": 0.1,
     },
+    # 低内存配方：与 large_m_960 逐项一致，仅压低 DataLoader worker。
+    # 本机是 12GB WSL，960px 下 worker 进程是内存峰值主因：group2 上 workers=8 + batch=12 曾
+    # 连续两次在 epoch 0 之前被内存杀掉（见 docs/weeks/2026-10-10_2026-10-16/
+    # YOLO_DETECTION_SIDE_20261012.md §5）。large 组数据量更大（21.5k train），同理先压 worker。
+    "large_m_960_lowmem": {
+        "description": "large 组: yolo11m, imgsz 960, 强增强+cos, 低内存(workers=2)",
+        "model": "yolo11m.pt",
+        "imgsz": 960,
+        "epochs": 200,
+        "batch": 4,
+        "patience": 40,
+        "augment": "strong",
+        "cos_lr": True,
+        "label_smoothing": 0.1,
+        "workers": 2,
+    },
     "large_s_freeze": {
         "description": "large 组: yolo11s, freeze backbone 10 层",
         "model": "yolo11s.pt",
