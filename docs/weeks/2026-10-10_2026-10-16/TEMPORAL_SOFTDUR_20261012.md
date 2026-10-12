@@ -396,3 +396,33 @@ framework/cleansight_eval/temporal/full_sequence_pipeline.py:229
 
 **当前状态：接线未完成**，`full_sequence_pipeline.py` 与仓库均回到接线前的状态。
 §12 的两步方案仍然成立，只是第 1 步需要先补上第 1 条前置调查。
+
+
+## 14. 失败归因的下一步调查（2026-10-12）：形状是异质的，别再假设 `[1,T,C]`
+
+§13 的失败（`preds` 里出现 0 维数组）需要先弄清"解码点拿到的到底是什么形状"。本轮做了
+**源码侧的形状普查**（只读，未改动任何代码），结果说明**不能再假设所有模型都返回 `[1,T,C]`**：
+
+| 模型文件 | 返回形状线索 |
+|---|---|
+| `mstcn.py` | L90 `return logits.transpose(1, 2)  # [B, T, C]` |
+| `clean_offline.py` | L122 `return logits.transpose(1, 2)` |
+| `actionness.py` | L160 `return compose_log_probability(actionness, class_logits).transpose(1, 2)`；另有独立的 `compute_loss`（L162） |
+| `fact.py` | L213 `return self._token_mixture_logits(token_logits, token_time)`（**经 token 混合**，非朴素转置） |
+| `boxset.py` / `gru.py` / `transformer.py` | 各有自己的 `forward`/`compute_loss` 组合 |
+
+即：**各 head 的"前向返回值"语义并不统一**——有的返回转置后的 logits、有的经 token 混合、
+有的同时提供 `compute_loss`。而 §13 那次改动只在**合成张量**上验过 `[1,T,C]`，所以
+"某条真实路径产出 0 维数组"是完全可能的（例如某 head 返回 `[T,C]` 或 `[1,C]` 一类形状，
+使 `logits[0]` 之后 argmax 得到标量）。
+
+### 下一次尝试的修正方案（把鲁棒性写进 helper，而不是假设形状）
+
+1. **helper 里显式规范化形状**：接受 `[1,T,C]`、`[T,C]`、`[B,T,C]`，统一到 `[T,C]` 后再解码；
+   形状无法归一就**抛错并打印实际形状**（而不是静默产出 0 维数组）；
+2. **先跑真实模型的形状探针**：对 MS-TCN / MS-TCN++ / Transformer / actionness / fact
+   各跑一次前向，**打印** `type(ret)` 与 `ret.shape`，再动手接线；
+3. **把 `test_mstcn_smoke.py` 两条用例作为接线的门槛**——它们正是 §13 抓到回归的那两条，
+   比任何合成用例都贴近真实。
+
+**当前结论：接线仍未完成**，前置调查（第 2 条）尚未做；仓库处于接线前状态（§13 已回退并核实）。
