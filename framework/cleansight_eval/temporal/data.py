@@ -771,6 +771,16 @@ def load_split(
                     for path in frame_paths
                 ]
             ).astype(np.float32)
+        elif roi_presence_recipe:
+            # presence 平面契约（48 维）：只取 roi-grid 的 presence 通道。
+            # 注意：f92fcb7 曾把本分支顶掉（变量保留但无人使用），使 presence 契约静默回落到
+            # 末尾 else 的 40 维 bbox 特征，只被 pipeline 的维度断言拦下——勿再删。
+            feats = np.stack(
+                [
+                    build_roi_presence_frame_features(path, mask_target_ids=mask_target_ids)
+                    for path in frame_paths
+                ]
+            ).astype(np.float32)
         elif roi_delta_recipe:
             # Δ 契约需要整段序列（前向差分），因此一次性传入全部帧路径而不是逐帧调用。
             feats = build_roi_grid_delta_features(

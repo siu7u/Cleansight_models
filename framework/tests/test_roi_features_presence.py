@@ -10,9 +10,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
+from cleansight_eval.temporal.data import load_split
 from cleansight_eval.temporal.features import (
     ROI_CHANNELS,
     ROI_FEATURE_DIM,
@@ -101,3 +104,29 @@ def test_presence_channel_is_binary(tmp_path):
     presence = build_roi_presence_frame_features(path, n_classes=N_CLASSES)
 
     assert set(np.unique(presence).tolist()) <= {0.0, 1.0}
+
+
+def test_load_split_dispatches_presence_recipe():
+    """**加载器分派**回归：presence 契约必须走 presence 分支，宽度恒为 48。
+
+    本用例锁的是一个真实回归：`data.py` 里曾把 `elif roi_presence_recipe:` 顶成
+    `elif roi_delta_recipe:`（f92fcb7，2026-10-02），变量保留但无人使用 → presence 契约
+    静默回落到分支链末尾的 40 维 bbox 特征。上面几个用例只测特征构造器，测不到分派层，
+    所以这个 bug 能一路潜伏到训练期的维度断言才暴露。此处直接断言"加载宽度 == 契约维度"。
+    """
+
+    root = Path(__file__).resolve().parents[2] / "datasets/cleansight-ActionMixed-auto-lhh"
+    if not root.is_dir():
+        pytest.skip("本地缺少 datasets/cleansight-ActionMixed-auto-lhh")
+
+    data_cfg = {"root": str(root), "dataset_ref": None, "split_train": "train",
+                "split_val": "val", "split_eval": "test"}
+    feats, truths, id2name = load_split(
+        data_cfg, "test",
+        feature_schema={"dim": ROI_PRESENCE_DIM, "version": ROI_PRESENCE_VERSION})
+
+    assert feats, "test split 应有可用序列"
+    widths = {f.shape[1] for f in feats}
+    assert widths == {ROI_PRESENCE_DIM}, f"presence 契约实际加载宽度 {widths}，疑似回落到了别的 recipe"
+    assert all(len(t) == f.shape[0] for f, t in zip(feats, truths))
+    assert len(id2name) == 6
