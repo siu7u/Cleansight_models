@@ -48,7 +48,11 @@ from .features import (
     CLEAN_FEATURE_DIMS,
     EMBED_BBOX_DIM,
     GLOBAL_HAND_BBOX_VERSION,
+    GLOBAL_HAND_V2_EXPAND,
+    GLOBAL_HAND_V2_VERSION,
+    HAND_BBOX_V2_VERSION,
     HAND_BBOX_VERSION,
+    HAND_V2_EXPAND,
     ROI_DELTA_VERSION,
     ROI_FEATURE_VERSION,
     ROI_GRID_V2_VERSION,
@@ -57,9 +61,13 @@ from .features import (
     ROI_GRID_V5_VERSION,
     BOXSET_VERSION,
     COMBO_VERSION,
+    COMBO_V2_VERSION,
+    COMBO_V3_VERSION,
+    COMBO_V4_VERSION,
     ROI_PRESENCE_VERSION,
     build_clean_bbox_features,
     build_hand_frame_features,
+    build_hand_v2_frame_features,
     build_roi_frame_features,
     build_roi_grid_v2_frame_features,
     build_roi_grid_v3_frame_features,
@@ -67,6 +75,9 @@ from .features import (
     build_roi_grid_v5_frame_features,
     build_boxset_frame_features,
     build_combo_frame_features,
+    build_combo_v2_frame_features,
+    build_combo_v3_frame_features,
+    build_combo_v4_frame_features,
     build_roi_grid_delta_features,
     build_roi_presence_frame_features,
     block_dims_for_version,
@@ -710,7 +721,12 @@ def load_split(
     roi_v5_recipe = feature_version == ROI_GRID_V5_VERSION
     boxset_recipe = feature_version == BOXSET_VERSION
     combo_recipe = feature_version == COMBO_VERSION
+    combo_v2_recipe = feature_version == COMBO_V2_VERSION
+    combo_v3_recipe = feature_version == COMBO_V3_VERSION
+    combo_v4_recipe = feature_version == COMBO_V4_VERSION
     hand_recipe = feature_version == HAND_BBOX_VERSION
+    hand_v2_recipe = feature_version == HAND_BBOX_V2_VERSION
+    global_hand_v2_recipe = feature_version == GLOBAL_HAND_V2_VERSION
     global_hand_recipe = feature_version == GLOBAL_HAND_BBOX_VERSION
     clean_recipe = feature_version in CLEAN_FEATURE_DIMS
     detection_mapping = load_detection_mapping(data_cfg) if clean_recipe else None
@@ -822,6 +838,64 @@ def load_split(
             feats = np.stack(
                 [
                     build_combo_frame_features(path, mask_target_ids=mask_target_ids)
+                    for path in frame_paths
+                ]
+            ).astype(np.float32)
+        elif combo_v2_recipe:
+            # combo-v2（272 维）= roi-grid-v5(192) ‖ 全画面 bbox(40) ‖ 手部区域(40)。
+            # 三段分别来自 features/roi_bbox_v5.py、本模块的 featurize_frame_bbox 与
+            # features/hand_bbox.py；拼接器自带分段宽度自检（勿改成裸 concatenate，
+            # 否则分段错位会静默通过 40 维之外的宽度断言）。
+            feats = np.stack(
+                [
+                    build_combo_v2_frame_features(
+                        build_roi_grid_v5_frame_features(path, mask_target_ids=mask_target_ids),
+                        featurize_frame_bbox(path, mask_target_ids=mask_target_ids),
+                        build_hand_frame_features(path, mask_target_ids=mask_target_ids),
+                    )
+                    for path in frame_paths
+                ]
+            ).astype(np.float32)
+        elif hand_v2_recipe:
+            # 手部区域 v2（40 维）：锚点 = 全部 hand 框并集，扩张 2.0。
+            feats = np.stack(
+                [
+                    build_hand_v2_frame_features(path, mask_target_ids=mask_target_ids,
+                                                 expand=HAND_V2_EXPAND)
+                    for path in frame_paths
+                ]
+            ).astype(np.float32)
+        elif global_hand_v2_recipe:
+            # 全局+手部 v2（80 维）= 全画面 40 维 ‖ 手部区域 v2 40 维（并集锚点、扩张 1.5）。
+            feats = np.stack(
+                [
+                    np.concatenate(
+                        [
+                            featurize_frame_bbox(path, mask_target_ids=mask_target_ids),
+                            build_hand_v2_frame_features(path, mask_target_ids=mask_target_ids,
+                                                         expand=GLOBAL_HAND_V2_EXPAND),
+                        ]
+                    )
+                    for path in frame_paths
+                ]
+            ).astype(np.float32)
+        elif combo_v3_recipe:
+            # combo-v3（232 维）= roi-grid-v5(192) ‖ 手部区域 v2(40，并集锚点、扩张 2.0)。
+            feats = np.stack(
+                [build_combo_v3_frame_features(path, mask_target_ids=mask_target_ids)
+                 for path in frame_paths]
+            ).astype(np.float32)
+        elif combo_v4_recipe:
+            # combo-v4（272 维）= roi-grid-v5(192) ‖ 全画面(40) ‖ 手部区域 v2(40，并集锚点、扩张 1.5)。
+            # 与 round-1 的 combo-v2 同结构同维度，唯一变量是手部段 v1 → v2。
+            feats = np.stack(
+                [
+                    build_combo_v4_frame_features(
+                        featurize_frame_bbox(path, mask_target_ids=mask_target_ids),
+                        build_roi_grid_v5_frame_features(path, mask_target_ids=mask_target_ids),
+                        build_hand_v2_frame_features(path, mask_target_ids=mask_target_ids,
+                                                     expand=GLOBAL_HAND_V2_EXPAND),
+                    )
                     for path in frame_paths
                 ]
             ).astype(np.float32)

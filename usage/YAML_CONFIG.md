@@ -66,6 +66,12 @@ Pipeline 校验并执行。
 | [`framework/experiments/mstcn2-auto-roi-v4-aug-jitter.yaml`](../framework/experiments/mstcn2-auto-roi-v4-aug-jitter.yaml) | v4 配方（`mstcn2` h128/s4l10、128 维 `actionmixed-roi-grid-v4`、`dataset_ref: temporal.actionmixed-auto-roi-v4`、60 轮 / lr 5e-4 / wd 1e-4 / `best_metric=val_edit`）+ `augmentation.feature_jitter`（`sigma: 0.15`） | 第 13 轮**检测尺度抖动**对照：只扰动非零元素（模拟检测器计数/面积/尺寸的跨批次抖动）。16 seed 实测 **acc 58.16 vs 参考 58.24（Δ 中位 +0.13，9/7，p=0.84）→ 中性，不是杠杆**；`f1@0.25` 略降（−1.31，不显著）。见 `docs/weeks/2026-09-26_2026-10-02/TOPIC_02_AUGMENTATION_20260929.md`。 |
 | [`framework/experiments/mstcn2-auto-roi-v4-aug-tscale.yaml`](../framework/experiments/mstcn2-auto-roi-v4-aug-tscale.yaml) | 上条的**时间轴节奏**版：`augmentation.temporal_scale`（`max_rate: 0.15`），其余逐项一致 | 第 13 轮**帧率/动作速度抖动**对照（特征线性插值 + 标签最近邻同步重采样）。用于分离「尺度」与「节奏」两类批次差异的贡献；实测见同目录报告。 |
 | [`framework/experiments/mstcn2-auto-roi-v4-aug-both.yaml`](../framework/experiments/mstcn2-auto-roi-v4-aug-both.yaml) | 上两条**叠加**（jitter 0.15 + temporal_scale 0.15） | 两项同时启用，检验扰动是否可加；实测见同目录报告。 |
+| [`framework/experiments/mstcn2-auto-roi-v4-v41.yaml`](../framework/experiments/mstcn2-auto-roi-v4-v41.yaml) | **v4.1 数据的旗舰基线**：`mstcn2` h128/s4l10、128 维 `actionmixed-roi-grid-v4`、`dataset_ref: temporal.actionmixed-auto-roi-v4-v41`、`num_classes: 6`、60 轮 / lr 5e-4 / wd 1e-4 / grad_clip 5.0 / `best_metric=val_edit` / `patience: null` | 数据集换代（v4.1：15fps + 标签时间轴 ×1.25 + train 28 / val 7 / test 8）后的**旗舰重训基线**；配方与 `runs/acc-push/acc-roiv4/h128` 逐项一致，**唯一变量是数据版本**。**必须用本配置切数据**——旧配置的 ref 指向已被覆盖的 v3 数据，`load_config` 阶段即被数据门禁拒绝，`-S data.dataset_ref=…` 来不及生效（见 `docs/weeks/2026-10-03_2026-10-09/V41_DATA_UPDATE_20261008.md` §5）。 |
+| [`framework/experiments/mstcn2-auto-combo-v2-v41.yaml`](../framework/experiments/mstcn2-auto-combo-v2-v41.yaml) | **拼接契约 v2**：`mstcn2` h128/s4l10、272 维 `actionmixed-combo-v2`（`feature_parts: [192, 40, 40]` = `roi-grid-v5` ‖ 全画面 bbox ‖ 手部区域 bbox）、`dataset_ref: temporal.actionmixed-auto-combo-v2-v41`、`num_classes: 6`，其余配方与 `mstcn2-auto-roi-v4-v41.yaml` **逐项一致**（唯一变量 = 特征契约与 `input_dim`） | v4.1 尺子上"最强 edit 契约（`roi-v5`，edit 69.43）‖ 最强 acc 契约（`bbox-global-hand`，acc 76.27）"的**单模型拼接**候选：检验跨契约互补能否固化进一个主干。8 seed 实测 acc 75.34 / edit 68.64——**落在两个父契约之间，未同时胜出**（vs `roi-v5`：acc +0.81 / edit 中位差 +3.33、p=0.56；vs `global-hand`：edit +7.69、p=0.33、acc −0.93）→ **拼接未证明有协同**（判 <1.5pp 的差异需 ≥16~32 seed），见 `docs/weeks/2026-10-10_2026-10-16/VOTING_AND_COMBO2_20261010.md` §4。 |
+| [`framework/experiments/mstcn2-auto-hand-v2-v41.yaml`](../framework/experiments/mstcn2-auto-hand-v2-v41.yaml) | **手部区域 v2（仅手部 40 维）**：`mstcn2` h128/s4l10、`actionmixed-bbox-hand-8cls-v2`（锚点 = 全部 hand 框并集、扩张 2.0）、`dataset_ref: temporal.actionmixed-auto-hand-v2-v41`，其余与旗舰配置逐项一致 | 源域筛选（train 28 视频、视频级 10 折留出）指出**锚点**是关键变量：同一 40 维 recipe 由"1.5×最大框"的 Δ +6.56 升到"并集锚点"的 **+14.65**（8/2 折，p=0.027）。对照臂 = `runs/v41/feat-hand/h128`（v1）。 |
+| [`framework/experiments/mstcn2-auto-global-hand-v2-v41.yaml`](../framework/experiments/mstcn2-auto-global-hand-v2-v41.yaml) | **手部区域 v2（全局+手部 80 维）**：`actionmixed-bbox-global-hand-8cls-v2`（并集锚点、扩张 **1.5**，即与 v1 **只差锚点**）、`dataset_ref: temporal.actionmixed-auto-global-hand-v2-v41` | v4.1 test acc 冠军契约（76.27）的**单变量锚点对照**：源域上由 +11.64 → **+12.78（10/0 折，p=0.002）**。 |
+| [`framework/experiments/mstcn2-auto-combo-v3-v41.yaml`](../framework/experiments/mstcn2-auto-combo-v3-v41.yaml) | **拼接族 v3**：`mstcn2` h128/s4l10、232 维 `actionmixed-combo-v3`（`feature_parts: [192, 40]` = `roi-grid-v5` ‖ `bbox-hand-8cls-v2`）、`dataset_ref: temporal.actionmixed-auto-combo-v3-v41` | 把唯一能召回 `short_brush_cleaning` 的契约（`roi-v5`，sbc 56.3%）与帧准确率最强的手部并集契约（`hand-v2`，test acc 77.75、**sbc 0**）拼进单模型；先验边界见 `framework/testsets.yaml` 的 combo-v3 条目注释（sbc 的证据缺失是**检测缺失**，不是区域没圈到）。 |
+| [`framework/experiments/mstcn2-auto-combo-v4-v41.yaml`](../framework/experiments/mstcn2-auto-combo-v4-v41.yaml) | **拼接族 v4**：272 维 `actionmixed-combo-v4`（`feature_parts: [192, 40, 40]` = `roi-grid-v5` ‖ 全画面 ‖ `bbox-hand-8cls-v2`）、`dataset_ref: temporal.actionmixed-auto-combo-v4-v41` | 与 round-1 `combo-v2` **同结构同维度**，唯一变量 = 手部段 v1 → v2（并集锚点）——用来验证"锚点收益能否在拼接里保留"。 |
 | [`framework/experiments/gru-actionmixed-auto-hand.yaml`](../framework/experiments/gru-actionmixed-auto-hand.yaml) | GRU、40 维手部区域特征（`actionmixed-bbox-hand-8cls-v1`：只编码面积最大 hand 框扩张 1.5 倍区域内的框，坐标相对区域归一化）、16 帧窗口、`dataset_ref: temporal.actionmixed-auto-hand-v1` | 与 gru-actionmixed-auto.yaml 同模型同超参，仅特征提取范围不同（整个画面 vs 仅手部周围）。 |
 | [`framework/experiments/gru-actionmixed-auto-global-hand.yaml`](../framework/experiments/gru-actionmixed-auto-global-hand.yaml) | GRU、80 维全局+手部双通道（`actionmixed-bbox-global-hand-8cls-v1` = 全局 40 维与手部 40 维拼接）、16 帧窗口、`dataset_ref: temporal.actionmixed-auto-global-hand-v1` | "两个都提取"策略：与"整个画面"/"仅手部"两路横向对比。 |
 | [`framework/experiments/gru-actionmixed-embed.yaml`](../framework/experiments/gru-actionmixed-embed.yaml) | GRU、616 维输入（40 bbox + 576 图像 embedding，`actionmixed-bbox-embed-mbv3s-v1`）、6 类、16 帧窗口、`dataset_ref: temporal.actionmixed-v2-embed-mbv3s-v1`、`model.image_dim: 576` + `model.image_proj_dim: 64`（图像块先线性投影再拼接） | 形态 B（像素特征进时序）E1 实验：与 E0 基线 gru-actionmixed.yaml 同模型同超参，仅特征契约不同；embedding 由 features/extract_embeddings.py 离线预计算，训练侧不依赖图像与 GPU；健康配方由运行命令 -S 注入。 |
@@ -83,6 +89,19 @@ Pipeline 校验并执行。
 | `split_overlap_policy` | `error` 禁止同源跨 split；`frame` 允许同源但禁止具体帧重合；`allow` 关闭重叠门禁。 |
 | `testsets` | split 身份、manifest、用途和可选预期样本。 |
 | `purpose` | 区分训练、训练期验证、开发 benchmark、锁定 holdout 和 schema smoke。 |
+
+> **2026-10-08 数据换代（v4.1）——当前唯一可用的 auto 契约**：上游 auto 数据推进到 v4.1
+> （15fps 重采样 + 标签时间轴 ×1.25 修正 + train 28 / val 7 / test 8），本地把新数据目录改名为
+> `datasets/cleansight-ActionMixed-auto-lhh`（**路径与 v3 各条目相同、内容已换代**）。
+> 该数据的**全部 12 个特征契约**已登记并通过校验（`temporal.actionmixed-auto-v41` 40 维 bbox、
+> `-roi-v1/-v2/-v3/-v4/-v5-v41`、`-roi-presence-v1-v41`、`-roi-delta-v1-v41`、`-hand-v1-v41`、
+> `-global-hand-v1-v41`、`-boxset-v1-v41`、`-combo-v1-v41`；共用 revision `4aa9bf31…` 与
+> manifest `benchmark/manifests/actionmixed-auto-v41/`，条目字段由 catalog 解析器导出以避免手抄错）。
+> v3 / v3.1 时代的 auto 条目因数据被覆盖**无法再通过校验**（`validate_testsets.py` 会显式报
+> 「split 目录存在未登记样本」/「manifest 样本不在 split 目录」，不会静默读到错数据），
+> 其历史 run 转为只读。`water_injection` 在新数据 train/val/test 全 0 正样本（仅隔离区 42 帧），
+> 报数时须标为不适用。详见
+> [`../docs/weeks/2026-10-03_2026-10-09/V41_DATA_UPDATE_20261008.md`](../docs/weeks/2026-10-03_2026-10-09/V41_DATA_UPDATE_20261008.md)。
 
 当前内容登记 ActionMixed 时序 train/val/test（`temporal.actionmixed-v2`，人工标注）、
 自动标注数据通道 `temporal.actionmixed-auto-v3`（YOLO 检测框 + 人工动作标签，2026-08-28

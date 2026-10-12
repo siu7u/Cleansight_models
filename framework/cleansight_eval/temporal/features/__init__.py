@@ -12,6 +12,15 @@ from .hand_bbox import (
     HAND_FEATURE_DIM,
     build_hand_frame_features,
 )
+from .hand_bbox_v2 import (
+    GLOBAL_HAND_V2_DIM,
+    GLOBAL_HAND_V2_EXPAND,
+    GLOBAL_HAND_V2_VERSION,
+    HAND_BBOX_V2_VERSION,
+    HAND_V2_DIM,
+    HAND_V2_EXPAND,
+    build_hand_v2_frame_features,
+)
 from .image_embed import (
     EMBED_BBOX_DIM,
     EMBED_FEAT_DIM,
@@ -53,6 +62,22 @@ from .roi_bbox_v2 import (
     roi_grid_v2_block_dims,
 )
 from .combo import COMBO_DIM, COMBO_VERSION, build_combo_frame_features
+from .combo_v2 import (
+    COMBO_V2_DIM,
+    COMBO_V2_PARTS,
+    COMBO_V2_VERSION,
+    build_combo_v2_frame_features,
+)
+from .combo_v3 import (
+    COMBO_V3_DIM,
+    COMBO_V3_PARTS,
+    COMBO_V3_VERSION,
+    COMBO_V4_DIM,
+    COMBO_V4_PARTS,
+    COMBO_V4_VERSION,
+    build_combo_v3_frame_features,
+    build_combo_v4_frame_features,
+)
 from .boxset import (
     BOXSET_DIM,
     BOXSET_N_SLOTS,

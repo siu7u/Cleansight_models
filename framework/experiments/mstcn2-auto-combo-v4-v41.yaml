@@ -1,0 +1,43 @@
+# v4.1 拼接契约 `actionmixed-combo-v4`（272 维 = roi-grid-v5(192) ‖ 全画面(40) ‖ 手部区域 v2(40)）上的 MS-TCN++（`mstcn2` s4l10 h128）。
+#
+# 立项依据、先验边界与对照口径见 framework/testsets.yaml 的 `temporal.actionmixed-auto-combo-v4-v41` 条目注释；
+# 一句话：把"唯一能召回 sbc 的契约"（roi-grid-v5，sbc 56.3%）与"帧准确率最强的手部并集契约"
+# （hand-v2 acc 77.75 / global-hand-v2 acc 79.15，但 sbc 0 / 28.3）拼进一个主干，
+# 检验能否同时拿到 acc 与 sbc。
+#
+# 配方与 `mstcn2-auto-roi-v4-v41.yaml` **逐项一致**（lr 5e-4 / wd 1e-4 / 60 轮 / grad_clip 5.0 /
+# best_metric=val_edit / 早停关闭 / 同一 seed 集），唯一变量是特征契约与 input_dim。
+
+schema_version: 1
+pipeline: full_sequence_temporal
+
+model:
+  type: mstcn2
+  input_dim: 272
+  num_classes: 6
+  hidden: 128
+  num_stages: 4
+  num_layers: 10
+
+data:
+  dataset_ref: temporal.actionmixed-auto-combo-v4-v41
+  split_train: train
+  split_val: val
+  split_eval: test
+
+feature_schema:
+  dim: 272
+  version: actionmixed-combo-v4
+
+evaluation:
+  mode: formal
+  visualize: true
+  save_predictions: true
+
+train:
+  epochs: 60
+  lr: 0.0005
+  grad_clip: 5.0
+  weight_decay: 0.0001
+  best_metric: val_edit
+  patience: null  # 关闭早停：固定预算下比较，避免大模型被 val_loss 提前截断

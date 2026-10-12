@@ -1,0 +1,44 @@
+# v4.1 手部区域 recipe **v2**（并集锚点）上的 MS-TCN++（`mstcn2` s4l10 h128）。
+#
+# 立项依据与源域筛选读数见 framework/testsets.yaml 的
+# `temporal.actionmixed-auto-global-hand-v2-v41` 条目注释；一句话：把区域锚点从「面积最大的单个 hand 框」改成
+# 「全部 hand 框的并集」后，源域（train 28 视频、视频级 10 折留出）的 Δ 由 +6.56 → +14.65
+# （仅手部 40 维）/ +11.64 → +12.78（全局+手部 80 维，10/0 折）——手部段是 v4.1 上最强的
+# 帧准确率驱动（40 维全画面 69.38 → 80 维全局+手部 76.27）。
+#
+# 配方与 `mstcn2-auto-roi-v4-v41.yaml` **逐项一致**（lr 5e-4 / wd 1e-4 / 60 轮 / grad_clip 5.0 /
+# best_metric=val_edit / 早停关闭 / 同一 seed 集），唯一变量是特征契约与 input_dim。
+
+schema_version: 1
+pipeline: full_sequence_temporal
+
+model:
+  type: mstcn2
+  input_dim: 80
+  num_classes: 6
+  hidden: 128
+  num_stages: 4
+  num_layers: 10
+
+data:
+  dataset_ref: temporal.actionmixed-auto-global-hand-v2-v41
+  split_train: train
+  split_val: val
+  split_eval: test
+
+feature_schema:
+  dim: 80
+  version: actionmixed-bbox-global-hand-8cls-v2
+
+evaluation:
+  mode: formal
+  visualize: true
+  save_predictions: true
+
+train:
+  epochs: 60
+  lr: 0.0005
+  grad_clip: 5.0
+  weight_decay: 0.0001
+  best_metric: val_edit
+  patience: null  # 关闭早停：固定预算下比较，避免大模型被 val_loss 提前截断

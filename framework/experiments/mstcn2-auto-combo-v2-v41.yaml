@@ -1,0 +1,43 @@
+# v4.1 拼接契约 `actionmixed-combo-v2`（272 维）上的 MS-TCN++（`mstcn2` s4l10 h128）。
+#
+# 立项依据与对照口径见 framework/testsets.yaml 的 `temporal.actionmixed-auto-combo-v2-v41`
+# 条目注释；一句话：v4.1 尺子上 edit 最高的 `roi-grid-v5`（192 维）‖ acc 最高的
+# `bbox-global-hand`（80 维），把一个主干同时喂两段特征，检验"跨契约互补"能否**固化进单模型**。
+#
+# 配方与 `mstcn2-auto-roi-v4-v41.yaml` **逐项一致**（lr 5e-4 / wd 1e-4 / 60 轮 / grad_clip 5.0 /
+# best_metric=val_edit / 早停关闭 / 同一 seed 集），唯一变量是特征契约与 input_dim，
+# 因此与本批次其它契约臂（roi-v5 / global-hand）构成配对对照。
+
+schema_version: 1
+pipeline: full_sequence_temporal
+
+model:
+  type: mstcn2
+  input_dim: 272
+  num_classes: 6
+  hidden: 128
+  num_stages: 4
+  num_layers: 10
+
+data:
+  dataset_ref: temporal.actionmixed-auto-combo-v2-v41  # v4.1 数据 + combo-v2 契约（272 维）
+  split_train: train
+  split_val: val
+  split_eval: test
+
+feature_schema:
+  dim: 272
+  version: actionmixed-combo-v2
+
+evaluation:
+  mode: formal
+  visualize: true
+  save_predictions: true
+
+train:
+  epochs: 60
+  lr: 0.0005
+  grad_clip: 5.0
+  weight_decay: 0.0001
+  best_metric: val_edit
+  patience: null  # 关闭早停：固定预算下比较，避免大模型被 val_loss 提前截断
