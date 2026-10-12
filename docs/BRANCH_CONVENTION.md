@@ -42,7 +42,57 @@
 
 - 需要长期存活的分支（如发布线）应在文档中登记**用途与合并计划**，不允许"挂机无人管"。
 
-## 现状速查（2026-08-05）
+## 2026-10-12 收口（已执行）
+
+「臃肿」的实际形态不是分支多，而是**一条长命分支把多个主题叠了十万行**：`feat/roi-training`
+领先 master **62 个提交 / 308 文件 / 102,121 插入**，且 `behind = 0`（master 是它的严格祖先）。
+处置如下，**未改写任何已推送历史**。
+
+### 1. 先把混合的工作区按主题拆开（7 个提交）
+
+工作区里当时混着 6 个互不相关的主题（数据换代 / presence 回归修复 / 新契约 / 可视化工具 /
+分析探针 / 周报），先拆成单一主题提交，再谈分支：
+
+| 提交 | 主题 |
+|---|---|
+| `feat(data)`: 登记 v4.1 数据换代 | catalog + 下载器 + 配套测试 + 旗舰配置 |
+| `fix(temporal)`: 修复 presence 契约加载分派被顶掉 | 1 处分支修复 + 1 条回归用例 |
+| `docs(features)`: 修正 roi-grid-v5 docstring | 纯文档（128 → 192 维） |
+| `feat(features)`: 新增 hand-v2 与 combo-v2/v3/v4 | 契约 + 配置 + catalog + YAML 索引 |
+| `feat(tools)`: 预览视频配色对齐色带图 | 可视化工具 + skill 渲染约定 |
+| `feat(tools)`: 新增四个只读分析探针 | 复评隔离 / 投票 / 手部区域筛选 / 段复核 |
+| `docs(weekly)`: 补齐两周简报与模型总览 | 周报 + 状态文档 |
+
+### 2. master 收口（fast-forward，不改写历史）
+
+master `a6f4ec4` → `3a9e671`：两者是严格祖先关系，直接 `update-ref` 快进，
+**不产生 merge 提交、不改写任何历史**。`feat/roi-training` 随即删除（内容 100% 已在 master）。
+
+### 3. 分支清理
+
+先给**有独有提交**的分支打 `archive/*` tag（无损）再删分支，避免"清理"变成"删代码"：
+
+| 原分支 | 独有提交 | 处置 |
+|---|---:|---|
+| `feat/roi-training` | 0（已全在 master） | 删除 |
+| `feat/yolo-optimize` | 0 | 删除 |
+| `feat/actionmixed-v3` | 0 | 删除 |
+| `feat/auto-annotate` | 0 | 删除 |
+| `refact/train` | 17 | **`archive/refact-train`** tag，删分支 |
+| `feat/eval-frame` | 29 | **`archive/feat-eval-frame`** tag，删分支 |
+| `feat/yolo-optimize-gl` | 2 | **`archive/feat-yolo-optimize-gl`** tag，删分支 |
+
+`lhh/develop` 保留（他人工作线，不由本仓库清理）。**远程分支未动**——删远程是对团队可见的
+动作，需人工确认后另行执行；本地 `archive/*` tag 与 `origin/*` 两处都可取回。
+
+### 4. 新工作各开一条小分支
+
+| 分支 | 主题 | 状态 |
+|---|---|---|
+| `feat/yolo-brush-detect` | 链路检测侧：刷类证据为何到不了时序 | 分析已入（见 [`weeks/2026-10-10_2026-10-16/YOLO_DETECTION_SIDE_20261012.md`](weeks/2026-10-10_2026-10-16/YOLO_DETECTION_SIDE_20261012.md)）；重训进行中 |
+| `feat/temporal-sbc` | 时序侧提升 | 待开 |
+
+## 现状速查（2026-08-05，历史记录）
 
 | 分支 | 状态 | 处置 |
 |---|---|---|
