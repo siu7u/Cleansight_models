@@ -112,3 +112,32 @@ item: prediction_start_frame / num_predictions /
 **本轮结论汇总**：① 门槛机制已合成验证（§1，精确上限）；② 它确实与 `sbc` 的段长冲突（§2）；
 ③ 6 个在线臂全走默认 25、从未扫过（§3）；④ **无法离线扫，须重跑推理**；若要做，
 先在产物里存逐帧候选更划算（§5）。
+
+
+## 6. 落地路径的摸底（2026-10-12 补）：现有入口**都不支持配置覆盖**
+
+要把这个门槛真正扫起来，需要"用同一份 checkpoint、只改一个 `evaluation` 字段"重跑推理。
+查了两个入口，**都没有覆盖能力**：
+
+- `benchmark/cli/eval.py`：只有 `--config` / `--checkpoint`(见 `add_argument`) / `--out-dir`，
+  **没有 `-S key=value` 之类的覆盖**；
+- `tools/eval_runs_on_split.py`：调用的是
+  `python -m benchmark.cli.eval --config <config> ...`，**不转发任何覆盖参数**。
+
+因此这一步必须**手工搭一次**，且必须绕开一个已知事故（见周简报 2026-10-11 事故记录：
+**评估器会把报告与预测产物写回 checkpoint 所在目录**）：
+
+1. 取该 arm 的 `config.resolved.json`，复制到 `tmp/` 下并改写
+   `evaluation.smoothing_min_duration`；
+2. 把 `best.pt` **硬链接**到同一个 `tmp/` run 目录（隔离，原 run 不受污染）；
+3. `python -m benchmark.cli.eval --config <tmp config> --split val --out-dir <tmp out>`；
+4. 对每个候选门槛重复，然后按 val 选参、test 上报。
+
+**为什么本轮不执行**：三条都要写对（config 字段名、checkpoint 隔离、out-dir），
+而本机 GPU 还被 YOLO 全量训练占着；在余量不足时硬上，很容易重演"污染 run 目录"那类事故。
+故本轮把路径登记清楚，交给有充裕工作空间的一轮执行。
+
+**顺带一条改进建议（与工具层的归属有关）**：给"重跑评测"的入口加**受控的配置覆盖**
+（如 `--set evaluation.smoothing_min_duration=15`）比每次手搭 tmp run 更安全，
+且覆盖语义应当落在**拥有评测编排的那一层**，而不是让 `tools/` 的包装脚本各自发明一套
+（参见 `architecture-boundaries` 的 thin-wrapper 规则）。
