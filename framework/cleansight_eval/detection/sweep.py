@@ -50,6 +50,24 @@ PRESETS: Dict[str, dict] = {
     # 为什么不用 large_m_960_lowmem：实测本机 yolo11m@960 只有 **1.83 it/s**
     # （5382 iter/epoch ⇒ 约 49 min/epoch），200 轮 ≈ 163 小时，在本机不具可行性。
     # group1 此前只有 1~15 轮的截断 run，先把**全量数据的可完成基线**跑出来，再按读数决定是否上容量。
+    # 容量对照（2026-10-12 立项）：与 large_baseline_lowmem 逐项一致，**唯一变量 = 模型 n→s**。
+    # 动机：group1 两个 scope 类（control_body / mid_section）召回 46.9 / 26.8，而数据侧解释
+    # （目标尺寸、类间混淆、样本量、标注重叠）已逐一用本机数据排除（见 docs/weeks/
+    # 2026-10-10_2026-10-16/YOLO_GROUP1_FULL_20261012.md §8–§11）⇒ 下一个未检验变量是**容量**，
+    # 且此前所有 run 用的都是最小的 yolo11n、更大模型从未在全量数据上试过。
+    "large_s_lowmem": {
+        "description": "large 组容量对照: yolo11s, imgsz 640, 默认增强, 低内存(workers=2)",
+        "model": "yolo11s.pt",
+        "imgsz": 640,
+        "epochs": 150,
+        "batch": 16,
+        "patience": 30,
+        "augment": "default",
+        "label_smoothing": 0.0,
+        "cos_lr": False,
+        "close_mosaic": 10,
+        "workers": 2,
+    },
     "large_baseline_lowmem": {
         "description": "large 组基线: yolo11n, imgsz 640, 默认增强, 低内存(workers=2)",
         "model": "yolo11n.pt",
