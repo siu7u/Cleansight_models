@@ -353,3 +353,46 @@ evaluate 口径分叉"的要求——两处可以共用同一份解码设置。
 
 这样第 1 步就已经让这条增益**可验证、可在评测链路里复现**（从"不可部署"变成"可验证"），
 而不必等第 2 步的 schema 改动。
+
+
+## 13. 第一次接线尝试：**失败并已回退**（2026-10-12，如实记录）
+
+按 §12 的第 1 步动手接线（两处签名加可选参数 + 两个解码点换成 `_decode` + 两个调用点传
+`_decode_cfg(cfg)` + helper + import），**编译通过、单元级检查全过**：
+
+| 单元级检查 | 结果 |
+|---|---|
+| 默认路径（`decode_cfg=None`）vs `torch.argmax`，30 组随机 `[1,T,C]` | **不一致 0 组** |
+| 配置 β 后 vs framework 的 `viterbi_decode` | **一致** |
+| 配置解析（缺省→None / 给值 / 缺 `D_c` 报错） | **符合预期** |
+
+**但全量测试从 `6 failed / 520 passed` 变成 `8 failed / 518 passed`**：
+
+```
+FAILED framework/tests/test_mstcn_smoke.py::test_mstcn_end_to_end
+FAILED framework/tests/test_mstcn_smoke.py::test_mstcn2_end_to_end
+E   TypeError: iteration over a 0-d array
+framework/cleansight_eval/temporal/full_sequence_pipeline.py:229
+```
+
+第 229 行是 `pred_by_item = {… for index, video in enumerate(preds)}`——即 **`preds` 里出现了
+0 维数组**，说明 `_decode` 在某条真实路径上返回了标量而非 `[T]` 序列。
+
+**已回退**，回退后全量测试恢复为基线 **6 failed / 520 passed**（已核实）。
+
+### 这次失败的教训（比结论更重要）
+
+**我的单元级检查用的是合成张量 `[1,T,C]`，而真实模型（MS-TCN / MS-TCN++）的输出形状/路径
+并不都一样**——`_evaluate_full_sequence` 里还有 `compute_loss` 分支与不同 head 的返回差异。
+所以"合成输入上等价"**不能**推出"在真实管线里等价"。
+
+**下一次尝试必须先做的事**：
+
+1. **先打印真实 logits 的形状**（至少 MS-TCN / MS-TCN++ / Transformer 三种 head）再动手，
+   不要假设都是 `[1,T,C]`；
+2. **把 MS-TCN 的 smoke 用例作为接线的前置验证**（`framework/tests/test_mstcn_smoke.py`），
+   它正是这次抓到问题的那两条；
+3. 单元级检查要**覆盖真实模型的输出**，而不是只覆盖合成张量——否则只是把"我以为"换了个地方写。
+
+**当前状态：接线未完成**，`full_sequence_pipeline.py` 与仓库均回到接线前的状态。
+§12 的两步方案仍然成立，只是第 1 步需要先补上第 1 条前置调查。
