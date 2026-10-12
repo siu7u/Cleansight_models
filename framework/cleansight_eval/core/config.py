@@ -87,6 +87,9 @@ KNOWN_SECTION_KEYS = {
         "mode", "testset_id", "save_predictions", "measure_latency", "latency_warmup",
         "latency_runs", "limits", "conf", "iou", "max_det", "agnostic_nms",
         "visualize", "viz_per_page", "smoothing_min_duration",
+        # 离线软时长惩罚解码（Viterbi）：β 与每类最短时长 D_c（见
+        # docs/weeks/2026-10-10_2026-10-16/TEMPORAL_SOFTDUR_20261012.md）
+        "duration_soft_strength", "duration_min_frames",
     },
     "train": {
         "epochs", "lr", "batch", "batch_size", "patience", "window", "grad_clip",
@@ -129,6 +132,9 @@ PIPELINE_DEFAULTS = {
         "evaluation.visualize": False,
     },
     "full_sequence_temporal": {
+        # 离线软时长惩罚解码的缺省：β=0 ⇒ 不施加，与历史逐帧 argmax 完全一致
+        "evaluation.duration_soft_strength": 0.0,
+        "evaluation.duration_min_frames": [],
         "evaluation.mode": "formal",
         "evaluation.save_predictions": True,
         "evaluation.visualize": True,
