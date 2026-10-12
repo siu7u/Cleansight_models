@@ -230,3 +230,47 @@ val 上扫得：
 
 至此四个契约的覆盖情况：`combo-v3`(16 seed) / `hand-v2`(16) / `global-hand-v2`(16) 三个有
 可交付 β；`roi-v5`(8 seed) 方向一致但样本不足。
+
+
+## 10. 落地计划：把软时长惩罚从探针提到推理链路（2026-10-12 摸底，**尚未实施**）
+
+§0–§7 已把这条增益验证清楚（3 个契约各有可用 β，16 seed 配对、两 split 显著为正），
+但它**目前只在 `tools/probe_constrained_decoding.py`（探针）里**——探针只读产物、不改推理，
+**所以这条增益现在不可部署**。本节把落地位置查清楚。
+
+### 10.1 改动点（已按源码定位）
+
+| 位置 | 现状 | 要改什么 |
+|---|---|---|
+| `framework/cleansight_eval/temporal/full_sequence_pipeline.py` **L147 / L181** | 两处 `torch.argmax(logits[0], dim=-1)`——现行离线解码（零平滑） | 换成带软时长惩罚的 Viterbi 解码；两处都要改，否则 `predict` 与 `evaluate` 口径会分叉 |
+| `framework/cleansight_eval/core/config.py` **L89**（`evaluation` 允许键集合）、**L111–114**（默认值） | 已有 `smoothing_min_duration`（在线侧用） | 加 `duration_soft_strength`（β）与 `duration_quantile`（默认 0.10） |
+| `framework/cleansight_eval/temporal/sliding_window_pipeline.py` **L62 / L434 / L464** | 在线侧用 `causal_decision(min_duration=25)` | **本计划不动在线侧**（在线已有 §10 之外的那条门槛杠杆） |
+
+### 10.2 唯一需要设计决策的地方：`D_c` 从哪来
+
+软惩罚的强度是 `β·max(0, D_c − d)`，而 `D_c` = **train 真值**段时长的 q0.10 分位。
+探针在读产物时顺手 `load_split(train)` 就能算，但**推理链路里没有 train 标签**。两条路：
+
+- **(a) 评测时现算**：在 pipeline 里额外加载 train split 的标签估 `D_c`。
+  改动小，但给推理引入"训练集必须就在那儿"的依赖 —— **部署时不可接受**（交付环境不该带 train 标签）。
+- **(b) 训练时算好、写进 checkpoint meta**（**推荐**）：`D_c` 是**训练集的属性**，
+  与权重同为模型产物的一部分，理应随 checkpoint 落盘；推理只读 meta。
+  这样解码器自洽、可部署，且 `D_c` 与权重版本天然绑定（换数据换权重时它自动跟着变）。
+
+**建议取 (b)**，并在 `pin.yaml` 里登记 `duration_quantile` 与 `D_c`（按 skill 的注册表要求：
+改变特征映射/阈值属新版本，需可复现）。
+
+### 10.3 验收判据（照探针里已经用过的那些）
+
+1. **β=0 必须逐帧等价于现行 argmax**——这是判别性断言（探针里 `tests/test_probe_constrained_decoding.py`
+   已有一条同型用例，且已做过对抗性复核：还原 bug 后该用例会红）。**落地时必须先过这条**，
+   否则等于在未察觉的情况下改了全部历史读数。
+2. 在 `combo-v3` / `hand-v2` / `global-hand-v2` 三个契约上，用**同一 seed 集**复现 §2/§7 的 β 增益
+   （val 选 β、test 上报），且 `acc` 与 `edit` 的配对结论与探针一致。
+3. 落盘 meta 后跑一次"换机器/无 train 标签"的评测，确认解码仍可用（验证 (b) 的部署性）。
+
+### 10.4 为什么本轮不做
+
+改动跨 3 个文件 + 需要动 checkpoint meta 的 schema（属中等改动），且本机 GPU 正被 YOLO 全量训练
+占用、我的工作余量也不足以稳妥完成。**故本轮只把位置、决策与验收判据查清写定**，
+交给余量充足时执行——避免在"赶"的状态下动推理链路（那会影响**所有**历史读数）。
