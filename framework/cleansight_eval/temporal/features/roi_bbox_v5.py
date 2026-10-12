@@ -1,6 +1,19 @@
-"""ActionMixed bbox 帧 → **通道语义替换**版 ROI 特征（actionmixed-roi-grid-v5，128 维）。
+"""ActionMixed bbox 帧 → **通道语义替换 + 格内亚格位置**版 ROI 特征（actionmixed-roi-grid-v5，192 维）。
 
-**立项依据（2026-09-29 第 6 轮源域实测）**：第 5 轮发现现行 v2 的 `presence` 通道
+**本版相对 v4 的单一变量**：在 v4 的每区域 4 通道 `[count, max_area, w, h]` 之上追加
+**最大面积框在格内的相对位置** `dx, dy`（以格中心为原点、−0.5~0.5），即每区域 6 通道。
+动机：`dx/dy` 把网格**丢掉的亚格位置**补回来，且**不增加格子数** —— 绕开"4×4（v3）因每格
+过小而统计退化"的问题（v3 实测 −4.62pp）。依据见 `docs/features/INPUT_DESIGN_PROPOSAL.md`
+与 `docs/FEATURE_STRATEGY_COMPARE.md` 第 7 轮源域筛选。
+
+**布局**：高频 3 类（hand / scope_control_body / scope_mid_section）3×3 网格（9 区域），
+低频 5 类全局 1 区域；每类块宽 = 区域数 × 6。共 3×(9×6) + 5×(1×6) = **192 维**。
+因果、无状态、逐帧独立，空帧全零；`mask_target_ids` 语义同前几版。
+
+> 下列立项依据与筛选中表沿自 v4（通道语义替换：把 v2 冗余的 `presence` 槽位换成 `w,h`），
+> 是 v5 所继承的**上一代**依据，保留以便溯源；其中"`count,max_area,w,h`（本版）"指 v4。
+
+**立项依据（2026-09-29 第 6 轮源域实测，v4 的先导）**：第 5 轮发现 v2 的 `presence` 通道
 **完全冗余**（`presence ≡ count>0`：`2ch(count+max_area)` 与 `3ch` 的逐折 Δ 完全相同），
 `max_area` 不可省（去掉 −2.63pp）。也就是说每个区域的**有效信息只有 2 个数**，
 第三、四个通道槽位应当放**新信息**，而不是继续放冗余量。
@@ -9,21 +22,14 @@
 
 | 通道组合 | 维度 | Δ 中位 | 配对 vs `p,c,a` | p |
 |---|---:|---:|---|---:|
-| **`count,max_area,w,h`（本版）** | **128** | **−2.53** | **+0.82pp，8/2 胜** | **0.084** |
+| **`count,max_area,w,h`（v4 本版）** | **128** | **−2.53** | **+0.82pp，8/2 胜** | **0.084** |
 | `count,max_area,mean_area,dx,dy` | 160 | −2.45 | +0.83pp，6/4 | 0.432 |
 | `count,max_area,mean_area` | 96 | −2.87 | +0.53pp，7/3 | 0.131 |
 | `count,max_area,sum_area` | 96 | −3.29 | +0.35pp，7/2 | 0.055 |
-| `p,c,a`（现行 v2，参考） | 96 | −3.40 | — | — |
+| `p,c,a`（v2 参考） | 96 | −3.40 | — | — |
 | `c,a`（去掉冗余 presence） | 64 | −3.40 | ±0.00（逐折相同） | — |
 
-**本版相对 v2 的单一变量**：把冗余的 `presence` 槽位换成**最大面积框的宽、高**（`w`、`h`）
-——`max_area = w×h` 丢了**形状/长宽比**，而器械的长宽比是有判别力的（细长的内镜 vs 方正的刷子）。
-
-**布局与 v2 逐项一致**：高频 3 类（hand / scope_control_body / scope_mid_section）3×3 网格
-（9 区域），低频 5 类全局 1 区域；每类块宽 = 区域数 × 4。共 3×(9×4) + 5×(1×4) = **128 维**。
-因果、无状态、逐帧独立，空帧全零；`mask_target_ids` 语义同前几版。
-
-**块宽不等**（高频 36 / 低频 4），遮罩必须用 :func:`roi_grid_v5_block_dims` 的显式块宽切片。
+**块宽不等**（高频 54 / 低频 6），遮罩必须用 :func:`roi_grid_v5_block_dims` 的显式块宽切片。
 """
 
 from __future__ import annotations
@@ -51,7 +57,7 @@ ROI_GRID_V5_DIM = (
 
 
 def roi_grid_v5_block_dims(n_classes: int = ROI_GRID_V5_N_CLASSES) -> list[int]:
-    """返回每类特征块宽（高频类 36 / 低频类 4），供遮罩按类精确切片。"""
+    """返回每类特征块宽（高频类 54 / 低频类 6），供遮罩按类精确切片。"""
 
     if n_classes != ROI_GRID_V5_N_CLASSES:
         raise ValueError(
