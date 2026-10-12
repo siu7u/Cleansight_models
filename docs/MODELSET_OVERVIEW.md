@@ -7,6 +7,29 @@
 
 > **最新状态（2026-09-24 更新）**
 >
+> - **2026-10-10~11 v4.1 准确率攻关（4 轮，离线与在线两条轨都拿到验证过的增益）**：
+>   离线单模型 **test acc 64.91 → 79.15**（`actionmixed-bbox-global-hand-8cls-v2`，80 维）、
+>   **edit 62.64 → 70.41**（`actionmixed-combo-v3`，232 维 = `roi-grid-v5` ‖ `bbox-hand-8cls-v2`）；
+>   在线（滑窗因果）**acc 58.82 → 64.06、edit 49.35 → 55.20**（换契约 + 固定预算取末轮）。
+>   三条杠杆：① 手部区域锚点由"面积最大的 hand 框"改为"**全部 hand 框并集**"（单变量；
+>   test 段级 f1@0.1/0.25/0.5 配对 p=0.017/0.011/0.0006）；② 两段拼接把 `sbc` 召回从 0 补到 50.4；
+>   ③ 多成员投票（`combo-v3` 16 成员投票 test 80.10/73.40、val 79.93/78.78）。
+>   逐项读数、边界与复现见 [`weeks/2026-10-10_2026-10-16/README.md`](weeks/2026-10-10_2026-10-16/README.md)。
+>   **待定**：v4.1 旗舰契约尚未切换（只要 acc 选 80 维 `global-hand-v2`，要 `sbc`/edit 选 232 维
+>   `combo-v3`），故 `mstcn2-auto-roi-v4-v41.yaml` 仍是仓库默认。
+> - **2026-10-08 数据换代（v4.1）**：auto 数据推进到 v4.1（15fps 重采样 + **标签时间轴 ×1.25
+>   修正** + train 28 / val 7 / test 8），本地把新数据目录改名为
+>   `datasets/cleansight-ActionMixed-auto-lhh`（路径同 v3、内容已换代）。因此**下文与各处引用的
+>   时序读数全部是旧 v3 口径，与 v4.1 不可比**，auto 链 14 个配置均需重训；检测侧逐坐标未变，
+>   YOLO 不受影响。新契约 `temporal.actionmixed-auto-roi-v4-v41` 与旗舰基线配置
+>   `framework/experiments/mstcn2-auto-roi-v4-v41.yaml` 已就绪，详见
+>   [`weeks/2026-10-03_2026-10-09/V41_DATA_UPDATE_20261008.md`](weeks/2026-10-03_2026-10-09/V41_DATA_UPDATE_20261008.md)。
+> - **2026-10-09 v4.1 全量重训完成（20 臂 × 8 seed，正式评测）**：特征轴 acc 64.91~**76.27**、
+>   架构轴 33.75~66.37、在线轨 50.45~55.45。两个必须知道的结论：① **特征契约排名不随数据口径
+>   迁移**（新旧尺子 Spearman ρ=−0.149，v3 冠军 roi-v4 在 v4.1 上垫底）；② **val_edit 选点在部分
+>   臂上反噬**（transformer 的 best 比 last 低 17.12pp）。逐臂表/逐类召回/YOLO 复评见
+>   [`weeks/2026-10-03_2026-10-09/TOPIC §7`](weeks/2026-10-03_2026-10-09/V41_DATA_UPDATE_20261008.md)
+>   与 `runs/v41/SUMMARY_ALL_ARMS.md`。**下文 §4/§8 的配置与指标均为 v3 口径历史记录。**
 > - **当前最佳时序配方**：`mstcn2` `s4l10 h128`（331 万参）+ `roi-grid-144`(z-score)，
 >   lr 5e-4 / 60 轮 / `dropout 0.3` / T-MSE 0.15 / clip 0.1，
 >   **`best_metric = val_edit`** → edit 中位 **51.08**、F1@0.1 40.01、acc 53.98（8 seed）；
@@ -100,6 +123,7 @@ export MPLCONFIGDIR=/tmp/matplotlib
 | MS-TCN | `framework/experiments/mstcn-actionmixed.yaml` | `full_sequence_temporal` |
 | MS-TCN（ROI 空间特征） | `framework/experiments/mstcn-actionmixed-auto-roi.yaml` | `full_sequence_temporal` |
 | MS-TCN++ | `framework/experiments/mstcn2-actionmixed.yaml` | `full_sequence_temporal` |
+| MS-TCN++（**v4.1 旗舰基线**，128 维 roi-grid-v4） | `framework/experiments/mstcn2-auto-roi-v4-v41.yaml` | `full_sequence_temporal` |
 | Transformer | `framework/experiments/transformer-actionmixed.yaml` | `full_sequence_temporal` |
 | Transformer（ROI 空间特征） | `framework/experiments/transformer-actionmixed-auto-roi.yaml` | `full_sequence_temporal` |
 | 历史 GRU v1 | `framework/experiments/legacy-gru-v1.yaml` | `sliding_window_temporal` |
