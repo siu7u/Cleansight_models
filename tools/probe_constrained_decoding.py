@@ -115,117 +115,12 @@ def estimate_priors(truths: list, num_classes: int, quantile: float):
     return log_transition, min_duration
 
 
-def viterbi_decode(logits: np.ndarray, log_transition: np.ndarray, min_duration: np.ndarray,
-                   transition_strength: float, hard_duration: bool,
-                   soft_duration_strength: float = 0.0,
-                   max_state_duration: int = 64) -> np.ndarray:
-    """带**最短时长约束**（硬约束或软惩罚，可选转移先验）的 Viterbi 解码，返回 ``[T]`` 标签序列。
-
-    状态为 ``(类别 c, 当前段已持续帧数 d)``，``d`` 在 ``D_c = min_duration[c]`` 处饱和
-    （更长的 ``d`` 在代价上等价，故截断到 ``max_state_duration`` 控制状态数）。递推：
-
-        留在 c   : (c, d) → (c, min(d+1, D_c))          代价 0
-        切到 c'  : (c, d) → (c', 1)                     代价 α·log A[c, c'] + 时长罚
-
-    ``D_c`` 由 **train** 真值段时长的低分位估计。**离开类 c 的时长代价有三种模式**：
-
-    - ``hard_duration=True``：``d < D_c`` 时**禁止**切走（代价 −∞）——这是本工具原默认，
-      论文（CAD, ICPR 2026 / arXiv 2605.10149）的消融里硬约束优于软惩罚（77.9 vs 74.6）；
-    - ``hard_duration=False`` 且 ``soft_duration_strength > 0``：按**缺口线性惩罚**
-      ``β·max(0, D_c − d)``，仍允许提前切走，只是要付代价；
-    - ``hard_duration=False`` 且 ``soft_duration_strength == 0``：不加任何时长代价。
-
-    > **为什么必须有软惩罚这条分支（2026-10-12 实测）**：论文结论是在**旧旗舰**
-    （`roi-grid-144`，真值段内非 idle 帧比例中位仅 **1.4%**）上得出的——那时模型几乎不出段，
-    硬逼"段至少持续 N 帧"是净收益。在 `combo-v3` 上段覆盖率已到 **75.6%**，同一硬约束
-    **灾难性失败**：16/16 run 变差、edit 75.78 → 5.70（val）、段数比塌到 0.04、除 idle 外
-    逐类召回全 0（整条序列塌成 idle）。**硬约束治的病灶已被手部锚点 v2 修掉**，
-    于是只剩副作用；软惩罚是"要约束但仍允许偏离"的中间形态。
-
-    ``α = 0`` 且不加任何时长代价时本函数逐帧等价于 argmax（由
-    ``tests/test_probe_constrained_decoding.py`` 固定）。
-    """
-
-    from scipy.special import log_softmax
-
-    t_len, num_classes = logits.shape
-    logp = log_softmax(logits.astype(np.float64), axis=1)
-    # 约束不得长于视频本身：否则任何路径都不可行。
-    D = np.clip(np.round(min_duration).astype(int), 1, max(1, min(max_state_duration, t_len - 1 or 1)))
-    states_per_class = int(D.max())
-
-    switch = transition_strength * log_transition.astype(np.float64).copy()
-    np.fill_diagonal(switch, -np.inf)
-
-    # 允许"离开类 c"的最小已持续帧数（d 的下标 = d−1）。硬约束：d ≥ D_c 才可切走。
-    leave_allowed = np.stack(
-        [np.arange(1, states_per_class + 1) >= D[c] for c in range(num_classes)]
-    )  # [C, S]
-    # 软惩罚用的"时长缺口"：状态下标 s 对应 d = s+1，缺口 = max(0, D_c − d)。
-    duration_deficit = np.maximum(
-        0.0, D[:, None] - (np.arange(states_per_class) + 1)[None, :]
-    )  # [C, S]
-
-    scores = np.full((num_classes, states_per_class), -np.inf, dtype=np.float64)
-    scores[:, 0] = logp[0]
-    back_c = np.zeros((t_len, num_classes, states_per_class), dtype=np.int16)
-    back_d = np.zeros((t_len, num_classes, states_per_class), dtype=np.int16)
-
-    for t in range(1, t_len):
-        # 留在原类：d → d+1，在饱和点保持。
-        stay = np.full((num_classes, states_per_class), -np.inf, dtype=np.float64)
-        stay[:, 1:] = scores[:, :-1]
-        stay[:, states_per_class - 1] = np.maximum(stay[:, states_per_class - 1],
-                                                   scores[:, states_per_class - 1])
-        stay_src_c = np.tile(np.arange(num_classes)[:, None], (1, states_per_class))
-        # **回溯指针**：`stay[:, 1:] = scores[:, :-1]` 意味着 t 时刻的 (c,s) 来自 t−1 的 (c,s−1)，
-        # 故前驱下标是 s−1（在 0 处夹住）。2026-10-12 修复：原先写 min(s+1, S−1)（前向邻居），
-        # 方向反了；S=1（D 全为 1）时两者都夹到 0，bug 不可见——`--no-duration` 自检路径测不到。
-        stay_src_d = np.maximum(np.arange(states_per_class) - 1, 0)
-        stay_src_d = np.tile(stay_src_d[None, :], (num_classes, 1))
-        # **饱和态 S−1 有两个来源**：来自 S−2，或自环（上一帧已在 S−1）。
-        # `stay[:, S-1] = max(scores[:, S-2], scores[:, S-1])` 只记一个指针就会在"自环胜出"时
-        # 错误地往回走一格，从而凭空造出该类的额外帧、把标签序列整体错位——D>1 时必然踩到。
-        if states_per_class > 1:
-            from_prev = scores[:, states_per_class - 2] >= scores[:, states_per_class - 1]
-            stay_src_d[:, states_per_class - 1] = np.where(
-                from_prev, states_per_class - 2, states_per_class - 1)
-
-        # 切进 c'：源状态的时长代价按模式施加（硬掩码 / 软惩罚 / 无）。
-        if hard_duration:
-            usable = np.where(leave_allowed, scores, -np.inf)
-        elif soft_duration_strength > 0:
-            usable = scores - soft_duration_strength * duration_deficit
-        else:
-            usable = scores
-        best_d = np.argmax(usable, axis=1)                     # [C]
-        best_val = usable[np.arange(num_classes), best_d]      # [C]
-        switch_scores = best_val[:, None] + switch             # [K, C']
-        src_of_target = np.argmax(switch_scores, axis=0)       # [C']
-        switch_val = switch_scores[src_of_target, np.arange(num_classes)]
-
-        take_switch = switch_val > stay[:, 0]
-        new_scores = stay.copy()
-        new_scores[:, 0] = np.where(take_switch, switch_val, stay[:, 0])
-        back_c[t] = stay_src_c
-        back_d[t] = stay_src_d
-        for c_prime in range(num_classes):
-            if take_switch[c_prime]:
-                back_c[t, c_prime, 0] = src_of_target[c_prime]
-                back_d[t, c_prime, 0] = best_d[src_of_target[c_prime]]
-        scores = new_scores + logp[t][:, None]
-
-    labels = np.zeros(t_len, dtype=np.int64)
-    flat = int(np.argmax(scores))
-    c, d = divmod(flat, states_per_class)
-    labels[-1] = c
-    for t in range(t_len - 1, 0, -1):
-        prev_c = int(back_c[t, c, d])
-        prev_d = int(back_d[t, c, d])
-        labels[t - 1] = prev_c
-        c, d = prev_c, prev_d
-    return labels
-
+# 实现已迁入 framework（归属推理链路的层），此处**只做再导出**，避免两份实现漂移；
+# 探针自身的用例仍按 tools.probe_constrained_decoding.viterbi_decode 引用，故名字保留。
+from framework.cleansight_eval.temporal.util import (  # noqa: E402,F401
+    estimate_min_duration,
+    viterbi_decode,
+)
 
 def segment_coverage(truth: np.ndarray, pred: np.ndarray) -> list[float]:
     """真值动作段（非 idle 极大连续段）内被预测为任一非 idle 类的帧比例列表。"""
