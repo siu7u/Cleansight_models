@@ -17,7 +17,9 @@
 | **`sbc` 输入侧定论**（还能不能补） | ✅ 完成（**否**） | `sbc` 与 `idle` 在手部区域里的静态构成**几乎逐项相同**（框数 3.0 vs 3.0、类别数 2.0 vs 2.0、区域面积 0.205 vs 0.244），运动幅度也不具区分性（0.0069，介于 flush 0.0030 与 idle 0.0097 之间）→ **不是特征没取对，是输入里没有可分的判别信号**；要动它只能靠长时上下文 |
 | **投票协议在新契约上重测** | ✅ 完成（**是，首次两指标同时为正**） | `combo-v3` 的 16 成员投票在 val 与 test、acc 与 edit **四个格子全为正**（+2.03/+3.00/+2.70/+2.99）→ **test 80.10 / 73.40、val 79.93 / 78.78**；而跨契约投票第四次被否（edit −5.77 / −8.22） |
 | **在线轨换契约**（v2 手部契约） | ✅ 完成（**是**） | 在线轨此前跑的全是**离线最差**契约；换到 `hand-v2`(40) 后 **edit 49.35 → 55.14（配对 +9.40，p=0.0042 显著）**、f1@0.1 +15.02（p=0.0001）；且四个在线臂的 `last.pt` acc **全部**优于 `best.pt`（+1.09~+4.77）→ 交付读数 **acc 64.06 / edit 55.20**（旧最好 58.82/49.35）。**80 维并不更好**（59.84/48.29） |
-| 入库改动 | ✅ | 6 个新契约（combo-v2/v3/v4、hand-v2、global-hand-v2）+ 5 份配置 + 19 条测试 + 3 个分析工具 + 七处文档同步 |
+| **分支收口（10-12）** | ✅ 完成 | 臃肿的真形态是**一条分支叠了多个主题**（`feat/roi-training` 领先 master 62 提交 / 308 文件 / 10.2 万行）。先把混合工作区拆成 **7 个单一主题提交**，再 master **快进**收口，最后清理：4 条直接删、3 条有独有提交的**先打 `archive/*` tag 再删**；本地分支 8 → **4 条**。**未改写任何已推送历史、远程未动** |
+| **检测侧专项（10-12）** | ✅ 分析完成（**重训进行中**） | 刷类证据到不了时序链路，卡在检测侧且是两件事：① 全局 `conf: 0.25` 白扔 10.7pp 的 `short_brush` 召回（test 0.7669 → 0.8738），零训练成本可先吃；② **group2 的 val 刷类标注口径与 train 不一致**（`short_brush` val **4.12×** train 面积中位）→ `short_brush` 召回 val 0.03 vs test 0.92（差 30 倍）→ **val 不能用来判刷类能力或选点**，`EXPERIMENTS` 里 g2 四个预设的 val mAP50 需重判。`brush_tip_out` 全阈值恒 0（被邻近类吸收）。详见 [`YOLO_DETECTION_SIDE_20261012.md`](YOLO_DETECTION_SIDE_20261012.md) |
+| 入库改动 | ✅ | 6 个新契约（combo-v2/v3/v4、hand-v2、global-hand-v2）+ 5 份配置 + 19 条测试 + 3 个分析工具 + 七处文档同步；**10-12 追加** 2 个检测侧探针 + 低内存配方 + 分支收口记录 |
 
 ## 1. 背景（为什么先做这两件事）
 
@@ -255,3 +257,45 @@
 - **在线轨偏好最省的 40 维契约**：离线 acc 冠军的 80 维版本在在线轨上并没有更好。
 - **`val_edit` 选点在在线轨上系统性压低 acc**：四个臂的 `last.pt` acc 全部更高
   （+1.09~+4.77），edit 有正有负 → 交付用"固定 60 轮取末轮"比"val 选点"更稳。
+
+### 2026-10-12 · 分支收口（**未改写任何已推送历史**）
+
+- **成因**：分支并不算多，臃肿的是**一条长命分支叠了多个主题**——`feat/roi-training`
+  领先 master **62 提交 / 308 文件 / 102,121 插入**，而 `behind = 0`（master 是它的严格祖先）。
+- **两步走**：① 先把未入库的混合工作区按主题拆成 **7 个单一主题提交**（数据换代 / presence
+  回归修复 / roi-v5 docstring / 新契约 / 可视化工具 / 分析探针 / 周报）——其中 presence 那条
+  是**真 bug**：`elif roi_presence_recipe:` 曾被顶掉，presence 契约静默回落到 40 维 bbox，
+  新加的回归用例在**反向补丁还原 bug 后确实失败**（`assert {40} == {48}`）、修复后 7 passed；
+  ② master `a6f4ec4 → 3a9e671` **快进**收口，随后删 `feat/roi-training`。
+- **清理**：4 条内容已全在 master 的直接删除；3 条**有独有提交**的先打
+  `archive/{refact-train,feat-eval-frame,feat-yolo-optimize-gl}` tag（删前逐条校验 tag 与分支
+  指向同一提交）再删，避免"清理"变成"删代码"。本地分支由 8 条收敛到 **4 条**
+  （master / feat/yolo-brush-detect / feat/temporal-sbc / lhh/develop）。**远程未动**。
+- **验证**：把 dirty 工作区的内容与拆分后的 HEAD 逐字节比对（`testsets.yaml` IDENTICAL）；
+  `pytest framework/tests tests -q` → **508 passed / 6 failed**，6 项在拆分前的 `fdc8817`
+  上用临时 worktree 复跑**同样失败** → 确认为既有失败、非本轮引入。
+- 分支策略全文见 [`../../BRANCH_CONVENTION.md`](../../BRANCH_CONVENTION.md) §2026-10-12 收口。
+
+### 2026-10-12 · 检测侧专项：刷类证据为什么到不了时序链路
+
+`feat/yolo-brush-detect` 分支。**先证伪再烧 GPU**：本轮没有产出更好的 g2 权重，
+而是量清了"该不该训、按什么选点"。三条读数：
+
+1. **全局 `conf: 0.25` 白扔了一部分刷类召回**（新探针 `tools/probe_detection_conf_recall.py`）：
+   test split 上 `short_brush` 召回 **0.7669 → 0.8738**（conf 0.25 → 0.05，+10.7pp），
+   其他类各掉 2~4pp；而 `brush_tip_out` 在 0.01~0.50 **全区间恒 0.0000**（降阈值无用）。
+2. **group2 的 val 刷类标注口径与 train 不一致**（新工具 `tools/probe_detection_label_geometry.py`）：
+   同一权重下 `short_brush` 召回 val 0.03 vs test 0.92（**差 30 倍**）；查标注本身，
+   syringe/air_gun/scope_distal_end 三类的 split 口径稳定在 0.71~1.10×，而
+   **`short_brush` val = 4.12× train** 面积中位、`brush_tip_out` val 1.94× / test 2.05×。
+   → **group2 的 val 不能用来判刷类能力，也不能用来早停/选点**；`EXPERIMENTS` 里 g2 四个预设的
+   val mAP50（0.11~0.19）需按此重判。
+3. **12GB WSL 下原配方会被内存杀掉**：960px + `workers: 8` + `batch: 12` 连续两次在 epoch 0
+   前被杀；新增 `small_s_copy_paste_lowmem`（workers 2 / batch 8）后 1 epoch 预检跑通。
+
+**边界**：本地**不能**重跑自动标注——auto 数据集是 ModelScope clone，只有检测框 txt 与动作标签，
+**无图片无视频**，43 个 auto 视频与本地 images 零交集 → 换权重重生成 frames/ 必须在持有视频的
+机器上做。完整读数与复现命令见 [`YOLO_DETECTION_SIDE_20261012.md`](YOLO_DETECTION_SIDE_20261012.md)。
+
+**进行中**：`small_s_copy_paste_lowmem`（group2，960px，200 轮）在本机跑，约 13 min/epoch；
+**选点不得用 val 的刷类读数**。时序侧提升另开 `feat/temporal-sbc`（待动）。
