@@ -15,7 +15,11 @@
 ## 口径（与 mAP 不同，别混用）
 
 召回按**贪心匹配**计算：同类、IoU ≥ `--iou-match`、每个 GT 只被一个预测匹配。
-这测的是"给定阈值下还剩多少 GT 被框住"，不是 PR 曲线下的面积；与 ultralytics 的
+同时给出**逐类精确率**（匹配上的预测 / 该类全部预测）——只看召回会误导：降阈值必然涨召回，
+代价记在精确率上；而时序特征吃的是"框出现了没有"，低置信度框进来就是噪声，
+**是否划算必须两侧一起读**。
+
+这测的是"给定阈值下该类的检出与误报"，不是 PR 曲线下的面积；与 ultralytics 的
 `model.val()` 读数**不可直接比较**。
 
 用法（仓库根执行）::
@@ -88,9 +92,15 @@ def sweep_split(weights: str, data_yaml: Path, labels_dir: Path, split: str,
     for th in THRESHOLDS:
         hit = {n: 0 for n in names.values()}
         tot = {n: 0 for n in names.values()}
+        # 预测框总数（按类）：与 hit 一起给出**逐类精确率**。
+        # 只看召回会误导——降阈值必然涨召回，代价记在精确率上；而时序特征吃的是
+        # "框出现了没有"，低置信度框进来是噪声，是否划算必须两侧一起读。
+        pred_n = {n: 0 for n in names.values()}
         for fname, rows in gt.items():
             boxes = [(p["class_id"], *p["xywhn"]) for p in items.get(fname, [])
                      if p["confidence"] >= th]
+            for pc, *_ in boxes:
+                pred_n[names[pc]] += 1
             used = [False] * len(boxes)
             for c, cx, cy, w, h in rows:
                 tot[names[c]] += 1
@@ -107,6 +117,9 @@ def sweep_split(weights: str, data_yaml: Path, labels_dir: Path, split: str,
         table[f"{th:.2f}"] = {
             "per_class_recall": {n: (round(hit[n] / tot[n], 4) if tot[n] else None)
                                  for n in names.values()},
+            "per_class_precision": {n: (round(hit[n] / pred_n[n], 4) if pred_n[n] else None)
+                                    for n in names.values()},
+            "per_class_pred_boxes": pred_n,
             "gt_instances": {n: tot[n] for n in names.values()},
         }
     return table, names
@@ -139,15 +152,19 @@ def main(argv: list[str] | None = None) -> int:
         result["splits"][split] = table
         print(f"\n=== {args.group} / {split} @ imgsz {args.imgsz} @ IoU {args.iou_match} ===")
         print(f"{'conf':>5}  " + "".join(f"{n[:14]:>16}" for n in names.values()))
-        for th, row in table.items():
-            cells = ""
-            for n in names.values():
-                value = row["per_class_recall"][n]
-                text = "n/a" if value is None else f"{value:.4f}"
-                cells += f"{text:>16}"
-            print(f"{th:>5}  {cells}")
+        for metric, label in (("per_class_recall", "recall"), ("per_class_precision", "precision")):
+            print(f"  [{label}]")
+            for th, row in table.items():
+                cells = ""
+                for n in names.values():
+                    value = row[metric][n]
+                    text = "n/a" if value is None else f"{value:.4f}"
+                    cells += f"{text:>16}"
+                print(f"{th:>5}  {cells}")
         print("  GT 实例数: " + ", ".join(f"{n}={table['0.25']['gt_instances'][n]}"
                                         for n in names.values()))
+        print("  预测框数@0.05: " + ", ".join(f"{n}={table['0.05']['per_class_pred_boxes'][n]}"
+                                            for n in names.values()))
 
     if args.out:
         Path(args.out).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
