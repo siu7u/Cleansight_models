@@ -51,7 +51,16 @@ def parse_args(argv: Iterable[str] | None = None):
                         help="模型 run glob：报『同后处理下 --run 组 vs 此 run 组』的按视频配对检验（前者通常是探针）")
     parser.add_argument("--compare-label", default="模型")
     parser.add_argument("--select-on-val", action="store_true",
-                        help="在 val 上挑后处理参数、再在 test 上评（避免用 test 选参）")
+                        help="在 val 上挑后处理参数、再在 test 上评（避免用 test 选参）。"
+                             "**注意：这里的 val 曲线是「逐帧 LDA 探针」的，不是模型的**——"
+                             "它的用途是判定『平滑』与『时序建模』各自值多少。要给**模型**挑"
+                             "后处理参数请用 --select-on-val-model。")
+    parser.add_argument("--select-on-val-model", action="store_true",
+                        help="用**模型自己的 val 产物**挑后处理参数、再在 test 上评（交付口径）。"
+                             "需配合 --val-root 指向 val 复评产物（tools/eval_runs_on_split.py 的产出）")
+    parser.add_argument("--val-root", default=None,
+                        help="模型 val 产物 glob，如 'tmp/v41push/val_runs/<contract>-*'；"
+                             "每个 run 需含 artifacts/*.predictions.json 与 env.json")
     return parser.parse_args(argv)
 
 
@@ -162,6 +171,27 @@ def select_threshold_on_val(config_glob: str, median_ks, mindur_ds, split_key: s
         curve.append((f"mindur d={d}", d, statistics.median([v["edit"] for v in scored.values()])))
     kind, value, val_edit = max(curve, key=lambda item: item[2])
     return (kind, value, val_edit, curve), runs
+
+
+def pick_postprocess_on_val(runs: dict, labels: list[str], median_ks, mindur_ds):
+    """在给定产物上按**逐视频 edit 中位**挑最优后处理设置，返回 (kind, value, 曲线)。
+
+    ``runs`` 应是**模型自己的 val 预测**（``load_runs`` 的产出）——这是交付口径的选参；
+    与 ``select_threshold_on_val``（走 LDA 探针）区分开：后者回答的是机制问题，
+    拿它的结果当"模型选了某个参数"会误判。
+    """
+
+    rows = [("argmax", 0, statistics.median([v["edit"] for v in score(runs, labels, lambda s: s).values()]))]
+    for k in median_ks:
+        if k <= 1:
+            continue
+        scored = score(runs, labels, lambda s, k=k: median_filter(s, k))
+        rows.append((f"median k={k}", k, statistics.median([v["edit"] for v in scored.values()])))
+    for d in mindur_ds:
+        scored = score(runs, labels, lambda s, d=d: merge_short(s, d))
+        rows.append((f"mindur d={d}", d, statistics.median([v["edit"] for v in scored.values()])))
+    kind, value, val_edit = max(rows, key=lambda item: item[2])
+    return kind, value, val_edit, rows
 
 
 def score(runs: dict, labels: list[str], transform) -> dict:
@@ -297,6 +327,31 @@ def main(argv: Iterable[str] | None = None) -> int:
         else:
             stats = aggregate(chosen)
             print(f"  test: edit={stats['edit']:.2f} F1@.1={stats['f1_01']:.2f} F1@.25={stats['f1_025']:.2f}")
+
+    if args.select_on_val_model:
+        if not args.val_root:
+            print("\n[probe] --select-on-val-model 需要 --val-root", file=sys.stderr)
+            return 2
+        val_runs, _ = load_runs([args.val_root])
+        if not val_runs:
+            print(f"\n[probe] val 产物缺失：--val-root {args.val_root} 未匹配到含 predictions 的 run")
+            return 2
+        kind, value, val_edit, curve = pick_postprocess_on_val(val_runs, labels, median_ks, mindur_ds)
+        print(f"\n=== 交付口径：后处理参数在**模型自己的 val 产物**上选（{len(val_runs)} seed）===")
+        print("  val 曲线（逐视频 edit 中位）: " +
+              "、".join(f"{name}={edit:.2f}" for name, _v, edit in curve))
+        print(f"  → val 选出：{kind}（val edit {val_edit:.2f}；argmax 基线 {curve[0][2]:.2f}，"
+              f"val 增益 {val_edit - curve[0][2]:+.2f}）")
+        transform = (lambda s, k=value: median_filter(s, k)) if kind.startswith("median") \
+            else (lambda s, d=value: merge_short(s, d))
+        chosen = score(runs, labels, transform)
+        base = score(runs, labels, lambda s: s)
+        b, ch = aggregate(base), aggregate(chosen)
+        print("  test 上套用该参数：")
+        for key in ("edit", "f1_01", "f1_025", "f1_05"):
+            if key in b and key in ch:
+                print(f"    {key:8} 基线 {b[key]:6.2f} → 后处理 {ch[key]:6.2f}  ({ch[key] - b[key]:+.2f})")
+        print("    逐视频配对（后处理 vs 基线）: " + format_paired(paired_by_video(chosen, base, "edit")))
     return 0
 
 
