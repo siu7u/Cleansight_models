@@ -320,3 +320,36 @@ def _decode(logits_1tc, min_duration, soft_strength):      # logits: [1, T, C]
 **建议**：先用"评测时现算"把 β 增益在**真实评测链路**上复现一遍（这是"不可部署"到"可验证"
 的关键一步），确认与探针结论一致后，再补 meta 落盘。两步分开做，避免一次性改动既动行为
 又动 schema。
+
+
+## 12. 接线范围已核实（2026-10-12 补）：两个调用点都拿得到 `cfg`，改动确实小
+
+§11 写的"一个 helper + 两处替换"当时是**照着函数体推的**，没核对调用点。本轮把调用点查清，
+结论**成立**，并把当时没验的那一环补上：
+
+| 解码函数 | 调用点 | 所在函数 | `cfg` 是否在手边 |
+|---|---|---|---|
+| `_infer_split(model, features, device)` | L530 | `predict(self, cfg, ckpt, device)`（L517） | **是** |
+| `_evaluate_full_sequence(model, features, truths, id2name, criterion, device)` | L458 | `train(self, cfg, runs_dir, seed, device)`（L267） | **是** |
+
+⇒ 两个函数各加一个可选参数（解码设置），在调用点从 `cfg["evaluation"]` 取并传入即可，
+**不需要改别处的签名或调用链**。这也顺带满足了 §10.1 那条"两处都要改、否则 predict 与
+evaluate 口径分叉"的要求——两处可以共用同一份解码设置。
+
+### 仍未解决、且**无法靠读代码绕过**的一环：`D_c` 的来源
+
+- `predict(self, cfg, ckpt, device)` 只拿到特征与 checkpoint，**手里没有 train 标签**
+  ⇒ 想在那里自动估 `D_c` 是不可行的；
+- 故要完整接线，`D_c` 必须**持久化**（config 显式给出，或随 checkpoint meta 落盘）。
+
+**因此建议的落地顺序（两小步，各自可验证）**：
+
+1. **先做"显式配置"版**：`cfg["evaluation"]` 增加 `duration_soft_strength`（β）与
+   `duration_min_frames`（`D_c` 列表，缺省则 β 视为 0），helper 只读配置。
+   这一步能立刻在**真实评测链路**上复现 β 增益（用探针算出的 `D_c` 填进去即可），
+   且默认不改变任何行为；
+2. **再做"自动 + 持久化"版**：训练时用 train 真值估 `D_c`、写进 checkpoint meta，
+   推理只读 meta（§10.2 的推荐形态），并在 `pin.yaml` 登记 `duration_quantile` 与 `D_c`。
+
+这样第 1 步就已经让这条增益**可验证、可在评测链路里复现**（从"不可部署"变成"可验证"），
+而不必等第 2 步的 schema 改动。
