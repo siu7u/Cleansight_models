@@ -46,9 +46,13 @@ def parse_args(argv=None):
                         help="转移先验权重 α。**默认 0**：文献消融显示只加转移先验的朴素 Viterbi "
                              "反而更差（39.2 vs 约束版 48.9 Edit），增益来自约束而非转移先验")
     parser.add_argument("--duration-quantile", type=float, default=0.10,
-                        help="从 train 真值段估计类最短时长的分位数（硬约束下界）")
+                        help="从 train 真值段估计类最短时长的分位数（硬约束下界 / 软惩罚的 D_c）")
     parser.add_argument("--no-duration", action="store_true",
                         help="关闭时长约束（此时 α=0 即等价逐帧 argmax，用作自检）")
+    parser.add_argument("--duration-strength", type=float, default=None, metavar="β",
+                        help="把类最短时长当成**软惩罚** β·max(0, D_c−d) 而不是硬掩码；"
+                             "给值即启用（与硬约束互斥，与 --no-duration 互斥）。"
+                             "硬约束在 combo-v3 上会把序列整条塌成 idle（见 viterbi_decode docstring）")
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--json", default=None, help="把逐 run 结构化结果写到此路径")
     return parser.parse_args(argv)
@@ -113,27 +117,33 @@ def estimate_priors(truths: list, num_classes: int, quantile: float):
 
 def viterbi_decode(logits: np.ndarray, log_transition: np.ndarray, min_duration: np.ndarray,
                    transition_strength: float, hard_duration: bool,
+                   soft_duration_strength: float = 0.0,
                    max_state_duration: int = 64) -> np.ndarray:
-    """带**硬最短时长约束**（可选转移先验）的 Viterbi 解码，返回 ``[T]`` 标签序列。
+    """带**最短时长约束**（硬约束或软惩罚，可选转移先验）的 Viterbi 解码，返回 ``[T]`` 标签序列。
 
     状态为 ``(类别 c, 当前段已持续帧数 d)``，``d`` 在 ``D_c = min_duration[c]`` 处饱和
     （更长的 ``d`` 在代价上等价，故截断到 ``max_state_duration`` 控制状态数）。递推：
 
         留在 c   : (c, d) → (c, min(d+1, D_c))          代价 0
-        切到 c'  : (c, d) → (c', 1)，**仅当 d ≥ D_c**     代价 α·log A[c, c']
+        切到 c'  : (c, d) → (c', 1)                     代价 α·log A[c, c'] + 时长罚
 
-    ``D_c`` 由 **train** 真值段时长的低分位估计。约束是**硬**的：一旦进入类 c，必须至少持续
-    ``D_c`` 帧才允许切走——于是解码器只能把 2~4 帧的短脉冲**延长**到最短时长，而不是掐掉它。
-    这是逐帧 argmax 完全缺失的结构先验（CAD, ICPR 2026 / arXiv 2605.10149 的"按类时长界约束解码"）。
+    ``D_c`` 由 **train** 真值段时长的低分位估计。**离开类 c 的时长代价有三种模式**：
 
-    两条由文献固定、且被本工具单元校验复现的纪律：
+    - ``hard_duration=True``：``d < D_c`` 时**禁止**切走（代价 −∞）——这是本工具原默认，
+      论文（CAD, ICPR 2026 / arXiv 2605.10149）的消融里硬约束优于软惩罚（77.9 vs 74.6）；
+    - ``hard_duration=False`` 且 ``soft_duration_strength > 0``：按**缺口线性惩罚**
+      ``β·max(0, D_c − d)``，仍允许提前切走，只是要付代价；
+    - ``hard_duration=False`` 且 ``soft_duration_strength == 0``：不加任何时长代价。
 
-    1. **只加转移先验会变差**：论文消融里"logits + 转移矩阵"的朴素 Viterbi 只有 39.2 Edit，
-       而带约束的版本是 48.9——增益主要来自**约束**而非解码本身。故 ``transition_strength``
-       默认为 ``0.0``，只作为可选旋钮（否则强转移先验会把稀类脉冲直接抹平，本工具单元测试已复现）。
-    2. **硬约束优于软惩罚**（论文 77.9 vs 74.6），故 ``hard_duration=True`` 为默认。
+    > **为什么必须有软惩罚这条分支（2026-10-12 实测）**：论文结论是在**旧旗舰**
+    （`roi-grid-144`，真值段内非 idle 帧比例中位仅 **1.4%**）上得出的——那时模型几乎不出段，
+    硬逼"段至少持续 N 帧"是净收益。在 `combo-v3` 上段覆盖率已到 **75.6%**，同一硬约束
+    **灾难性失败**：16/16 run 变差、edit 75.78 → 5.70（val）、段数比塌到 0.04、除 idle 外
+    逐类召回全 0（整条序列塌成 idle）。**硬约束治的病灶已被手部锚点 v2 修掉**，
+    于是只剩副作用；软惩罚是"要约束但仍允许偏离"的中间形态。
 
-    ``α = 0 且 hard_duration=False`` 时本函数逐帧等价于 argmax（已由单元校验固定）。
+    ``α = 0`` 且不加任何时长代价时本函数逐帧等价于 argmax（由
+    ``tests/test_probe_constrained_decoding.py`` 固定）。
     """
 
     from scipy.special import log_softmax
@@ -151,6 +161,10 @@ def viterbi_decode(logits: np.ndarray, log_transition: np.ndarray, min_duration:
     leave_allowed = np.stack(
         [np.arange(1, states_per_class + 1) >= D[c] for c in range(num_classes)]
     )  # [C, S]
+    # 软惩罚用的"时长缺口"：状态下标 s 对应 d = s+1，缺口 = max(0, D_c − d)。
+    duration_deficit = np.maximum(
+        0.0, D[:, None] - (np.arange(states_per_class) + 1)[None, :]
+    )  # [C, S]
 
     scores = np.full((num_classes, states_per_class), -np.inf, dtype=np.float64)
     scores[:, 0] = logp[0]
@@ -164,11 +178,26 @@ def viterbi_decode(logits: np.ndarray, log_transition: np.ndarray, min_duration:
         stay[:, states_per_class - 1] = np.maximum(stay[:, states_per_class - 1],
                                                    scores[:, states_per_class - 1])
         stay_src_c = np.tile(np.arange(num_classes)[:, None], (1, states_per_class))
-        stay_src_d = np.tile(np.arange(states_per_class)[None, :], (num_classes, 1))
-        stay_src_d = np.minimum(stay_src_d + 1, states_per_class - 1)
+        # **回溯指针**：`stay[:, 1:] = scores[:, :-1]` 意味着 t 时刻的 (c,s) 来自 t−1 的 (c,s−1)，
+        # 故前驱下标是 s−1（在 0 处夹住）。2026-10-12 修复：原先写 min(s+1, S−1)（前向邻居），
+        # 方向反了；S=1（D 全为 1）时两者都夹到 0，bug 不可见——`--no-duration` 自检路径测不到。
+        stay_src_d = np.maximum(np.arange(states_per_class) - 1, 0)
+        stay_src_d = np.tile(stay_src_d[None, :], (num_classes, 1))
+        # **饱和态 S−1 有两个来源**：来自 S−2，或自环（上一帧已在 S−1）。
+        # `stay[:, S-1] = max(scores[:, S-2], scores[:, S-1])` 只记一个指针就会在"自环胜出"时
+        # 错误地往回走一格，从而凭空造出该类的额外帧、把标签序列整体错位——D>1 时必然踩到。
+        if states_per_class > 1:
+            from_prev = scores[:, states_per_class - 2] >= scores[:, states_per_class - 1]
+            stay_src_d[:, states_per_class - 1] = np.where(
+                from_prev, states_per_class - 2, states_per_class - 1)
 
-        # 切进 c'：源状态必须满足"已持续 ≥ D_c"。
-        usable = np.where(leave_allowed, scores, -np.inf)
+        # 切进 c'：源状态的时长代价按模式施加（硬掩码 / 软惩罚 / 无）。
+        if hard_duration:
+            usable = np.where(leave_allowed, scores, -np.inf)
+        elif soft_duration_strength > 0:
+            usable = scores - soft_duration_strength * duration_deficit
+        else:
+            usable = scores
         best_d = np.argmax(usable, axis=1)                     # [C]
         best_val = usable[np.arange(num_classes), best_d]      # [C]
         switch_scores = best_val[:, None] + switch             # [K, C']
@@ -213,10 +242,16 @@ def segment_coverage(truth: np.ndarray, pred: np.ndarray) -> list[float]:
 def render(args, rows: list[dict]) -> str:
     """把逐 run 结果渲染成 markdown 汇总。"""
 
+    # 时长代价模式：与实际传给 viterbi_decode 的口径保持一致，避免报告与实现脱节
+    if args.no_duration:
+        mode = "**已关闭**（等价逐帧 argmax 自检）"
+    elif args.duration_strength is not None:
+        mode = f"**软惩罚** β={args.duration_strength}（允许提前切走，付 β·缺口 代价）"
+    else:
+        mode = "**硬约束**（d < D_c 禁止切走）"
     lines = ["# 约束感知解码探针（训练无关）", "",
              f"- 转移先验权重 α={args.transition_strength}；类最短时长 = train 真值段时长的 "
-             f"q{args.duration_quantile:.2f} 分位，**硬约束**"
-             + ("（已关闭，此时等价逐帧 argmax 自检）" if args.no_duration else ""),
+             f"q{args.duration_quantile:.2f} 分位，{mode}",
              f"- 先验从 **train** 真值估计，评估在 test；指标口径与正式评测一致。", ""]
     lines.append("| 解码 | n run | " + " | ".join(METRIC_KEYS) + " | 段数比 | 段覆盖率中位 |")
     lines.append("|---|---:|" + "---:|" * (len(METRIC_KEYS) + 2))
@@ -280,9 +315,12 @@ def main(argv=None) -> int:
         names = [id2name[i] for i in range(num_classes)]
 
         argmax = [np.argmax(lg, axis=1).astype(np.int64) for lg in logits]
+        # 时长代价三模式：硬掩码（默认）/ 软惩罚（--duration-strength）/ 无（--no-duration）
+        use_hard = not args.no_duration and args.duration_strength is None
+        soft_strength = 0.0 if args.duration_strength is None else args.duration_strength
         viterbi = [
             viterbi_decode(lg, log_transition, min_duration, args.transition_strength,
-                           not args.no_duration)
+                           use_hard, soft_duration_strength=soft_strength)
             for lg in logits
         ]
 
