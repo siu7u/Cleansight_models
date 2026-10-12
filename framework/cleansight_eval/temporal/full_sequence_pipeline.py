@@ -63,6 +63,7 @@ from .util import (
     estimate_transition_rarity,
     resolve_best_metric,
     resolve_class_weight_clip,
+    viterbi_decode,
 )
 
 
@@ -137,14 +138,60 @@ def _load_eval_model(cfg: dict, ckpt: str, device):
     return model, meta
 
 
-def _infer_split(model, features, device) -> list:
+def _decode_cfg(cfg: dict) -> dict | None:
+    """从 ``evaluation`` 段取解码设置；**未配置时返回 None ⇒ 逐帧 argmax，现行行为不变**。
+
+    两个键：``duration_soft_strength``（β，0 或缺省 = 不施加）与 ``duration_min_frames``
+    （每类最短时长 ``D_c`` 的列表，长度须等于类别数）。``predict()`` 手里没有 train 标签，
+    故此处只接受**显式给出**的 ``D_c``；"训练时估计并随 checkpoint meta 落盘"是后续形态
+    （见 docs/weeks/2026-10-10_2026-10-16/TEMPORAL_SOFTDUR_20261012.md §12）。
+    """
+
+    ev = (cfg or {}).get("evaluation") or {}
+    strength = float(ev.get("duration_soft_strength") or 0.0)
+    if strength <= 0:
+        return None
+    frames = ev.get("duration_min_frames")
+    if not frames:
+        raise ValueError("配置了 evaluation.duration_soft_strength 但缺少 evaluation.duration_min_frames")
+    return {"strength": strength, "min_frames": np.asarray(frames, dtype=np.float64)}
+
+
+def _decode(logits, decode_cfg):
+    """离线逐视频解码：默认逐帧 argmax；配置了软时长惩罚时走 Viterbi。
+
+    ``logits`` 形状 ``[1, T, C]`` 或 ``[T, C]``（torch），返回 ``[T]`` 的 int64 numpy 数组。
+
+    **形状契约**：上一版把调用点写成传 ``logits[0]``，而本函数内部又取一次 ``[0]``，
+    于是拿到的是"第一帧的 ``[C]``"、argmax 后是**标量**（0 维数组），在调用方遍历预测序列时
+    报 ``TypeError: iteration over a 0-d array``。现在**显式规范化**并在无法归一时报出实际形状，
+    避免这类接口错配再次静默发生。
+    """
+
+    if not decode_cfg:
+        arr = logits[0] if logits.dim() == 3 else logits
+        return torch.argmax(arr, dim=-1).cpu().numpy().astype(np.int64)
+    x = logits[0] if logits.dim() == 3 else logits
+    if x.dim() != 2:
+        raise ValueError(f"_decode 期望 [1,T,C] 或 [T,C]，实际 {tuple(logits.shape)}")
+    logits_np = x.cpu().numpy()
+    classes = logits_np.shape[-1]
+    min_duration = decode_cfg["min_frames"]
+    if min_duration.shape != (classes,):
+        raise ValueError(f"duration_min_frames 长度 {min_duration.shape} 与类别数 {classes} 不符")
+    return viterbi_decode(logits_np, np.zeros((classes, classes), dtype=np.float64),
+                          min_duration, transition_strength=0.0,
+                          hard_duration=False, soft_duration_strength=decode_cfg["strength"])
+
+
+def _infer_split(model, features, device, decode_cfg=None) -> list:
     """逐视频整段前向 + 逐帧 argmax，返回与 features 对齐的预测序列列表。"""
     preds = []
     with torch.no_grad():
         for feats in features:
             x = torch.from_numpy(feats).float().unsqueeze(0).to(device)  # [1, T, F]
             logits = model(x)  # [1, T, C]
-            preds.append(torch.argmax(logits[0], dim=-1).cpu().numpy().astype(np.int64))
+            preds.append(_decode(logits, decode_cfg))
     return preds
 
 
@@ -161,7 +208,8 @@ def _validation_split_name(cfg: dict) -> str:
     return data.get("split_val") or data["split_eval"]
 
 
-def _evaluate_full_sequence(model, features, truths, id2name, criterion, device) -> dict:
+def _evaluate_full_sequence(model, features, truths, id2name, criterion, device,
+                           decode_cfg=None) -> dict:
     """按视频整段 validation，返回 loss 与指标，保持视频边界不用于训练更新。"""
 
     model.eval()
@@ -178,7 +226,7 @@ def _evaluate_full_sequence(model, features, truths, id2name, criterion, device)
                 logits = model(x)
                 loss = criterion(logits.reshape(-1, logits.shape[-1]), y.reshape(-1))
             losses.append(float(loss.detach().cpu().item()))
-            preds.append(torch.argmax(logits[0], dim=-1).cpu().numpy().astype(np.int64))
+            preds.append(_decode(logits, decode_cfg))
     pred_by_item = {
         f"video-{index:04d}": [id2name[int(value)] for value in video]
         for index, video in enumerate(preds)
@@ -455,7 +503,9 @@ class FullSequenceTemporalPipeline(Pipeline):
                     optimizer.step()
                     losses.append(float(loss.detach().cpu().item()))
 
-                validation = _evaluate_full_sequence(model, val_features, val_truths, val_id2name, criterion, device)
+                validation = _evaluate_full_sequence(
+                    model, val_features, val_truths, val_id2name, criterion, device,
+                    _decode_cfg(cfg))
                 train_loss = float(np.mean(losses)) if losses else None
                 metric_value = validation.get(best_metric_name)
                 improved = metric_value is not None and (
@@ -527,7 +577,7 @@ class FullSequenceTemporalPipeline(Pipeline):
             max_frames=limits.get("max_frames"),
         )
 
-        video_preds = _infer_split(model, features, device)
+        video_preds = _infer_split(model, features, device, _decode_cfg(cfg))
         names = split_video_names(
             cfg["data"],
             cfg["data"]["split_eval"],
