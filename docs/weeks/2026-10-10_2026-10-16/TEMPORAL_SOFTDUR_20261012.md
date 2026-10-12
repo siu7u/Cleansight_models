@@ -426,3 +426,46 @@ framework/cleansight_eval/temporal/full_sequence_pipeline.py:229
    比任何合成用例都贴近真实。
 
 **当前结论：接线仍未完成**，前置调查（第 2 条）尚未做；仓库处于接线前状态（§13 已回退并核实）。
+
+
+## 15. 形状探针：**§14 的假设被自己的实测推翻**（2026-10-12）
+
+§14 从源码 `return logits.transpose(1, 2)` 一类线索推断"各 head 返回形状异质，可能导致 0 维
+数组"。本轮**直接跑了形状探针**（逐 `model.type` 构造、前向 `[1,20,40]`、打印返回 type 与 shape；
+只读、不改仓库）：
+
+```
+_build_actionness_tcn          -> Tensor shape=(1, 20, 6)
+_build_asformer                -> Tensor shape=(1, 20, 6)
+_build_clean_asformer          -> Tensor shape=(1, 20, 6)
+_build_clean_bigru             -> Tensor shape=(1, 20, 6)
+_build_clean_mstcn_bilstm      -> Tensor shape=(1, 20, 6)
+_build_fact                    -> Tensor shape=(1, 20, 6)
+_build_gru                     -> Tensor shape=(1, 20, 6)
+_build_legacy_causal_tcn       -> Tensor shape=(1, 20, 6)
+_build_legacy_causal_transformer -> Tensor shape=(1, 20, 6)
+_build_mstcn                   -> Tensor shape=(1, 20, 6)
+_build_mstcn2                  -> Tensor shape=(1, 20, 6)
+_build_transformer             -> Tensor shape=(1, 20, 6)
+_build_boxset_mstcn2           -> 构造失败（`input_dim` 必须 = num_slots×slot_dim，是**我探针的入参
+                                  问题**，不是形状问题）
+```
+
+**结论：13 个 builder 里能构造的 12 个，前向返回一律是 `[1, T, C]`**——`[1,T,C]` 这个假设
+**本来就是对的**。所以 §14 关于"形状异质导致 0 维数组"的推断**被推翻**，§13 那个
+`TypeError: iteration over a 0-d array` **另有原因，目前仍未定位**。
+
+### 为什么这次自我推翻值得记下来
+
+§14 是**从源码的 `return ... .transpose(1, 2)` 反推**出来的，读起来很合理（转置确实存在），
+但**转置之后仍是 `[B,T,C]`**——我只看到"有 transpose"就推出了"形状不统一"，
+中间少了一步验证。**又一次"没量就下结论"，只是这次错在归因而不在数字。**
+教训：**形状、取值域这类可一次测出的事实，一律先测再写**；源码里的模式（transpose、reshape）
+不能替代实测形状。
+
+### 下一步：在失败现场打印，而不是继续外围推测
+
+`_evaluate_full_sequence` 里 `preds` 出现 0 维数组，而模型输出是 `[1,T,C]` ⇒ 问题在
+**两者之间**（该函数的 `compute_loss` 分支、`logits` 变量被覆盖、或我在 §13 那次改动里的
+helper 调用）。下一步应**在失败路径上临时打印**（`type/logits.shape/preds[-1].shape`），
+跑一次 `framework/tests/test_mstcn_smoke.py` 拿到现场，而不是再从外围猜。
