@@ -92,3 +92,28 @@ python tools/probe_constrained_decoding.py --run "runs/v41-push/feat-combo-v3/h1
 python tools/probe_constrained_decoding.py --run "runs/v41-push/feat-combo-v3/h128/mstcn2-*" \
     --split test --device cuda:0 --no-duration                     # 关闭（自检：应等于 argmax）
 ```
+
+
+## 6. 对抗性复核（2026-10-12 补）：回归用例**确实**守住了这个 bug
+
+§2 声称新用例"修复前确实失败"。这类自证很容易变成"我写的测试当然通过"，故本轮做了一次
+**对抗性复核**——把两处指针修复**都还原成原实现**，看用例是否真的会红：
+
+```
+# 还原 bug 后
+FAILED tests/test_probe_constrained_decoding.py::test_alpha_zero_without_duration_equals_argmax
+E   DESIRED: array([0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 2])     # D>1 时不再等于 argmax
+1 failed, 5 passed
+
+# 恢复修复后
+6 passed
+```
+
+即：判别性断言（"`D>1` 时无时长代价也必须逐帧等于 argmax"）**在没有修复时会红**，
+该用例不是摆设。复核后工作树无残留改动（`git status --porcelain` 为空）。
+
+**关于测试覆盖的一个补充教训**：同一批用例里，`test_soft_duration_still_allows_short_segment`
+**抓不住**软惩罚分支被删掉（禁用该分支后它照样通过，因为"不施加惩罚"同样会保留脉冲）。
+所以"某功能有测试"不等于"该功能被守住"——本次是靠**能区分两种实现**的断言（D>1 的 argmax
+等价性）才守住的。这也是 §1 那个 bug 能潜伏至今的原因：`--no-duration` 自检路径（S=1）
+在这三处断言下都恰好正确。
