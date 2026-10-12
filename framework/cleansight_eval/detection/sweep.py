@@ -165,6 +165,19 @@ PRESETS: Dict[str, dict] = {
         "augment": "copy_paste",
         "cos_lr": True,
     },
+    # 低内存配方：与 small_s_copy_paste 同配置，仅压低 DataLoader worker 与 batch，
+    # 供 12GB WSL 环境下训练（960px + copy_paste 的 worker 进程是内存峰值主因）。
+    "small_s_copy_paste_lowmem": {
+        "description": "small 组: yolo11s, copy_paste 增强, 低内存配方(workers=2/batch=8)",
+        "model": "yolo11s.pt",
+        "imgsz": 960,
+        "epochs": 200,
+        "batch": 8,
+        "patience": 40,
+        "augment": "copy_paste",
+        "cos_lr": True,
+        "workers": 2,
+    },
 }
 
 # ── Grid 维度定义 ──────────────────────────────────────────
@@ -291,6 +304,8 @@ def run_experiment(
     batch = cfg.get("batch")
     if batch is None:
         batch = adjust_batch_for_imgsz(16, 640, imgsz)
+    # DataLoader worker 数：None 时交给 ultralytics 默认（8）；显式传入可压低内存峰值。
+    workers = cfg.get("workers")
     # 显式 device 参数（CLI --device）优先，其次 cfg（预设/测试可注入），最后 auto。
     device = device or cfg.get("device", "auto")
 
@@ -332,6 +347,7 @@ def run_experiment(
         "epochs": epochs,
         "batch": batch,
         "patience": patience,
+        **({"workers": workers} if workers is not None else {}),
         "cos_lr": cos_lr,
         "label_smoothing": label_smoothing,
         "close_mosaic": close_mosaic,
