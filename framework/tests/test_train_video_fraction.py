@@ -114,7 +114,7 @@ def test_video_fraction_recorded_in_provenance_and_guards_resume(tmp_path):
     assert sub["train_video_fraction"] == 0.5
 
     # 已登记数据集分支同样要记录（真实训练走的就是这条）。
-    registered = {"dataset_ref": "temporal.actionmixed-auto-roi-v1", "split_train": "train",
+    registered = {"dataset_ref": "temporal.actionmixed-auto-roi-v1-v41", "split_train": "train",
                   "split_val": "val", "split_eval": "test", "root": str(root)}
     assert "train_video_fraction" not in build_dataset_provenance(registered, None)
     assert build_dataset_provenance(

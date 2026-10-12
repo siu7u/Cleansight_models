@@ -81,7 +81,7 @@ def test_experiment_config_carries_smoothing_key(tmp_path):
     cfg_path.write_text(
         "schema_version: 1\npipeline: sliding_window_temporal\n"
         "model:\n  type: gru\n  input_dim: 96\n  num_classes: 6\n"
-        "data:\n  dataset_ref: temporal.actionmixed-auto-roi-v2\n"
+        "data:\n  dataset_ref: temporal.actionmixed-auto-roi-v2-v41\n"
         "feature_schema:\n  dim: 96\n  version: actionmixed-roi-grid-v2\n"
         "evaluation:\n  mode: formal\n  smoothing_min_duration: 5\n",
         encoding="utf-8",

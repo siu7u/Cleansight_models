@@ -104,7 +104,7 @@ def test_mask_target_ids_zeroes_whole_class(tmp_path):
 
 
 def test_load_split_real_data_gives_128_dims():
-    """真数据端到端：按 v4 契约加载 test split，8 视频 / 2639 帧 / 每条 128 维。"""
+    """真数据端到端：按 v4 契约加载 test split，8 视频 / 5272 帧（数据 v4.1）/ 每条 128 维。"""
 
     root = Path(__file__).resolve().parents[2] / "datasets/cleansight-ActionMixed-auto-lhh"
     if not root.is_dir():
@@ -116,5 +116,5 @@ def test_load_split_real_data_gives_128_dims():
         data_cfg, "test", feature_schema={"dim": ROI_GRID_V5_DIM, "version": ROI_GRID_V5_VERSION})
     assert len(feats) == 8
     assert all(f.shape[1] == ROI_GRID_V5_DIM for f in feats)
-    assert sum(len(t) for t in truths) == 2639
+    assert sum(len(t) for t in truths) == 5272  # 数据 v4.1（15fps）test split；v3 时代为 2639
     assert len(id2name) == 6

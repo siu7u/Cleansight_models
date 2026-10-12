@@ -1,0 +1,51 @@
+# v4.1 旗舰基线：MS-TCN++（`mstcn2` s4l10 h128）+ `roi-grid-v4`（128 维）在**数据版本 v4.1** 上。
+#
+# 为什么需要这个配置：数据从 v3.x 换到 v4.1 后，旧配置（如 mstcn2-auto-roi-v4-aug-*.yaml）的
+# `dataset_ref` 指向的 v3 契约已随数据换代失效——`load_config` 在应用 `-S` 覆盖**之前**就会做
+# 数据门禁，因此拿旧配置 + `-S data.dataset_ref=...` 是跑不起来的，必须有一份 ref 直指 v4.1
+# 的配置。配方本身与 `runs/acc-push/acc-roiv4/h128` 逐项一致，**唯一变量是数据版本**
+# （15fps 重采样 + 标签时间轴 ×1.25 修正 + train 14→28 / val 3→7），属单变量对照。
+#
+# v4.1 数据的三项实质变化与影响见 framework/testsets.yaml 的
+# `temporal.actionmixed-auto-roi-v4-v41` 条目注释；结论摘要：
+#   · 采样率 7.5→15fps：`num_stages`/`num_layers` 决定的**感受野帧数不变、物理时长减半**
+#     （同一份超参在时间轴上的语义变了）→ 本臂刻意先不动超参，拿到基线再谈重定标；
+#   · 标签时间轴 ×1.25：旧口径动作段整体偏早 20%，故与 v3 指标**不可比**；
+#   · `water_injection` 在 train/val/test 全 0 正样本：`num_classes` 仍为 6（id 位置保留），
+#     该类报数时必须标为不适用（不得当 0 分平摊）。
+#
+# 口径：lr 5e-4 / wd 1e-4 / 60 轮 / grad_clip 5.0 / `best_metric=val_edit` / 早停关闭。
+
+schema_version: 1
+pipeline: full_sequence_temporal
+
+model:
+  type: mstcn2
+  input_dim: 128
+  num_classes: 6
+  hidden: 128
+  num_stages: 4
+  num_layers: 10
+
+data:
+  dataset_ref: temporal.actionmixed-auto-roi-v4-v41  # v4.1 数据 + roi-grid-v4 契约（128 维）
+  split_train: train
+  split_val: val
+  split_eval: test
+
+feature_schema:
+  dim: 128
+  version: actionmixed-roi-grid-v4
+
+evaluation:
+  mode: formal
+  visualize: true
+  save_predictions: true
+
+train:
+  epochs: 60
+  lr: 0.0005
+  grad_clip: 5.0
+  weight_decay: 0.0001
+  best_metric: val_edit
+  patience: null  # 关闭早停：固定预算下比较，避免大模型被 val_loss 提前截断

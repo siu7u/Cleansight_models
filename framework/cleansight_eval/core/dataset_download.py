@@ -30,9 +30,9 @@ REQUIRED_FILES: dict[str, list[Path]] = {
         Path("datasets/cleansight-ActionMixed/frames/data.yaml"),
     ],
     "actionmixed-auto": [
-        Path("datasets/cleansight-ActionMixed-auto/labels/data.yaml"),
-        Path("datasets/cleansight-ActionMixed-auto/frames/data.yaml"),
-        Path("datasets/cleansight-ActionMixed-auto/task_ids.yaml"),
+        Path("datasets/cleansight-ActionMixed-auto-lhh/labels/data.yaml"),
+        Path("datasets/cleansight-ActionMixed-auto-lhh/frames/data.yaml"),
+        Path("datasets/cleansight-ActionMixed-auto-lhh/task_ids.yaml"),
     ],
 }
 
@@ -44,8 +44,8 @@ DATASET_PRESETS: dict[str, dict] = {
     },
     "actionmixed-auto": {
         "dataset": "lhh010/cleansight-ActionMixed-auto",
-        "output": Path("datasets/cleansight-ActionMixed-auto"),
-        "description": "自动标注 ActionMixed 时序样本（YOLO 检测框 + 人工动作标签，v3）",
+        "output": Path("datasets/cleansight-ActionMixed-auto-lhh"),
+        "description": "自动标注 ActionMixed 时序样本（YOLO 检测框 + 人工动作标签，v4.1：15fps / 28-7-8）",
     },
     "raw": {
         "dataset": "lhh010/cleansight-raw",

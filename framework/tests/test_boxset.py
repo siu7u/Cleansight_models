@@ -127,5 +127,5 @@ def test_load_split_real_data_gives_96_dims():
         data_cfg, "test", feature_schema={"dim": BOXSET_DIM, "version": BOXSET_VERSION})
     assert len(feats) == 8
     assert all(f.shape[1] == BOXSET_DIM for f in feats)
-    assert sum(len(t) for t in truths) == 2639
+    assert sum(len(t) for t in truths) == 5272  # 数据 v4.1（15fps）test split；v3 时代为 2639
     assert len(id2name) == 6
