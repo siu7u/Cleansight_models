@@ -237,3 +237,31 @@ checkpoint 硬链接隔离、显式 `--out-dir`，只改 `evaluation.smoothing_m
 val 侧的强支持（edit +19.00）使这条线索值得直接上
 **16 seed 配对**：同 seed 集、md ∈ {25, 10} 两档，在 val 与 test 两侧都做配对检验，
 并**同时输出逐类召回**（重点 `sbc` 是否从 0 起身、代价落在哪些类）。
+
+
+## 9. 工具化：`tools/probe_online_min_duration.py`（2026-10-12）
+
+§6 那套手工步骤（复制配置改字段 → 硬链接隔离 checkpoint → 显式 `--out-dir` → 逐门槛重复）
+已固化为入库探针，理由有两条：
+
+1. **它踩过的坑值得固化**：三处必须同时写对（配置字段名、`data.split_eval` 的改法、
+   checkpoint 隔离 + `--out-dir`），任一处错就会读到错 split 或污染原 run（2026-10-11 事故）。
+   写成工具后，下一个人不必再摸索一遍。
+2. **它是这个门槛唯一可做的路径**：在线产物只存迟滞之后的标签，门槛**无法离线重套**（§5），
+   只能重跑推理——那就把它做成一步。
+
+用法：
+
+```bash
+# 在 val 上扫（选参，默认）
+python tools/probe_online_min_duration.py --arm "runs/v41-push/online-gru-hand-v2/h128/gru-*" --md 25 10
+# 全部 seed 配对后再去 test 报数
+python tools/probe_online_min_duration.py --arm "<glob>" --md 25 10 --split test
+```
+
+**验证（本轮回填）**：用已知 seed 42 跑 `--md 25 10 --split val`，输出
+`md=25 acc=56.18 edit=38.70` / `md=10 acc=58.80 edit=57.70`，与 §8 手工搭出的表格**逐位相同**
+→ 工具口径与手工一致；n=1 时配对统计按预期报 `n/a`（不硬凑显著性）。
+
+**下一步不变**：把 `--arm` 换成完整的 16 个 `gru-*` run（去掉时间戳后缀只留 seed 决定性），
+在 val 上选门槛、再到 test 上报，并加逐类召回（重点 `sbc` 是否从 0 起身）。
