@@ -90,7 +90,7 @@ KNOWN_SECTION_KEYS = {
     },
     "train": {
         "epochs", "lr", "batch", "batch_size", "patience", "window", "grad_clip",
-        "weight_decay", "resume", "best_metric",
+        "weight_decay", "resume", "best_metric", "class_weights",
         # 类别权重截断区间（活动量旋钮）：[lo, hi] 或 "lo,hi"
         "class_weight_clip",
         # 转移级代价敏感（transition-level）：按训练集转移稀缺度对逐帧加权；0 = 关闭
