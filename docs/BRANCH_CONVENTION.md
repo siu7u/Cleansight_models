@@ -99,3 +99,35 @@ master `a6f4ec4` → `3a9e671`：两者是严格祖先关系，直接 `update-re
 | `master` | 停在 `273e2f8`（zone.identifier 清理） | 等待下一次功能合并落地 |
 | `feat/eval-frame` | 31 提交领先 master，含框架重构 + YOLO 优化工具化 | 历史遗留，不重写；作为下一次合并候选 |
 | `refact/train` | 18 提交，17 个已被 feat/eval-frame 包含 | 死分支；下次合并落地时删除 |
+
+
+## 2026-10-12 事故：`checkout -b` 的基点搞错，两个主题被串成一条线
+
+**现象**：`feat/temporal-sbc` / `-decode` / `-softdur*` 这批时序分支，其**基点不是 master**
+而是当时恰好 checkout 着的 `feat/yolo-group1`——因为我开新分支时用的是
+`git checkout -b feat/xxx`，**没有先 `git checkout master`**。后果：
+
+```
+* b1ea204  experiment(temporal): roi-v5 …
+* 8c96088  experiment(temporal): 逐契约扫 β …
+* 867779e  docs(yolo): …        ← 本该只在 yolo-group1 上
+* d10c572  feat(detection): …   ← 同上
+* fa0f964  feat(detection): …
+```
+
+随后把时序分支 `--ff-only` 合入 master 时，**底下的 YOLO 提交被一并带进 master**。
+`feat/yolo-group1` 因此变成"领先 master 0 个提交"，两个主题在历史上串成一条直线，
+`git log --graph` 看不出分支边界。
+
+**影响**：内容无损（都是新增配方与文档，master 拿到它们没有害处），但**分支边界丢了**——
+本来 `feat/yolo-group1` 应该在训练跑完、读数到齐后才合入，结果提前进了 master；
+"一个分支只做一件事"的可见性也没了。
+
+**规则（补进 §1）**：**开新主题分支前必须先切回 master**，即
+`git checkout master && git checkout -b feat/<主题>`；
+不要依赖"当前恰好在哪个分支"。收尾时用
+`git rev-list --count master..feat/<主题>` 确认该分支确实**只承载本主题的提交**，
+再合入并删除。
+
+**处置**：删除 `feat/yolo-group1`（0 个独有提交，内容已在 master）；
+group1 后续（评测 + 登记新版本）另开一条基于 master 的分支。
