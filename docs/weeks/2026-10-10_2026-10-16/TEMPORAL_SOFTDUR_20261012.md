@@ -274,3 +274,49 @@ val 上扫得：
 改动跨 3 个文件 + 需要动 checkpoint meta 的 schema（属中等改动），且本机 GPU 正被 YOLO 全量训练
 占用、我的工作余量也不足以稳妥完成。**故本轮只把位置、决策与验收判据查清写定**，
 交给余量充足时执行——避免在"赶"的状态下动推理链路（那会影响**所有**历史读数）。
+
+
+## 11. 接线形状已查定（2026-10-12，**仍未接线**）：改动比预想小，只剩 `D_c` 的来源
+
+§10 只定位了"改哪两处"，本轮把**两处的上下文读完**，接线形状因此确定。两处的 logits 形状
+与调用方式完全一样：
+
+```python
+# framework/cleansight_eval/temporal/full_sequence_pipeline.py
+# 站点 1：_infer_split()          L146-147
+logits = model(x)                     # [1, T, C]
+preds.append(torch.argmax(logits[0], dim=-1).cpu().numpy().astype(np.int64))
+# 站点 2：_evaluate_full_sequence() L180-181（同一形状；该函数同时还算 loss，替换只动预测那行）
+```
+
+⇒ 接线 = **加一个解码 helper + 两处替换**，helper 的入参已经齐备：
+
+```python
+def _decode(logits_1tc, min_duration, soft_strength):      # logits: [1, T, C]
+    if soft_strength <= 0:                                  # 默认等价现行 argmax
+        return torch.argmax(logits_1tc[0], dim=-1).cpu().numpy().astype(np.int64)
+    return viterbi_decode(logits_1tc[0].cpu().numpy(),
+                          np.zeros((C, C)),                 # α=0 ⇒ 转移先验不参与
+                          min_duration, transition_strength=0.0,
+                          hard_duration=False, soft_duration_strength=soft_strength)
+```
+
+三点已确认，**不再是未知数**：
+
+1. **转移先验不用传真值**：验证过的配置是 **α=0**（只用时长代价），故
+   `np.zeros((C, C))` 即可——探针当时也是这么调的，**不需要为它读 train**。
+2. **两个站点可以共用一个 helper**，`predict` 与 `evaluate` 口径不会分叉（§10.1 担心的那点）。
+3. **默认路径保持逐帧 argmax**（`soft_strength <= 0` 直接走原分支），因此**接线本身不改任何
+   历史读数**；这也让"β=0 必须等于 argmax"这条验收判据在实现层面天然成立，并由
+   `framework/tests/test_soft_duration_decoding.py` 的判别性用例兜住。
+
+### 于是**唯一**剩下的实质工作就是 `D_c` 的来源
+
+- 短期（评测可用）：在 pipeline 初始化时对 **train** split 调
+  `estimate_min_duration(train_truths, C, quantile)`——该仓库的评测流程本就持有 train 数据；
+- 目标形态（部署可用）：**训练时算好写进 checkpoint meta**，推理只读 meta（§10.2 的推荐），
+  并在 `pin.yaml` 登记 `duration_quantile` 与 `D_c`。
+
+**建议**：先用"评测时现算"把 β 增益在**真实评测链路**上复现一遍（这是"不可部署"到"可验证"
+的关键一步），确认与探针结论一致后，再补 meta 落盘。两步分开做，避免一次性改动既动行为
+又动 schema。
