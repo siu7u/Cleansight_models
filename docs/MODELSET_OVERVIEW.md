@@ -17,6 +17,29 @@
 >   逐项读数、边界与复现见 [`weeks/2026-10-10_2026-10-16/README.md`](weeks/2026-10-10_2026-10-16/README.md)。
 >   **待定**：v4.1 旗舰契约尚未切换（只要 acc 选 80 维 `global-hand-v2`，要 `sbc`/edit 选 232 维
 >   `combo-v3`），故 `mstcn2-auto-roi-v4-v41.yaml` 仍是仓库默认。
+> - **2026-10-12 时序侧两条例杆（均在既有 v4.1 盘面上，不换数据、不换契约）**：
+>   ① **离线软时长惩罚解码**（`β·max(0, D_c−d)` 的 Viterbi，**训练无关、零参数**）——
+>   F1 三个 IoU 门槛 × 两个 split = **18/18 显著为正**（16 seed 配对）；逐契约采纳 β =
+>   `combo-v3` **0.5** / `hand-v2` **0.1** / `global-hand-v2` **0.05**；已在**真实评测链路**
+>   端到端复现（`combo-v3` β=0.5 ⇒ val edit **+0.73**；`hand-v2` β=0.1 ⇒ val edit +0.51、acc −0.01），
+>   且 **β=0 时与已存盘评测逐位一致**（不写配置 ⇒ 行为完全不变）。用法：实验 YAML 的
+>   `evaluation` 段写 `duration_soft_strength` 与 `duration_min_frames`（长度 = 类别数，
+>   依据 train 真值 q0.10 估得）。**余**：`D_c` 需人工填入，下一步做「训练时估好、随 checkpoint
+>   meta 落盘、推理只读」。实现与判别性用例见 `framework/cleansight_eval/temporal/util.py`
+>   与 `framework/tests/test_soft_duration_decoding.py`。
+>   ② **在线轨门槛 `smoothing_min_duration`**——该值是**硬召回上限**（输出里不可能出现短于它的段），
+>   而 **6 个在线臂全部走默认 25、从未被扫过**。8 seed 配对（`online-gru-hand-v2`）：
+>   门槛 25 → 10 使 **acc val +3.55 / test +3.59（两 split 一致，p=0.0078 / 0.0234）**；
+>   `edit` 在该臂的 test 上无净收益（−0.22、p=1.0）⇒ **该臂不报 edit**，但第二个臂
+>   `online-gru-global-hand-v2`（80 维、单 seed）acc 与 edit 皆为正 ⇒ 「edit 不迁移」是**臂特定**、
+>   不是通则。**适合按 acc 目标调低该门槛；逐臂各自选值。**
+>   两条的机制、边界与复现见
+>   [`weeks/2026-10-10_2026-10-16/TEMPORAL_SOFTDUR_20261012.md`](weeks/2026-10-10_2026-10-16/TEMPORAL_SOFTDUR_20261012.md)
+>   与 [`…/ONLINE_MIN_DURATION_20261012.md`](weeks/2026-10-10_2026-10-16/ONLINE_MIN_DURATION_20261012.md)。
+> - **检测侧（2026-10-12）**：首次 `fraction=1.0` 的 group1 全量训练完成中（此前 **11 个历史 run
+>   全是 `fraction=0.2` 探针**，故旧读数不得当作模型质量）；诊断为**目标「P/R ≥ 0.7」的联合门槛
+>   在现有模型上不可达**（逐类与整体两种口径皆然）、**阈值无解**，硬件侧起点是最小的 `yolo11n`。
+>   详见 [`weeks/2026-10-10_2026-10-16/YOLO_GROUP1_FULL_20261012.md`](weeks/2026-10-10_2026-10-16/YOLO_GROUP1_FULL_20261012.md)。
 > - **2026-10-08 数据换代（v4.1）**：auto 数据推进到 v4.1（15fps 重采样 + **标签时间轴 ×1.25
 >   修正** + train 28 / val 7 / test 8），本地把新数据目录改名为
 >   `datasets/cleansight-ActionMixed-auto-lhh`（路径同 v3、内容已换代）。因此**下文与各处引用的
