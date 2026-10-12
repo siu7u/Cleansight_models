@@ -46,6 +46,23 @@ PRESETS: Dict[str, dict] = {
         "cos_lr": False,
         "close_mosaic": 10,
     },
+    # 低内存 + 可跑完的基线：与 large_baseline 逐项一致，仅压 worker。
+    # 为什么不用 large_m_960_lowmem：实测本机 yolo11m@960 只有 **1.83 it/s**
+    # （5382 iter/epoch ⇒ 约 49 min/epoch），200 轮 ≈ 163 小时，在本机不具可行性。
+    # group1 此前只有 1~15 轮的截断 run，先把**全量数据的可完成基线**跑出来，再按读数决定是否上容量。
+    "large_baseline_lowmem": {
+        "description": "large 组基线: yolo11n, imgsz 640, 默认增强, 低内存(workers=2)",
+        "model": "yolo11n.pt",
+        "imgsz": 640,
+        "epochs": 150,
+        "batch": 16,
+        "patience": 30,
+        "augment": "default",
+        "label_smoothing": 0.0,
+        "cos_lr": False,
+        "close_mosaic": 10,
+        "workers": 2,
+    },
     "large_s": {
         "description": "large 组: yolo11s, imgsz 640",
         "model": "yolo11s.pt",
