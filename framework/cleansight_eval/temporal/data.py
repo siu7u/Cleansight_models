@@ -76,6 +76,11 @@ from .features import (
     resolve_embedding_root,
     roi_grid_v2_block_dims,
 )
+from .features.nodep_concat import (
+    NODEP_CONCAT_DIM,
+    NODEP_CONCAT_VERSION,
+    build_nodep_concat_features,
+)
 
 N_DET_CLASSES = 8  # frames/data.yaml 的检测类数（每类 5 维）
 FEATURE_DIM = N_DET_CLASSES * 5  # = 40
@@ -708,12 +713,13 @@ def load_split(
     roi_v3_recipe = feature_version == ROI_GRID_V3_VERSION
     roi_v4_recipe = feature_version == ROI_GRID_V4_VERSION
     roi_v5_recipe = feature_version == ROI_GRID_V5_VERSION
+    nodep_concat_recipe = feature_version == NODEP_CONCAT_VERSION
     boxset_recipe = feature_version == BOXSET_VERSION
     combo_recipe = feature_version == COMBO_VERSION
     hand_recipe = feature_version == HAND_BBOX_VERSION
     global_hand_recipe = feature_version == GLOBAL_HAND_BBOX_VERSION
     clean_recipe = feature_version in CLEAN_FEATURE_DIMS
-    detection_mapping = load_detection_mapping(data_cfg) if clean_recipe else None
+    detection_mapping = load_detection_mapping(data_cfg) if (clean_recipe or nodep_concat_recipe) else None
     fps = float(data_cfg.get("fps", 7.5))
     confidence_default = float(
         (feature_schema or {}).get("detection_confidence_default", 1.0)
@@ -739,6 +745,25 @@ def load_split(
             if window is not None and len(frame_ids) < window:
                 continue
         frame_paths = [frames_dir / f"{stem}-{frame_id:06d}.txt" for frame_id in frame_ids]
+        # 特征缓存查找（合并后恢复：cache_file 定义块被丢失）
+        cache_file = None
+        if cache_root is not None:
+            try:
+                _sizes = [p.stat().st_size for p in frame_paths]
+            except FileNotFoundError:
+                _sizes = None
+            if _sizes is not None:
+                import hashlib as _hl
+                _fp = f"{len(_sizes)}:{sum(_sizes)}:{fps}:{confidence_default}:{sorted(mask_target_ids)}"
+                cache_file = cache_root / f"{stem}-{_hl.sha1(_fp.encode()).hexdigest()[:12]}.npz"
+                if cache_file.exists():
+                    _cached = np.load(cache_file)["feats"]
+                    features.append(_cached)
+                    truths.append(
+                        np.asarray([action_id_remap[a] for a in action_ids], dtype=np.int64)
+                    )
+                    cache_hit += 1
+                    continue
         if image_embed_recipe:
             bbox_feats = np.stack(
                 [
@@ -843,6 +868,19 @@ def load_split(
                     for path in frame_paths
                 ]
             ).astype(np.float32)
+        if nodep_concat_recipe:
+            feats, _names, actual_version = build_nodep_concat_features(
+                frame_paths,
+                detection_mapping=detection_mapping or {},
+                fps=fps,
+                confidence_default=confidence_default,
+                mask_target_ids=mask_target_ids,
+            )
+            if actual_version != NODEP_CONCAT_VERSION:
+                raise ValueError(f"nodep recipe 返回版本 {actual_version!r}")
+            if feats.shape[1] != NODEP_CONCAT_DIM:
+                raise ValueError(f"nodep 维度 {feats.shape[1]} != {NODEP_CONCAT_DIM}")
+
         else:
             feats = np.stack(
                 [
