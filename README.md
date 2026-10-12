@@ -469,19 +469,24 @@ checkpoint + checkpoint metadata + CARD.md + pin.yaml
 
 ## 文档索引
 
+> **完整分类索引见 [`docs/README.md`](docs/experiments/frame-acc/README.md)**（按入口 / 架构 / 手册 / 评测 / 特征 / 实验报告 / 协作约定分组，
+> 含全部实验报告与周报）；下面只列最常用的入口。
+
 - [架构简述](docs/ARCHITECTURE_OVERVIEW.md)：用目录和数据流快速说明当前仓库结构。
 - [YAML 配置文档](usage/YAML_CONFIG.md)：所有受跟踪 YAML 的内容、读取方、功能和快速定位链接。
 - [测试命令行教程](usage/TEST_COMMANDS.md)：模型评测、timeline、矩阵和 pytest 的常用写法。
+- [特征方案评测 RUNBOOK](usage/FEATURE_EVAL_RUNBOOK.md)：数据更新 → 特征契约登记 → 评测口径 → 矩阵 → 门禁的实操顺序与常见陷阱。
 - [模型集总览](docs/MODELSET_OVERVIEW.md)：现状、使用入口与汇报要点（合并原 STATUS/PRESENTATION/USAGE 三份）。
 - [项目流程](docs/PROJECT_FLOW.md)：数据、训练、评测与交付的流程关系。
 - [framework README](framework/README.md)：CLI、配置字段、resume 与扩展点。
 - [YOLO 优化工作流](docs/YOLO_OPTIMIZATION.md)：sweep / analyze / 特征融合的操作指南。
-- [YOLO 自动标注工具](docs/AUTO_ANNOTATION.md)：视频 → legacy 标注 JSON → 时序训练数据，以及图片帧序列数据集 → 时序训练数据（frames/ + labels/）的完整使用指南（run / run-dataset / convert / 优化参数 / 训练链路）。
+- [YOLO 自动标注工具](docs/AUTO_ANNOTATION.md)：视频 → legacy 标注 JSON → 时序训练数据，以及图片帧序列数据集 → 时序训练数据（frames/ + labels/）的完整使用指南（run / run-dataset / convert / 优化参数 / 训练链路 / 训练数据可视化 / 质量报告）。
 - [自动标注快速上手](docs/AUTO_ANNOTATION_QUICKSTART.md)：最小命令集，5 分钟跑通 run / run-dataset / convert 与常见报错排查。
 - [数据集构建要求（Label Studio）](docs/DATASET_BUILDING_GUIDE.md)：队友通过 Label Studio 构建/扩充训练数据的硬性契约与操作步骤（只需标动作标签，不画框；目标框由 YOLO 自动标注），以及后续数据维护的注意事项（类别覆盖/平衡、增量扩量、版本与登记联动）。
 - [YOLO 结果人工审核流程](docs/YOLO_REVIEW_FLOW.md)：YOLO 预标注 → Label Studio 人工改框+标动作 → 导出 → convert 的质量门闭环。
 - [推理链路性能测量](docs/INFERENCE_CHAIN_PERF.md)：YOLO 检测 / 特征化 / 时序推理的实测时延，支撑"预计算入数据集 vs 现场推理"决策。
-- [评估能力说明](docs/EVAL.md)：指标定义、聚合口径和完整性检查。
+- [评估能力说明](docs/EVAL.md)：指标定义、聚合口径、完整性检查与预测可视化（带状图 / 预测动作阶段视频 / 单命令时间线检测）。
+- [特征提取方案索引](docs/features/README.md)：可用 feature mapping 的语义、维度、代码/登记/配置定位与实测结论，新增方案照检查清单执行。
 - [benchmark README](benchmark/README.md)：单模型、feed-mode 和端到端 benchmark。
 - [新模型接入手册](docs/MODEL_ONBOARDING.md)：新增时序网络或检测器。
 - [实现状态](docs/TRAIN_EVAL_IMPLEMENTATION_STATUS.md)：当前能力与剩余事项。

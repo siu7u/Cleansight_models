@@ -134,6 +134,21 @@ python -m framework.cleansight_eval.cli.annotate convert \
 - `validate_testsets.py`：auto-v2 三 split 全部 OK（fingerprint 已生成）；仅存的 5 个 FAIL 为本机未挂载的历史数据集（手动 v2 / endo），非本次回归
 - catalog/实验配置/YAML_CONFIG 已同步升 v2；3 个未质检候选已按方案 a 合入（37c53d37→val、f4b10ad8/3b2dcda0→train），质检不通过时走 manifest 剔除流程
 
+### 6.4 执行结果（2026-08-28，v3 已完成）
+
+- 数据集 `temporal.actionmixed-auto-v3`：数据源换为 project-16 导出（18 个 2026-08 新录视频），train 13 / val 3 / test 2，test 锚定团队指定 task#195/#199，revision `b7edb874…`（README 展示前缀）
+- 动作标签随 LS 更名 `air_injection → water_injection`（id 位置不变）；检测源仍为 yolo11s-g1/g2-v1，8 类全非零；仓库根附 `task_ids.yaml` 溯源（split → 视频 → project-16 task id）
+- 六类覆盖（标签帧 12,959）：test 仅 idle/lb_insert/lb_withdraw（锚定任务所致，已如实记录）；water 全库仅 2 视频（#201 train 194 帧、#207 val 17 帧）
+- `validate_testsets.py`：auto-v3 三 split 全部 OK；catalog/实验配置/YAML_CONFIG 已同步升 v3；v3 数据已从 ModelScope 同步到本地 `datasets/cleansight-ActionMixed-auto`（旧本地副本备份为 `-v1-backup`）
+
+### 6.5 执行结果（2026-09-03，task#204 标注修正）
+
+- 背景：train task#204（`67aa31ca…`）经人工审核后修正 short_brush_cleaning 标注
+- 变更：11 帧（10 帧 idle→sbc + 1 帧 sbc→idle），sbc 39→48 帧；**仅该 train 视频标签变化**，val/test 与 frames/ 全部不变
+- 同步：ModelScope HEAD `cd585c5` 已同步进本地正式数据目录（旧标签备份于 `labels_backup_task204fix/`）；`-lhh` 克隆目录保留作后续同步源
+- 登记影响：manifest 未变 → revision `b7edb874…` 不变；train split 内容指纹更新 → 旧 checkpoint resume 按指纹自动拒绝（防混训，符合设计）；此前 val/test 上的评估结果不受影响
+- 门禁：`validate_testsets.py` 全绿（22 testset）
+
 ---
 
 ## 7. Phase 3 — 模型侧联动（本轮暂缓，决策 D）
@@ -183,12 +198,12 @@ python -m framework.cleansight_eval.cli.annotate convert \
 
 ## 10. 决策记录（已定）
 
-| #   | 决策                   | 结论                                          |
-| --- | -------------------- | ------------------------------------------- |
-| A   | val 修复方式             | **整体重划**——数据量小、重训快；接受旧 val/test 指标不可比并留痕    |
-| B   | 旧手动通道                | **不再接收新视频，代码保留**（冻结不删除，保证历史可复现）             |
-| C   | auto 上 ModelScope 时机 | **Phase 2 定稿后一次性上传首版；上传执行前需负责人确认**          |
-| D   | Phase 3 本轮是否执行       | **暂不执行**，优先数据侧，后续轮次补上；v1 pin 漂移先以 CARD 注记过渡 |
+| #   | 决策                       | 结论                                                          |
+| --- | ------------------------ | ----------------------------------------------------------- |
+| A   | val 修复方式                 | **整体重划**——数据量小、重训快；接受旧 val/test 指标不可比并留痕                     |
+| B   | 旧手动通道                    | **不再接收新视频，代码保留**（冻结不删除，保证历史可复现）                          |
+| C   | auto 上 ModelScope 时机     | **Phase 2 定稿后一次性上传首版；上传执行前需负责人确认**                       |
+| D   | Phase 3 本轮是否执行           | **暂不执行**，优先数据侧，后续轮次补上；v1 pin 漂移先以 CARD 注记过渡                |
 
 ## 11. 线路 B 执行记录（2026-08-25）
 
@@ -201,58 +216,6 @@ python -m framework.cleansight_eval.cli.annotate convert \
 - **检测完成（2026-08-27）**：26/26 JSON 产出至 `outputs/annotations-yolo11`，终检通过——无空轨迹视频，hand×2 全局一致，8 类全覆盖（hand 52 / control_body 26 / mid_section 26 / short_brush 18 / syringe 18 / distal_end 18 / air_gun 15 / brush_tip_out 5），帧覆盖与视频长度一致
 - 质检状态基线：见 `E:\曦源\dataset\raw-from Label Studio\EXPORT_NOTES.md`
 - 暂存记录：`687e3c78`（在库但无动作标注）已暂存至 `outputs/stash-pending-videos/`（仅本地，不外发；处置与流程见 EXPORT_NOTES.md 第四节）
-
-## 11A. v3 重建（2026-08-28，project-16 数据源切换）
-
-应团队变更要求完成 v3 重建，关键变更：
-
-- **数据源切换**：LS project-16（18 个 8 月新录视频，task#192-211），旧 project-10 的 26 个视频不在新导出内；v2 产物备份于 `datasets/cleansight-ActionMixed-auto-v2-backup`
-- **标签与 LS 同步**：`air_injection` 更名 `water_injection`（action id 位置 1 不变）；`_constants.py::ACTION_CLASSES` 已同步
-- **task id 溯源**：数据集根新增 `task_ids.yaml`（split → 视频 → LS task id 映射）
-- **test 锚定**：按团队指定 = LS task#195（5b181b9b）/ #199（1b2c95ff）；注意 test 仅含 insert/withdraw 两类，water/flush/sbc 不在 test 中
-- **split**：train 13（9142 帧，六类齐）/ val 3（1926 帧，五类齐；water 仅 17 帧——全库仅 2 个 water 视频所致，152453e5#207 在 val、39da2635#201 在 train）
-- **revision**：`b7edb874…`；catalog/experiments/YAML_CONFIG 已升 v3；validate 全绿
-- **检测**：18/18 yolo11 双模型完成（outputs/annotations-yolo11 追加 18 份 JSON）
-- **ModelScope**：`lhh010/cleansight-ActionMixed-auto` 仓库已建，上传脚本已备（`dataset/cleansight-pipeline/actionmixed/upload_auto.py`），**执行前需负责人确认**
-
-## 11B. v3 质审更新（2026-08-30）
-
-- task#195/199/211 审核通过，标注无变化；**task#204 审核修正 4 段 sbc 区间**，已过滤式重建（sbc 39→48 帧），标签文件已同步 ModelScope，manifest/revision 不变（split 未动）
-- 新导出发现 **task#203**（f809e944，water_injection 177 帧）未审，暂不入库，待 QC
-- 质审台账：dataset 仓库 raw-from Label Studio/EXPORT_NOTES.md 第六节
-
-## 11C. v3 审核更新与 val 重划（2026-09-05）
-
-依据 LS 新导出 `project-16-at-2026-09-05-07-46-8edb5c66.json`（19 task，归档于 dataset 仓库根）：
-
-- **标注审核更新入 v3**：task#196/197/198/208/209/210（196/210 多段 flush 区间修正、197 short_brush 大段拆分为 7 段、198/209 flush 区间收窄、208/210 相对 08-28 导出的修正一并落入）；labels 已重建
-- **val 重划（视频构成变化，split 比例不变）**：#202（071eb2d6，仅 sbc 183 帧小视频）val→train，#205（e8ea5bb7，flush+sbc）train→val；val = #209/#205/#207，六类齐（water 17 帧），train 13（water 194 帧含全库最大 water 源 #201）；test 锚定不变（#195/#199）
-- **版本口径**：仍为 v3（视频集合与检测侧未变），但 **train/val 视频构成与标签内容已变，重训前后的 val/test 指标与旧 v3 结果不可比**，评测报告须注明本次变更
-- **task#203**：新导出已有 water_injection 标注（148-188 等 4 段），维持 08-30 决定暂缓入库（water 扩量优先级调低），重建导出已剔除
-- **ModelScope**：变更文件已增量同步（labels 8 份 + task_ids.yaml + 移动视频 frames 697 份至新 split 位置；labels 旧位置 2 份已在网页端删除）。注意：ModelScope 已下线 API 删除能力（错误码 10020301011，提示到网页删除），`frames/val/071eb2d6-*`（261 份）与 `frames/train/e8ea5bb7-*`（436 份）旧位置残留——后已改用 git 方式全部清除，见 11C+
-- validate：manifest 三件套 / labels 目录 / task_ids.yaml 一致性全绿
-
-## 11C+. test 集取消，#195/#199 并入 train/val（2026-09-05 第二次调整）
-
-- 团队决定取消 auto 通道 test 集：原 test 锚定视频 **#195（5b181b9b）→ train**、**#199（1b2c95ff）→ val**；此后 train 14 / val 4 / test 0
-- 涉及变更：manifest 三件套（test.txt 删除）、task_ids.yaml、testsets.yaml（移除 `temporal.actionmixed-auto-v3.test`）、YAML_CONFIG、数据集 labels/frames 位置移动
-- 评测口径本轮未动：三个 experiment yaml 的 `split_eval: test` 暂保留，重训前需改（建议改 val）并注明与历史 test 指标不可比
-- ModelScope 已用 git 方式同步（clone→移动→push）；API 删除已下线，git push 为替代通道
-
-## 11D. 数据开发优先级参考（2026-08-30 引入）
-
-依据 `dataset/docs/BENCHMARK_SEGMENTATION.md`（benchmark 等价类划分）的优先级框架，指导后续数据采集与扩量方向：
-
-**采集优先级（对数据侧的含义）**
-- **P0（缺口类/对抗序列，需真实采集，增强造不出）**：对抗-可见性序列（器具在场未操作 / 多器具同框仅一件在用）、insert vs withdraw 对比段、模糊渐变边界、罕见转移对、段内遮挡/手离场
-- **P1**：超短/超长段、动作重复/缺失 phase、无停顿衔接、长 idle、异机位
-- **P2/已饱和（作对照基线，无需扩量）**：**flush、long_brush_insert**
-- 类别缺口口径与 v3 现状对照：文档标注 air(现 water)_injection/sbc 为 P0 缺口是 benchmark test 策展视角；**维护人 2026-08-30 决定：water_injection 扩量优先级调低**，task#203(f809e944) 暂缓入库，sbc 仍按缺口对待
-
-**对 split/评测纪律的启示（v3 已符合）**
-- test 源级整条隔离（v3:视频级 split，无跨 split）✓
-- test 整段保留不截散帧（v3:整视频入库）✓
-- 后续 Phase 3 重训时，评测报告建议按文档 §7 做 EC 切片指标（对抗-可见性子集 vs 普通子集 F1 衰减等）
 
 ## 12. 附录：命令速查
 

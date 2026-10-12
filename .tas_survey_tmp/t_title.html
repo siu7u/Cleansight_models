@@ -1,0 +1,1869 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<!-- new favicon config and versions by realfavicongenerator.net -->
+<link rel="apple-touch-icon" sizes="180x180" href="https://static.arxiv.org/static/base/1.0.0a5/images/icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://static.arxiv.org/static/base/1.0.0a5/images/icons/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="https://static.arxiv.org/static/base/1.0.0a5/images/icons/favicon-16x16.png">
+<link rel="manifest" href="https://static.arxiv.org/static/base/1.0.0a5/images/icons/site.webmanifest">
+<link rel="mask-icon" href="https://static.arxiv.org/static/base/1.0.0a5/images/icons/safari-pinned-tab.svg" color="#b31b1b">
+<link rel="shortcut icon" href="https://static.arxiv.org/static/base/1.0.0a5/images/icons/favicon.ico">
+<meta name="msapplication-TileColor" content="#b31b1b">
+<meta name="msapplication-config" content="images/icons/browserconfig.xml">
+<meta name="theme-color" content="#b31b1b">
+<!-- end favicon config -->
+<title>Search | arXiv e-print repository</title>
+<script defer src="https://static.arxiv.org/static/base/1.0.0a5/fontawesome-free-5.11.2-web/js/all.js"></script>
+<link rel="stylesheet" href="https://static.arxiv.org/static/base/1.0.0a5/css/arxivstyle.css" />
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    messageStyle: "none",
+    extensions: ["tex2jax.js"],
+    jax: ["input/TeX", "output/HTML-CSS"],
+    tex2jax: {
+      inlineMath: [ ['$','$'], ["\\(","\\)"] ],
+      displayMath: [ ['$$','$$'], ["\\[","\\]"] ],
+      processEscapes: true,
+      ignoreClass: '.*',
+      processClass: 'mathjax.*'
+    },
+    TeX: {
+        extensions: ["AMSmath.js", "AMSsymbols.js", "noErrors.js"],
+        noErrors: {
+          inlineDelimiters: ["$","$"],
+          multiLine: false,
+          style: {
+            "font-size": "normal",
+            "border": ""
+          }
+        }
+    },
+    "HTML-CSS": { availableFonts: ["TeX"] }
+  });
+</script>
+<script src='//static.arxiv.org/MathJax-2.7.3/MathJax.js'></script>
+<script src="https://static.arxiv.org/static/base/1.0.0a5/js/notification.js"></script>
+
+    
+  <script>document.documentElement.classList.add('js');</script>
+  <link rel="stylesheet" type="text/css" media="screen" href="https://static.arxiv.org/static/base/1.0.1/css/arxiv-header-footer.css?v=20260626" />
+  <script defer src="https://static.arxiv.org/static/base/1.0.1/js/arxiv-header.js?v=20260626"></script>
+  <link rel="stylesheet" href="https://static.arxiv.org/static/search/0.5.6/css/bulma-tooltip.min.css" />
+  <link rel="stylesheet" href="https://static.arxiv.org/static/search/0.5.6/css/search.css" />
+  <script
+    src="https://code.jquery.com/jquery-3.2.1.slim.min.js"
+    integrity="sha256-k2WSCIexGzOj3Euiig+TlR8gA0EmPjuc79OEeY5L45g="
+    crossorigin="anonymous"></script>
+
+  <script src="https://static.arxiv.org/static/search/0.5.6/js/fieldset.js"></script>
+  <style>
+  radio#cf-customfield_11400 {
+    display: none;
+  }
+  /* Render the spinout .ds-site-footer standalone / full-bleed. search extends the
+     legacy base, whose bare wrapping <footer> (in base/base.html, outside any
+     overridable block — so it can't be removed from here) is styled by
+     arxivstyle.css with a grey background (hsl(0,0%,95%)) + 1em 2em padding,
+     boxing our warm-wash footer inside a second grey band. display:contents drops
+     the wrapper's box entirely (cleaner than zeroing individual properties) so
+     .ds-site-footer renders in its place; it inherits flex-shrink:0 from the same
+     legacy `footer` rule, so the sticky footer still works. Search-specific
+     legacy-base integration; the shared chrome CSS stays byte-identical to the SSOT. */
+  body > footer {
+    display: contents;
+  }
+  </style>
+
+  </head>
+  <body>
+  
+  
+  <header><a href="#main-container" class="is-sr-only">Skip to main content</a>
+    <div class="ds-announcement" id="announcement-banner" role="region" aria-label="Announcement" data-banner-name="spinout-nonprofit">
+  <img class="ds-announcement-glyph" src="https://static.arxiv.org/static/base/1.0.1/images/icons/smileybones-small.svg" alt="" aria-hidden="true">
+  <span class="ds-announcement-text">arXiv is now an independent nonprofit!</span>
+  <a class="ds-announcement-link" href="https://info.arxiv.org/about">Learn more</a>
+  <button type="button" class="ds-announcement-close" aria-label="Dismiss announcement">&times;</button>
+</div>
+<header class="ds-site-header">
+  <a href="https://arxiv.org/" class="ds-site-header-logo" aria-label="archive home">
+    <img src="https://static.arxiv.org/static/base/1.0.1/images/arxiv-logo-primary-light.svg" alt="archive">
+  </a>
+  <button type="button" id="ds-nav-toggle" class="ds-site-header-nav-toggle"
+    aria-label="Open menu" aria-controls="ds-site-header-nav" aria-expanded="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+      <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+  </button>
+  <nav class="ds-site-header-nav" id="ds-site-header-nav" aria-label="Main navigation">
+    <a id="arxiv-search-toggle" href="/search" aria-controls="arxiv-search-overlay" aria-expanded="false">
+      <svg class="ds-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      Search
+    </a>
+    <a href="https://arxiv.org/user/create">Submit</a>
+    <a href="https://info.arxiv.org/about/donate.html">Donate</a>
+    <span class="ds-site-header-divider" aria-hidden="true"></span>
+    <a href="https://arxiv.org/login" class="ds-site-header-login">Log in</a>
+  </nav>
+</header>
+
+<div class="arxiv-search-overlay" id="arxiv-search-overlay" hidden>
+  <div class="arxiv-search-panel" role="search">
+    <form method="GET" action="/search">
+      <label for="arxiv-search-input" class="is-sr-only">Search arXiv</label>
+      <input type="text" name="query" id="arxiv-search-input" autocomplete="off"
+        placeholder="Search papers by title, author, abstract, or ID...">
+      <input type="hidden" name="searchtype" value="all">
+      <input type="hidden" name="source" value="header">
+    </form>
+    <div class="arxiv-search-hint">
+      Press Enter to search &middot; <a href="/search/advanced">Advanced search</a>
+    </div>
+  </div>
+</div>
+
+  </header>
+  <main class="container" id="main-container">
+    
+
+
+    
+  <div class="level is-marginless">
+    <div class="level-left">
+      <h1 class="title is-clearfix">
+    
+        Showing 1&ndash;25 of 73 results for title: <span class="mathjax">temporal action segmentation</span>
+    
+</h1>
+    </div>
+    <div class="level-right is-hidden-mobile">
+      <!-- feedback for mobile is moved to footer -->
+      <span class="help" style="display: inline-block;"><a href="https://github.com/arXiv/arxiv-search/releases">Search v0.5.6 released 2020-02-24</a>&nbsp;&nbsp;</span>
+    </div>
+  </div>
+    <div class="content">
+      
+  <form method="GET" action="/search/"  aria-role="search">
+    
+
+    
+    <div class="field has-addons-tablet">
+      <div class="control is-expanded">
+        <label for="query" class="hidden-label">Search term or terms</label>
+        
+          <input class="input is-medium" id="query" name="query" placeholder="Search term..." type="text" value="temporal action segmentation">
+        
+        
+      </div>
+      <div class="select control is-medium">
+        <label class="is-hidden" for="searchtype">Field</label>
+        <select class="is-medium" id="searchtype" name="searchtype"><option value="all">All fields</option><option selected value="title">Title</option><option value="author">Author(s)</option><option value="abstract">Abstract</option><option value="comments">Comments</option><option value="journal_ref">Journal reference</option><option value="acm_class">ACM classification</option><option value="msc_class">MSC classification</option><option value="report_num">Report number</option><option value="paper_id">arXiv identifier</option><option value="doi">DOI</option><option value="orcid">ORCID</option><option value="license">License (URI)</option><option value="author_id">arXiv author ID</option><option value="help">Help pages</option><option value="full_text">Full text</option></select>
+      </div>
+      <div class="control">
+          <button class="button is-link is-medium">Search</button>
+      </div>
+    </div>
+    <div class="field">
+      <div class="control is-size-7">
+        
+        <label class="radio">
+          <input checked id="abstracts-0" name="abstracts" type="radio" value="show"> Show abstracts
+        </label>
+        
+        <label class="radio">
+          <input id="abstracts-1" name="abstracts" type="radio" value="hide"> Hide abstracts
+        </label>
+        
+      </div>
+    </div>
+    <div class="is-clearfix" style="height: 2.5em"> 
+      <div class="is-pulled-right">
+        
+        <a href="/search/advanced?terms-0-term=temporal+action+segmentation&amp;terms-0-field=title&amp;size=25&amp;order=-announced_date_first">Advanced Search</a>
+        
+      </div>
+    </div>
+    <input type="hidden" name="order" value="-announced_date_first">
+    <input type="hidden" name="size" value="25">
+  </form>
+
+  
+
+  
+      
+<div class="level breathe-horizontal">
+  <div class="level-left">
+    <form method="GET" action="/search/">
+      <div style="display: none;">
+        
+          
+            <select id="searchtype" name="searchtype"><option value="all">All fields</option><option selected value="title">Title</option><option value="author">Author(s)</option><option value="abstract">Abstract</option><option value="comments">Comments</option><option value="journal_ref">Journal reference</option><option value="acm_class">ACM classification</option><option value="msc_class">MSC classification</option><option value="report_num">Report number</option><option value="paper_id">arXiv identifier</option><option value="doi">DOI</option><option value="orcid">ORCID</option><option value="license">License (URI)</option><option value="author_id">arXiv author ID</option><option value="help">Help pages</option><option value="full_text">Full text</option></select>
+          
+        
+          
+            <input id="query" name="query" type="text" value="temporal action segmentation">
+          
+        
+          
+        
+          
+        
+          
+            <ul id="abstracts"><li><input checked id="abstracts-0" name="abstracts" type="radio" value="show"> <label for="abstracts-0">Show abstracts</label></li><li><input id="abstracts-1" name="abstracts" type="radio" value="hide"> <label for="abstracts-1">Hide abstracts</label></li></ul>
+          
+        
+      </div>
+      <div class="box field is-grouped is-grouped-multiline level-item">
+        <div class="control">
+          <span class="select is-small">
+            <select id="size" name="size"><option selected value="25">25</option><option value="50">50</option><option value="100">100</option><option value="200">200</option></select>
+          </span>
+          <label for="size">results per page</label>.
+        </div>
+        <div class="control">
+          <label for="order">Sort results by</label>
+          <span class="select is-small">
+            <select id="order" name="order"><option selected value="-announced_date_first">Announcement date (newest first)</option><option value="announced_date_first">Announcement date (oldest first)</option><option value="-submitted_date">Submission date (newest first)</option><option value="submitted_date">Submission date (oldest first)</option><option value="">Relevance</option></select>
+          </span>
+        </div>
+        <div class="control">
+          <button class="button is-small is-link">Go</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+      
+
+
+  <nav class="pagination is-small is-centered breathe-horizontal" role="navigation" aria-label="pagination">
+    
+    <a href=""
+      class="pagination-previous is-invisible">Previous
+    </a>
+    
+    
+      <a href="/search/?searchtype=title&amp;query=temporal+action+segmentation&amp;size=25&amp;start=25"
+        class="pagination-next" >Next
+      </a>
+    
+    <ul class="pagination-list">
+
+      <li>
+        <a href="/search/?searchtype=title&amp;query=temporal+action+segmentation&amp;size=25&amp;start=0"
+          class="pagination-link is-current"
+          aria-label="Goto page 1">1
+        </a>
+      </li>
+
+      
+        
+        <li>
+          <a href="/search/?searchtype=title&amp;query=temporal+action+segmentation&amp;size=25&amp;start=25"
+            class="pagination-link "
+            aria-label="Page 2"
+            aria-current="page">2
+          </a>
+        </li>
+        
+        <li>
+          <a href="/search/?searchtype=title&amp;query=temporal+action+segmentation&amp;size=25&amp;start=50"
+            class="pagination-link "
+            aria-label="Page 3"
+            aria-current="page">3
+          </a>
+        </li>
+        
+      
+    </ul>
+  </nav>
+  
+
+
+
+<ol class="breathe-horizontal" start="1"> 
+
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2608.29611">arXiv:2608.29611</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2608.29611">pdf</a>, <a href="https://arxiv.org/ps/2608.29611">ps</a>, <a href="https://arxiv.org/format/2608.29611">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        See the Change, Keep the Flow: Unsupervised <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span> via Spectral-<span class="search-hit mathjax">Temporal</span> Representation Learning
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Li%2C+Y">Yun Li</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Xiao%2C+J">Jun Xiao</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Zhang%2C+C">Cong Zhang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Lam%2C+K">Kin-Man Lam</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2608.29611v1-abstract-short" style="display: inline;">
+        Unsupervised action segmentation aims to discover latent action categories and their temporal organization without action annotations. Optimal transport-based methods provide structured frame-to-action assignments, however, their pseudo-label quality is fundamentally conditioned on the representation space used to construct the transport cost. We argue that reliable OT pseudo-labeling requires a r&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.29611v1-abstract-full').style.display = 'inline'; document.getElementById('2608.29611v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2608.29611v1-abstract-full" style="display: none;">
+        Unsupervised action segmentation aims to discover latent action categories and their temporal organization without action annotations. Optimal transport-based methods provide structured frame-to-action assignments, however, their pseudo-label quality is fundamentally conditioned on the representation space used to construct the transport cost. We argue that reliable OT pseudo-labeling requires a representation geometry that is simultaneously sensitive to discriminative action changes and coherent along local temporal progressions. Based on this insight, we propose SpecT-OT, a spectral-temporal representation learning framework built upon an unbalanced optimal transport pseudo-labeling concept. SpecT-OT introduces a Spectral Reparameterization Projector (SRP), which parameterizes projector weights with fixed Fourier bases and learnable coefficients to improve the modeling of rapidly varying discriminative features, and Temporal Affinity Regularization (TAR), which imposes distance-aware, label-free constraints on pairwise frame affinities to stabilize local temporal structure. The two components jointly produce more discriminative and temporally stable transport costs, yielding more reliable pseudo-labels for iterative representation learning. Experiments on four benchmarks demonstrate strong performance compared with state-of-the-art methods. SpecT-OT achieves the best results on 13 of 15 metrics, including 4.1-point MoF and 7.4-point F1 gains over the baseline on Breakfast and Desktop Assembly, respectively.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.29611v1-abstract-full').style.display = 'none'; document.getElementById('2608.29611v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 30 August, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> August 2026.
+      
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2608.24043">arXiv:2608.24043</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2608.24043">pdf</a>, <a href="https://arxiv.org/ps/2608.24043">ps</a>, <a href="https://arxiv.org/format/2608.24043">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        ConsensusTAS: Self-Supervised <span class="search-hit mathjax">Temporal</span> <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span> for Long-Horizon Construction Videos
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Zhou%2C+X">Xiaoshan Zhou</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Sun%2C+Y">Yafei Sun</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2608.24043v1-abstract-short" style="display: inline;">
+        Recognizing sequential construction activities is important for collaborative human-robot work; for example, robots are able to understand workers&#39; current and upcoming actions and provide timely tool delivery or physical support. However, despite extensive research on construction worker activity recognition, existing studies have been limited to classifying activity categories, such as climbing,&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.24043v1-abstract-full').style.display = 'inline'; document.getElementById('2608.24043v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2608.24043v1-abstract-full" style="display: none;">
+        Recognizing sequential construction activities is important for collaborative human-robot work; for example, robots are able to understand workers&#39; current and upcoming actions and provide timely tool delivery or physical support. However, despite extensive research on construction worker activity recognition, existing studies have been limited to classifying activity categories, such as climbing, lifting, and walking, instead of recognizing fine-grained activity transitions from long-horizon sequences. Addressing this problem is challenging because annotating action temporal boundaries in long construction videos is time-consuming. In this study, we propose ConsensusTAS, a label-free, self-supervised learning approach to segment continuous video streams into distinct activity phases by exploiting the internal consensus of candidate segmentations. We evaluated our algorithm on three public datasets, where it outperformed state-of-the-art methods, achieving an F1@10 of 73.08 on GTEA, an F1@10 of 64.33 on Breakfast, and an F1@50 of 33.50 on static-camera videos from Assembly101. We also tested it on real-world construction videos, where post-hoc evaluation showed that the model successfully recognized and segmented actions within the composite activity of bricklaying, such as spreading mortar on a brick, placing the brick, pressing, and aligning. Compared with other temporal action segmentation models that require computationally intensive large vision-language models, our method can run on a CPU, which provides practical value for video surveillance and human-robot collaboration on mobile robotic platforms.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.24043v1-abstract-full').style.display = 'none'; document.getElementById('2608.24043v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 25 August, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> August 2026.
+      
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2606.02246">arXiv:2606.02246</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2606.02246">pdf</a>, <a href="https://arxiv.org/ps/2606.02246">ps</a>, <a href="https://arxiv.org/format/2606.02246">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        Ego-METAS: Egocentric online Multimodal Energy-efficient <span class="search-hit mathjax">Temporal</span> <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span> benchmark
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Santos-Villafranca%2C+M">Maria Santos-Villafranca</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Bermudez-cameo%2C+J">Jesus Bermudez-cameo</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Perez-Yus%2C+A">Alejandro Perez-Yus</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Farinella%2C+G+M">Giovanni Maria Farinella</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Furnari%2C+A">Antonino Furnari</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2606.02246v1-abstract-short" style="display: inline;">
+        To operate in the physical world, embodied agents must perceive their environment in an &#34;always-on&#34; fashion, selectively accessing the most informative sensors to balance energy constraints and task accuracy. Despite its importance for resource-constrained devices, energy-aware perception remains under-explored, with most prior work assuming unlimited compute. To address this, we introduce Ego-MET&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2606.02246v1-abstract-full').style.display = 'inline'; document.getElementById('2606.02246v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2606.02246v1-abstract-full" style="display: none;">
+        To operate in the physical world, embodied agents must perceive their environment in an &#34;always-on&#34; fashion, selectively accessing the most informative sensors to balance energy constraints and task accuracy. Despite its importance for resource-constrained devices, energy-aware perception remains under-explored, with most prior work assuming unlimited compute. To address this, we introduce Ego-METAS: the first Egocentric online Multimodal Energy-efficient Temporal Action Segmentation benchmark. Ego-METAS provides a unified testbed of more than 100 hours of untrimmed egocentric video from EgoExo4D, CMU-MMAC, and CaptainCook4D, spanning 5 modalities (RGB, audio, gaze, IMU, and monochrome camera). We formulate an online temporal action segmentation task where models must dynamically select which sensors to activate at each timestep while strictly adhering to hardware-representative energy budgets. Alongside the benchmark, we release unified splits, cleaned annotations, pre-extracted features, and a diverse suite of baseline routing policies. Our evaluations show that optimal routing is highly scenario-dependent, and that existing policy-learning methods, designed primarily for trimmed clips, struggle to adapt to continuous, untrimmed environments. However, even simple dynamic fusion of complementary modalities (e.g., via random routing) proves critical for balancing predictive accuracy against strict energy budgets. Ultimately, Ego-METAS provides a standardized foundation to develop robust, cost-aware policies for autonomous, always-on embodied AI.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2606.02246v1-abstract-full').style.display = 'none'; document.getElementById('2606.02246v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 29 May, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> June 2026.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">Project Page: https://maria-sanvil.github.io/Ego-METAS-website/</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2605.10149">arXiv:2605.10149</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2605.10149">pdf</a>, <a href="https://arxiv.org/ps/2605.10149">ps</a>, <a href="https://arxiv.org/format/2605.10149">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        Improving <span class="search-hit mathjax">Temporal</span> <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span> via Constraint-Aware Decoding
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Ee%2C+Y+K">Yeo Keat Ee</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Roy%2C+D">Debaditya Roy</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Li%2C+C">Chen Li</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Zhang%2C+H">Hao Zhang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Fernando%2C+B">Basura Fernando</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2605.10149v1-abstract-short" style="display: inline;">
+        Temporal action segmentation (TAS) divides untrimmed videos into labeled action segments. While fully supervised methods have advanced the field, challenges such as action variability, ambiguous boundaries, and high annotation costs remain, especially in new or low-resource domains. Grammar-based approaches improve segmentation with structural priors but rely on complex parsing limiting scalabilit&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2605.10149v1-abstract-full').style.display = 'inline'; document.getElementById('2605.10149v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2605.10149v1-abstract-full" style="display: none;">
+        Temporal action segmentation (TAS) divides untrimmed videos into labeled action segments. While fully supervised methods have advanced the field, challenges such as action variability, ambiguous boundaries, and high annotation costs remain, especially in new or low-resource domains. Grammar-based approaches improve segmentation with structural priors but rely on complex parsing limiting scalability. In this work, we propose a lightweight, constraint-based refinement framework that enhances TAS predictions by integrating statistical structural priors such as transition confidence, action boundary sets, and per-class duration, that can be directly extracted from annotated data. These constraints are integrated into a modified Viterbi decoding algorithm, allowing inference-time refinement without retraining or added model complexity. Our approach improves both fully and semi-supervised TAS models by correcting structural prediction errors while maintaining high efficiency. Code is available at https://github.com/LUNAProject22/CAD
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2605.10149v1-abstract-full').style.display = 'none'; document.getElementById('2605.10149v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 11 May, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> May 2026.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">accepted to ICPR 2026</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2605.01668">arXiv:2605.01668</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2605.01668">pdf</a>, <a href="https://arxiv.org/ps/2605.01668">ps</a>, <a href="https://arxiv.org/format/2605.01668">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        
+          
+            <span class="tag is-small is-grey tooltip is-tooltip-top" data-tooltip="Artificial Intelligence">cs.AI</span>
+          
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        IMPACT-Scribe: Interactive <span class="search-hit mathjax">Temporal</span> <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span> with Boundary Scribbles and Query Planning
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Yin%2C+Q">Qian Yin</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Wen%2C+D">Di Wen</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Peng%2C+K">Kunyu Peng</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Schneider%2C+D">David Schneider</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Zhong%2C+Z">Zeyun Zhong</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Jaus%2C+A">Alexander Jaus</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Marinov%2C+Z">Zdravko Marinov</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Wei%2C+J">Jiale Wei</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Liu%2C+R">Ruiping Liu</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Zheng%2C+J">Junwei Zheng</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Chen%2C+Y">Yufan Chen</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Zhang%2C+C">Chen Zhang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Qi%2C+L">Lei Qi</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Stiefelhagen%2C+R">Rainer Stiefelhagen</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2605.01668v1-abstract-short" style="display: inline;">
+        Dense temporal annotation of procedural activity videos is vital for action understanding and embodied intelligence but remains labor-intensive due to reactive tools. Each correction is treated as an isolated edit, limiting reuse of information on annotator uncertainty and model reliability. We introduce IMPACT-Scribe, a correction-driven framework for dense labeling that uses each correction to i&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2605.01668v1-abstract-full').style.display = 'inline'; document.getElementById('2605.01668v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2605.01668v1-abstract-full" style="display: none;">
+        Dense temporal annotation of procedural activity videos is vital for action understanding and embodied intelligence but remains labor-intensive due to reactive tools. Each correction is treated as an isolated edit, limiting reuse of information on annotator uncertainty and model reliability. We introduce IMPACT-Scribe, a correction-driven framework for dense labeling that uses each correction to improve future human-machine collaboration. IMPACT-Scribe combines uncertainty-aware boundary scribble supervision, local proposal modeling, cost-aware query planning, structured propagation, and correction-driven adaptation. Experiments and a human study show that this closed-loop design improves labeling quality per effort, enhances boundary accuracy, and fosters better human-machine interaction over time. The code will be made publicly available at https://github.com/BanzQians/IMPACT_AS.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2605.01668v1-abstract-full').style.display = 'none'; document.getElementById('2605.01668v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 2 May, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> May 2026.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">7 pages, 4 figures. Code is available at https://github.com/BanzQians/IMPACT_AS</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2604.15173">arXiv:2604.15173</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2604.15173">pdf</a>, <a href="https://arxiv.org/ps/2604.15173">ps</a>, <a href="https://arxiv.org/format/2604.15173">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        Boundary-Centric Clip-Budgeted Active Learning for <span class="search-hit mathjax">Temporal</span> <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span>
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Helvaci%2C+H+I">Halil Ismail Helvaci</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Cheung%2C+S+S">Sen-ching Samson Cheung</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2604.15173v2-abstract-short" style="display: inline;">
+        Temporal action segmentation (TAS) in untrimmed videos requires dense temporal supervision. However, most of the annotation cost is spent identifying action transitions where segmentation errors concentrate and small temporal shifts can disproportionately degrade segment-level metrics. We introduce B-ACT, a clip-budgeted active learning framework that explicitly allocates supervision to these erro&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2604.15173v2-abstract-full').style.display = 'inline'; document.getElementById('2604.15173v2-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2604.15173v2-abstract-full" style="display: none;">
+        Temporal action segmentation (TAS) in untrimmed videos requires dense temporal supervision. However, most of the annotation cost is spent identifying action transitions where segmentation errors concentrate and small temporal shifts can disproportionately degrade segment-level metrics. We introduce B-ACT, a clip-budgeted active learning framework that explicitly allocates supervision to these error-prone boundary regions. B-ACT operates in a hierarchical two-stage loop: (i) it ranks and queries unlabeled videos using predictive uncertainty, and (ii) within each selected video, it detects candidate transitions from the current model predictions and selects the top-$K$ boundaries via a novel boundary score. The boundary score fuses neighborhood uncertainty, class ambiguity, and temporal prediction dynamics to reveal the underlying importance of each frame. Importantly, our annotation protocol requests labels only at the boundary frames while still training on boundary-centered clips to exploit temporal context through the model&#39;s receptive field. Extensive experiments on GTEA, 50Salads, and Breakfast demonstrate that boundary-centric supervision delivers strong label efficiency and consistently surpasses representative TAS active learning baselines and prior state of the art under sparse budgets. Gains are largest on datasets where performance is highly sensitive to boundary placement, as measured by edit and overlap-based F1 metrics.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2604.15173v2-abstract-full').style.display = 'none'; document.getElementById('2604.15173v2-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 11 June, 2026; <span class="has-text-black-bis has-text-weight-semibold">v1</span> submitted 16 April, 2026;
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> April 2026.
+      
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2603.24097">arXiv:2603.24097</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2603.24097">pdf</a>, <a href="https://arxiv.org/ps/2603.24097">ps</a>, <a href="https://arxiv.org/format/2603.24097">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        LaDy: Lagrangian-Dynamic Informed Network for Skeleton-based <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span> via Spatial-<span class="search-hit mathjax">Temporal</span> Modulation
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Ji%2C+H">Haoyu Ji</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Liu%2C+X">Xueting Liu</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Gao%2C+Y">Yu Gao</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Huang%2C+W">Wenze Huang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Yang%2C+Z">Zhihao Yang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Ren%2C+W">Weihong Ren</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Wang%2C+Z">Zhiyong Wang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Liu%2C+H">Honghai Liu</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2603.24097v1-abstract-short" style="display: inline;">
+        Skeleton-based Temporal Action Segmentation (STAS) aims to densely parse untrimmed skeletal sequences into frame-level action categories. However, existing methods, while proficient at capturing spatio-temporal kinematics, neglect the underlying physical dynamics that govern human motion. This oversight limits inter-class discriminability between actions with similar kinematics but distinct dynami&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2603.24097v1-abstract-full').style.display = 'inline'; document.getElementById('2603.24097v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2603.24097v1-abstract-full" style="display: none;">
+        Skeleton-based Temporal Action Segmentation (STAS) aims to densely parse untrimmed skeletal sequences into frame-level action categories. However, existing methods, while proficient at capturing spatio-temporal kinematics, neglect the underlying physical dynamics that govern human motion. This oversight limits inter-class discriminability between actions with similar kinematics but distinct dynamic intents, and hinders precise boundary localization where dynamic force profiles shift. To address these, we propose the Lagrangian-Dynamic Informed Network (LaDy), a framework integrating principles of Lagrangian dynamics into the segmentation process. Specifically, LaDy first computes generalized coordinates from joint positions and then estimates Lagrangian terms under physical constraints to explicitly synthesize the generalized forces. To further ensure physical coherence, our Energy Consistency Loss enforces the work-energy theorem, aligning kinetic energy change with the work done by the net force. The learned dynamics then drive a Spatio-Temporal Modulation module: Spatially, generalized forces are fused with spatial representations to provide more discriminative semantics. Temporally, salient dynamic signals are constructed for temporal gating, thereby significantly enhancing boundary awareness. Experiments on challenging datasets show that LaDy achieves state-of-the-art performance, validating the integration of physical dynamics for action segmentation. Code is available at https://github.com/HaoyuJi/LaDy.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2603.24097v1-abstract-full').style.display = 'none'; document.getElementById('2603.24097v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 25 March, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> March 2026.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">CVPR Conference</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2508.10281">arXiv:2508.10281</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2508.10281">pdf</a>, <a href="https://arxiv.org/ps/2508.10281">ps</a>, <a href="https://arxiv.org/format/2508.10281">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        VIFSS: View-Invariant and Figure Skating-Specific Pose Representation Learning for <span class="search-hit mathjax">Temporal</span> <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span>
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Tanaka%2C+R">Ryota Tanaka</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Suzuki%2C+T">Tomohiro Suzuki</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Fujii%2C+K">Keisuke Fujii</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2508.10281v1-abstract-short" style="display: inline;">
+        Understanding human actions from videos plays a critical role across various domains, including sports analytics. In figure skating, accurately recognizing the type and timing of jumps a skater performs is essential for objective performance evaluation. However, this task typically requires expert-level knowledge due to the fine-grained and complex nature of jump procedures. While recent approache&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2508.10281v1-abstract-full').style.display = 'inline'; document.getElementById('2508.10281v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2508.10281v1-abstract-full" style="display: none;">
+        Understanding human actions from videos plays a critical role across various domains, including sports analytics. In figure skating, accurately recognizing the type and timing of jumps a skater performs is essential for objective performance evaluation. However, this task typically requires expert-level knowledge due to the fine-grained and complex nature of jump procedures. While recent approaches have attempted to automate this task using Temporal Action Segmentation (TAS), there are two major limitations to TAS for figure skating: the annotated data is insufficient, and existing methods do not account for the inherent three-dimensional aspects and procedural structure of jump actions. In this work, we propose a new TAS framework for figure skating jumps that explicitly incorporates both the three-dimensional nature and the semantic procedure of jump movements. First, we propose a novel View-Invariant, Figure Skating-Specific pose representation learning approach (VIFSS) that combines contrastive learning as pre-training and action classification as fine-tuning. For view-invariant contrastive pre-training, we construct FS-Jump3D, the first publicly available 3D pose dataset specialized for figure skating jumps. Second, we introduce a fine-grained annotation scheme that marks the ``entry (preparation)&#39;&#39; and ``landing&#39;&#39; phases, enabling TAS models to learn the procedural structure of jumps. Extensive experiments demonstrate the effectiveness of our framework. Our method achieves over 92% F1@50 on element-level TAS, which requires recognizing both jump types and rotation levels. Furthermore, we show that view-invariant contrastive pre-training is particularly effective when fine-tuning data is limited, highlighting the practicality of our approach in real-world scenarios.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2508.10281v1-abstract-full').style.display = 'none'; document.getElementById('2508.10281v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 13 August, 2025; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> August 2025.
+      
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2508.04513">arXiv:2508.04513</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2508.04513">pdf</a>, <a href="https://arxiv.org/ps/2508.04513">ps</a>, <a href="https://arxiv.org/format/2508.04513">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        Skeleton Motion Words for Unsupervised Skeleton-Based <span class="search-hit mathjax">Temporal</span> <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span>
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=G%C3%B6kay%2C+U">Uzay Gökay</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Spurio%2C+F">Federico Spurio</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Bach%2C+D+R">Dominik R. Bach</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Gall%2C+J">Juergen Gall</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2508.04513v1-abstract-short" style="display: inline;">
+        Current state-of-the-art methods for skeleton-based temporal action segmentation are predominantly supervised and require annotated data, which is expensive to collect. In contrast, existing unsupervised temporal action segmentation methods have focused primarily on video data, while skeleton sequences remain underexplored, despite their relevance to real-world applications, robustness, and privac&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2508.04513v1-abstract-full').style.display = 'inline'; document.getElementById('2508.04513v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2508.04513v1-abstract-full" style="display: none;">
+        Current state-of-the-art methods for skeleton-based temporal action segmentation are predominantly supervised and require annotated data, which is expensive to collect. In contrast, existing unsupervised temporal action segmentation methods have focused primarily on video data, while skeleton sequences remain underexplored, despite their relevance to real-world applications, robustness, and privacy-preserving nature. In this paper, we propose a novel approach for unsupervised skeleton-based temporal action segmentation. Our method utilizes a sequence-to-sequence temporal autoencoder that keeps the information of the different joints disentangled in the embedding space. Latent skeleton sequences are then divided into non-overlapping patches and quantized to obtain distinctive skeleton motion words, driving the discovery of semantically meaningful action clusters. We thoroughly evaluate the proposed approach on three widely used skeleton-based datasets, namely HuGaDB, LARa, and BABEL. The results demonstrate that our model outperforms the current state-of-the-art unsupervised temporal action segmentation methods. Code is available at https://github.com/bachlab/SMQ .
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2508.04513v1-abstract-full').style.display = 'none'; document.getElementById('2508.04513v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 6 August, 2025; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> August 2025.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">Accepted to ICCV2025</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2504.18662">arXiv:2504.18662</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2504.18662">pdf</a>, <a href="https://arxiv.org/ps/2504.18662">ps</a>, <a href="https://arxiv.org/format/2504.18662">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Robotics">cs.RO</span>
+        
+          
+            <span class="tag is-small is-grey tooltip is-tooltip-top" data-tooltip="Artificial Intelligence">cs.AI</span>
+          
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        M2R2: MultiModal Robotic Representation for <span class="search-hit mathjax">Temporal</span> <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span>
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Sliwowski%2C+D">Daniel Sliwowski</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Lee%2C+D">Dongheui Lee</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2504.18662v3-abstract-short" style="display: inline;">
+        Temporal action segmentation (TAS) has long been a key area of research in both robotics and computer vision. In robotics, algorithms have primarily focused on leveraging proprioceptive information to determine skill boundaries, with recent approaches in surgical robotics incorporating vision. In contrast, computer vision typically relies on exteroceptive sensors, such as cameras. Existing multimo&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2504.18662v3-abstract-full').style.display = 'inline'; document.getElementById('2504.18662v3-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2504.18662v3-abstract-full" style="display: none;">
+        Temporal action segmentation (TAS) has long been a key area of research in both robotics and computer vision. In robotics, algorithms have primarily focused on leveraging proprioceptive information to determine skill boundaries, with recent approaches in surgical robotics incorporating vision. In contrast, computer vision typically relies on exteroceptive sensors, such as cameras. Existing multimodal TAS models in robotics integrate feature fusion within the model, making it difficult to reuse learned features across different models. Meanwhile, pretrained vision-only feature extractors commonly used in computer vision struggle in scenarios with limited object visibility. In this work, we address these challenges by proposing M2R2, a multimodal feature extractor tailored for TAS, which combines information from both proprioceptive and exteroceptive sensors. We introduce a novel training strategy that enables the reuse of learned features across multiple TAS models. Our method sets a new state-of-the-art performance on three robotic datasets REASSEMBLE, (Im)PerfectPour, and JIGSAWS. Additionally, we conduct an extensive ablation study to evaluate the contribution of different modalities in robotic TAS tasks.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2504.18662v3-abstract-full').style.display = 'none'; document.getElementById('2504.18662v3-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 29 April, 2026; <span class="has-text-black-bis has-text-weight-semibold">v1</span> submitted 25 April, 2025;
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> April 2025.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">8 pages, 6 figures, 2 tables</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2504.02512">arXiv:2504.02512</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2504.02512">pdf</a>, <a href="https://arxiv.org/format/2504.02512">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        
+          
+            <span class="tag is-small is-grey tooltip is-tooltip-top" data-tooltip="Artificial Intelligence">cs.AI</span>
+          
+            <span class="tag is-small is-grey tooltip is-tooltip-top" data-tooltip="Machine Learning">cs.LG</span>
+          
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        Towards Generalizing <span class="search-hit mathjax">Temporal</span> <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span> to Unseen Views
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Bahrami%2C+E">Emad Bahrami</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Zatsarynna%2C+O">Olga Zatsarynna</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Francesca%2C+G">Gianpiero Francesca</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Gall%2C+J">Juergen Gall</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2504.02512v1-abstract-short" style="display: inline;">
+        While there has been substantial progress in temporal action segmentation, the challenge to generalize to unseen views remains unaddressed. Hence, we define a protocol for unseen view action segmentation where camera views for evaluating the model are unavailable during training. This includes changing from top-frontal views to a side view or even more challenging from exocentric to egocentric vie&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2504.02512v1-abstract-full').style.display = 'inline'; document.getElementById('2504.02512v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2504.02512v1-abstract-full" style="display: none;">
+        While there has been substantial progress in temporal action segmentation, the challenge to generalize to unseen views remains unaddressed. Hence, we define a protocol for unseen view action segmentation where camera views for evaluating the model are unavailable during training. This includes changing from top-frontal views to a side view or even more challenging from exocentric to egocentric views. Furthermore, we present an approach for temporal action segmentation that tackles this challenge. Our approach leverages a shared representation at both the sequence and segment levels to reduce the impact of view differences during training. We achieve this by introducing a sequence loss and an action loss, which together facilitate consistent video and action representations across different views. The evaluation on the Assembly101, IkeaASM, and EgoExoLearn datasets demonstrate significant improvements, with a 12.8% increase in F1@50 for unseen exocentric views and a substantial 54% improvement for unseen egocentric views.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2504.02512v1-abstract-full').style.display = 'none'; document.getElementById('2504.02512v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 3 April, 2025; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> April 2025.
+      
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2503.18358">arXiv:2503.18358</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2503.18358">pdf</a>, <a href="https://arxiv.org/format/2503.18358">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        Cost-Sensitive Learning for Long-Tailed <span class="search-hit mathjax">Temporal</span> <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span>
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Pang%2C+Z">Zhanzhong Pang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Sener%2C+F">Fadime Sener</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Ramasubramanian%2C+S">Shrinivas Ramasubramanian</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Yao%2C+A">Angela Yao</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2503.18358v1-abstract-short" style="display: inline;">
+        Temporal action segmentation in untrimmed procedural videos aims to densely label frames into action classes. These videos inherently exhibit long-tailed distributions, where actions vary widely in frequency and duration. In temporal action segmentation approaches, we identified a bi-level learning bias. This bias encompasses (1) a class-level bias, stemming from class imbalance favoring head clas&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2503.18358v1-abstract-full').style.display = 'inline'; document.getElementById('2503.18358v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2503.18358v1-abstract-full" style="display: none;">
+        Temporal action segmentation in untrimmed procedural videos aims to densely label frames into action classes. These videos inherently exhibit long-tailed distributions, where actions vary widely in frequency and duration. In temporal action segmentation approaches, we identified a bi-level learning bias. This bias encompasses (1) a class-level bias, stemming from class imbalance favoring head classes, and (2) a transition-level bias arising from variations in transitions, prioritizing commonly observed transitions. As a remedy, we introduce a constrained optimization problem to alleviate both biases. We define learning states for action classes and their associated transitions and integrate them into the optimization process. We propose a novel cost-sensitive loss function formulated as a weighted cross-entropy loss, with weights adaptively adjusted based on the learning state of actions and their transitions. Experiments on three challenging temporal segmentation benchmarks and various frameworks demonstrate the effectiveness of our approach, resulting in significant improvements in both per-class frame-wise and segment-wise performance.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2503.18358v1-abstract-full').style.display = 'none'; document.getElementById('2503.18358v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 24 March, 2025; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> March 2025.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">BMCV 2024</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2411.01122">arXiv:2411.01122</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2411.01122">pdf</a>, <a href="https://arxiv.org/format/2411.01122">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        OnlineTAS: An Online Baseline for <span class="search-hit mathjax">Temporal</span> <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span>
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Zhong%2C+Q">Qing Zhong</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Ding%2C+G">Guodong Ding</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Yao%2C+A">Angela Yao</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2411.01122v1-abstract-short" style="display: inline;">
+        Temporal context plays a significant role in temporal action segmentation. In an offline setting, the context is typically captured by the segmentation network after observing the entire sequence. However, capturing and using such context information in an online setting remains an under-explored problem. This work presents the an online framework for temporal action segmentation. At the core of t&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2411.01122v1-abstract-full').style.display = 'inline'; document.getElementById('2411.01122v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2411.01122v1-abstract-full" style="display: none;">
+        Temporal context plays a significant role in temporal action segmentation. In an offline setting, the context is typically captured by the segmentation network after observing the entire sequence. However, capturing and using such context information in an online setting remains an under-explored problem. This work presents the an online framework for temporal action segmentation. At the core of the framework is an adaptive memory designed to accommodate dynamic changes in context over time, alongside a feature augmentation module that enhances the frames with the memory. In addition, we propose a post-processing approach to mitigate the severe over-segmentation in the online setting. On three common segmentation benchmarks, our approach achieves state-of-the-art performance.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2411.01122v1-abstract-full').style.display = 'none'; document.getElementById('2411.01122v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 1 November, 2024; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> November 2024.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">16 pages, 4 figures, 12 tables. Accepted to NeurIPS 2024</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2410.06353">arXiv:2410.06353</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2410.06353">pdf</a>, <a href="https://arxiv.org/format/2410.06353">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        Language-Assisted Human Part Motion Learning for Skeleton-Based <span class="search-hit mathjax">Temporal</span> <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span>
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Chen%2C+B">Bowen Chen</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Ji%2C+H">Haoyu Ji</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Wang%2C+Z">Zhiyong Wang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Filtjens%2C+B">Benjamin Filtjens</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Wang%2C+C">Chunzhuo Wang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Ren%2C+W">Weihong Ren</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Vanrumste%2C+B">Bart Vanrumste</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Liu%2C+H">Honghai Liu</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2410.06353v1-abstract-short" style="display: inline;">
+        Skeleton-based Temporal Action Segmentation involves the dense action classification of variable-length skeleton sequences. Current approaches primarily apply graph-based networks to extract framewise, whole-body-level motion representations, and use one-hot encoded labels for model optimization. However, whole-body motion representations do not capture fine-grained part-level motion representatio&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2410.06353v1-abstract-full').style.display = 'inline'; document.getElementById('2410.06353v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2410.06353v1-abstract-full" style="display: none;">
+        Skeleton-based Temporal Action Segmentation involves the dense action classification of variable-length skeleton sequences. Current approaches primarily apply graph-based networks to extract framewise, whole-body-level motion representations, and use one-hot encoded labels for model optimization. However, whole-body motion representations do not capture fine-grained part-level motion representations and the one-hot encoded labels neglect the intrinsic semantic relationships within the language-based action definitions. To address these limitations, we propose a novel method named Language-assisted Human Part Motion Representation Learning (LPL), which contains a Disentangled Part Motion Encoder (DPE) to extract dual-level (i.e., part and whole-body) motion representations and a Language-assisted Distribution Alignment (LDA) strategy for optimizing spatial relations within representations. Specifically, after part-aware skeleton encoding via DPE, LDA generates dual-level action descriptions to construct a textual embedding space with the help of a large-scale language model. Then, LDA motivates the alignment of the embedding space between text descriptions and motions. This alignment allows LDA not only to enhance intra-class compactness but also to transfer the language-encoded semantic correlations among actions to skeleton-based motion learning. Moreover, we propose a simple yet efficient Semantic Offset Adapter to smooth the cross-domain misalignment. Our experiments indicate that LPL achieves state-of-the-art performance across various datasets (e.g., +4.4\% Accuracy, +5.6\% F1 on the PKU-MMD dataset). Moreover, LDA is compatible with existing methods and improves their performance (e.g., +4.8\% Accuracy, +4.3\% F1 on the LARa dataset) without additional inference costs.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2410.06353v1-abstract-full').style.display = 'none'; document.getElementById('2410.06353v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 8 October, 2024; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> October 2024.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">This work has been submitted to the IEEE for possible publication</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2408.16638">arXiv:2408.16638</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2408.16638">pdf</a>, <a href="https://arxiv.org/format/2408.16638">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        
+          
+            <span class="tag is-small is-grey tooltip is-tooltip-top" data-tooltip="Machine Learning">cs.LG</span>
+          
+        </div>
+      
+        
+          <div class="is-inline-block" style="margin-left: 0.5rem">
+            <div class="tags has-addons">
+              <span class="tag is-dark is-size-7">doi</span>
+              <span class="tag is-light is-size-7"><a class="" href="https://doi.org/10.1145/3689061.3689077">10.1145/3689061.3689077 <i class="fa fa-external-link" aria-hidden="true"></i></a></span>
+            </div>
+          </div>
+        
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        3D Pose-Based <span class="search-hit mathjax">Temporal</span> <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span> for Figure Skating: A Fine-Grained and Jump Procedure-Aware Annotation Approach
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Tanaka%2C+R">Ryota Tanaka</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Suzuki%2C+T">Tomohiro Suzuki</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Fujii%2C+K">Keisuke Fujii</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2408.16638v1-abstract-short" style="display: inline;">
+        Understanding human actions from videos is essential in many domains, including sports. In figure skating, technical judgments are performed by watching skaters&#39; 3D movements, and its part of the judging procedure can be regarded as a Temporal Action Segmentation (TAS) task. TAS tasks in figure skating that automatically assign temporal semantics to video are actively researched. However, there is&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2408.16638v1-abstract-full').style.display = 'inline'; document.getElementById('2408.16638v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2408.16638v1-abstract-full" style="display: none;">
+        Understanding human actions from videos is essential in many domains, including sports. In figure skating, technical judgments are performed by watching skaters&#39; 3D movements, and its part of the judging procedure can be regarded as a Temporal Action Segmentation (TAS) task. TAS tasks in figure skating that automatically assign temporal semantics to video are actively researched. However, there is a lack of datasets and effective methods for TAS tasks requiring 3D pose data. In this study, we first created the FS-Jump3D dataset of complex and dynamic figure skating jumps using optical markerless motion capture. We also propose a new fine-grained figure skating jump TAS dataset annotation method with which TAS models can learn jump procedures. In the experimental results, we validated the usefulness of 3D pose features as input and the fine-grained dataset for the TAS model in figure skating. FS-Jump3D Dataset is available at https://github.com/ryota-skating/FS-Jump3D.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2408.16638v1-abstract-full').style.display = 'none'; document.getElementById('2408.16638v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 29 August, 2024; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> August 2024.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">10 pages, 7th ACM International Workshop on Multimedia Content Analysis in Sports</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2408.09919">arXiv:2408.09919</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2408.09919">pdf</a>, <a href="https://arxiv.org/format/2408.09919">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        Long-Tail <span class="search-hit mathjax">Temporal</span> <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span> with Group-wise <span class="search-hit mathjax">Temporal</span> Logit Adjustment
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Pang%2C+Z">Zhanzhong Pang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Sener%2C+F">Fadime Sener</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Ramasubramanian%2C+S">Shrinivas Ramasubramanian</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Yao%2C+A">Angela Yao</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2408.09919v1-abstract-short" style="display: inline;">
+        Procedural activity videos often exhibit a long-tailed action distribution due to varying action frequencies and durations. However, state-of-the-art temporal action segmentation methods overlook the long tail and fail to recognize tail actions. Existing long-tail methods make class-independent assumptions and struggle to identify tail classes when applied to temporal segmentation frameworks. This&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2408.09919v1-abstract-full').style.display = 'inline'; document.getElementById('2408.09919v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2408.09919v1-abstract-full" style="display: none;">
+        Procedural activity videos often exhibit a long-tailed action distribution due to varying action frequencies and durations. However, state-of-the-art temporal action segmentation methods overlook the long tail and fail to recognize tail actions. Existing long-tail methods make class-independent assumptions and struggle to identify tail classes when applied to temporal segmentation frameworks. This work proposes a novel group-wise temporal logit adjustment~(G-TLA) framework that combines a group-wise softmax formulation while leveraging activity information and action ordering for logit adjustment. The proposed framework significantly improves in segmenting tail actions without any performance loss on head actions.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2408.09919v1-abstract-full').style.display = 'none'; document.getElementById('2408.09919v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 19 August, 2024; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> August 2024.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">Accepted by ECCV 2024</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2405.15995">arXiv:2405.15995</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2405.15995">pdf</a>, <a href="https://arxiv.org/format/2405.15995">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        Efficient <span class="search-hit mathjax">Temporal</span> <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span> via Boundary-aware Query Voting
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Wang%2C+P">Peiyao Wang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Lin%2C+Y">Yuewei Lin</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Blasch%2C+E">Erik Blasch</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Wei%2C+J">Jie Wei</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Ling%2C+H">Haibin Ling</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2405.15995v1-abstract-short" style="display: inline;">
+        Although the performance of Temporal Action Segmentation (TAS) has improved in recent years, achieving promising results often comes with a high computational cost due to dense inputs, complex model structures, and resource-intensive post-processing requirements. To improve the efficiency while keeping the performance, we present a novel perspective centered on per-segment classification. By harne&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2405.15995v1-abstract-full').style.display = 'inline'; document.getElementById('2405.15995v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2405.15995v1-abstract-full" style="display: none;">
+        Although the performance of Temporal Action Segmentation (TAS) has improved in recent years, achieving promising results often comes with a high computational cost due to dense inputs, complex model structures, and resource-intensive post-processing requirements. To improve the efficiency while keeping the performance, we present a novel perspective centered on per-segment classification. By harnessing the capabilities of Transformers, we tokenize each video segment as an instance token, endowed with intrinsic instance segmentation. To realize efficient action segmentation, we introduce BaFormer, a boundary-aware Transformer network. It employs instance queries for instance segmentation and a global query for class-agnostic boundary prediction, yielding continuous segment proposals. During inference, BaFormer employs a simple yet effective voting strategy to classify boundary-wise segments based on instance segmentation. Remarkably, as a single-stage approach, BaFormer significantly reduces the computational costs, utilizing only 6% of the running time compared to state-of-the-art method DiffAct, while producing better or comparable accuracy over several popular benchmarks. The code for this project is publicly available at https://github.com/peiyao-w/BaFormer.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2405.15995v1-abstract-full').style.display = 'none'; document.getElementById('2405.15995v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 24 May, 2024; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> May 2024.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">17 pages, 8 figures, 11 tables</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2404.01518">arXiv:2404.01518</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2404.01518">pdf</a>, <a href="https://arxiv.org/format/2404.01518">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        
+          
+            <span class="tag is-small is-grey tooltip is-tooltip-top" data-tooltip="Machine Learning">cs.LG</span>
+          
+            <span class="tag is-small is-grey tooltip is-tooltip-top" data-tooltip="Image and Video Processing">eess.IV</span>
+          
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        <span class="search-hit mathjax">Temporally</span> Consistent Unbalanced Optimal Transport for Unsupervised <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span>
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Xu%2C+M">Ming Xu</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Gould%2C+S">Stephen Gould</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2404.01518v3-abstract-short" style="display: inline;">
+        We propose a novel approach to the action segmentation task for long, untrimmed videos, based on solving an optimal transport problem. By encoding a temporal consistency prior into a Gromov-Wasserstein problem, we are able to decode a temporally consistent segmentation from a noisy affinity/matching cost matrix between video frames and action classes. Unlike previous approaches, our method does no&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2404.01518v3-abstract-full').style.display = 'inline'; document.getElementById('2404.01518v3-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2404.01518v3-abstract-full" style="display: none;">
+        We propose a novel approach to the action segmentation task for long, untrimmed videos, based on solving an optimal transport problem. By encoding a temporal consistency prior into a Gromov-Wasserstein problem, we are able to decode a temporally consistent segmentation from a noisy affinity/matching cost matrix between video frames and action classes. Unlike previous approaches, our method does not require knowing the action order for a video to attain temporal consistency. Furthermore, our resulting (fused) Gromov-Wasserstein problem can be efficiently solved on GPUs using a few iterations of projected mirror descent. We demonstrate the effectiveness of our method in an unsupervised learning setting, where our method is used to generate pseudo-labels for self-training. We evaluate our segmentation approach and unsupervised learning pipeline on the Breakfast, 50-Salads, YouTube Instructions and Desktop Assembly datasets, yielding state-of-the-art results for the unsupervised video action segmentation task.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2404.01518v3-abstract-full').style.display = 'none'; document.getElementById('2404.01518v3-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 8 April, 2024; <span class="has-text-black-bis has-text-weight-semibold">v1</span> submitted 1 April, 2024;
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> April 2024.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">Accepted to CVPR 2024 (Oral)</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2403.06102">arXiv:2403.06102</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2403.06102">pdf</a>, <a href="https://arxiv.org/format/2403.06102">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        Coherent <span class="search-hit mathjax">Temporal</span> Synthesis for Incremental <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span>
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Ding%2C+G">Guodong Ding</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Golong%2C+H">Hans Golong</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Yao%2C+A">Angela Yao</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2403.06102v1-abstract-short" style="display: inline;">
+        Data replay is a successful incremental learning technique for images. It prevents catastrophic forgetting by keeping a reservoir of previous data, original or synthesized, to ensure the model retains past knowledge while adapting to novel concepts. However, its application in the video domain is rudimentary, as it simply stores frame exemplars for action recognition. This paper presents the first&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2403.06102v1-abstract-full').style.display = 'inline'; document.getElementById('2403.06102v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2403.06102v1-abstract-full" style="display: none;">
+        Data replay is a successful incremental learning technique for images. It prevents catastrophic forgetting by keeping a reservoir of previous data, original or synthesized, to ensure the model retains past knowledge while adapting to novel concepts. However, its application in the video domain is rudimentary, as it simply stores frame exemplars for action recognition. This paper presents the first exploration of video data replay techniques for incremental action segmentation, focusing on action temporal modeling. We propose a Temporally Coherent Action (TCA) model, which represents actions using a generative model instead of storing individual frames. The integration of a conditioning variable that captures temporal coherence allows our model to understand the evolution of action features over time. Therefore, action segments generated by TCA for replay are diverse and temporally coherent. In a 10-task incremental setup on the Breakfast dataset, our approach achieves significant increases in accuracy for up to 22% compared to the baselines.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2403.06102v1-abstract-full').style.display = 'none'; document.getElementById('2403.06102v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 10 March, 2024; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> March 2024.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">10 pages, 6 figures, 5 tables, accepted to CVPR 2024</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2312.12347">arXiv:2312.12347</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2312.12347">pdf</a>, <a href="https://arxiv.org/format/2312.12347">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        SMC-NCA: Semantic-guided Multi-level Contrast for Semi-supervised <span class="search-hit mathjax">Temporal</span> <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span>
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Zhou%2C+F">Feixiang Zhou</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Jiang%2C+Z">Zheheng Jiang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Zhou%2C+H">Huiyu Zhou</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Li%2C+X">Xuelong Li</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2312.12347v3-abstract-short" style="display: inline;">
+        Semi-supervised temporal action segmentation (SS-TA) aims to perform frame-wise classification in long untrimmed videos, where only a fraction of videos in the training set have labels. Recent studies have shown the potential of contrastive learning in unsupervised representation learning using unlabelled data. However, learning the representation of each frame by unsupervised contrastive learning&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2312.12347v3-abstract-full').style.display = 'inline'; document.getElementById('2312.12347v3-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2312.12347v3-abstract-full" style="display: none;">
+        Semi-supervised temporal action segmentation (SS-TA) aims to perform frame-wise classification in long untrimmed videos, where only a fraction of videos in the training set have labels. Recent studies have shown the potential of contrastive learning in unsupervised representation learning using unlabelled data. However, learning the representation of each frame by unsupervised contrastive learning for action segmentation remains an open and challenging problem. In this paper, we propose a novel Semantic-guided Multi-level Contrast scheme with a Neighbourhood-Consistency-Aware unit (SMC-NCA) to extract strong frame-wise representations for SS-TAS. Specifically, for representation learning, SMC is first used to explore intra- and inter-information variations in a unified and contrastive way, based on action-specific semantic information and temporal information highlighting relations between actions. Then, the NCA module, which is responsible for enforcing spatial consistency between neighbourhoods centered at different frames to alleviate over-segmentation issues, works alongside SMC for semi-supervised learning (SSL). Our SMC outperforms the other state-of-the-art methods on three benchmarks, offering improvements of up to 17.8% and 12.6% in terms of Edit distance and accuracy, respectively. Additionally, the NCA unit results in significantly better segmentation performance in the presence of only 5% labelled videos. We also demonstrate the generalizability and effectiveness of the proposed method on our Parkinson Disease&#39;s Mouse Behaviour (PDMB) dataset. Code is available at https://github.com/FeixiangZhou/SMC-NCA.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2312.12347v3-abstract-full').style.display = 'none'; document.getElementById('2312.12347v3-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 19 July, 2024; <span class="has-text-black-bis has-text-weight-semibold">v1</span> submitted 19 December, 2023;
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> December 2023.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">Accepted to IEEE Transactions on Multimedia</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2312.05830">arXiv:2312.05830</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2312.05830">pdf</a>, <a href="https://arxiv.org/format/2312.05830">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        A Decoupled Spatio-<span class="search-hit mathjax">Temporal</span> Framework for Skeleton-based <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span>
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Li%2C+Y">Yunheng Li</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Li%2C+Z">Zhongyu Li</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Gao%2C+S">Shanghua Gao</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Wang%2C+Q">Qilong Wang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Hou%2C+Q">Qibin Hou</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Cheng%2C+M">Ming-Ming Cheng</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2312.05830v1-abstract-short" style="display: inline;">
+        Effectively modeling discriminative spatio-temporal information is essential for segmenting activities in long action sequences. However, we observe that existing methods are limited in weak spatio-temporal modeling capability due to two forms of decoupled modeling: (i) cascaded interaction couples spatial and temporal modeling, which over-smooths motion modeling over the long sequence, and (ii) j&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2312.05830v1-abstract-full').style.display = 'inline'; document.getElementById('2312.05830v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2312.05830v1-abstract-full" style="display: none;">
+        Effectively modeling discriminative spatio-temporal information is essential for segmenting activities in long action sequences. However, we observe that existing methods are limited in weak spatio-temporal modeling capability due to two forms of decoupled modeling: (i) cascaded interaction couples spatial and temporal modeling, which over-smooths motion modeling over the long sequence, and (ii) joint-shared temporal modeling adopts shared weights to model each joint, ignoring the distinct motion patterns of different joints. We propose a Decoupled Spatio-Temporal Framework (DeST) to address the above issues. Firstly, we decouple the cascaded spatio-temporal interaction to avoid stacking multiple spatio-temporal blocks, while achieving sufficient spatio-temporal interaction. Specifically, DeST performs once unified spatial modeling and divides the spatial features into different groups of subfeatures, which then adaptively interact with temporal features from different layers. Since the different sub-features contain distinct spatial semantics, the model could learn the optimal interaction pattern at each layer. Meanwhile, inspired by the fact that different joints move at different speeds, we propose joint-decoupled temporal modeling, which employs independent trainable weights to capture distinctive temporal features of each joint. On four large-scale benchmarks of different scenes, DeST significantly outperforms current state-of-the-art methods with less computational complexity.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2312.05830v1-abstract-full').style.display = 'none'; document.getElementById('2312.05830v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 10 December, 2023; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> December 2023.
+      
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2312.04266">arXiv:2312.04266</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2312.04266">pdf</a>, <a href="https://arxiv.org/format/2312.04266">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        Activity Grammars for <span class="search-hit mathjax">Temporal</span> <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span>
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Gong%2C+D">Dayoung Gong</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Lee%2C+J">Joonseok Lee</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Jung%2C+D">Deunsol Jung</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Kwak%2C+S">Suha Kwak</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Cho%2C+M">Minsu Cho</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2312.04266v1-abstract-short" style="display: inline;">
+        Sequence prediction on temporal data requires the ability to understand compositional structures of multi-level semantics beyond individual and contextual properties. The task of temporal action segmentation, which aims at translating an untrimmed activity video into a sequence of action segments, remains challenging for this reason. This paper addresses the problem by introducing an effective act&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2312.04266v1-abstract-full').style.display = 'inline'; document.getElementById('2312.04266v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2312.04266v1-abstract-full" style="display: none;">
+        Sequence prediction on temporal data requires the ability to understand compositional structures of multi-level semantics beyond individual and contextual properties. The task of temporal action segmentation, which aims at translating an untrimmed activity video into a sequence of action segments, remains challenging for this reason. This paper addresses the problem by introducing an effective activity grammar to guide neural predictions for temporal action segmentation. We propose a novel grammar induction algorithm that extracts a powerful context-free grammar from action sequence data. We also develop an efficient generalized parser that transforms frame-level probability distributions into a reliable sequence of actions according to the induced grammar with recursive rules. Our approach can be combined with any neural network for temporal action segmentation to enhance the sequence prediction and discover its compositional structure. Experimental results demonstrate that our method significantly improves temporal action segmentation in terms of both performance and interpretability on two standard benchmarks, Breakfast and 50 Salads.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2312.04266v1-abstract-full').style.display = 'none'; document.getElementById('2312.04266v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 7 December, 2023; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> December 2023.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">Accepted to NeurIPS 2023</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2312.02638">arXiv:2312.02638</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2312.02638">pdf</a>, <a href="https://arxiv.org/format/2312.02638">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        Synchronization is All You Need: Exocentric-to-Egocentric Transfer for <span class="search-hit mathjax">Temporal</span> <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span> with Unlabeled Synchronized Video Pairs
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Quattrocchi%2C+C">Camillo Quattrocchi</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Furnari%2C+A">Antonino Furnari</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Di+Mauro%2C+D">Daniele Di Mauro</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Giuffrida%2C+M+V">Mario Valerio Giuffrida</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Farinella%2C+G+M">Giovanni Maria Farinella</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2312.02638v3-abstract-short" style="display: inline;">
+        We consider the problem of transferring a temporal action segmentation system initially designed for exocentric (fixed) cameras to an egocentric scenario, where wearable cameras capture video data. The conventional supervised approach requires the collection and labeling of a new set of egocentric videos to adapt the model, which is costly and time-consuming. Instead, we propose a novel methodolog&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2312.02638v3-abstract-full').style.display = 'inline'; document.getElementById('2312.02638v3-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2312.02638v3-abstract-full" style="display: none;">
+        We consider the problem of transferring a temporal action segmentation system initially designed for exocentric (fixed) cameras to an egocentric scenario, where wearable cameras capture video data. The conventional supervised approach requires the collection and labeling of a new set of egocentric videos to adapt the model, which is costly and time-consuming. Instead, we propose a novel methodology which performs the adaptation leveraging existing labeled exocentric videos and a new set of unlabeled, synchronized exocentric-egocentric video pairs, for which temporal action segmentation annotations do not need to be collected. We implement the proposed methodology with an approach based on knowledge distillation, which we investigate both at the feature and Temporal Action Segmentation model level. Experiments on Assembly101 and EgoExo4D demonstrate the effectiveness of the proposed method against classic unsupervised domain adaptation and temporal alignment approaches. Without bells and whistles, our best model performs on par with supervised approaches trained on labeled egocentric data, without ever seeing a single egocentric label, achieving a +15.99 improvement in the edit score (28.59 vs 12.60) on the Assembly101 dataset compared to a baseline model trained solely on exocentric data. In similar settings, our method also improves edit score by +3.32 on the challenging EgoExo4D benchmark. Code is available here: https://github.com/fpv-iplab/synchronization-is-all-you-need.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2312.02638v3-abstract-full').style.display = 'none'; document.getElementById('2312.02638v3-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 16 July, 2024; <span class="has-text-black-bis has-text-weight-semibold">v1</span> submitted 5 December, 2023;
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> December 2023.
+      
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2309.15683">arXiv:2309.15683</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2309.15683">pdf</a>, <a href="https://arxiv.org/format/2309.15683">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        End-to-End Streaming Video <span class="search-hit mathjax">Temporal</span> <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span> with Reinforce Learning
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Zhang%2C+J">Jinrong Zhang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Wen%2C+W">Wujun Wen</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Liu%2C+S">Shenglan Liu</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Li%2C+Y">Yunheng Li</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Li%2C+Q">Qifeng Li</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Feng%2C+L">Lin Feng</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2309.15683v2-abstract-short" style="display: inline;">
+        The streaming temporal action segmentation (STAS) task, a supplementary task of temporal action segmentation (TAS), has not received adequate attention in the field of video understanding. Existing TAS methods are constrained to offline scenarios due to their heavy reliance on multimodal features and complete contextual information. The STAS task requires the model to classify each frame of the en&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2309.15683v2-abstract-full').style.display = 'inline'; document.getElementById('2309.15683v2-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2309.15683v2-abstract-full" style="display: none;">
+        The streaming temporal action segmentation (STAS) task, a supplementary task of temporal action segmentation (TAS), has not received adequate attention in the field of video understanding. Existing TAS methods are constrained to offline scenarios due to their heavy reliance on multimodal features and complete contextual information. The STAS task requires the model to classify each frame of the entire untrimmed video sequence clip by clip in time, thereby extending the applicability of TAS methods to online scenarios. However, directly applying existing TAS methods to SATS tasks results in significantly poor segmentation outcomes. In this paper, we thoroughly analyze the fundamental differences between STAS tasks and TAS tasks, attributing the severe performance degradation when transferring models to model bias and optimization dilemmas. We introduce an end-to-end streaming video temporal action segmentation model with reinforcement learning (SVTAS-RL). The end-to-end modeling method mitigates the modeling bias introduced by the change in task nature and enhances the feasibility of online solutions. Reinforcement learning is utilized to alleviate the optimization dilemma. Through extensive experiments, the SVTAS-RL model significantly outperforms existing STAS models and achieves competitive performance to the state-of-the-art TAS model on multiple datasets under the same evaluation criteria, demonstrating notable advantages on the ultra-long video dataset EGTEA. Code is available at https://github.com/Thinksky5124/SVTAS.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2309.15683v2-abstract-full').style.display = 'none'; document.getElementById('2309.15683v2-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 23 May, 2024; <span class="has-text-black-bis has-text-weight-semibold">v1</span> submitted 27 September, 2023;
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> September 2023.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">submit to TNNLS</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2309.06276">arXiv:2309.06276</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2309.06276">pdf</a>, <a href="https://arxiv.org/format/2309.06276">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        OTAS: Unsupervised Boundary Detection for Object-Centric <span class="search-hit mathjax">Temporal</span> <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span>
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Li%2C+Y">Yuerong Li</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Xue%2C+Z">Zhengrong Xue</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Xu%2C+H">Huazhe Xu</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="has-text-black-bis has-text-weight-semibold">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2309.06276v1-abstract-short" style="display: inline;">
+        Temporal action segmentation is typically achieved by discovering the dramatic variances in global visual descriptors. In this paper, we explore the merits of local features by proposing the unsupervised framework of Object-centric Temporal Action Segmentation (OTAS). Broadly speaking, OTAS consists of self-supervised global and local feature extraction modules as well as a boundary selection modu&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2309.06276v1-abstract-full').style.display = 'inline'; document.getElementById('2309.06276v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2309.06276v1-abstract-full" style="display: none;">
+        Temporal action segmentation is typically achieved by discovering the dramatic variances in global visual descriptors. In this paper, we explore the merits of local features by proposing the unsupervised framework of Object-centric Temporal Action Segmentation (OTAS). Broadly speaking, OTAS consists of self-supervised global and local feature extraction modules as well as a boundary selection module that fuses the features and detects salient boundaries for action segmentation. As a second contribution, we discuss the pros and cons of existing frame-level and boundary-level evaluation metrics. Through extensive experiments, we find OTAS is superior to the previous state-of-the-art method by $41\%$ on average in terms of our recommended F1 score. Surprisingly, OTAS even outperforms the ground-truth human annotations in the user study. Moreover, OTAS is efficient enough to allow real-time inference.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2309.06276v1-abstract-full').style.display = 'none'; document.getElementById('2309.06276v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 12 September, 2023; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> September 2023.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">Accepted to WACV 2024</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+</ol>
+
+
+  <nav class="pagination is-small is-centered breathe-horizontal" role="navigation" aria-label="pagination">
+    
+    <a href=""
+      class="pagination-previous is-invisible">Previous
+    </a>
+    
+    
+      <a href="/search/?searchtype=title&amp;query=temporal+action+segmentation&amp;size=25&amp;start=25"
+        class="pagination-next" >Next
+      </a>
+    
+    <ul class="pagination-list">
+
+      <li>
+        <a href="/search/?searchtype=title&amp;query=temporal+action+segmentation&amp;size=25&amp;start=0"
+          class="pagination-link is-current"
+          aria-label="Goto page 1">1
+        </a>
+      </li>
+
+      
+        
+        <li>
+          <a href="/search/?searchtype=title&amp;query=temporal+action+segmentation&amp;size=25&amp;start=25"
+            class="pagination-link "
+            aria-label="Page 2"
+            aria-current="page">2
+          </a>
+        </li>
+        
+        <li>
+          <a href="/search/?searchtype=title&amp;query=temporal+action+segmentation&amp;size=25&amp;start=50"
+            class="pagination-link "
+            aria-label="Page 3"
+            aria-current="page">3
+          </a>
+        </li>
+        
+      
+    </ul>
+  </nav>
+  
+
+  
+
+
+      <div class="is-hidden-tablet">
+        <!-- feedback for mobile only -->
+        <span class="help" style="display: inline-block;"><a href="https://github.com/arXiv/arxiv-search/releases">Search v0.5.6 released 2020-02-24</a>&nbsp;&nbsp;</span>
+      </div>
+    </div>
+
+  </main>
+  <footer>
+    
+<footer class="ds-site-footer">
+  <div class="ds-site-footer-grid">
+    <div class="ds-site-footer-main">
+      <div class="ds-site-footer-ack">
+        We gratefully acknowledge support from
+        our <strong>major funders</strong>,
+        <a href="https://info.arxiv.org/about/ourmembers.html"><strong>member institutions</strong></a><span class="ack-member-inline" hidden>, <strong></strong></span>,
+        and all contributors.
+      </div>
+      <nav class="ds-site-footer-links" aria-label="Site navigation">
+        <a href="https://info.arxiv.org/about">About</a>
+        <span class="ds-site-footer-sep" aria-hidden="true">&middot;</span>
+        <a href="https://info.arxiv.org/help">Help</a>
+        <span class="ds-site-footer-sep" aria-hidden="true">&middot;</span>
+        <a href="https://info.arxiv.org/help/contact.html">Contact</a>
+        <span class="ds-site-footer-sep" aria-hidden="true">&middot;</span>
+        <a href="https://info.arxiv.org/help/subscribe">Subscribe</a>
+        <span class="ds-site-footer-sep" aria-hidden="true">&middot;</span>
+        <a href="https://info.arxiv.org/help/license/index.html">Copyright</a>
+        <span class="ds-site-footer-sep" aria-hidden="true">&middot;</span>
+        <a href="https://info.arxiv.org/help/policies/privacy_policy.html">Privacy</a>
+        <span class="ds-site-footer-sep" aria-hidden="true">&middot;</span>
+        <a href="https://info.arxiv.org/help/web_accessibility.html">Accessibility</a>
+        <span class="ds-site-footer-sep" aria-hidden="true">&middot;</span>
+        <a href="https://status.arxiv.org" target="_blank" rel="noopener noreferrer">Operational Status<span class="is-sr-only"> (opens in new tab)</span></a>
+      </nav>
+    </div>
+    <div class="ds-site-footer-funders" aria-label="Major funders">
+      <div class="ds-site-footer-funders-label">Major funding support from</div>
+      <div class="ds-site-footer-funders-logos">
+        <a class="ds-funder-link" href="https://www.simonsfoundation.org/" target="_blank" rel="noopener noreferrer">
+          <img class="ds-funder-logo" src="https://static.arxiv.org/static/base/1.0.1/images/funders/simons-foundation.png" alt="Simons Foundation"></a>
+        <a class="ds-funder-link" href="https://www.sfi.org.bm/" target="_blank" rel="noopener noreferrer">
+          <img class="ds-funder-logo" src="https://static.arxiv.org/static/base/1.0.1/images/funders/simons-foundation-international.png" alt="Simons Foundation International"></a>
+        <a class="ds-funder-link" href="https://www.schmidtsciences.org/" target="_blank" rel="noopener noreferrer">
+          <img class="ds-funder-logo" src="https://static.arxiv.org/static/base/1.0.1/images/funders/schmidt-sciences.png" alt="Schmidt Sciences"></a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+  </footer>
+  <script src="https://static.arxiv.org/static/base/1.0.0a5/js/member_acknowledgement.js"></script>
+  </body>
+</html>

@@ -1,0 +1,1929 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<!-- new favicon config and versions by realfavicongenerator.net -->
+<link rel="apple-touch-icon" sizes="180x180" href="https://static.arxiv.org/static/base/1.0.0a5/images/icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://static.arxiv.org/static/base/1.0.0a5/images/icons/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="https://static.arxiv.org/static/base/1.0.0a5/images/icons/favicon-16x16.png">
+<link rel="manifest" href="https://static.arxiv.org/static/base/1.0.0a5/images/icons/site.webmanifest">
+<link rel="mask-icon" href="https://static.arxiv.org/static/base/1.0.0a5/images/icons/safari-pinned-tab.svg" color="#b31b1b">
+<link rel="shortcut icon" href="https://static.arxiv.org/static/base/1.0.0a5/images/icons/favicon.ico">
+<meta name="msapplication-TileColor" content="#b31b1b">
+<meta name="msapplication-config" content="images/icons/browserconfig.xml">
+<meta name="theme-color" content="#b31b1b">
+<!-- end favicon config -->
+<title>Search | arXiv e-print repository</title>
+<script defer src="https://static.arxiv.org/static/base/1.0.0a5/fontawesome-free-5.11.2-web/js/all.js"></script>
+<link rel="stylesheet" href="https://static.arxiv.org/static/base/1.0.0a5/css/arxivstyle.css" />
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    messageStyle: "none",
+    extensions: ["tex2jax.js"],
+    jax: ["input/TeX", "output/HTML-CSS"],
+    tex2jax: {
+      inlineMath: [ ['$','$'], ["\\(","\\)"] ],
+      displayMath: [ ['$$','$$'], ["\\[","\\]"] ],
+      processEscapes: true,
+      ignoreClass: '.*',
+      processClass: 'mathjax.*'
+    },
+    TeX: {
+        extensions: ["AMSmath.js", "AMSsymbols.js", "noErrors.js"],
+        noErrors: {
+          inlineDelimiters: ["$","$"],
+          multiLine: false,
+          style: {
+            "font-size": "normal",
+            "border": ""
+          }
+        }
+    },
+    "HTML-CSS": { availableFonts: ["TeX"] }
+  });
+</script>
+<script src='//static.arxiv.org/MathJax-2.7.3/MathJax.js'></script>
+<script src="https://static.arxiv.org/static/base/1.0.0a5/js/notification.js"></script>
+
+    
+  <script>document.documentElement.classList.add('js');</script>
+  <link rel="stylesheet" type="text/css" media="screen" href="https://static.arxiv.org/static/base/1.0.1/css/arxiv-header-footer.css?v=20260626" />
+  <script defer src="https://static.arxiv.org/static/base/1.0.1/js/arxiv-header.js?v=20260626"></script>
+  <link rel="stylesheet" href="https://static.arxiv.org/static/search/0.5.6/css/bulma-tooltip.min.css" />
+  <link rel="stylesheet" href="https://static.arxiv.org/static/search/0.5.6/css/search.css" />
+  <script
+    src="https://code.jquery.com/jquery-3.2.1.slim.min.js"
+    integrity="sha256-k2WSCIexGzOj3Euiig+TlR8gA0EmPjuc79OEeY5L45g="
+    crossorigin="anonymous"></script>
+
+  <script src="https://static.arxiv.org/static/search/0.5.6/js/fieldset.js"></script>
+  <style>
+  radio#cf-customfield_11400 {
+    display: none;
+  }
+  /* Render the spinout .ds-site-footer standalone / full-bleed. search extends the
+     legacy base, whose bare wrapping <footer> (in base/base.html, outside any
+     overridable block — so it can't be removed from here) is styled by
+     arxivstyle.css with a grey background (hsl(0,0%,95%)) + 1em 2em padding,
+     boxing our warm-wash footer inside a second grey band. display:contents drops
+     the wrapper's box entirely (cleaner than zeroing individual properties) so
+     .ds-site-footer renders in its place; it inherits flex-shrink:0 from the same
+     legacy `footer` rule, so the sticky footer still works. Search-specific
+     legacy-base integration; the shared chrome CSS stays byte-identical to the SSOT. */
+  body > footer {
+    display: contents;
+  }
+  </style>
+
+  </head>
+  <body>
+  
+  
+  <header><a href="#main-container" class="is-sr-only">Skip to main content</a>
+    <div class="ds-announcement" id="announcement-banner" role="region" aria-label="Announcement" data-banner-name="spinout-nonprofit">
+  <img class="ds-announcement-glyph" src="https://static.arxiv.org/static/base/1.0.1/images/icons/smileybones-small.svg" alt="" aria-hidden="true">
+  <span class="ds-announcement-text">arXiv is now an independent nonprofit!</span>
+  <a class="ds-announcement-link" href="https://info.arxiv.org/about">Learn more</a>
+  <button type="button" class="ds-announcement-close" aria-label="Dismiss announcement">&times;</button>
+</div>
+<header class="ds-site-header">
+  <a href="https://arxiv.org/" class="ds-site-header-logo" aria-label="archive home">
+    <img src="https://static.arxiv.org/static/base/1.0.1/images/arxiv-logo-primary-light.svg" alt="archive">
+  </a>
+  <button type="button" id="ds-nav-toggle" class="ds-site-header-nav-toggle"
+    aria-label="Open menu" aria-controls="ds-site-header-nav" aria-expanded="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+      <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+  </button>
+  <nav class="ds-site-header-nav" id="ds-site-header-nav" aria-label="Main navigation">
+    <a id="arxiv-search-toggle" href="/search" aria-controls="arxiv-search-overlay" aria-expanded="false">
+      <svg class="ds-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      Search
+    </a>
+    <a href="https://arxiv.org/user/create">Submit</a>
+    <a href="https://info.arxiv.org/about/donate.html">Donate</a>
+    <span class="ds-site-header-divider" aria-hidden="true"></span>
+    <a href="https://arxiv.org/login" class="ds-site-header-login">Log in</a>
+  </nav>
+</header>
+
+<div class="arxiv-search-overlay" id="arxiv-search-overlay" hidden>
+  <div class="arxiv-search-panel" role="search">
+    <form method="GET" action="/search">
+      <label for="arxiv-search-input" class="is-sr-only">Search arXiv</label>
+      <input type="text" name="query" id="arxiv-search-input" autocomplete="off"
+        placeholder="Search papers by title, author, abstract, or ID...">
+      <input type="hidden" name="searchtype" value="all">
+      <input type="hidden" name="source" value="header">
+    </form>
+    <div class="arxiv-search-hint">
+      Press Enter to search &middot; <a href="/search/advanced">Advanced search</a>
+    </div>
+  </div>
+</div>
+
+  </header>
+  <main class="container" id="main-container">
+    
+
+
+    
+  <div class="level is-marginless">
+    <div class="level-left">
+      <h1 class="title is-clearfix">
+    
+        Showing 1&ndash;25 of 680 results for all: <span class="mathjax">temporal action segmentation</span>
+    
+</h1>
+    </div>
+    <div class="level-right is-hidden-mobile">
+      <!-- feedback for mobile is moved to footer -->
+      <span class="help" style="display: inline-block;"><a href="https://github.com/arXiv/arxiv-search/releases">Search v0.5.6 released 2020-02-24</a>&nbsp;&nbsp;</span>
+    </div>
+  </div>
+    <div class="content">
+      
+  <form method="GET" action="/search/"  aria-role="search">
+    
+
+    
+    <div class="field has-addons-tablet">
+      <div class="control is-expanded">
+        <label for="query" class="hidden-label">Search term or terms</label>
+        
+          <input class="input is-medium" id="query" name="query" placeholder="Search term..." type="text" value="temporal action segmentation">
+        
+        
+      </div>
+      <div class="select control is-medium">
+        <label class="is-hidden" for="searchtype">Field</label>
+        <select class="is-medium" id="searchtype" name="searchtype"><option selected value="all">All fields</option><option value="title">Title</option><option value="author">Author(s)</option><option value="abstract">Abstract</option><option value="comments">Comments</option><option value="journal_ref">Journal reference</option><option value="acm_class">ACM classification</option><option value="msc_class">MSC classification</option><option value="report_num">Report number</option><option value="paper_id">arXiv identifier</option><option value="doi">DOI</option><option value="orcid">ORCID</option><option value="license">License (URI)</option><option value="author_id">arXiv author ID</option><option value="help">Help pages</option><option value="full_text">Full text</option></select>
+      </div>
+      <div class="control">
+          <button class="button is-link is-medium">Search</button>
+      </div>
+    </div>
+    <div class="field">
+      <div class="control is-size-7">
+        
+        <label class="radio">
+          <input checked id="abstracts-0" name="abstracts" type="radio" value="show"> Show abstracts
+        </label>
+        
+        <label class="radio">
+          <input id="abstracts-1" name="abstracts" type="radio" value="hide"> Hide abstracts
+        </label>
+        
+      </div>
+    </div>
+    <div class="is-clearfix" style="height: 2.5em"> 
+      <div class="is-pulled-right">
+        
+        <a href="/search/advanced?terms-0-term=temporal+action+segmentation&amp;terms-0-field=all&amp;size=25&amp;order=-announced_date_first">Advanced Search</a>
+        
+      </div>
+    </div>
+    <input type="hidden" name="order" value="-announced_date_first">
+    <input type="hidden" name="size" value="25">
+  </form>
+
+  
+
+  
+      
+<div class="level breathe-horizontal">
+  <div class="level-left">
+    <form method="GET" action="/search/">
+      <div style="display: none;">
+        
+          
+            <select id="searchtype" name="searchtype"><option selected value="all">All fields</option><option value="title">Title</option><option value="author">Author(s)</option><option value="abstract">Abstract</option><option value="comments">Comments</option><option value="journal_ref">Journal reference</option><option value="acm_class">ACM classification</option><option value="msc_class">MSC classification</option><option value="report_num">Report number</option><option value="paper_id">arXiv identifier</option><option value="doi">DOI</option><option value="orcid">ORCID</option><option value="license">License (URI)</option><option value="author_id">arXiv author ID</option><option value="help">Help pages</option><option value="full_text">Full text</option></select>
+          
+        
+          
+            <input id="query" name="query" type="text" value="temporal action segmentation">
+          
+        
+          
+        
+          
+        
+          
+            <ul id="abstracts"><li><input checked id="abstracts-0" name="abstracts" type="radio" value="show"> <label for="abstracts-0">Show abstracts</label></li><li><input id="abstracts-1" name="abstracts" type="radio" value="hide"> <label for="abstracts-1">Hide abstracts</label></li></ul>
+          
+        
+      </div>
+      <div class="box field is-grouped is-grouped-multiline level-item">
+        <div class="control">
+          <span class="select is-small">
+            <select id="size" name="size"><option selected value="25">25</option><option value="50">50</option><option value="100">100</option><option value="200">200</option></select>
+          </span>
+          <label for="size">results per page</label>.
+        </div>
+        <div class="control">
+          <label for="order">Sort results by</label>
+          <span class="select is-small">
+            <select id="order" name="order"><option selected value="-announced_date_first">Announcement date (newest first)</option><option value="announced_date_first">Announcement date (oldest first)</option><option value="-submitted_date">Submission date (newest first)</option><option value="submitted_date">Submission date (oldest first)</option><option value="">Relevance</option></select>
+          </span>
+        </div>
+        <div class="control">
+          <button class="button is-small is-link">Go</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+      
+
+
+  <nav class="pagination is-small is-centered breathe-horizontal" role="navigation" aria-label="pagination">
+    
+    <a href=""
+      class="pagination-previous is-invisible">Previous
+    </a>
+    
+    
+      <a href="/search/?searchtype=all&amp;query=temporal+action+segmentation&amp;size=25&amp;start=25"
+        class="pagination-next" >Next
+      </a>
+    
+    <ul class="pagination-list">
+
+      <li>
+        <a href="/search/?searchtype=all&amp;query=temporal+action+segmentation&amp;size=25&amp;start=0"
+          class="pagination-link is-current"
+          aria-label="Goto page 1">1
+        </a>
+      </li>
+
+      
+                                     
+          
+          <li>
+            <a href="/search/?searchtype=all&amp;query=temporal+action+segmentation&amp;size=25&amp;start=25"
+              class="pagination-link "
+              aria-label="Page 2"
+              aria-current="page">2
+            </a>
+          </li>
+          
+          <li>
+            <a href="/search/?searchtype=all&amp;query=temporal+action+segmentation&amp;size=25&amp;start=50"
+              class="pagination-link "
+              aria-label="Page 3"
+              aria-current="page">3
+            </a>
+          </li>
+          
+          <li>
+            <a href="/search/?searchtype=all&amp;query=temporal+action+segmentation&amp;size=25&amp;start=75"
+              class="pagination-link "
+              aria-label="Page 4"
+              aria-current="page">4
+            </a>
+          </li>
+          
+          <li>
+            <a href="/search/?searchtype=all&amp;query=temporal+action+segmentation&amp;size=25&amp;start=100"
+              class="pagination-link "
+              aria-label="Page 5"
+              aria-current="page">5
+            </a>
+          </li>
+          
+          <li><span class="pagination-ellipsis">&hellip;</span></li>
+        
+      
+    </ul>
+  </nav>
+  
+
+
+
+<ol class="breathe-horizontal" start="1"> 
+
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2609.29822">arXiv:2609.29822</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2609.29822">pdf</a>, <a href="https://arxiv.org/ps/2609.29822">ps</a>, <a href="https://arxiv.org/format/2609.29822">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Robotics">cs.RO</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        Self-Supervised Anchoring of Fingertip Sensing to Proprioception and Proactive <span class="search-hit mathjax">Actions</span> for Robot Imitation Learning
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Motoda%2C+T">Tomohiro Motoda</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Murooka%2C+M">Masaki Murooka</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Shirai%2C+K">Keisuke Shirai</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Oh%2C+H">Hanbit Oh</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Nakajo%2C+R">Ryoichi Nakajo</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Miwa%2C+S">Shotaro Miwa</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Mykhailyshyn%2C+R">Roman Mykhailyshyn</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Duarte%2C+H">Hugo Duarte</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Domae%2C+Y">Yukiyasu Domae</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2609.29822v1-abstract-short" style="display: inline;">
+        &hellip;cameras, yet local interaction cues such as object proximity, contact onset, and grasp state are difficult to observe near the fingertips because of occlusion and limited <span class="search-hit mathjax">temporal</span> resolution. We study how to effectively incorporate complementary fingertip sensing into imitation learning using pressure-sensitive tactile and reflective proximity sensors, along&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.29822v1-abstract-full').style.display = 'inline'; document.getElementById('2609.29822v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2609.29822v1-abstract-full" style="display: none;">
+        Robotic imitation learning often relies on external cameras, yet local interaction cues such as object proximity, contact onset, and grasp state are difficult to observe near the fingertips because of occlusion and limited <span class="search-hit mathjax">temporal</span> resolution. We study how to effectively incorporate complementary fingertip sensing into imitation learning using pressure-sensitive tactile and reflective proximity sensors, along with pretrained sensor encoders. The two modalities provide information at different manipulation phases: proximity sensing is informative before contact, whereas tactile sensing becomes informative after contact. However, naively adding these signals to a policy does not consistently improve performance and can even underperform vision-only policies, suggesting that sparse, phase-dependent sensor signals are difficult to exploit from limited demonstrations. We therefore propose a proprioception-anchored pretraining method, PROprioceptive-and-PRoactive Anchoring (PROPRA), which independently aligns each fingertip sensor history with proprioceptive and <span class="search-hit mathjax">action</span> <span class="search-hit mathjax">segments</span>. This provides a continuously available sensorimotor reference, allowing each sensor to be aligned independently during its informative phases. Experiments on real-world manipulation tasks show that our pretraining method improves average success rates over vision-only policies and image-anchored pretraining baselines. Representation analysis further shows that it preserves richer information about pre-contact states, enabling more effective use of complementary fingertip sensing. Please refer to our project page: https://tomohiromotoda.github.io/nia.propra/
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.29822v1-abstract-full').style.display = 'none'; document.getElementById('2609.29822v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 24 September, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> September 2026.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">Project page is available at https://tomohiromotoda.github.io/nia.propra/</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2609.28388">arXiv:2609.28388</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2609.28388">pdf</a>, <a href="https://arxiv.org/ps/2609.28388">ps</a>, <a href="https://arxiv.org/format/2609.28388">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Social and Information Networks">cs.SI</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        OranSim: Simulating Social Media Marketing
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Ma%2C+J">Jianxiang Ma</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Zhang%2C+M">Mingfu Zhang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Yang%2C+X">Xiaocui Yang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Gao%2C+Y">Yichen Gao</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Huang%2C+J">Junzhao Huang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Hou%2C+Y">Yuesong Hou</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2609.28388v1-abstract-short" style="display: inline;">
+        Social simulation studies how individual behavior and social interaction produce collective outcomes. In social media marketing, campaign <span class="search-hit mathjax">actions</span> shape which consumers encounter the content and how they respond; these responses then spread through the population. We propose OranSim, a social simulation framework that connects creative, creator, targeting, an&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.28388v1-abstract-full').style.display = 'inline'; document.getElementById('2609.28388v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2609.28388v1-abstract-full" style="display: none;">
+        Social simulation studies how individual behavior and social interaction produce collective outcomes. In social media marketing, campaign <span class="search-hit mathjax">actions</span> shape which consumers encounter the content and how they respond; these responses then spread through the population. We propose OranSim, a social simulation framework that connects creative, creator, targeting, and budget choices to this process. Heterogeneous consumers receive exposure according to content matching and platform allocation and generate initial responses, which propagate among 60 population <span class="search-hit mathjax">segments</span>. Candidate campaigns share the initial population and aligned random numbers, making their response trajectories comparable under <span class="search-hit mathjax">action</span> changes. In a controlled synthetic campaign, doubling the budget approximately doubles reach while lowering mean content match and engagement probability among the reached consumers; mean 14-day cumulative simulated response mass rises to 1.96 times the baseline. LightGBM predictors fitted to 39,000 historical RedNote notes estimate platform engagement with log-scale $R^2$ of 0.56--0.62 in five-fold cross-validation; a separate 12,154-note corpus supplies <span class="search-hit mathjax">temporal</span>, unseen-creator, and held-out-niche test splits. Public-data experiments evaluate policy value and audience ranking, and paired synthetic outcomes test counterfactual scoring. Together, scenario trajectories and engagement estimates support campaign selection according to a prespecified marketing objective. Code is available at https://github.com/OranAi-Ltd/oransim.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.28388v1-abstract-full').style.display = 'none'; document.getElementById('2609.28388v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 23 September, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> September 2026.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">22 pages, 5 figures. Code: https://github.com/OranAi-Ltd/oransim</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2609.28049">arXiv:2609.28049</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2609.28049">pdf</a>, <a href="https://arxiv.org/ps/2609.28049">ps</a>, <a href="https://arxiv.org/format/2609.28049">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        
+          
+            <span class="tag is-small is-grey tooltip is-tooltip-top" data-tooltip="Artificial Intelligence">cs.AI</span>
+          
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        Prompt, Probe, Train, or Annotate? Single-camera sports video understanding in amateur settings
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Kodathala%2C+S+V">Sai Varun Kodathala</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Pollishetty%2C+P">Prashanth Pollishetty</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Cargill%2C+J">Jaylen Cargill</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2609.28049v1-abstract-short" style="display: inline;">
+        &hellip;benchmark uses. No single paradigm wins every stage, and static, single-frame computer vision is not competitive at any stage involving motion or identity. A prompted model <span class="search-hit mathjax">segments</span> matches well, yet a far smaller trained model beats it at spotting contacts for a fraction of the cost, and the sport&#39;s own rules recover rally outcomes the pixels cannot. Id&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.28049v1-abstract-full').style.display = 'inline'; document.getElementById('2609.28049v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2609.28049v1-abstract-full" style="display: none;">
+        Video understanding is usually benchmarked on curated, single-actor, or professionally filmed clips, and a strong score there is routinely read as evidence a model is robust enough for deployment. Amateur team sport is a useful, largely untested place to check that assumption: over eight million students played a school sport in the United States in 2024-25 alone, almost none of it filmed by more than a single fixed camera, with several candidate actors crowded into frame and no operator or second angle to fall back on. Using volleyball as a test case, we ask whether strong performance on general video and world-model benchmarks translates into reliable, per-player attribution once footage is this chaotic, turning footage into statistics through a chain of tasks from finding play boundaries to naming who did what. We evaluate four approaches (prompting and agentic reasoning over frontier vision-language models, classical computer vision with small trained specialists, self-supervised video world models, and manual annotation) at every stage, on 66 amateur matches with 46,648 human-labelled contacts, filmed under conditions no published benchmark uses. No single paradigm wins every stage, and static, single-frame computer vision is not competitive at any stage involving motion or identity. A prompted model <span class="search-hit mathjax">segments</span> matches well, yet a far smaller trained model beats it at spotting contacts for a fraction of the cost, and the sport&#39;s own rules recover rally outcomes the pixels cannot. Identity is where every automated approach struggles: a jersey number is a static fact <span class="search-hit mathjax">temporal</span> reasoning cannot recover if never visible, unlike sporting <span class="search-hit mathjax">action</span>, a repeated motor pattern a <span class="search-hit mathjax">temporal</span> model can exploit, which is why holistic reasoning improves event detection while identity stays unchanged. We close with where each approach earns its cost, and what transfers beyond volleyball to amateur sport.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.28049v1-abstract-full').style.display = 'none'; document.getElementById('2609.28049v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 23 September, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> September 2026.
+      
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2609.24059">arXiv:2609.24059</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2609.24059">pdf</a>, <a href="https://arxiv.org/ps/2609.24059">ps</a>, <a href="https://arxiv.org/format/2609.24059">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Robotics">cs.RO</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        Automatic Labelling for Bimanual Mobile Manipulation
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Lu%2C+Y">Yupu Lu</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Pan%2C+J">Jia Pan</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2609.24059v1-abstract-short" style="display: inline;">
+        Semantically meaningful subtask labels can provide useful contexts for long-horizon policies, but automatically identifying both reliable <span class="search-hit mathjax">temporal</span> boundaries and broad semantic descriptions for annotations remains difficult. We present an automatic labelling pipeline that assigns&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.24059v1-abstract-full').style.display = 'inline'; document.getElementById('2609.24059v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2609.24059v1-abstract-full" style="display: none;">
+        Semantically meaningful subtask labels can provide useful contexts for long-horizon policies, but automatically identifying both reliable <span class="search-hit mathjax">temporal</span> boundaries and broad semantic descriptions for annotations remains difficult. We present an automatic labelling pipeline that assigns <span class="search-hit mathjax">temporal</span> localisation to deterministic trajectory analysis and semantic interpretation to vision-language (VL) reasoning. The pipeline <span class="search-hit mathjax">segments</span> synchronised kinematic signals into phases, performs phase-localised VL reasoning to describe the contents, and aggregates the outputs for the base, left arm, and right arm <span class="search-hit mathjax">actions</span>. We evaluate this pipeline primarily on 29 real Galaxea bimanual mobile-manipulation tasks. Repeating the VL reasoning three times first produces the same output value for 87.4% on selected tasks. A review by nine participants across all 29 tasks then judgements on the labelled phases and shows positive acceptance of <span class="search-hit mathjax">temporal</span> divisions (90.5%), body labels (90.7%), and arm labels (78.7%). The results indicate that the <span class="search-hit mathjax">segmentation</span>-VL design can produce structured annotations while preserving asynchronous bimanual behaviour, providing a basis for richer semantic subtask identification and state-based verification.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.24059v1-abstract-full').style.display = 'none'; document.getElementById('2609.24059v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 20 September, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> September 2026.
+      
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2609.23677">arXiv:2609.23677</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2609.23677">pdf</a>, <a href="https://arxiv.org/ps/2609.23677">ps</a>, <a href="https://arxiv.org/format/2609.23677">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Information Retrieval">cs.IR</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        MuSeR: Scalable Long-sequence Recommendation with Multi-interest Modeling
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Fu%2C+Y">Yongkang Fu</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Bao%2C+B">Beining Bao</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Jiang%2C+Y">Yu Jiang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Zhao%2C+X">Xiangyu Zhao</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Wei%2C+H">Hongyang Wei</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Chen%2C+G">Guangxing Chen</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Yang%2C+Z">Zuodong Yang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Li%2C+S">Shantao Li</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Wu%2C+Z">Zonggang Wu</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Lu%2C+Y">Yuqi Lu</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Qin%2C+S">Shouke Qin</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Liu%2C+H">Hanmeng Liu</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Wang%2C+M">Maolin Wang</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2609.23677v1-abstract-short" style="display: inline;">
+        Ultra-long user behavior sequences carry rich signals of stable and diverse preferences, yet industrial recommender systems typically truncate histories to a few hundred <span class="search-hit mathjax">actions</span> under strict latency and memory budgets, leaving long-term interests under-utilized. Users also pursue multiple heterogeneous intents across modalities such as news, Q&amp;A, and sho&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.23677v1-abstract-full').style.display = 'inline'; document.getElementById('2609.23677v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2609.23677v1-abstract-full" style="display: none;">
+        Ultra-long user behavior sequences carry rich signals of stable and diverse preferences, yet industrial recommender systems typically truncate histories to a few hundred <span class="search-hit mathjax">actions</span> under strict latency and memory budgets, leaving long-term interests under-utilized. Users also pursue multiple heterogeneous intents across modalities such as news, Q&amp;A, and short video, which sparse ID embeddings alone struggle to represent. We present Multi-interest Sequence Representation (MuSeR), a retrieval framework built on the deployed MGS system, which integrates three components: (i) hierarchical <span class="search-hit mathjax">temporal</span> compression, which retains recent <span class="search-hit mathjax">actions</span> at full resolution while progressively pooling older <span class="search-hit mathjax">segments</span>, so that per-user histories of $10^{4}$-$10^{5}$ interactions fit within a fixed serving budget; (ii) disentangled multi-query interest extraction with orthogonality regularization; and (iii) multimodal semantic alignment, which augments sparse item IDs with textual summaries distilled from a large language model. For industrial deployment, MuSeR further adopts asynchronous user-representation refresh with adaptive caching and hierarchical beam-search retrieval across heterogeneous hardware. On three public benchmarks and a large-scale industrial dataset, MuSeR consistently improves Recall@$K$ over strong long-sequence and multi-interest baselines. In online A/B tests on Baidu APP&#39;s homepage feed, discovery feed, and short-video scenarios, MuSeR yields +0.26% daily active users and +0.89% total session duration (both statistically significant, p&lt;0.05), alongside reduced serving latency and cost. Rather than proposing a new modeling primitive, our contribution is a system-level integration that makes long-term, multi-interest, and multimodal modeling jointly deployable in a real-time production pipeline, together with the engineering practices required to sustain it.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.23677v1-abstract-full').style.display = 'none'; document.getElementById('2609.23677v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 20 September, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> September 2026.
+      
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2609.23492">arXiv:2609.23492</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2609.23492">pdf</a>, <a href="https://arxiv.org/ps/2609.23492">ps</a>, <a href="https://arxiv.org/format/2609.23492">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        
+          
+            <span class="tag is-small is-grey tooltip is-tooltip-top" data-tooltip="Artificial Intelligence">cs.AI</span>
+          
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        CE$^4$L: Continual Ego, Exo, and Ego-Exo Learning
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Yan%2C+H">Hongwei Yan</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Zhou%2C+K">Kanglei Zhou</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Liu%2C+Y">Yuchen Liu</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Shi%2C+Q">Qingyu Shi</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Zhong%2C+Y">Yi Zhong</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Wang%2C+L">Liyuan Wang</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2609.23492v1-abstract-short" style="display: inline;">
+        &hellip;L), a unified multi-view CL benchmark spanning four representative tasks: cross-view referenced skill assessment, <span class="search-hit mathjax">temporal</span> <span class="search-hit mathjax">action</span> <span class="search-hit mathjax">segmentation</span>, cross-view association, and <span class="search-hit mathjax">action</span> anticipation &amp; planning. CE$^4$L highlights challenges la&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.23492v1-abstract-full').style.display = 'inline'; document.getElementById('2609.23492v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2609.23492v1-abstract-full" style="display: none;">
+        Perception for embodied agents is video-based, often multi-view (ego, exo, or both), and inherently continual, with simultaneous task and viewpoint shifts. Yet continual learning (CL) remains dominated by exo-only recognition tasks, obscuring behavior under these real-world coupled shifts. We introduce Continual Ego, E}xo, and Ego-Exo Learning (CE$^4$L), a unified multi-view CL benchmark spanning four representative tasks: cross-view referenced skill assessment, <span class="search-hit mathjax">temporal</span> <span class="search-hit mathjax">action</span> <span class="search-hit mathjax">segmentation</span>, cross-view association, and <span class="search-hit mathjax">action</span> anticipation &amp; planning. CE$^4$L highlights challenges largely absent in prior CL benchmarks, including cross-view correspondence, view-dependent asynchrony, and heterogeneous semantic objectives. To this end, we propose Video Incremental Subspace-routed Task Adapters (VISTA), a parameter-efficient baseline method that stores task-specific updates in lightweight adapters and performs training-free routing via residual distance to task-specific whitened subspaces estimated from second-order statistics. Extensive experiments demonstrate the significantly varied efficacy of representative CL methods across CE$^4$L settings, while VISTA is consistently competitive and achieves state-of-the-art overall performance. Our source code for benchmarks and methods is available at https://github.com/AnAppleCore/CE4L .
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.23492v1-abstract-full').style.display = 'none'; document.getElementById('2609.23492v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 20 September, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> September 2026.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">23 pages. Accepted by ICML 2026</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2609.22840">arXiv:2609.22840</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2609.22840">pdf</a>, <a href="https://arxiv.org/ps/2609.22840">ps</a>, <a href="https://arxiv.org/format/2609.22840">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Robotics">cs.RO</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        ForceRFT: Refining VLA <span class="search-hit mathjax">Actions</span> through Force-Guided Residual Reinforcement Learning
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Wang%2C+Y">Yichen Wang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Zhang%2C+C">Chaoyang Zhang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Su%2C+X">Xuqi Su</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Ma%2C+J">Jun Ma</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Zhu%2C+H">Haiyue Zhu</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Li%2C+X">Xiaocong Li</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2609.22840v1-abstract-short" style="display: inline;">
+        Force-conditioned vision-language-<span class="search-hit mathjax">action</span> (VLA) policies can respond to contact, but when trained solely on demonstrations, their recovery behavior may be limited by demonstration coverage, and they do not learn from deployment outcomes. Human corrective imitation provides additional recovery examples, but its objective matches local&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.22840v1-abstract-full').style.display = 'inline'; document.getElementById('2609.22840v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2609.22840v1-abstract-full" style="display: none;">
+        Force-conditioned vision-language-<span class="search-hit mathjax">action</span> (VLA) policies can respond to contact, but when trained solely on demonstrations, their recovery behavior may be limited by demonstration coverage, and they do not learn from deployment outcomes. Human corrective imitation provides additional recovery examples, but its objective matches local <span class="search-hit mathjax">action</span> targets without explicitly optimizing task return. We present ForceRFT, a force-guided residual reinforcement learning framework that learns contact-dependent corrections from human supervision and autonomous task outcomes. A frozen, demonstration-trained SmolVLA-based prior generates force-conditioned <span class="search-hit mathjax">action</span> chunks, while a lightweight residual actor refines individual end-effector pose commands using wrist feedback acquired during chunk execution. The decision-time wrist wrench, its <span class="search-hit mathjax">temporal</span> change, and the selected base motion condition both residual correction and value estimation. Human corrections supervise the residual actor, while verified autonomous transitions train the twin critics and support value-guided updates to the same actor. Bootstrapping is restricted to autonomous <span class="search-hit mathjax">segments</span>, preventing TD credit from crossing human-intervention boundaries. Real-robot experiments on plug insertion, ring-on-peg assembly, and whiteboard wiping show higher autonomous success rates than the evaluated demonstration-trained and residual-imitation baselines. Comparisons with residual imitation support value-guided residual optimization, while plug-insertion ablations indicate the benefit of direct execution-time wrist feedback.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.22840v1-abstract-full').style.display = 'none'; document.getElementById('2609.22840v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 19 September, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> September 2026.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">8 pages, 4 figures, 3 tables</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2609.22278">arXiv:2609.22278</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2609.22278">pdf</a>, <a href="https://arxiv.org/ps/2609.22278">ps</a>, <a href="https://arxiv.org/format/2609.22278">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Robotics">cs.RO</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        DeViGrasp: Robust Visual Mobile Grasping for Quadruped Manipulators under Degraded Perception
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Zhou%2C+L">Liang Zhou</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Su%2C+J">Jiaming Su</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Wei%2C+Y">Yancong Wei</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Dong%2C+K">Kangkang Dong</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Liu%2C+H">Houde Liu</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2609.22278v1-abstract-short" style="display: inline;">
+        &hellip;to unreliable onboard visual perception. Existing methods are typically developed under relatively reliable observations and have not systematically examined how occlusion, <span class="search-hit mathjax">segmentation</span>-mask dropout, depth noise, and target-localization jitter affect grasp reasoning and target tracking. To address this gap, we introduce DeViGrasp-Bench, a benchmark for mobil&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.22278v1-abstract-full').style.display = 'inline'; document.getElementById('2609.22278v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2609.22278v1-abstract-full" style="display: none;">
+        Quadruped manipulators enable mobile grasping in complex environments, yet their whole-body control policies remain vulnerable to unreliable onboard visual perception. Existing methods are typically developed under relatively reliable observations and have not systematically examined how occlusion, <span class="search-hit mathjax">segmentation</span>-mask dropout, depth noise, and target-localization jitter affect grasp reasoning and target tracking. To address this gap, we introduce DeViGrasp-Bench, a benchmark for mobile grasping under degraded vision that incorporates controlled visual degradations, seen and unseen objects, multiple difficulty levels, and complex terrains, and evaluates task success, execution efficiency, and <span class="search-hit mathjax">action</span> smoothness. We further propose DeViGrasp-Net, a teacher--student framework that combines state-conditioned grasp reasoning with reliability-aware <span class="search-hit mathjax">temporal</span> target estimation. The privileged teacher attends to offline grasp candidates conditioned on object, robot, end-effector, and task states, while the deployable student fuses dual-view <span class="search-hit mathjax">segmented</span>-depth observations with current, memory, and recovery target hypotheses through Target Hold Memory and <span class="search-hit mathjax">Temporal</span> Memory Attention. DeViGrasp-Net outperforms VBC across degradation levels, unseen objects, and complex terrains, and surpasses an adapted DQ-Net across all evaluated degradation levels. Under the Difficult setting, it achieves a success rate of 62.3\%, improving upon VBC and DQ-Net by 16.1 and 4.3 percentage points, respectively; under the Hard setting, its margin over DQ-Net increases to 10.5 percentage points. Ablation studies confirm the complementary benefits of grasp-aware supervision and reliability-aware <span class="search-hit mathjax">temporal</span> memory.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.22278v1-abstract-full').style.display = 'none'; document.getElementById('2609.22278v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 12 September, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> September 2026.
+      
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2609.21462">arXiv:2609.21462</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2609.21462">pdf</a>, <a href="https://arxiv.org/ps/2609.21462">ps</a>, <a href="https://arxiv.org/format/2609.21462">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        PSEE: Progressive Sensor Event Expansion for Point-Supervised <span class="search-hit mathjax">Temporal</span> <span class="search-hit mathjax">Action</span> Localization
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Yin%2C+J">Jiaxi Yin</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Wang%2C+G">Ge Wang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Ding%2C+H">Han Ding</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Wang%2C+F">Fei Wang</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2609.21462v1-abstract-short" style="display: inline;">
+        <span class="search-hit mathjax">Temporal</span>&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.21462v1-abstract-full').style.display = 'inline'; document.getElementById('2609.21462v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2609.21462v1-abstract-full" style="display: none;">
+        <span class="search-hit mathjax">Temporal</span> <span class="search-hit mathjax">action</span> localization (TAL) in wearable sensor streams identifies <span class="search-hit mathjax">action</span> classes and <span class="search-hit mathjax">temporal</span> boundaries, enabling finer-grained activity understanding than conventional <span class="search-hit mathjax">action</span> recognition. However, training typically requires costly start--end annotations for every <span class="search-hit mathjax">action</span> instance. To reduce this burden, we study point-supervised TAL, where each instance is labeled with only one timestamp and its class. We propose Progressive Sensor Event Expansion (PSEE), which combines semantic activations, sensor-specific transition evidence, and adaptive <span class="search-hit mathjax">temporal</span> ownership to recover point-supervised pseudo <span class="search-hit mathjax">segments</span>. These <span class="search-hit mathjax">segments</span> supervise standard TAL detectors without modifying their inference procedures. Cross-subject experiments on four inertial-sensing benchmarks demonstrate improved pseudo-boundary quality over adapted point-supervised baselines, compatibility with different TAL detectors, and robustness to point sampling. Code is available at https://github.com/joeeeeyin/PSEE.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.21462v1-abstract-full').style.display = 'none'; document.getElementById('2609.21462v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 18 September, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> September 2026.
+      
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2609.18430">arXiv:2609.18430</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2609.18430">pdf</a>, <a href="https://arxiv.org/ps/2609.18430">ps</a>, <a href="https://arxiv.org/format/2609.18430">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        StrucPhysVideo: Learning Physical Dynamics from Structured Captions and Robot <span class="search-hit mathjax">Actions</span>
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Team%2C+A">Awomo-WM Team</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=%3A"> :</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Ma%2C+E">Enhui Ma</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Guo%2C+K">Kaiwen Guo</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Zhang%2C+T">Tingrui Zhang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Song%2C+W">Wei Song</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Tan%2C+Y">Yingshui Tan</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Xu%2C+J">Jianhua Xu</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Zhang%2C+T">Tong Zhang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Yu%2C+K">Kaicheng Yu</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2609.18430v1-abstract-short" style="display: inline;">
+        &hellip;state, is central to video world models for embodied AI. We present StrucPhysVideo, a family of video world models that bridges physics-focused data curation with language- and <span class="search-hit mathjax">action</span>-conditioned prediction of scene evolution. Our data pipeline combines motion-aware video&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.18430v1-abstract-full').style.display = 'inline'; document.getElementById('2609.18430v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2609.18430v1-abstract-full" style="display: none;">
+        Modeling physical dynamics, including how objects move, interact, and change state, is central to video world models for embodied AI. We present StrucPhysVideo, a family of video world models that bridges physics-focused data curation with language- and <span class="search-hit mathjax">action</span>-conditioned prediction of scene evolution. Our data pipeline combines motion-aware video <span class="search-hit mathjax">segmentation</span>, quality and content filtering, and physical relevance verification with structured annotations of objects, materials, and <span class="search-hit mathjax">temporally</span> localized interactions. By disentangling camera motion from object behavior and explicitly describing contact, deformation, and state transitions, the pipeline provides supervision grounded in observable physical events. Building on these data, we introduce StrucPhysVideo-TI2V, a sparse Mixture-of-Experts (MoE) text-image-to-video model trained with a curriculum that progressively emphasizes physical dynamics while retaining general-domain video data. StrucPhysVideo-TI2V achieves state-of-the-art performance on Physics-IQ Verified, scoring 45.5% and outperforming Cosmos3-Super-Image2Video by 2.8 percentage points. Caption ablations across backbones further demonstrate the effectiveness of physics-focused supervision. We further extend StrucPhysVideo-TI2V to StrucPhysVideo-IA2V, an interactive image-<span class="search-hit mathjax">action</span>-to-video world model that predicts visual outcomes from robot end-effector commands. <span class="search-hit mathjax">Action</span> conditioning, causal autoregressive generation, and few-step distillation enable incremental robot rollouts with only four denoising steps. Together, StrucPhysVideo advances physical dynamics modeling from image- and language-conditioned video prediction toward <span class="search-hit mathjax">action</span>-driven interaction.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.18430v1-abstract-full').style.display = 'none'; document.getElementById('2609.18430v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 16 September, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> September 2026.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">Project page: https://westlakedi-awomo.github.io/StrucPhysVideo-Page/</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2609.17909">arXiv:2609.17909</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2609.17909">pdf</a>, <a href="https://arxiv.org/ps/2609.17909">ps</a>, <a href="https://arxiv.org/format/2609.17909">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        
+          
+            <span class="tag is-small is-grey tooltip is-tooltip-top" data-tooltip="Machine Learning">cs.LG</span>
+          
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        Zing-0.5: Toward Playable Worlds with Real-Time Joint <span class="search-hit mathjax">Action</span> and Text Control
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Chen%2C+M">Mingyang Chen</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Chen%2C+S">Shengdong Chen</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Fu%2C+X">Xiaoxiao Fu</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Gong%2C+B">Bosheng Gong</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Guo%2C+H">Haoyuan Guo</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Li%2C+B">Bowen Li</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Li%2C+J">Jiawen Li</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Li%2C+K">Kejun Li</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Li%2C+T">Tianpeng Li</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Liu%2C+Y">Yin Liu</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Sun%2C+H">Haoze Sun</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Tian%2C+Z">Zeyang Tian</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Wang%2C+M">Meng Wang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Wu%2C+X">Xinmiao Wu</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Yan%2C+J">Jiangqiao Yan</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Zhao%2C+Z">Zining Zhao</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2609.17909v1-abstract-short" style="display: inline;">
+        &hellip;unfolding events, and respond to the resulting feedback through joint keyboard and online text control. Our approach brings together three technical contributions: (1) Unified <span class="search-hit mathjax">action</span> and text conditioning, combining magnitude-aware keyboard inputs with&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.17909v1-abstract-full').style.display = 'inline'; document.getElementById('2609.17909v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2609.17909v1-abstract-full" style="display: none;">
+        We introduce Zing-0.5, a 5B autoregressive world model designed for playability: users can explore generated worlds, influence unfolding events, and respond to the resulting feedback through joint keyboard and online text control. Our approach brings together three technical contributions: (1) Unified <span class="search-hit mathjax">action</span> and text conditioning, combining magnitude-aware keyboard inputs with <span class="search-hit mathjax">temporally</span> aligned text instructions and jointly annotated videos to learn navigation and event control within the same sequence; (2) Event-scale supervision for incremental generation, using a <span class="search-hit mathjax">segment</span>-level teacher trained on connected multi-prompt videos to supervise a block-level causal student through distribution-matching distillation; and (3) Low-cost real-time interaction, combining four-step generation with context-preserving streaming to support 832 x 480 inference at 24 FPS at an estimated server rental cost of approximately USD 0.009 per stream-minute. Zing-0.5 achieves an overall score of 81.0 and a consistency score of 88.5 across 158 WBench Navigation cases. A joint-control demonstration shows a text-directed event change during continued navigation without restarting generation. We release the model weights, inference code, and Zing-SGLang serving implementation to support further work on playable generated worlds.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.17909v1-abstract-full').style.display = 'none'; document.getElementById('2609.17909v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 15 September, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> September 2026.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">19 pages, 8 figures. Authors listed alphabetically by surname. Project: https://zing.loopit.me/ ; Code: https://github.com/seedleap/zing-world-model ; Models: https://huggingface.co/seedleap/zing-0.5 ; Serving: https://github.com/seedleap/Zing-SGLang</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2609.16102">arXiv:2609.16102</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2609.16102">pdf</a>, <a href="https://arxiv.org/ps/2609.16102">ps</a>, <a href="https://arxiv.org/format/2609.16102">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Machine Learning">cs.LG</span>
+        
+          
+            <span class="tag is-small is-grey tooltip is-tooltip-top" data-tooltip="Artificial Intelligence">cs.AI</span>
+          
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        A Decision-Support Audit Protocol for Supervision Drift in Proxy-Labeled Credit-Risk Prediction
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Shoeibi%2C+M">Mehrdad Shoeibi</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Shabanpour%2C+M">Muhammad Shabanpour</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Karwowski%2C+W">Waldemar Karwowski</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Yousefi%2C+N">Niloofar Yousefi</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2609.16102v1-abstract-short" style="display: inline;">
+        Credit-risk models are trained on proxy labels and deployed under <span class="search-hit mathjax">temporal</span> and&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.16102v1-abstract-full').style.display = 'inline'; document.getElementById('2609.16102v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2609.16102v1-abstract-full" style="display: none;">
+        Credit-risk models are trained on proxy labels and deployed under <span class="search-hit mathjax">temporal</span> and <span class="search-hit mathjax">segment</span> change, yet no single transfer metric separates base-rate shift, probability-scale shift, and feature-label relationship change. We contribute a design-science artifact: a locked, multi-signal audit protocol for supervision drift in proxy-labeled credit-risk prediction. Five layers (transfer performance, an oracle-gap probe, a calibration diagnostic, feature-label stability, and a synthetic positive control), thresholds, and decision rules were locked before interpretation; a bounded reading is a designed outcome. On a public LendingClub dataset (<span class="search-hit mathjax">temporal</span> 2013 to 2016 and cross-<span class="search-hit mathjax">segment</span> transfer), ranking is stable and oracle gaps are small; the clearest <span class="search-hit mathjax">temporal</span> signal is a prevalence and probability-scale mismatch that intercept-only diagnostic recalibration largely reduces, though its cause is not identifiable from the available release. The positive control responds only to larger injected shifts; subtler drift cannot be excluded. Mapping diagnostic patterns to governance <span class="search-hit mathjax">actions</span> is conceptual guidance, not validated here.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.16102v1-abstract-full').style.display = 'none'; document.getElementById('2609.16102v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 14 September, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> September 2026.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">10 pages, 2 figures, 3 tables</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2609.09736">arXiv:2609.09736</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2609.09736">pdf</a>, <a href="https://arxiv.org/ps/2609.09736">ps</a>, <a href="https://arxiv.org/format/2609.09736">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        
+          
+            <span class="tag is-small is-grey tooltip is-tooltip-top" data-tooltip="Multimedia">cs.MM</span>
+          
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        IAE-VTG: Interaction-Aligned <span class="search-hit mathjax">Action</span>-Entity Video <span class="search-hit mathjax">Temporal</span> Grounding
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Zhao%2C+S">Shiwen Zhao</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Zhang%2C+Q">Qi Zhang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Karaoglu%2C+S">Sezer Karaoglu</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Gevers%2C+T">Theo Gevers</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Oswald%2C+M+R">Martin R. Oswald</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2609.09736v1-abstract-short" style="display: inline;">
+        Video <span class="search-hit mathjax">Temporal</span> Grounding (VTG) localizes the video&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.09736v1-abstract-full').style.display = 'inline'; document.getElementById('2609.09736v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2609.09736v1-abstract-full" style="display: none;">
+        Video <span class="search-hit mathjax">Temporal</span> Grounding (VTG) localizes the video <span class="search-hit mathjax">segment</span> that matches a natural-language query. Many queries describe an <span class="search-hit mathjax">action</span> performed by a particular entity. Existing methods often encode the query as a whole or use general video-text interactions, without explicitly checking whether the <span class="search-hit mathjax">action</span> and entity occur together. They may therefore select a <span class="search-hit mathjax">segment</span> that contains both concepts but not the event described by the query. We propose Interaction Aligned <span class="search-hit mathjax">Action</span>-Entity Video <span class="search-hit mathjax">Temporal</span> Grounding (IAE-VTG), which models this rela?tionship at both the representation and training assignment levels. First, the Fine-grained Disentangled Interaction Module (FDIM) separates <span class="search-hit mathjax">action</span> and entity related query information and aligns it with complementary motion and appearance features. It then combines token-level interactions to build representations that capture the relationship between the <span class="search-hit mathjax">action</span> and entity. Second, Interaction-Sensitive Assignment (ISA) adds this interaction evidence to bipartite matching, so training targets are selected using both <span class="search-hit mathjax">temporal</span> overlap and semantic compatibility. This reduces supervision from <span class="search-hit mathjax">temporally</span> plausible but semantically incorrect proposals. Experiments on QVHighlights, Charades?STA, and TACoS show that IAE-VTG consistently improves strong baselines and achieves competitive or state-of-the-art performance on standard grounding metrics. Additional analyses show that the method is especially effective when similar <span class="search-hit mathjax">actions</span> or entities appear at multiple times and produces more reliable assignments for complex events.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.09736v1-abstract-full').style.display = 'none'; document.getElementById('2609.09736v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 9 September, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> September 2026.
+      
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2609.08743">arXiv:2609.08743</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2609.08743">pdf</a>, <a href="https://arxiv.org/ps/2609.08743">ps</a>, <a href="https://arxiv.org/format/2609.08743">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Robotics">cs.RO</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        FOCI Policy: Focus on Object-Centric Interactions for Relational Manipulation Policies
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Fu%2C+Z">Ze Fu</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Song%2C+P">Pinhao Song</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Hu%2C+Y">Yutong Hu</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Detry%2C+R">Renaud Detry</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2609.08743v1-abstract-short" style="display: inline;">
+        Object-centric manipulation policies improve generalization by modeling object motion instead of directly predicting robot <span class="search-hit mathjax">actions</span>. However, existing methods are often limited by representations which are either too simplistic to capture interaction dynamics or too dense to learn efficiently. We observe that many rigid relational manipulation tasks are gover&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.08743v1-abstract-full').style.display = 'inline'; document.getElementById('2609.08743v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2609.08743v1-abstract-full" style="display: none;">
+        Object-centric manipulation policies improve generalization by modeling object motion instead of directly predicting robot <span class="search-hit mathjax">actions</span>. However, existing methods are often limited by representations which are either too simplistic to capture interaction dynamics or too dense to learn efficiently. We observe that many rigid relational manipulation tasks are governed by short interaction phases where the relative motion between task-relevant objects is tightly constrained. Based on this observation, we propose \textsc{Foci Policy}, an interaction-centric framework that achieves a two-fold abstraction: (1) <span class="search-hit mathjax">temporally</span>, by automatically extracting compact interaction <span class="search-hit mathjax">segments</span> from demonstrations;(2) spatially, by representing skills as relative $SE(3)$ motion between task-relevant objects, yielding invariance to scene configurations and robot embodiment. Experiments on RLBench, COLOSSEUM, and real-world tasks show that \textsc{Foci Policy} achieves strong performance with substantially less training data than prior object-centric and <span class="search-hit mathjax">action</span>-centric policies. These results suggest that modeling object-object interactions provides a simple and efficient inductive bias for rigid relational manipulation. Project page: \href{https://fitz0401.github.io/foci-page/}{fitz0401.github.io/foci-page/}.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2609.08743v1-abstract-full').style.display = 'none'; document.getElementById('2609.08743v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 8 September, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> September 2026.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">Accepted to CoRL 2026</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2608.30279">arXiv:2608.30279</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2608.30279">pdf</a>, <a href="https://arxiv.org/ps/2608.30279">ps</a>, <a href="https://arxiv.org/format/2608.30279">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        Motion-Saliency Complementary Masked Modeling for Point Cloud Video Understanding
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Wang%2C+W">Wei Wang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Sun%2C+Y">Yiding Sun</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Wang%2C+Y">Yuyan Wang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Zhang%2C+Z">Zhuoyue Zhang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Li%2C+Z">Zhengqiao Li</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Yin%2C+D">Dongfu Yin</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Li%2C+C">Chen Li</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2608.30279v1-abstract-short" style="display: inline;">
+        &hellip;token level. Together, these components allow MoSaiC to effectively capture both appearance and motion dynamics. Extensive experiments on multiple downstream tasks, including <span class="search-hit mathjax">action</span> recognition,&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.30279v1-abstract-full').style.display = 'inline'; document.getElementById('2608.30279v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2608.30279v1-abstract-full" style="display: none;">
+        Point cloud video representation learning is crucial for 3D dynamic scene understanding. In this paper, we propose MoSaiC, a novel Motion-Saliency Complementary masked modeling framework for self-supervised point cloud video representation learning. MoSaiC couples three components: Curriculum Motion-Saliency Masking (CMSM), which guides the masking process toward motion-salient tokens under a curriculum schedule; Normal-Flow Motion (NFM) modeling, which supervises the local rigid rotation of each token in the Lie algebra so(3) as an explicit geometric motion target; and Cross-view Token Consistency Prediction (CTCP), which enforces consistency between two complementary masked views at the token level. Together, these components allow MoSaiC to effectively capture both appearance and motion dynamics. Extensive experiments on multiple downstream tasks, including <span class="search-hit mathjax">action</span> recognition, <span class="search-hit mathjax">temporal</span> <span class="search-hit mathjax">action</span> <span class="search-hit mathjax">segmentation</span>, and point-level semantic <span class="search-hit mathjax">segmentation</span>, demonstrate the effectiveness of our approach.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.30279v1-abstract-full').style.display = 'none'; document.getElementById('2608.30279v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 31 August, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> August 2026.
+      
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2608.29980">arXiv:2608.29980</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2608.29980">pdf</a>, <a href="https://arxiv.org/ps/2608.29980">ps</a>, <a href="https://arxiv.org/format/2608.29980">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        FIS-OT: Feature-Induced Optimal Transport for Unsupervised <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span>
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Peng%2C+L">Linxiang Peng</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Qin%2C+X">Xinyao Qin</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Li%2C+J">Jinhan Li</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Yang%2C+D">Di Yang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Wang%2C+J">Jiangtao Wang</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2608.29980v1-abstract-short" style="display: inline;">
+        Unsupervised <span class="search-hit mathjax">action</span>&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.29980v1-abstract-full').style.display = 'inline'; document.getElementById('2608.29980v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2608.29980v1-abstract-full" style="display: none;">
+        Unsupervised <span class="search-hit mathjax">action</span> <span class="search-hit mathjax">segmentation</span> is a challenging task. It involves finding <span class="search-hit mathjax">action</span> categories and boundaries in videos without labels. Existing Optimal Transport (OT) methods use global constraints. This causes them to overlook the use of local information. Furthermore, existing Optimal transport architectures are prone to confirmation bias because they overly trust the pseudo-labels they generate. This causes models to learn from noise in the early training stages. To address these issues, we propose FIS-OT. It is a novel Feature-Induced Structured Optimal Transport framework. First, we introduce a Feature Enhanced Generator (FEG) module. It serves as an internal regularizer. By using triplet loss, FEG captures local consistency. It provides robust supervision that is independent of noisy pseudo-labels. Second, we propose a Feature-Induced Residual Structural Prior. This combines a fixed <span class="search-hit mathjax">temporal</span> backbone with dynamic feature similarities. This design ensures <span class="search-hit mathjax">temporal</span> continuity. It also allows the solver to adapt to complex <span class="search-hit mathjax">action</span> structures. Finally, we establish a cyclic optimization loop. This aligns local feature learning with global structural alignment. Extensive experiments on the three datasets show the effectiveness of our method.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.29980v1-abstract-full').style.display = 'none'; document.getElementById('2608.29980v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 30 August, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> August 2026.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">Accepted by ICME2026</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2608.29891">arXiv:2608.29891</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2608.29891">pdf</a>, <a href="https://arxiv.org/ps/2608.29891">ps</a>, <a href="https://arxiv.org/format/2608.29891">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        MASQ: Mask-Aware Spatiotemporal Quantization for Unsupervised Skeleton <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span>
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Qin%2C+X">Xinyao Qin</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Peng%2C+L">Linxiang Peng</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Ye%2C+Y">Youbao Ye</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Yang%2C+D">Di Yang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Wang%2C+J">Jiangtao Wang</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2608.29891v1-abstract-short" style="display: inline;">
+        Unsupervised skeleton-based <span class="search-hit mathjax">temporal</span>&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.29891v1-abstract-full').style.display = 'inline'; document.getElementById('2608.29891v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2608.29891v1-abstract-full" style="display: none;">
+        Unsupervised skeleton-based <span class="search-hit mathjax">temporal</span> <span class="search-hit mathjax">action</span> <span class="search-hit mathjax">segmentation</span> is a crucial task for understanding human behavior in long untrimmed sequences. Recent approaches often rely on discrete quantization to discover <span class="search-hit mathjax">action</span> boundaries from motion representations. However, when spatial masking is introduced for representation learning, it can introduce representation ambiguity, while discrete quantization further amplifies small fluctuations in the latent space. The interaction between these two factors often leads to unstable code switching and severe <span class="search-hit mathjax">temporal</span> jitter near <span class="search-hit mathjax">action</span> boundaries.To address these limitations, we propose a novel Mask-aware <span class="search-hit mathjax">Action</span> Spatiotemporal Quantization (MASQ) framework. Our framework decouples the conflicting tasks of spatial feature inference and <span class="search-hit mathjax">temporal</span> smoothing.In the spatial dimension, we introduce a Joint-Level Structured Dropout (JLSD) mechanism that masks the entire <span class="search-hit mathjax">temporal</span> trajectory of selected joints, to encourage the model to learn discriminative inter-joint coordination patterns. In the <span class="search-hit mathjax">temporal</span> dimension, we design a mask-aware velocity loss that enforces motion consistency only on visible joints, that prevents gradient conflicts caused by masked signals and stabilizing <span class="search-hit mathjax">temporal</span> predictions. Extensive experiments on three widely used skeleton datasets, including HuGaDB, LARa, and BABEL, demonstrate that the proposed MASQ framework significantly outperforms existing state-of-the-art unsupervised methods. In particular, our model establishes a comprehensive and substantial leading advantage in the Mean over Frames accuracy.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.29891v1-abstract-full').style.display = 'none'; document.getElementById('2608.29891v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 30 August, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> August 2026.
+      
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2608.29611">arXiv:2608.29611</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2608.29611">pdf</a>, <a href="https://arxiv.org/ps/2608.29611">ps</a>, <a href="https://arxiv.org/format/2608.29611">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        See the Change, Keep the Flow: Unsupervised <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span> via Spectral-<span class="search-hit mathjax">Temporal</span> Representation Learning
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Li%2C+Y">Yun Li</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Xiao%2C+J">Jun Xiao</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Zhang%2C+C">Cong Zhang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Lam%2C+K">Kin-Man Lam</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2608.29611v1-abstract-short" style="display: inline;">
+        Unsupervised <span class="search-hit mathjax">action</span>&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.29611v1-abstract-full').style.display = 'inline'; document.getElementById('2608.29611v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2608.29611v1-abstract-full" style="display: none;">
+        Unsupervised <span class="search-hit mathjax">action</span> <span class="search-hit mathjax">segmentation</span> aims to discover latent <span class="search-hit mathjax">action</span> categories and their <span class="search-hit mathjax">temporal</span> organization without <span class="search-hit mathjax">action</span> annotations. Optimal transport-based methods provide structured frame-to-<span class="search-hit mathjax">action</span> assignments, however, their pseudo-label quality is fundamentally conditioned on the representation space used to construct the transport cost. We argue that reliable OT pseudo-labeling requires a representation geometry that is simultaneously sensitive to discriminative <span class="search-hit mathjax">action</span> changes and coherent along local <span class="search-hit mathjax">temporal</span> progressions. Based on this insight, we propose SpecT-OT, a spectral-<span class="search-hit mathjax">temporal</span> representation learning framework built upon an unbalanced optimal transport pseudo-labeling concept. SpecT-OT introduces a Spectral Reparameterization Projector (SRP), which parameterizes projector weights with fixed Fourier bases and learnable coefficients to improve the modeling of rapidly varying discriminative features, and <span class="search-hit mathjax">Temporal</span> Affinity Regularization (TAR), which imposes distance-aware, label-free constraints on pairwise frame affinities to stabilize local <span class="search-hit mathjax">temporal</span> structure. The two components jointly produce more discriminative and <span class="search-hit mathjax">temporally</span> stable transport costs, yielding more reliable pseudo-labels for iterative representation learning. Experiments on four benchmarks demonstrate strong performance compared with state-of-the-art methods. SpecT-OT achieves the best results on 13 of 15 metrics, including 4.1-point MoF and 7.4-point F1 gains over the baseline on Breakfast and Desktop Assembly, respectively.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.29611v1-abstract-full').style.display = 'none'; document.getElementById('2608.29611v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 30 August, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> August 2026.
+      
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2608.27929">arXiv:2608.27929</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2608.27929">pdf</a>, <a href="https://arxiv.org/ps/2608.27929">ps</a>, <a href="https://arxiv.org/format/2608.27929">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        Training-Free <span class="search-hit mathjax">Temporal</span> Abstraction for General Video Understanding
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Casanova%2C+E">Etienne Casanova</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Brodjian%2C+S">Sevan Brodjian</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Perona%2C+P">Pietro Perona</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2608.27929v1-abstract-short" style="display: inline;">
+        Videos are expensive to analyze frame by frame, yet many video understanding tasks depend on knowing where relevant moments occur. A system may need to find when an <span class="search-hit mathjax">action</span> changes, locate the&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.27929v1-abstract-full').style.display = 'inline'; document.getElementById('2608.27929v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2608.27929v1-abstract-full" style="display: none;">
+        Videos are expensive to analyze frame by frame, yet many video understanding tasks depend on knowing where relevant moments occur. A system may need to find when an <span class="search-hit mathjax">action</span> changes, locate the <span class="search-hit mathjax">segment</span> described by a sentence, or choose a few frames for a vision-language model. Existing methods often solve these problems separately, using task-specific training data or specialized architectures. We study whether a pretrained video-text model can provide enough <span class="search-hit mathjax">temporal</span> structure to support several of these tasks at once. We present STITCH, a training-free method that divides a video into semantically meaningful <span class="search-hit mathjax">temporal</span> chunks. STITCH embeds short video windows with a frozen video-text backbone and detects changes in the resulting embedding sequence. These chunks are computed once per video and reused across tasks. We evaluate STITCH on generic event boundary detection, language-based moment retrieval, and frame selection for long-video VLM reasoning. Across all three settings, STITCH remains competitive with more specialized methods while requiring no task-specific training, with especially clear gains when only a small number of frames or tokens can be processed. These results suggest that reusable <span class="search-hit mathjax">temporal</span> abstraction is a promising direction for general video understanding, allowing dense video streams to be converted once into semantic units that can be localized, retrieved, sampled, or reasoned over by downstream systems.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.27929v1-abstract-full').style.display = 'none'; document.getElementById('2608.27929v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 28 August, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> August 2026.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">Submitted to NeurIPS 2026</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2608.27562">arXiv:2608.27562</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2608.27562">pdf</a>, <a href="https://arxiv.org/ps/2608.27562">ps</a>, <a href="https://arxiv.org/format/2608.27562">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        VidParse: Online Parsing of Egocentric Procedures Like a Pro
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Gupta%2C+A">Anubhav Gupta</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Kambhamettu%2C+A">Archit Kambhamettu</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Agarwal%2C+V">Vatsal Agarwal</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Kumar%2C+P">Pulkit Kumar</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Shrivastava%2C+A">Abhinav Shrivastava</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2608.27562v1-abstract-short" style="display: inline;">
+        Translating continuous, noisy egocentric video streams into discrete, <span class="search-hit mathjax">temporally</span> ordered&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.27562v1-abstract-full').style.display = 'inline'; document.getElementById('2608.27562v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2608.27562v1-abstract-full" style="display: none;">
+        Translating continuous, noisy egocentric video streams into discrete, <span class="search-hit mathjax">temporally</span> ordered <span class="search-hit mathjax">action</span> steps is fraught with visual challenges. Heavy ego-motion, transient occlusions, and the high intra-class variability of unscripted human-object interactions cause standard frame-level online <span class="search-hit mathjax">temporal</span> models to struggle, often resulting in severe over-<span class="search-hit mathjax">segmentation</span> and structural collapse. To bridge the gap between unstable low-level perception and high-level procedural logic, we present VidParse, an online, training-free framework that treats activity understanding as a graph-constrained inference problem. Rather than relying on learned <span class="search-hit mathjax">temporal</span> filters, we dynamically identify semantic transitions using a <span class="search-hit mathjax">temporal</span> similarity matrix over manipulation-anchored features, which are extracted from frozen foundation models to prioritize foreground hand-object interactions. A beam search decoder then leverages an induced procedural task graph to explicitly enforce valid <span class="search-hit mathjax">action</span> transitions and prune impossible trajectories. By anchoring robust visual <span class="search-hit mathjax">segments</span> to hard procedural constraints, our approach preserves long-range state transitions and achieves up to a 10x improvement in complex multi-step parsing accuracy over strong online baselines, all without requiring a single gradient update.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.27562v1-abstract-full').style.display = 'none'; document.getElementById('2608.27562v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 27 August, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> August 2026.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">Accepted at ECCV 2026</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2608.27051">arXiv:2608.27051</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2608.27051">pdf</a>, <a href="https://arxiv.org/ps/2608.27051">ps</a>, <a href="https://arxiv.org/format/2608.27051">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        
+          
+            <span class="tag is-small is-grey tooltip is-tooltip-top" data-tooltip="Image and Video Processing">eess.IV</span>
+          
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        Anatomy-Guided Foundation Model Adaptation with Within-Case Prototype Supervision for Standard Plane Detection in Fetal Ultrasound Blind Sweeps
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Zhao%2C+Y">Yuzhe Zhao</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2608.27051v1-abstract-short" style="display: inline;">
+        &hellip;plane in low-cost obstetric blind sweeps is a highly imbalanced frame-classification problem: positive frames account for under 3% of a sequence, form short contiguous <span class="search-hit mathjax">segments</span>, and are poorly handled by off-the-shelf ultrasound and vision foundation models. We propose AnatoProto, a lightweight sequence-level framework that adapts a frozen BiomedCLIP encoder&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.27051v1-abstract-full').style.display = 'inline'; document.getElementById('2608.27051v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2608.27051v1-abstract-full" style="display: none;">
+        Detecting the fetal abdominal circumference standard plane in low-cost obstetric blind sweeps is a highly imbalanced frame-classification problem: positive frames account for under 3% of a sequence, form short contiguous <span class="search-hit mathjax">segments</span>, and are poorly handled by off-the-shelf ultrasound and vision foundation models. We propose AnatoProto, a lightweight sequence-level framework that adapts a frozen BiomedCLIP encoder to fetal blind sweeps through four components: (i) anatomy-weighted spatial pooling that uses nnU-Net abdominal-region probabilities as a spatial prior to reweight BiomedCLIP patch tokens, so frozen semantic features are aggregated onto anatomically meaningful regions; (ii) a within-case prototype loss that pulls each frame embedding toward the mean of positive frames of the same sweep, exploiting case-level structure unavailable at the frame level; (iii) a three-stage cascade refinement (frame-&gt;<span class="search-hit mathjax">segment</span>-&gt;case-level rejecter) that lifts the prediction unit from noisy frames to structurally-constrained <span class="search-hit mathjax">segments</span>; and (iv) a hybrid prediction head that jointly models per-frame stability and inter-frame boundary transitions to suppress boundary false positives. On the ACOUSLIC-AI benchmark, AnatoProto reaches a test F1 of 67.72, outperforming the strongest foundation-model baseline (FetalCLIP + PRS, F1 = 54.52) by +13.20 F1 and the strongest video <span class="search-hit mathjax">temporal</span>-<span class="search-hit mathjax">action</span>-detection baseline (TriDet + PRS) by +15.76 F1. A synergy study, backed by embedding geometry and paired-bootstrap confidence intervals, shows that the prototype loss and anatomy-weighted pooling are not additive: applied alone the prototype loss reduces recall by 12 points, but combined with anatomy-weighted pooling it increases recall by 6.5 points -- a sign-flip we trace to the accuracy of the within-case prototype.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.27051v1-abstract-full').style.display = 'none'; document.getElementById('2608.27051v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 27 August, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> August 2026.
+      
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2608.24439">arXiv:2608.24439</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2608.24439">pdf</a>, <a href="https://arxiv.org/ps/2608.24439">ps</a>, <a href="https://arxiv.org/format/2608.24439">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        DoublesEval: Diagnosing Multi-Agent Tactical Reasoning in Vision-Language Models via Professional Doubles Badminton
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Cheng%2C+J">Jintao Cheng</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Li%2C+W">Weibin Li</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2608.24439v1-abstract-short" style="display: inline;">
+        Visual Language Models (VLMs) excel at describing visible scene content but struggle to reason about dynamic multi-agent interactions, where <span class="search-hit mathjax">action</span> semantics depend on coordinated roles and spatial-&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.24439v1-abstract-full').style.display = 'inline'; document.getElementById('2608.24439v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2608.24439v1-abstract-full" style="display: none;">
+        Visual Language Models (VLMs) excel at describing visible scene content but struggle to reason about dynamic multi-agent interactions, where <span class="search-hit mathjax">action</span> semantics depend on coordinated roles and spatial-<span class="search-hit mathjax">temporal</span> dependencies. We formalize this capability as \textbf{multi-agent tactical reasoning} and introduce \textbf{DoublesEval}, a diagnostic evaluation framework that leverages professional doubles badminton as a structurally tractable testbed. DoublesEval employs a key-moment-based protocol that decomposes rallies into tactically salient instants and probes models across four interpretable dimensions: atomic recognition, intra-<span class="search-hit mathjax">segment</span> composite understanding, cross-<span class="search-hit mathjax">segment</span> causal reasoning, and high-level tactical abstraction. This design isolates \emph{where} reasoning fails, rather than merely measuring answer correctness. To address observed failure modes, we propose \textbf{TacticCheck}, a lightweight constraint-guided test-time consistency checker that reranks candidate answers using the model&#39;s own lower-level tactical predictions, requiring no parameter updates or ground-truth labels at inference time. Evaluating four representative open-source VLMs on 60 curated rallies (yielding $\sim$9.6K structured instances) via a zero-shot protocol, we find that models remain weak across all diagnostic levels, with especially clear bottlenecks in spatial state, interaction binding, and terminal evidence. TacticCheck delivers consistent gains across all evaluated models, while still leaving a substantial gap to robust tactical reasoning. These results highlight the need for structured, interaction-aware evaluation paradigms for next-generation VLMs. The source code is available in \href{https://github.com/Chengjt1999/DoublesEval}{\textcolor{blue}{our GitHub repository}}.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.24439v1-abstract-full').style.display = 'none'; document.getElementById('2608.24439v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 25 August, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> August 2026.
+      
+    </p>
+    
+    <p class="comments is-size-7">
+      <span class="has-text-black-bis has-text-weight-semibold">Comments:</span>
+      <span class="has-text-grey-dark mathjax">Accepted by BMVC2026</span>
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2608.24043">arXiv:2608.24043</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2608.24043">pdf</a>, <a href="https://arxiv.org/ps/2608.24043">ps</a>, <a href="https://arxiv.org/format/2608.24043">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        ConsensusTAS: Self-Supervised <span class="search-hit mathjax">Temporal</span> <span class="search-hit mathjax">Action</span> <span class="search-hit mathjax">Segmentation</span> for Long-Horizon Construction Videos
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Zhou%2C+X">Xiaoshan Zhou</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Sun%2C+Y">Yafei Sun</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2608.24043v1-abstract-short" style="display: inline;">
+        Recognizing sequential construction activities is important for collaborative human-robot work; for example, robots are able to understand workers&#39; current and upcoming <span class="search-hit mathjax">actions</span> and provide timely tool delivery or physical support. However, despite extensive research on construction worker activity recognition, existing studies have been limited to classi&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.24043v1-abstract-full').style.display = 'inline'; document.getElementById('2608.24043v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2608.24043v1-abstract-full" style="display: none;">
+        Recognizing sequential construction activities is important for collaborative human-robot work; for example, robots are able to understand workers&#39; current and upcoming <span class="search-hit mathjax">actions</span> and provide timely tool delivery or physical support. However, despite extensive research on construction worker activity recognition, existing studies have been limited to classifying activity categories, such as climbing, lifting, and walking, instead of recognizing fine-grained activity transitions from long-horizon sequences. Addressing this problem is challenging because annotating <span class="search-hit mathjax">action</span> <span class="search-hit mathjax">temporal</span> boundaries in long construction videos is time-consuming. In this study, we propose ConsensusTAS, a label-free, self-supervised learning approach to <span class="search-hit mathjax">segment</span> continuous video streams into distinct activity phases by exploiting the internal consensus of candidate <span class="search-hit mathjax">segmentations</span>. We evaluated our algorithm on three public datasets, where it outperformed state-of-the-art methods, achieving an F1@10 of 73.08 on GTEA, an F1@10 of 64.33 on Breakfast, and an F1@50 of 33.50 on static-camera videos from Assembly101. We also tested it on real-world construction videos, where post-hoc evaluation showed that the model successfully recognized and <span class="search-hit mathjax">segmented</span> <span class="search-hit mathjax">actions</span> within the composite activity of bricklaying, such as spreading mortar on a brick, placing the brick, pressing, and aligning. Compared with other <span class="search-hit mathjax">temporal</span> <span class="search-hit mathjax">action</span> <span class="search-hit mathjax">segmentation</span> models that require computationally intensive large vision-language models, our method can run on a CPU, which provides practical value for video surveillance and human-robot collaboration on mobile robotic platforms.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.24043v1-abstract-full').style.display = 'none'; document.getElementById('2608.24043v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 25 August, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> August 2026.
+      
+    </p>
+    
+
+    
+
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2608.21686">arXiv:2608.21686</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2608.21686">pdf</a>, <a href="https://arxiv.org/ps/2608.21686">ps</a>, <a href="https://arxiv.org/format/2608.21686">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Human-Computer Interaction">cs.HC</span>
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        UrbanGazeVis: A Visualization System for Analyzing Eye-Tracking Data on Urban Safety Perception
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=De+La+Puente%2C+A">Andres De La Puente</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Sante%2C+L">Luis Sante</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Moreno-Vera%2C+F">Felipe Moreno-Vera</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Diaz%2C+M">Mauro Diaz</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Poco%2C+J">Jorge Poco</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2608.21686v2-abstract-short" style="display: inline;">
+        &hellip;study in which 30 participants viewed and rated the safety of 150 street-view images from Rio de Janeiro using a HoloLens 2 headset. Gaze traces were mapped onto semantic <span class="search-hit mathjax">segments</span> and disorder cues (e.g., damaged walls, graffiti, overhead cables), yielding a multimodal dataset linking gaze dynamics, scene semantics, and safety scores. To analyze it, we intro&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.21686v2-abstract-full').style.display = 'inline'; document.getElementById('2608.21686v2-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2608.21686v2-abstract-full" style="display: none;">
+        Perceived safety in streetscapes depends on where people look, yet how gaze relates to visual cues of urban disorder remains poorly understood. Prior work treats safety as an image-level label, offering little insight into how attention to specific elements (e.g, buildings, greenery, people, signs of decay) shapes these judgments. We present a head-mounted eye-tracking study in which 30 participants viewed and rated the safety of 150 street-view images from Rio de Janeiro using a HoloLens 2 headset. Gaze traces were mapped onto semantic <span class="search-hit mathjax">segments</span> and disorder cues (e.g., damaged walls, graffiti, overhead cables), yielding a multimodal dataset linking gaze dynamics, scene semantics, and safety scores. To analyze it, we introduce UrbanGazeVis, an interactive visual analytics system with image- and participant-centric views that connects the spatial, <span class="search-hit mathjax">temporal</span>, and semantic dimensions of gaze to perceived safety, supporting comparisons between safe and unsafe scenes, inspection of divergent ratings for similar images, and region-of-interest analysis via glyph-based summaries. Statistical models show that sustained attention to physical disorder is associated with lower perceived safety, while the visual analysis reveals context-specific effects often masked by global aggregation. Together, these analyses offer <span class="search-hit mathjax">actionable</span> insights for urban design and planning.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.21686v2-abstract-full').style.display = 'none'; document.getElementById('2608.21686v2-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 26 August, 2026; <span class="has-text-black-bis has-text-weight-semibold">v1</span> submitted 21 August, 2026;
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> August 2026.
+      
+    </p>
+    
+
+    
+
+    
+      <p class="comments is-size-7">
+        <span class="has-text-black-bis has-text-weight-semibold">Journal ref:</span>
+        Computers &amp; Graphics, 2026
+      </p>
+    
+  </li>
+
+  <li class="arxiv-result">
+    <div class="is-marginless">
+      <p class="list-title is-inline-block"><a href="https://arxiv.org/abs/2608.20284">arXiv:2608.20284</a>
+        <span>&nbsp;[<a href="https://arxiv.org/pdf/2608.20284">pdf</a>, <a href="https://arxiv.org/ps/2608.20284">ps</a>, <a href="https://arxiv.org/format/2608.20284">other</a>]&nbsp;</span>
+      </p>
+      <div class="tags is-inline-block">
+        <span class="tag is-small is-link tooltip is-tooltip-top" data-tooltip="Computer Vision and Pattern Recognition">cs.CV</span>
+        
+          
+            <span class="tag is-small is-grey tooltip is-tooltip-top" data-tooltip="Robotics">cs.RO</span>
+          
+        </div>
+      
+    </div>
+    
+    <p class="title is-5 mathjax">
+      
+        Towards Surgical World-<span class="search-hit mathjax">Action</span> Modeling: A Preliminary Joint Visual-Trajectory Forecasting for Surgical Motion Planning
+      
+    </p>
+    <p class="authors">
+      <span class="has-text-black-bis has-text-weight-semibold">Authors:</span>
+      
+      <a href="/search/?searchtype=author&amp;query=Huang%2C+W">Weiliang Huang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Liu%2C+H">Huanrong Liu</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Zhang%2C+B">Bob Zhang</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Dou%2C+Q">Qi Dou</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Chen%2C+Z">Zhen Chen</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Gu%2C+Y">Yun Gu</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Rosman%2C+G">Guy Rosman</a>, 
+      
+      <a href="/search/?searchtype=author&amp;query=Li%2C+Q">Qingbiao Li</a>
+      
+    </p>
+    
+    <p class="abstract mathjax">
+      <span class="search-hit">Abstract</span>:
+      <span class="abstract-short has-text-grey-dark mathjax" id="2608.20284v1-abstract-short" style="display: inline;">
+        &hellip;movement, leaving the consistency between predicted trajectories and future scene evolution unaddressed. Jointly forecasting both provides a more complete account of surgical <span class="search-hit mathjax">action</span>-scene dynamics by enabling explicit trajectory-level evaluation while simultaneously modeling the corresponding visual evolution. To bridge this gap, we present a preliminary joi&hellip;
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.20284v1-abstract-full').style.display = 'inline'; document.getElementById('2608.20284v1-abstract-short').style.display = 'none';">&#9661; More</a>
+      </span>
+      <span class="abstract-full has-text-grey-dark mathjax" id="2608.20284v1-abstract-full" style="display: none;">
+        Reliable surgical planning requires models to anticipate not only how instruments will move, but also how the operative visual state will evolve together with such motion. Existing approaches typically treat future scene generation and instrument trajectory prediction as two separate tasks. Scene-only models cannot directly evaluate the accuracy of future instrument motion at the trajectory level, while trajectory-only models fail to capture the visual consequences of instrument movement, leaving the consistency between predicted trajectories and future scene evolution unaddressed. Jointly forecasting both provides a more complete account of surgical <span class="search-hit mathjax">action</span>-scene dynamics by enabling explicit trajectory-level evaluation while simultaneously modeling the corresponding visual evolution. To bridge this gap, we present a preliminary joint visual-trajectory world-<span class="search-hit mathjax">action</span> model that simultaneously forecasts future visual states and instrument trajectories from historical surgical observations. Specifically, we encode historical video frames and tool trajectories into latent representations, which are processed by a <span class="search-hit mathjax">temporal</span>-spatial encoder and subsequently decoded through separate visual-state and trajectory prediction heads. Based on this preliminary architecture, a chunked autoregressive rollout is repeatedly applied to predict fifteen future steps. The chunked strategy consistently outperforms direct one-shot prediction across all evaluated horizons, improving first-<span class="search-hit mathjax">segment</span> PSNR from 18.86 to 23.11 dB and reducing ADE from 45.77 to 22.22 pixels. These results demonstrate the initial feasibility of joint visual-motion forecasting. However, we observe progressive visual degradation and accumulated trajectory errors over longer prediction horizons, which remain important challenges for future surgical world-<span class="search-hit mathjax">action</span> modeling.
+        <a class="is-size-7" style="white-space: nowrap;" onclick="document.getElementById('2608.20284v1-abstract-full').style.display = 'none'; document.getElementById('2608.20284v1-abstract-short').style.display = 'inline';">&#9651; Less</a>
+      </span>
+    </p>
+    
+
+    <p class="is-size-7"><span class="has-text-black-bis has-text-weight-semibold">Submitted</span> 20 August, 2026; 
+      <span class="has-text-black-bis has-text-weight-semibold">originally announced</span> August 2026.
+      
+    </p>
+    
+
+    
+
+    
+  </li>
+
+</ol>
+
+
+  <nav class="pagination is-small is-centered breathe-horizontal" role="navigation" aria-label="pagination">
+    
+    <a href=""
+      class="pagination-previous is-invisible">Previous
+    </a>
+    
+    
+      <a href="/search/?searchtype=all&amp;query=temporal+action+segmentation&amp;size=25&amp;start=25"
+        class="pagination-next" >Next
+      </a>
+    
+    <ul class="pagination-list">
+
+      <li>
+        <a href="/search/?searchtype=all&amp;query=temporal+action+segmentation&amp;size=25&amp;start=0"
+          class="pagination-link is-current"
+          aria-label="Goto page 1">1
+        </a>
+      </li>
+
+      
+                                     
+          
+          <li>
+            <a href="/search/?searchtype=all&amp;query=temporal+action+segmentation&amp;size=25&amp;start=25"
+              class="pagination-link "
+              aria-label="Page 2"
+              aria-current="page">2
+            </a>
+          </li>
+          
+          <li>
+            <a href="/search/?searchtype=all&amp;query=temporal+action+segmentation&amp;size=25&amp;start=50"
+              class="pagination-link "
+              aria-label="Page 3"
+              aria-current="page">3
+            </a>
+          </li>
+          
+          <li>
+            <a href="/search/?searchtype=all&amp;query=temporal+action+segmentation&amp;size=25&amp;start=75"
+              class="pagination-link "
+              aria-label="Page 4"
+              aria-current="page">4
+            </a>
+          </li>
+          
+          <li>
+            <a href="/search/?searchtype=all&amp;query=temporal+action+segmentation&amp;size=25&amp;start=100"
+              class="pagination-link "
+              aria-label="Page 5"
+              aria-current="page">5
+            </a>
+          </li>
+          
+          <li><span class="pagination-ellipsis">&hellip;</span></li>
+        
+      
+    </ul>
+  </nav>
+  
+
+  
+
+
+      <div class="is-hidden-tablet">
+        <!-- feedback for mobile only -->
+        <span class="help" style="display: inline-block;"><a href="https://github.com/arXiv/arxiv-search/releases">Search v0.5.6 released 2020-02-24</a>&nbsp;&nbsp;</span>
+      </div>
+    </div>
+
+  </main>
+  <footer>
+    
+<footer class="ds-site-footer">
+  <div class="ds-site-footer-grid">
+    <div class="ds-site-footer-main">
+      <div class="ds-site-footer-ack">
+        We gratefully acknowledge support from
+        our <strong>major funders</strong>,
+        <a href="https://info.arxiv.org/about/ourmembers.html"><strong>member institutions</strong></a><span class="ack-member-inline" hidden>, <strong></strong></span>,
+        and all contributors.
+      </div>
+      <nav class="ds-site-footer-links" aria-label="Site navigation">
+        <a href="https://info.arxiv.org/about">About</a>
+        <span class="ds-site-footer-sep" aria-hidden="true">&middot;</span>
+        <a href="https://info.arxiv.org/help">Help</a>
+        <span class="ds-site-footer-sep" aria-hidden="true">&middot;</span>
+        <a href="https://info.arxiv.org/help/contact.html">Contact</a>
+        <span class="ds-site-footer-sep" aria-hidden="true">&middot;</span>
+        <a href="https://info.arxiv.org/help/subscribe">Subscribe</a>
+        <span class="ds-site-footer-sep" aria-hidden="true">&middot;</span>
+        <a href="https://info.arxiv.org/help/license/index.html">Copyright</a>
+        <span class="ds-site-footer-sep" aria-hidden="true">&middot;</span>
+        <a href="https://info.arxiv.org/help/policies/privacy_policy.html">Privacy</a>
+        <span class="ds-site-footer-sep" aria-hidden="true">&middot;</span>
+        <a href="https://info.arxiv.org/help/web_accessibility.html">Accessibility</a>
+        <span class="ds-site-footer-sep" aria-hidden="true">&middot;</span>
+        <a href="https://status.arxiv.org" target="_blank" rel="noopener noreferrer">Operational Status<span class="is-sr-only"> (opens in new tab)</span></a>
+      </nav>
+    </div>
+    <div class="ds-site-footer-funders" aria-label="Major funders">
+      <div class="ds-site-footer-funders-label">Major funding support from</div>
+      <div class="ds-site-footer-funders-logos">
+        <a class="ds-funder-link" href="https://www.simonsfoundation.org/" target="_blank" rel="noopener noreferrer">
+          <img class="ds-funder-logo" src="https://static.arxiv.org/static/base/1.0.1/images/funders/simons-foundation.png" alt="Simons Foundation"></a>
+        <a class="ds-funder-link" href="https://www.sfi.org.bm/" target="_blank" rel="noopener noreferrer">
+          <img class="ds-funder-logo" src="https://static.arxiv.org/static/base/1.0.1/images/funders/simons-foundation-international.png" alt="Simons Foundation International"></a>
+        <a class="ds-funder-link" href="https://www.schmidtsciences.org/" target="_blank" rel="noopener noreferrer">
+          <img class="ds-funder-logo" src="https://static.arxiv.org/static/base/1.0.1/images/funders/schmidt-sciences.png" alt="Schmidt Sciences"></a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+  </footer>
+  <script src="https://static.arxiv.org/static/base/1.0.0a5/js/member_acknowledgement.js"></script>
+  </body>
+</html>

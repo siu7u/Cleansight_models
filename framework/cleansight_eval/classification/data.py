@@ -12,17 +12,26 @@ from typing import Dict, List, Tuple
 
 import yaml
 
+# 训练缓存的默认 split 集合（``train`` + ``val``）；留出集评估用 ``("test",)`` 单独构建。
+DEFAULT_ROI_SPLITS: Tuple[str, ...] = ("train", "val")
+
 
 def build_roi_dataset(
     group_dir: Path,
     classes: List[str],
     roi_size: int = 224,
     neg_ratio: float = 1.0,
+    splits: Tuple[str, ...] = DEFAULT_ROI_SPLITS,
+    seed: int = 0,
 ) -> Tuple["object", "object", List[str], dict]:
     """
     从 YOLO 数据集中为指定类别提取 ROI 区域。
 
-    返回 (X, y, class_names, stats)；X/y 为 numpy 数组（BGR 图像块与多标签）。
+    :param splits: 从哪些 YOLO split 目录取图（默认 ``("train", "val")``；留出集评估传 ``("test",)``
+        —— 见 ``docs/EVAL.md``：缓存由 train+val 构建、再随机切分属于 in-sample 评估）。
+    :param seed: 负样本随机裁剪的随机种子。此前未播种导致每次重建的负样本都不同，
+        评估数字不可复现；固定种子后同一份数据重建结果一致。
+    :return: ``(X, y, class_names, stats)``；X/y 为 numpy 数组（BGR 图像块与多标签）。
     """
 
     import cv2
@@ -34,7 +43,13 @@ def build_roi_dataset(
         raise FileNotFoundError(f"data.yaml 缺失: {data_yaml}")
 
     cfg = yaml.safe_load(data_yaml.read_text(encoding="utf-8")) or {}
-    all_names = cfg["names"]
+    # data.yaml 的 names 可能是 list 或 dict{id: name}（与 detection/data_tools.py 同一约定，
+    # 真实分组数据集用的是 dict 形式）；两种都要认，否则目标类别会被误判为"不在 data.yaml 中"。
+    raw_names = cfg["names"]
+    if isinstance(raw_names, dict):
+        all_names = [str(name) for _, name in sorted(raw_names.items(), key=lambda kv: int(kv[0]))]
+    else:
+        all_names = [str(name) for name in raw_names]
     name_to_id = {name: i for i, name in enumerate(all_names)}
     target_ids = {name_to_id[c] for c in classes if c in name_to_id}
     if not target_ids:
@@ -42,15 +57,18 @@ def build_roi_dataset(
     target_names = [c for c in classes if c in name_to_id]
     print(f"[build] 目标类别: {target_names} (IDs: {target_ids})")
 
+    rng = np.random.default_rng(seed)
     samples = []
     stats = {
         "total_frames": 0,
         "per_class_pos": {c: 0 for c in target_names},
         "neg_frames": 0,
         "neg_rois": 0,
+        "splits": list(splits),
+        "seed": seed,
     }
 
-    for split in ("train", "val"):
+    for split in splits:
         img_dir = group_dir / "images" / split
         lbl_dir = group_dir / "labels" / split
         if not img_dir.is_dir():
@@ -110,10 +128,10 @@ def build_roi_dataset(
                 stats["neg_frames"] += 1
                 num_negs = max(1, int(neg_ratio))
                 for _ in range(num_negs):
-                    crop_w = np.random.randint(roi_size, max(roi_size + 1, w // 3))
-                    crop_h = np.random.randint(roi_size, max(roi_size + 1, h // 3))
-                    x1 = np.random.randint(0, max(1, w - crop_w))
-                    y1 = np.random.randint(0, max(1, h - crop_h))
+                    crop_w = int(rng.integers(roi_size, max(roi_size + 1, w // 3)))
+                    crop_h = int(rng.integers(roi_size, max(roi_size + 1, h // 3)))
+                    x1 = int(rng.integers(0, max(1, w - crop_w)))
+                    y1 = int(rng.integers(0, max(1, h - crop_h)))
                     roi = img[y1:y1 + crop_h, x1:x1 + crop_w]
                     roi = cv2.resize(roi, (roi_size, roi_size))
                     samples.append((roi, np.zeros(len(target_names), dtype=np.float32)))
@@ -152,15 +170,21 @@ def save_dataset(X, y, classes: List[str], stats: dict, base_dir: Path) -> Path:
     return ds_dir
 
 
-def load_dataset(classes: List[str], base_dir: Path):
-    """加载已保存的 ROI 数据集，返回 (X, y, classes)。"""
+def load_dataset(classes: List[str], base_dir: Path, *, mmap: bool = True):
+    """加载已保存的 ROI 数据集，返回 (X, y, classes)。
+
+    ``mmap=True``（默认）用只读内存映射打开 ``X.npy``：真实分组数据集的裁剪可达 2 万张、
+    约 3 GB（uint8），直接 ``np.load`` 会整块常驻内存，训练时再转 float32 还要翻 4 倍——
+    WSL 下容易被 OOM kill。内存映射只占页缓存（可回收），配合按需转换即可把峰值压到
+    一个 batch 的量级。
+    """
 
     import numpy as np
 
     ds_dir = base_dir / "-".join(classes)
     if not ds_dir.is_dir():
         raise FileNotFoundError(f"数据集不存在: {ds_dir}\n请先构建（训练时自动构建）")
-    X = np.load(ds_dir / "X.npy")
+    X = np.load(ds_dir / "X.npy", mmap_mode="r" if mmap else None)
     y = np.load(ds_dir / "y.npy")
     meta = json.loads((ds_dir / "meta.json").read_text(encoding="utf-8"))
     print(f"[load] X={X.shape} y={y.shape} classes={meta['classes']}")

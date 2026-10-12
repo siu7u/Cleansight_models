@@ -1,0 +1,53 @@
+# 形态 B（像素特征进时序）E1 实验：bbox 40 维 + 冻结 backbone 逐帧整图 embedding 576 维。
+#
+# 与 E0 基线（gru-actionmixed.yaml，纯 40 维 bbox，同一份 cleansight-ActionMixed 机制床）
+# 同模型同超参，仅特征契约不同；配方由运行命令统一注入
+# （-S train.weight_decay=1e-4 -S model.dropout=0.2 -S train.patience=4
+#   -S train.best_metric=val_f1_0.5），见 docs/FEATURE_STRATEGY_COMPARE.md 坍缩分析。
+#
+# embedding 由 features/extract_embeddings.py 离线预计算（backbone 冻结、零训练），
+# 产物根目录由 catalog 的 feature_embed.root 声明并经 data.embedding_root 注入；
+# 训练侧只读 npy，不需要图像与 GPU。图像块先经线性投影头（model.image_proj_dim）再与
+# bbox 块拼接送入 GRU——投影头是形态 B 唯一新增的可训练参数。
+
+schema_version: 1
+pipeline: sliding_window_temporal
+
+model:
+  type: gru              # 因果模型，可用于滑窗
+  input_dim: 616         # 40 bbox（8 类 × [presence, cx, cy, w, h]）+ 576 图像 embedding
+  num_classes: 6         # labels/data.yaml: idle/air_injection/flush/long_brush_insert/long_brush_withdraw/short_brush_cleaning
+  hidden: 128
+  num_layers: 3
+  image_dim: 576         # 输入尾部图像块宽度（须等于 feature_schema.dim - 40）
+  image_proj_dim: 64     # 线性投影头输出宽度（冻结 embedding 的领域适配，见 §4.1）
+
+data:
+  dataset_ref: temporal.actionmixed-v2-embed-mbv3s-v1  # 根目录、embedding 根、类别由 catalog 解析
+  split_train: train
+  split_val: val
+  split_eval: test
+
+feature_schema:
+  dim: 616
+  version: actionmixed-bbox-embed-mbv3s-v1
+  # 布局：左 40 维 bbox 块（每 5 维一类，顺序同 frames/data.yaml），右 576 维图像 embedding；
+  # mask_targets 只作用于 bbox 块（图像块无检测类结构）。
+
+# 训练期随机目标遮罩：默认关闭（E1 与 E0 的对照不使用增强）；图像契约下该增强只遮 bbox 块。
+augmentation:
+  target_mask:
+    enabled: false
+    strategy: frame_dropout
+    targets: [scope_distal_end, syringe, air_gun]
+    probability: 0.2
+
+evaluation:
+  mode: formal
+  visualize: true
+
+train:
+  epochs: 20
+  lr: 0.001
+  batch_size: 32
+  window: 16          # 必须 ≤ 最短视频的采样帧数（本数据集最短约 35 帧）

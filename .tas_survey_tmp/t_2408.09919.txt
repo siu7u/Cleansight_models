@@ -1,0 +1,3167 @@
+ 
+
+ Long-Tail Temporal Action Segmentation with Group-wise Temporal Logit Adjustment 
+
+## Report GitHub Issue
+
+ × 
+
+ Title: 
+
+ Content selection saved. Describe the issue below: 
+
+ Description: 
+
+ Submit without GitHub 
+ Submit in GitHub 
+
+ arXiv is now an independent nonprofit! 
+ Learn more 
+ × 
+
+ Back to arXiv 
+
+ Why HTML? 
+
+ Report Issue 
+
+ Back to Abstract 
+
+ Download PDF 
+
+ Abstract 
+ 1 Introduction 
+ 2 Related works 
+ 3 Preliminaries 
+
+ 3.1 Temporal Action Segmentation 
+ 3.2 Logit Adjustment 
+
+ 4 Methodology 
+
+ 4.1 Action Inter-Dependencies 
+ 4.2 Group-wise Classification 
+ 4.3 Temporal Logit Adjustment 
+ 4.4 Overall loss 
+ 4.5 Inference 
+
+ 5 Experiments 
+
+ 5.1 Dataset, Implementation, and Evaluation 
+ 5.2 Benchmark Comparisons 
+ 5.3 Ablation Studies 
+ 5.4 Analyzing the effects of G-TLA 
+
+ 6 Conclusion 
+ References 
+ Clustering algorithm 
+ Effect of the number of groups n n . 
+ Dataset. 
+ Implementation Details. 
+ Main results. 
+ Extra plots for YouTube. 
+ Ablation study. 
+ Group identification results. 
+ Results on other datasets 
+
+ License: arXiv.org perpetual non-exclusive license
+
+arXiv:2408.09919v1 [cs.CV] 19 Aug 2024 
+
+## Long-Tail Temporal Action Segmentation with Group-wise Temporal Logit Adjustment
+
+ Zhanzhong Pang 
+
+ Affiliation:  National University of Singapore
+
+ Fadime Sener 
+
+ Affiliation:  Meta Reality Labs
+
+ Shrinivas Ramasubramanian 
+
+ Affiliation:  Carnegie Mellon University 
+
+ E-mail  , famesener@meta.com, shrinivr@cs.cmu.edu 
+
+ E-mail  {pang, ayao}@comp.nus.edu.sg 
+
+ Angela Yao 
+
+ Affiliation:  National University of Singapore
+
+## Abstract
+
+ Procedural activity videos often exhibit a long-tailed action distribution due to varying action frequencies and durations. However, state-of-the-art temporal action segmentation methods overlook the long tail and fail to recognize tail actions. Existing long-tail methods make class-independent assumptions and struggle to identify tail classes when applied to temporal segmentation frameworks. This work proposes a novel group-wise temporal logit adjustment (G-TLA) framework that combines a group-wise softmax formulation while leveraging activity information
+and action ordering for logit adjustment. The proposed framework significantly improves in segmenting tail actions without any performance loss on head actions. Source code is available 1 1 
+ 1 
+
+ https://github.com/pangzhan27/GTLA . 
+
+## Keywords: 
+ Temporal action segmentation Procedural video understanding Long-tail recognition Logit adjustment
+
+## 1 Introduction
+
+ Temporal action segmentation  [ 45 , 27 , 32 ] partitions procedural activity sequences into multiple segments, each corresponding to a specific action class as depicted in Fig.   1 . There are two sources of tail in temporal action segmentation datasets. First, procedural videos often exhibit a long-tail distribution of action segments  [ 12 ] , with infrequent actions forming the tail. For instance, in Fig.   1 , when "making tea" , ‘add teabag’ is indispensable, while ‘spoon sugar’ and ‘stir tea’ are optional. The temporal action segmentation problem is mainly framed as a frame-wise classification task  [ 15 , 52 , 44 ] , which leads to a second source of long-tail due to the varying durations of actions in procedural videos. For example,   ‘pour water’ in Fig.   1 is longer and has more frames than ‘spoon sugar’ . The segment- & frame-wise imbalances can be quite extreme, as depicted in Fig.   2 . 
+
+ Figure 1 : 
+ "Making tea" , with temporal segments indicated by colored bars. The tail action  ‘stir tea’ is recognized by Logit adjustment (LA) and our G-TLA but not by the MSTCN backbone.
+However, LA overlooks the action order and activity, resulting in activity-irrelevant false positives such as ‘take bowl’ & ‘stir coffee’ , and temporally illogical false positives like ‘add teabag’ occurring after  ‘stir tea’ .
+
+ The imbalance problem has been overlooked in temporal action segmentation literature  [ 12 , 15 , 52 , 44 , 18 ] , leading to poor performance on tail classes 2 2 
+ 2 
+
+ ASFormer  [ 52 ] , DiffAct  [ 35 ] have zero accuracy on 5 and 4 of 48 classes, respectively. . Our paper fills a significant gap by addressing the long-tail problem in temporal segmentation for the first time. Long-tail learning has mainly been investigated in image  [ 11 , 24 , 37 ] and video classification  [ 54 , 39 ] . Temporal segmentation differs, however, because actions are temporally correlated. Yet conventional long-tail learning solutions such as re-sampling  [ 19 , 21 ] , loss re-weighting  [ 11 , 34 ] , and logit adjustment (LA)  [ 48 , 37 ] make class independence assumptions. This compromises the learned temporal dependencies within the base models  [ 32 , 52 ] ; for example, LA incorrectly predicts ‘add teabag’ after ‘stir tea’ in   Fig.   1 . Moreover, for action segmentation, both frame- and segment-level performance is measured  [ 15 ] . Balancing head and tail classes, as well as frame- and segment-wise performance are two challenging trade-offs. Conventional methods are ineffective in addressing the frame and segment trade-offs. For example, LA in   Fig.   1 introduces irrelevant classes of ‘stir coffee’ and ‘take bowl’ from other activities, increasing false positives and over-segmentation. 
+
+ In procedural activities, some actions like ‘spoon sugar’ are shared across activities of "making tea" and "making coffee" ; others are activity-specific, e.g . action ‘stir tea’ occurs only in the activity of "making tea" . Additionally, actions follow certain ordering: ‘stir tea’ always follows ‘pour water’ , even if other actions like ‘spoon sugar’ occur in between. Based on these observations, we propose a novel Group-wise Temporal Logit Adjustment (G-TLA) framework that encodes action order and activity information to address the long tail problem. Our framework consists of group-wise classification based on the activity label and temporal logit adjustment based on action ordering priors. Our method enhances tail recognition and mitigates over-segmentation by reducing false positives as shown in Fig.   8 , including those from irrelevant activities and violating temporal dependencies.
+Our contributions can be summarized as: 
+
+ • 
+
+ the first method to address long-tail temporal action segmentation, along with our novel group-wise temporal logit adjustment (G-TLA) approach. 
+
+ • 
+
+ leveraging class interdependencies to reduce false positives from long-tail learning, reducing over-segmentation. 
+
+ • 
+
+ proposing new evaluation metrics to better reflect tail class performance, otherwise obscured by standard metrics. 
+
+ • 
+
+ extensive evaluations on five datasets  [ 28 , 1 , 17 , 46 , 41 ] , outperforming state-of-the-art backbones and standard long-tail learning approaches. 
+
+ (a) Breakfast. 
+
+ (b) YouTube 
+
+ Figure 2 : Temporal action segmentation datasets exhibit a long-tail distribution of actions due to varying frequencies of actions and action durations. 
+
+## 2 Related works
+
+ Temporal Action Segmentation. Early approaches  [ 2 , 9 , 16 ] employed hand-crafted features to model frame-wise dependencies while using HMMs  [ 29 ] or RNNs  [ 43 , 38 ] to capture long-term dependencies. Subsequent methods leveraged pre-computed video features, such as I3D  [ 8 ] and employed TCNs  [ 30 , 32 , 31 , 15 , 44 ] , transformers  [ 52 ] and diffusion models  [ 35 ] to learn frame- and action-wise relationships. For a comprehensive overview of temporal action segmentation, we refer to a recent survey  [ 12 ] . To our knowledge, we are the first to address the long-tail problem in video sequences for temporal action segmentation  [ 12 ] . 
+
+ Long-Tail Learning. 
+Long-tail methods can be broadly split into data and algorithm-level methods. Data-level methods either oversample the tail  [ 4 , 42 , 5 ] or undersample the head  [ 20 , 14 ] . However, both approaches have drawbacks: oversampling can lead to tail overfitting, while undersampling is suboptimal for video datasets, as they often have limited samples. Additionally, applying existing data-level methods naively at the frame level is unsuitable for temporal action segmentation, as it requires preserving the sequence entirely as input. 
+
+ Algorithm-level methods include cost-sensitive learning, post-hoc adjustment, and ensembling techniques. Cost-sensitive learning balances loss functions by re-weighting different classes or samples  [ 50 , 22 , 11 , 40 , 34 ] , or by adjusting the logits to enlarge margins for tail classes  [ 37 , 7 , 47 , 48 , 55 ] . Post-hoc adjustment improves predictions for rare classes after training, e.g . by normalizing the classification weights  [ 24 , 53 , 25 ] or modifying the classification threshold  [ 10 , 26 ] . Ensembling combines multiple modules or experts, each specializing in different class distributions  [ 56 , 49 ] or subsets  [ 33 , 6 ] . A key assumption in these methods is class independence. However, in action segmentation, videos can be assumed to be i.i.d. , while the actions within each video exhibit dependencies. Our work is the first to consider these dependencies in designing a long-tailed solution. 
+
+## 3 Preliminaries
+
+## 3.1 Temporal Action Segmentation
+
+ Temporal action segmentation maps frame-wise representations, 𝒳 \mathcal{X} , to action labels, 𝒴 = [ L ] = { 1 , 2 , … , L } \mathcal{Y}=[L]=\{1,2,\dots,L\} . Consider a video sample, { X , Y } \{X,Y\} : X = { x t } ∈ ℝ D × T , Y = { y t } ∈ [ L ] T X=\{x_{t}\}\in\mathbb{R}^{D\times T},Y=\{y_{t}\}\in[L]^{T} , where D D is the feature dimension, T T is the number of frames in a video, t t is the frame index, L L is the number of classes. In line with previous works  [ 15 , 52 , 44 ] , we use pre-computed video representations  [ 8 ] as X X . 
+
+ Consider a classifier, denoted as f f , which takes the entire sequence, X X , as input to learn temporal correlations among frames and outputs a sequence of action labels, Y Y . Classifier f f is a neural network such as MSTCN  [ 15 ] or AsFormer  [ 52 ] . Classifier f : 𝒳 → 𝒴 f:\mathcal{X}\rightarrow\mathcal{Y} is trained by minimizing a frame-wise cross-entropy loss: 
+
+ | 
+ ℒ c ​ l ​ s = 1 T ∑ t − log p ^ ( y t ) , \displaystyle\mathcal{L}_{cls}=\frac{1}{T}\sum_{t}-\log\hat{p}(y_{t}), | 
+ | 
+ (1) | 
+
+ where p ^ ​ ( y t ) \hat{p}(y_{t}) is the estimated probability for the ground truth label y t y_{t} of frame x t x_{t} . A smoothing loss is commonly applied with threshold δ \delta to encourage smooth transitions between frames. Following prior works  [ 15 ] , we set δ \delta to 4. 
+
+ | 
+ ℒ s ​ m \displaystyle\mathcal{L}_{sm} | 
+ = 1 T ​ L ​ ∑ t , c △ ^ t , c 2 , △ ^ t , c = { △ t , c , △ t , c ≤ δ δ , otherwise \displaystyle=\frac{1}{TL}\sum_{t,c}\hat{\triangle}^{2}_{t,c},\ \ \hat{\triangle}_{t,c}=\begin{cases}\triangle_{t,c},&\triangle_{t,c}\leq\delta\\
+\ \ \ \delta\quad,&\text{otherwise}\end{cases} | 
+ | 
+
+ | 
+ △ t , c \displaystyle\triangle_{t,c} | 
+ = | log ⁡ p ^ ​ ( c t ) − log ⁡ p ^ ​ ( c t − 1 ) | , c ∈ [ 1 , ⋯ , L ] , \displaystyle=|\log\hat{p}(c_{t})-\log\hat{p}(c_{t-1})|,\ c\in[1,\cdots,L], | 
+ | 
+ (2) | 
+
+ where p ^ ​ ( c t ) \hat{p}(c_{t}) is the estimated probability of class c c at time t t . 
+
+## 3.2 Logit Adjustment
+
+ Given a classification problem with data-label pairs { x , y } \{x,y\} , the standard training objective is to learn a model f f that minimizes the expected error E x , y ​ Err ​ ( f ⁡ ( x ) , y ) \textbf{E}_{x,y}\ \text{Err}(f(x),y) . When the label distribution is highly skewed, the learning process minimizes a skewed error, prioritizing classes with more samples. In such scenarios, a balanced error E x | y ​ Err ​ ( f ⁡ ( x ) , y ) \textbf{E}_{x\mid y}\ \text{Err}(f(x),y) that averages the per-class loss  [ 3 , 36 ] is more suitable. Given the prior p ⁡ ( c ) p(c) and the posterior p ⁡ ( c ∣ x ) p(c\!\mid\!x) of class c c , the optimal classifier for minimizing the balanced error  [ 10 ] takes the form 
+
+ | 
+ arg ⁡ max c ⁡ p ⁡ ( c ∣ x ) p ⁡ ( c ) ≈ arg ⁡ max c ​ s c ​ ( x ) − log ⁡ p ⁡ ( c ) \arg\max_{c}\frac{p(c\mid x)}{p(c)}\approx\arg\max_{c}s_{c}(x)-\log p(c) | 
+ | 
+ (3) | 
+
+ where a neural network typically estimates p ⁡ ( c ∣ x ) p(c\!\mid\!x) as a logit s c ​ ( x ) s_{c}(x) . For simplicity, we omit the logit’s dependency on the neural network’s parameters. 
+
+ Eq.   3 is the vanilla logit adjustment  [ 37 ] , which incorporating the prior during inference. Logit adjustment can be further incorporated into training by enforcing a class prior offset while learning the logits  [ 37 ] . 
+
+ | 
+ s ~ c ​ ( x ) \displaystyle\tilde{s}_{c}(x) | 
+ = s c ​ ( x ) + τ ​ log ⁡ p ⁡ ( c ) , p ~ ​ ( c | x ) = softmax ​ ( s ~ c ​ ( x ) ) \displaystyle=s_{c}(x)+\tau\log p(c),\quad\tilde{p}(c|x)=\text{softmax}(\tilde{s}_{c}(x)) | 
+ | 
+ (4) | 
+
+ where s c ​ ( x ) s_{c}(x) is the output logit, s ~ c ​ ( x ) \tilde{s}_{c}(x) is the adjusted logit, p ~ ​ ( c | x ) \tilde{p}(c|x) is the predicted probability of class c c after adjusting logit and used in the cross-entropy loss(we use p p to represent the prior, p ^ \hat{p} for predicted probability, and p ~ \tilde{p} for probability after adjusting logit). τ \tau controls the trade-off between minimizing balanced and skewed errors. Introducing the adjustment adds a per-class margin into the softmax, shifting the decision boundary away from tail classes as in Eq.   5 . 
+
+ | 
+ ℒ ⁡ ( y , f ⁡ ( x ) ) = − log ⁡ e s y ​ ( x ) + τ ​ log ⁡ p ⁡ ( y ) ∑ c e s c ​ ( x ) + τ ​ log ⁡ p ⁡ ( c ) = log ⁡ [ 1 + ∑ c ≠ y e s c ​ ( x ) − s y ​ ( x ) + τ ​ log ⁡ p ⁡ ( c ) log ⁡ p ⁡ ( y ) ] \mathcal{L}(y,f(x))=-\log\frac{e^{s_{y}(x)+\tau\log p(y)}}{\sum_{c}e^{s_{c}(x)+\tau\log p(c)}}=\log\left[1+\sum_{c\neq y}e^{s_{c}(x)-s_{y}(x)+\tau\frac{\log p(c)}{\log p(y)}}\right] | 
+ | 
+ (5) | 
+
+## 4 Methodology
+
+ Our method leverages action order and activity information to address the long-tail problem in action segmentation. We begin by introducing the action inter-dependencies in Sec.   4.1 and describe how to solve such dependencies through group-wise classification in Sec.   4.2 and temporal logic adjustment in Sec.   4.3 . Details of training and inference are presented in Sec.   4.4 and Sec.   4.5 . 
+
+## 4.1 Action Inter-Dependencies
+
+ The independent assumption of prior  p ⁡ ( c ) p(c) in  Eq.   4 does not hold for actions in videos.
+In procedural activities, actions within a sequence interact. Accurately estimating the prior of action c c conditioned on sequence Y Y , p ⁡ ( c | Y ) p(c|Y) is challenging due to varying action orders and limited training samples. Notably, the class distribution  p ⁡ ( c ) p(c) is activity,  a a , dependent; naively using p ⁡ ( c ) p(c) leads to activity-irrelevant false positives as in  Fig.   1 . Therefore, we propose a relaxed solution for the temporal prior as p ⁡ ( c | a ) p(c|a) to condition on activity label a a .
+As the video sequences have a loose ordering of actions, we assume that action classes are conditionally independent given the activity label. We further exploit useful action ordering in Sec.   4.3 . 
+
+ Given an input sequence, X X , and its activity label, a a , frame predictions are independent while frame representations interact  [ 15 , 52 ] , i.e . frame prediction y ^ t \hat{y}_{t} is based on the sequence representation X X instead of a single frame representation x t x_{t} . Then, the logit adjustment for frame t t , according to Eq.   4 , is: 
+
+ | 
+ s c , t ​ ( X ) + τ ​ log ⁡ p ⁡ ( c ∣ a ) , s_{c,t}(X)+\tau\log p(c\mid a), | 
+ | 
+ (6) | 
+
+ where s c , t ​ ( X ) s_{c,t}(X) is the logit of class c c at time t t . 
+
+## 4.2 Group-wise Classification
+
+ To leverage the conditional prior p ⁡ ( c | a ) p(c|a) , we propose a hierarchical classifier
+by categorizing sequences into disjoint groups and assigning actions within each sequence to the corresponding group. This grouping strategy enables group-wise action classification and logit adjustment based on the group’s prior. Additionally, grouping ensures no incompatible actions in each activity group. For example, the action ‘stir coffee’ does not occur in activities like "making tea" . The incompatibility causes zero conditional probability p ⁡ ( c | a ) = 0 p(c|a)=0 , posing a numerical problem for logit adjustment. Adding a small value to p ⁡ ( c | a ) p(c|a) does not solve the numerical problem. Instead, it converts activity-incompatible classes to tail classes. These classes are subsequently overemphasized and result in more activity-irrelevant false positives. 
+
+ Figure 3 : Our group-wise temporal logit adjustment framework consists of group-wise classification and temporal logit adjustment within the respective group. The temporal logit adjustment is only applied to the target group( G 1 G_{1} in this illustration). 
+
+ We denote the group set as 𝐆 \mathbf{G} . Each group may contain activities with shared actions. While a straightforward approach is to group based on the activity label, we also explore sequence clustering without activity labels based on the KL-divergence of action frequency distributions(see Supplementary for details). For each group, we introduce an auxiliary class, ‘others’ , corresponding to actions that do not belong to the current group. Classes shared across different groups are treated as separate classes. For example, ‘spoon sugar’ occurs in both "making coffee" and "making tea" which are different groups G 1 {G_{1}} and G 2 G_{2} , then ‘spoon sugar’ is treated as different classes y ( 1 ) y^{(1)} and y ( 2 ) y^{(2)} . Non-shared classes, like ‘stir tea’ , are labeled as ‘stir tea’ in G 2 G_{2} , and ‘others’ in the remaining groups. 
+
+ Our group-wise classification strategy is illustrated in Fig.   3 . The final feature layer z t z_{t} at time t t is fed into n n classifiers, where n n is the number of groups in 𝐆 \mathbf{G} . These classifiers generate predictions concurrently based on the last feature layer. For the i -th i^{\text{-th}} group, the predicted logit of class c c at time t t is computed as 
+
+ | 
+ s c , t ( i ) ​ ( X ) = ∑ j z t ​ [ j ] ⋅ W j , c ( i ) + b ( i ) s_{c,t}^{(i)}(X)=\sum_{j}z_{t}[j]\cdot W_{j,c}^{(i)}+b^{(i)} | 
+ | 
+ (7) | 
+
+ where W ( i ) W^{(i)} and b ( i ) b^{(i)} are the classifier weights and bias for group i i . 
+
+ The overall loss is the sum of two cross-entropies: one for the actions in the target group and one for the auxiliary class for non-target groups: 
+
+ | 
+ ℒ G = α k 1 T ∑ t − log p ^ ( y t ( k ) ) + η ∑ i ≠ k n 1 T ∑ t − log p ^ ( o t ( i ) ) \mathcal{L}_{G}=\alpha_{k}\frac{1}{T}\sum_{t}-\log\hat{p}(y_{t}^{(k)})+\eta\sum_{i\neq k}^{n}\frac{1}{T}\sum_{t}-\log\hat{p}(o_{t}^{(i)}) | 
+ | 
+ (8) | 
+
+ where k k is the current sequence’s group, p ^ ​ ( y t ( k ) ) \hat{p}(y_{t}^{(k)}) represents the predicted probability of the truth label y t y_{t} in the target group k k , p ^ ​ ( o t ( i ) ) \hat{p}(o_{t}^{(i)}) is the predicted probability of class ‘others’ in the non-targeted group. η \eta is a hyperparameter that balances the losses between target and non-target groups and α k \alpha_{k} represents a pre-computed reweighting factor designed to balance the bias arising from group size, i.e . the number of sequences in each group. From a gradient analysis perspective  [ 48 ] , a small η \eta helps reduce the suppression of tail classes by down-weighting the gradients from negative samples of the class others . However, if η \eta is too small, it may hinder group identification during inference. 
+
+ Group-wise classification offers several advantages. Separating semantically similar actions into different groups mitigates confusion, e.g . distinguishing between ‘take plate’ and ‘take cup’ becomes easier, despite sharing a verb. Additionally, it reduces false positives from irrelevant classes, ensuring that only group-compatible actions are predicted, preventing implausible predictions. 
+
+## 4.3 Temporal Logit Adjustment
+
+ Our group-wise framework simplifies frame-wise classification.
+With group information we can substitutes p ⁡ ( c | a ) p(c|a) in Eq.   6 with p ⁡ ( c | G k ) p(c|G_{k}) .
+However, there is still valuable sequential ordering information. For example, the action ‘stir tea’ always follows ‘pour water’ , even if other actions e.g . ‘spoon sugar’ occur in between. This ordering information can also be incorporated into the logit adjustment. Therefore, we adopt a fine-grained approach by tailoring the adjustment to each class c c and frame t t within the target group G k G_{k} , as follows: 
+
+ | 
+ s c , t ( k ) ​ ( X ) + τ ​ 𝒯 c , t ( k ) ​ ( X ) ​ log ⁡ p ⁡ ( c ∣ G k ) , s_{c,t}^{(k)}(X)+\tau\mathcal{T}_{c,t}^{(k)}(X)\log p(c\mid G_{k}), | 
+ | 
+ (9) | 
+
+ where the temporal factor 𝒯 c , t ( k ) ​ ( X ) \mathcal{T}^{(k)}_{c,t}(X) refines the logit adjustment based on the temporal bounds for class c c in the target group G k G_{k} . 
+
+ Temporal Factor. 
+For an action c c , we define S b ​ f ​ [ c ] S_{bf}[c] as the set of actions that must precede c c , and S a ​ f ​ [ c ] S_{af}[c] that must follow c c . These two sets are exclusive and can be derived from the training data. Given a sequence X X from group G k G_{k} , we can utilize the two sets to determine the temporal bounds [ t 1 ​ ( c , X ) , t 2 ​ ( c , X ) ] [t_{1}(c,X),t_{2}(c,X)] within which action c c can occur, where t 1 ​ ( c , X ) t_{1}(c,X) and t 2 ​ ( c , X ) t_{2}(c,X) are determined by the latest and earliest occurrence time of classes in S b ​ f ​ [ C ] S_{bf}[C] and S a ​ f ​ [ C ] S_{af}[C] , respectively. 
+
+ | 
+
+ t 1 ​ ( c , X ) = { max t ⁡ y t ∈ S b ​ f ​ [ c ] , if ​ S b ​ f ​ [ c ] ≠ ∅ 0 , otherwise , t 2 ​ ( c , X ) = { min t ⁡ y t ∈ S a ​ f ​ [ c ] , if ​ S a ​ f ​ [ c ] ≠ ∅ T , otherwise , t_{1}(c,X)=\begin{cases}\max_{t}y_{t}\in S_{bf}[c],\ \text{if}\ S_{bf}[c]\neq\emptyset\\
+0,\ \text{otherwise}\end{cases},t_{2}(c,X)=\begin{cases}\min_{t}y_{t}\in S_{af}[c],\ \text{if}\ S_{af}[c]\neq\emptyset\\
+T,\ \text{otherwise},\end{cases} 
+ | 
+ | 
+ (10) | 
+
+ where y t y_{t} is the ground truth label of X X at time t t . 
+
+ Temporal factor adjusts the logit for class c c in the target group G k G_{k} based on these temporal bounds. Logits within the temporal bounds are adjusted normally, while those outside the bounds are left unadjusted to prevent false positives that violate the temporal prior as in Fig.   4 . This can be formalized as: 
+
+ | 
+ 𝒯 c , t ( k ) ​ ( X ) = { 1 , if ​ t ∈ [ t 1 ​ ( c , X ) , t 2 ​ ( c , X ) ] log ⁡ p ⁡ ( y t | G k ) log ⁡ p ⁡ ( c | G k ) , otherwise , \mathcal{T}^{(k)}_{c,t}(X)=\begin{cases}1,&\text{if}\ t\in[t_{1}(c,X),t_{2}(c,X)]\\
+\frac{\log p(y_{t}|G_{k})}{\log p(c|G_{k})},&\text{otherwise},\end{cases} | 
+ | 
+ (11) | 
+
+ where otherwise , we use the ratio of the prior for label y t y_{t} and class c c to ensure consistent adjustment with the target label, p ⁡ ( y t ∣ G k ) p(y_{t}\mid G_{k}) . This prevents misclassification due to adjustment between y t y_{t} and c c , avoiding violating temporal prior. 
+
+ Figure 4 : Illustration of temporal logit adjustment for class c = c= ‘add teabag’ . The adjustment only occurs within the temporal bounds. 
+
+## 4.4 Overall loss
+
+ With group-wise classification and temporal logit adjustment, we can reframe the classification loss  Eq.   8 as 
+
+ | 
+ ℒ G ​ T ​ L ​ A = α k 1 T ∑ t − log p ~ ( y t ( k ) ) + η ∑ i ≠ k n 1 T ∑ t − log p ^ ( o t ( i ) ) , \displaystyle\mathcal{L}_{GTLA}=\alpha_{k}\frac{1}{T}\sum_{t}-\log\tilde{p}(y_{t}^{(k)})+\eta\sum_{i\neq k}^{n}\frac{1}{T}\sum_{t}-\log\hat{p}(o_{t}^{(i)}), | 
+ | 
+ (12) | 
+
+ where predicted probabilities p ~ \tilde{p} for the target group k k is based on adjusted logits in Eq.   9 . For non-target groups i i , logit adjustment is not performed; instead, the naive logit s o , t ( i ) ​ ( X ) s^{(i)}_{o,t}(X) of class ‘others’ is used to calculate the probability. 
+
+ The training loss ℒ \mathcal{L} combines group-wise logit adjustment loss ℒ G ​ T ​ L ​ A \mathcal{L}_{GTLA} and smooth loss ℒ s ​ m \mathcal{L}_{sm} , ℒ = ℒ G ​ T ​ L ​ A + λ ​ ℒ s ​ m \mathcal{L}=\mathcal{L}_{GTLA}+\lambda\mathcal{L}_{sm} , with λ \lambda as the trade-off hyper-parameter. 
+
+## 4.5 Inference
+
+ The group label of a sequence is unknown during inference. We use the prediction for ‘others’ to identify the group. Specifically, the group with the lowest probability for ‘others’ across all frames is selected as the predicted group k ^ \hat{k} ( Eq.   13 ).
+The final result is the prediction (excluding class ‘others’ ) from the classifier corresponding to the identified group. During inference, temporal logit adjustment is not used, i.e . inference applies argmax on predicted probabilities p ^ \hat{p} instead of adjusted probability p ~ \tilde{p} through temporal logit adjustment. 
+
+ | 
+ k ^ = arg ⁡ min i ​ 1 T ​ ∑ t p ^ ​ ( o t ( i ) ) , y ^ t = arg ⁡ max c t ( k ^ ) ≠ others ​ p ^ ​ ( c t ( k ^ ) ) , \hat{k}=\arg\min_{i}\frac{1}{T}\sum_{t}\hat{p}(o^{(i)}_{t}),\quad\hat{y}_{t}=\arg\max_{c_{t}^{(\hat{k})}\neq\text{others}}\hat{p}(c_{t}^{(\hat{k})}), | 
+ | 
+ (13) | 
+
+ where c t ( k ^ ) c_{t}^{(\hat{k})} represent class c c in group k ^ \hat{k} at time t t . 
+
+## 5 Experiments
+
+## 5.1 Dataset, Implementation, and Evaluation
+
+ Dataset. We evaluate our method on five datasets: Breakfast Actions  [ 28 ] YouTube Instructional Videos  [ 1 ] , Assembly101  [ 41 ] , GTEA  [ 17 ] and 50Salads  [ 46 ] . We follow the same settings and splits in  [ 15 , 41 ] . We split classes in these datasets into Head and Tail according to their frequency, with distributions for Breakfast and YouTube shown in Fig.   2 and others in the Supplementary. 
+
+ Table 1 : Class split and imbalance of used datasets. The imbalance ratio is the number of samples in the most frequent class divided by the number in the least frequent class. 
+
+ Dataset | 
+ Head group | 
+ Tail group | 
+ Imbalance ratio | 
+
+ # \# actions | 
+ # \# frames | 
+ # \# actions | 
+ # \# frames | 
+
+ Breakfast | 
+ 20 | 
+ ≥ \geq 5 × 10 4 \times 10^{4} | 
+ 28 | 
+ ≤ \leq 5 × 10 4 \times 10^{4} | 
+ 639 | 
+
+ YouTube | 
+ 14 | 
+ ≥ \geq 500 | 
+ 32 | 
+ ≤ \leq 500 | 
+ 558 | 
+
+ Assembly101 | 
+ 31 | 
+ ≥ \geq 1.8 × 10 5 \times 10^{5} | 
+ 171 | 
+ ≤ \leq 1.8 × 10 5 \times 10^{5} | 
+ 2604 | 
+
+ 50salads | 
+ 6 | 
+ ≥ \geq 4 × 10 4 \times 10^{4} | 
+ 13 | 
+ ≤ \leq 4 × 10 4 \times 10^{4} | 
+ 6 | 
+
+ GTEA | 
+ 5 | 
+ ≥ \geq 2000 | 
+ 6 | 
+ ≤ \leq 2000 | 
+ 24 | 
+
+ Implementation Details. We use a temporal convolution model, MSTCN  [ 15 ] , and a transformer model, ASFormer  [ 52 ] as backbones. We retrain these models using the same protocols, settings, and pre-extracted I3D features as the original papers; see the Supplementary for details and hyper-parameters. During training, activity labels or clustering results serve as group labels. During testing, the group label is inferred from predictions of the class ‘others’ in that group. 
+
+ Table 2 : Comparison on YouTube with harmonic mean on head and tail classes over three runs. (Global metrics in grey are for reference. See Suppl. for standard deviation). 
+
+ Model | 
+ Type | 
+ Frame acc | 
+ Segment F1@25 | 
+ Global | 
+
+ Head | 
+ Tail | 
+ Hmean | 
+ Head | 
+ Tail | 
+ Hmean | 
+ Acc | 
+ F1@25 | 
+
+ AsFormer | 
+ - | 
+ 53.1 | 
+ 17.2 | 
+ 26.0 | 
+ 47.6 | 
+ 20.2 | 
+ 28.4 | 
+ 69.8 | 
+ 45.6 | 
+
+ + CB  [ 11 ] | 
+ reweight | 
+ -2.2 | 
+ +2.9 | 
+ +2.8 | 
+ -0.9 | 
+ +1.0 | 
+ +0.8 | 
+ -0.2 | 
+ -0.2 | 
+
+ + Focal  [ 34 ] | 
+ reweight | 
+ -2.4 | 
+ +0.8 | 
+ +0.1 | 
+ -2.2 | 
+ +2.0 | 
+ +1.4 | 
+ -0.1 | 
+ +1.0 | 
+
+ + BAGS  [ 33 ] | 
+ ensemble | 
+ -1.2 | 
+ +3.2 | 
+ +3.3 | 
+ -0.8 | 
+ +1.8 | 
+ +1.6 | 
+ -0.5 | 
+ -0.5 | 
+
+ + τ \tau -norm  [ 24 ] | 
+ post-hoc | 
+ +1.2 | 
+ +1.3 | 
+ +1.6 | 
+ -1.0 | 
+ +0.3 | 
+ +0.1 | 
+ -0.8 | 
+ -1.3 | 
+
+ + LA  [ 37 ] | 
+ logit adj. | 
+ +0.8 | 
+ +4.9 | 
+ +5.3 | 
+ -0.7 | 
+ +2.3 | 
+ +2.1 | 
+ -1.9 | 
+ -0.5 | 
+
+ + LDAM  [ 7 ] | 
+ logit adj. | 
+ +1.2 | 
+ +3.6 | 
+ +3.4 | 
+ -1.7 | 
+ +1.4 | 
+ +0.9 | 
+ -0.8 | 
+ -0.8 | 
+
+ + Seesaw  [ 48 ] | 
+ logit adj. | 
+ -0.6 | 
+ +1.9 | 
+ +2.0 | 
+ -1.9 | 
+ +1.3 | 
+ +0.8 | 
+ -0.6 | 
+ +0.1 | 
+
+ + G-TLA(ours) | 
+ logit adj. | 
+ +2.3 | 
+ +6.8 | 
+ +7.5 | 
+ -0.3 | 
+ +5.1 | 
+ +4.6 | 
+ +0.1 | 
+ +0.6 | 
+
+ MSTCN | 
+ - | 
+ 46.0 | 
+ 15.5 | 
+ 23.2 | 
+ 39.0 | 
+ 16.8 | 
+ 23.5 | 
+ 68.0 | 
+ 39.1 | 
+
+ + CB  [ 11 ] | 
+ reweight | 
+ -0.2 | 
+ +2.5 | 
+ +2.7 | 
+ +1.2 | 
+ -0.4 | 
+ -0.2 | 
+ -1.7 | 
+ -0.4 | 
+
+ + Focal  [ 34 ] | 
+ reweight | 
+ +1.7 | 
+ +1.5 | 
+ +1.8 | 
+ +1.9 | 
+ +1.2 | 
+ +1.9 | 
+ -0.5 | 
+ +0.9 | 
+
+ + BAGS  [ 33 ] | 
+ ensemble | 
+ -0.4 | 
+ +2.1 | 
+ +2.1 | 
+ +2.5 | 
+ +0.5 | 
+ +0.9 | 
+ -0.8 | 
+ +1.0 | 
+
+ + τ \tau -norm  [ 24 ] | 
+ post-hoc | 
+ +0.5 | 
+ +1.1 | 
+ +1.3 | 
+ 0.0 | 
+ -0.6 | 
+ -0.6 | 
+ -0.7 | 
+ -1.1 | 
+
+ + LA  [ 37 ] | 
+ logit adj. | 
+ 0.0 | 
+ +2.1 | 
+ +2.3 | 
+ +0.4 | 
+ -0.8 | 
+ -0.7 | 
+ -1.0 | 
+ -0.3 | 
+
+ + LDAM  [ 7 ] | 
+ logit adj. | 
+ -2.3 | 
+ +0.3 | 
+ 0.0 | 
+ -2.1 | 
+ +0.6 | 
+ +0.2 | 
+ -0.4 | 
+ +0.1 | 
+
+ + Seesaw  [ 48 ] | 
+ logit adj. | 
+ +1.8 | 
+ +1.4 | 
+ +1.8 | 
+ +1.8 | 
+ +0.3 | 
+ +0.6 | 
+ -0.1 | 
+ +0.6 | 
+
+ + G-TLA(ours) | 
+ logit adj. | 
+ +2.7 | 
+ +6.3 | 
+ +6.8 | 
+ +2.7 | 
+ +3.3 | 
+ +3.6 | 
+ -0.4 | 
+ +1.1 | 
+
+ Table 3 : Comparison on Breakfast with harmonic mean on head and tail classes over three runs. (Global metrics in grey are for reference. See Suppl. for standard deviation). 
+
+ Model | 
+ Type | 
+ Frame acc | 
+ Segment F1@25 | 
+ Global | 
+
+ Head | 
+ Tail | 
+ Hmean | 
+ Head | 
+ Tail | 
+ Hmean | 
+ Acc | 
+ F1@25 | 
+
+ AsFormer | 
+ - | 
+ 69.7 | 
+ 39.8 | 
+ 50.7 | 
+ 69.9 | 
+ 43.9 | 
+ 53.9 | 
+ 72.4 | 
+ 69.9 | 
+
+ + CB  [ 11 ] | 
+ reweight | 
+ +0.5 | 
+ +1.0 | 
+ +0.9 | 
+ +1.3 | 
+ +0.8 | 
+ +1.0 | 
+ -0.5 | 
+ -0.2 | 
+
+ + Focal  [ 34 ] | 
+ reweight | 
+ +0.2 | 
+ -0.7 | 
+ -0.5 | 
+ +1.4 | 
+ -0.2 | 
+ +1.2 | 
+ -0.1 | 
+ +0.5 | 
+
+ + BAGS  [ 33 ] | 
+ ensemble | 
+ -0.2 | 
+ +0.8 | 
+ +0.5 | 
+ +1.6 | 
+ +0.5 | 
+ +1.0 | 
+ -0.6 | 
+ -1.0 | 
+
+ + τ \tau -norm  [ 24 ] | 
+ post-hoc | 
+ -0.1 | 
+ +1.3 | 
+ +0.8 | 
+ 0.0 | 
+ +0.4 | 
+ +0.3 | 
+ -0.2 | 
+ -0.8 | 
+
+ + LA  [ 37 ] | 
+ logit adj. | 
+ +0.4 | 
+ +0.6 | 
+ +0.6 | 
+ +0.3 | 
+ +0.8 | 
+ +1.0 | 
+ +0.1 | 
+ -0.2 | 
+
+ + LDAM  [ 7 ] | 
+ logit adj. | 
+ +0.4 | 
+ +1.2 | 
+ +1.0 | 
+ +0.3 | 
+ +1.1 | 
+ +1.2 | 
+ +0.2 | 
+ +0.7 | 
+
+ + Seesaw  [ 48 ] | 
+ logit adj. | 
+ +0.4 | 
+ +1.3 | 
+ +1.1 | 
+ +0.5 | 
+ +1.5 | 
+ +1.6 | 
+ +0.1 | 
+ +0.2 | 
+
+ + G-TLA(ours) | 
+ logit adj. | 
+ +0.6 | 
+ +3.4 | 
+ +2.6 | 
+ +1.8 | 
+ +2.6 | 
+ +2.6 | 
+ -0.2 | 
+ +1.0 | 
+
+ MSTCN | 
+ - | 
+ 65.1 | 
+ 37.7 | 
+ 47.7 | 
+ 53.3 | 
+ 38.7 | 
+ 44.8 | 
+ 67.7 | 
+ 57.9 | 
+
+ + CB  [ 11 ] | 
+ reweight | 
+ -1.0 | 
+ +1.6 | 
+ +1.1 | 
+ +0.8 | 
+ +0.7 | 
+ +0.8 | 
+ -0.3 | 
+ 0.0 | 
+
+ + Focal  [ 34 ] | 
+ reweight | 
+ +1.0 | 
+ -1.6 | 
+ -1.0 | 
+ +0.3 | 
+ -0.7 | 
+ -0.4 | 
+ +0.8 | 
+ -0.4 | 
+
+ + BAGS  [ 33 ] | 
+ ensemble | 
+ +0.9 | 
+ +1.8 | 
+ +1.7 | 
+ +4.4 | 
+ +1.5 | 
+ +2.6 | 
+ +0.8 | 
+ +1.9 | 
+
+ + τ \tau -norm  [ 24 ] | 
+ post-hoc | 
+ +0.2 | 
+ -1.5 | 
+ -1.1 | 
+ -0.6 | 
+ -1.3 | 
+ -1.0 | 
+ +0.2 | 
+ -0.9 | 
+
+ + LA  [ 37 ] | 
+ logit adj. | 
+ -0.7 | 
+ +2.4 | 
+ +2.1 | 
+ +2.7 | 
+ 0.0 | 
+ +0.9 | 
+ -0.1 | 
+ 0.0 | 
+
+ + LDAM  [ 7 ] | 
+ logit adj. | 
+ +0.7 | 
+ +0.1 | 
+ +0.3 | 
+ +0.7 | 
+ +0.8 | 
+ +0.8 | 
+ -0.2 | 
+ +0.2 | 
+
+ + Seesaw  [ 48 ] | 
+ logit adj. | 
+ +1.2 | 
+ +2.5 | 
+ +2.4 | 
+ +0.7 | 
+ +0.3 | 
+ +0.5 | 
+ +0.9 | 
+ -0.1 | 
+
+ + G-TLA(ours) | 
+ logit adj. | 
+ +2.5 | 
+ +5.3 | 
+ +5.0 | 
+ +6.8 | 
+ +6.5 | 
+ +6.7 | 
+ +2.6 | 
+ +5.0 | 
+
+ Evaluation metrics. 
+Temporal segmentation is traditionally evaluated [ 15 , 44 , 52 , 51 ] using Mean over Frames accuracy for frames, Edit distance and F1-score at various IoU thresholds  ( 0.10 , 0.25 , 0.50 ) (0.10,0.25,0.50) for segments. However, these metrics aggregate globally across all samples, masking tail class performance. To assess each class effectively, we use balanced per-class recall for frame-wise and per-class F1 @ ​ 0.25 @0.25 score for segment-wise evaluations, following long-tailed works  [ 48 , 47 , 24 ] . The balanced metrics ensure that performance is not largely driven by the head classes. We compute the average performance within the head and tail groups and their harmonic mean to reflect the balance in our predictions accurately. See Suppl. for the F1 score at other thresholds and global metrics. 
+
+## 5.2 Benchmark Comparisons
+
+ We compare our work against seven long-tail methods across different datasets and backbones in Tab.   2 on YouTube & Tab.   3 on Breakfast. We report per-class accuracy and F1 scores at IoU threshold 25% for Head and Tail groups, respectively, and their harmonic mean (Hmean) to ensure that the models perform well across all classes, not just the head or tail. Some methods, like CB  [ 11 ] , enhance tail group classes at the expense of head group classes (see Tab.   2 ), while others, like Focal [ 34 ] , primarily enhance head classes with little improvement for tail classes (see Tab.   3 ). Furthermore, some methods result in drops in segment-wise metric, F ​ 1 ​ @ ​ 25 F1@25 , despite improved frame accuracy, indicating over-segmentation. For example, LA  [ 37 ] and Seesaw  [ 48 ] in Tab.   2 sacrifice head class F1 scores despite achieving promising frame accuracy gains. We also observe that ensemble methods generally perform best across the long-tail method types, followed by LA, reweighting, and post-hoc methods. 
+
+ Our method, G-TLA, demonstrates strong performance across different class groups, metrics, datasets, and backbones, effectively addressing the long-tail problem while minimizing over-segmentation. Using the Asformer backbone, our method outperforms the next best model by 2.2% on YouTube and 1.5% on Breakfast on frame accuracy, and by 2.5% and 1.0% on F1@25, respectively. When using the MSTCN backbone, we outperform the next best model by 4.1% on YouTube and 2.6% on Breakfast on frame accuracy, and by 1.7% and 4.1% on F1@25, respectively. Our method not only enhances frame accuracy but also consistently improves F1@25. Our method is further tested with the SOTA DiffAct  [ 35 ] backbone on Breakfast( Tab.   4 ) to verify its effectiveness, improving per-class performance without compromising overall performance.
+In summary, we find that directly applying standard long-tail models to temporal segmentation yields subpar performance, underscoring the significance of our method specifically designed to address the challenges posed by procedural activities. 
+
+ Table 4 : Additional results with DiffAct on Breakfast. 
+
+ Model | 
+ Frame acc | 
+ Segment F1@25 | 
+ Global | 
+
+ Head | 
+ Tail | 
+ Hmean | 
+ Head | 
+ Tail | 
+ Hmean | 
+ Acc | 
+ F1@25 | 
+
+ DiffAct | 
+ 74.8 | 
+ 42.6 | 
+ 54.3 | 
+ 77.5 | 
+ 49.2 | 
+ 60.2 | 
+ 76.5 | 
+ 75.3 | 
+
+ + CB  [ 11 ] | 
+ 74.1 | 
+ 43.3 | 
+ 54.7 | 
+ 77.5 | 
+ 49.1 | 
+ 60.2 | 
+ 75.7 | 
+ 75.8 | 
+
+ + LA  [ 37 ] | 
+ 75.3 | 
+ 44.5 | 
+ 55.9 | 
+ 78.1 | 
+ 49.0 | 
+ 60.2 | 
+ 76.3 | 
+ 75.6 | 
+
+ + Seesaw  [ 48 ] | 
+ 73.2 | 
+ 38.9 | 
+ 50.8 | 
+ 76.0 | 
+ 44.0 | 
+ 55.8 | 
+ 73.6 | 
+ 72.0 | 
+
+ + G-TLA(ours) | 
+ 75.6 | 
+ 45.5 | 
+ 56.8 | 
+ 78.4 | 
+ 50.4 | 
+ 61.4 | 
+ 76.6 | 
+ 76.1 | 
+
+ In Tab.   5 , we present our model’s performance on a recent long-tailed dataset Assembly101  [ 41 ] , along with two commonly used datasets, GTEA  [ 17 ] and 50Salads  [ 46 ] , which have smaller vocabulary sizes and are less imbalanced. For GTEA and Assembly101, we apply clustering to determine the group for each sequence (3 groups for GTEA and 2 groups for Assembly101), with each group containing several activities. For 50Salads, which contains a single activity, we forgo the group-wise framework and exclusively implement temporal logit adjustment. Our method demonstrates competitive results over the baseline by a large margin, further validating its effectiveness. Notably, the tail performance is even higher than the head for GTEA, emphasizing the lack of imbalance. 
+
+ Table 5 : Additional results on 50salads, GTEA, and Assembly101. 
+
+ Dataset | 
+ Model | 
+ Frame acc | 
+ Segment F1@25 | 
+ Global | 
+
+ Head | 
+ Tail | 
+ Hmean | 
+ Head | 
+ Tail | 
+ Hmean | 
+ Acc | 
+ F1@25 | 
+
+ 50salads | 
+ AsFormer | 
+ 90.6 | 
+ 77.4 | 
+ 83.5 | 
+ 87.5 | 
+ 80.3 | 
+ 83.8 | 
+ 85.2 | 
+ 82.3 | 
+
+ + G-TLA(ours) | 
+ 90.8 | 
+ 79.7 | 
+ 84.9 | 
+ 89.4 | 
+ 83.1 | 
+ 86.1 | 
+ 86.3 | 
+ 84.6 | 
+
+ MSTCN | 
+ 87.7 | 
+ 70.0 | 
+ 77.9 | 
+ 85.7 | 
+ 72.1 | 
+ 78.3 | 
+ 81.1 | 
+ 75.9 | 
+
+ + G-TLA(ours) | 
+ 89.0 | 
+ 71.7 | 
+ 79.4 | 
+ 86.8 | 
+ 73.8 | 
+ 79.8 | 
+ 81.9 | 
+ 77.3 | 
+
+ GTEA | 
+ AsFormer | 
+ 80.6 | 
+ 81.7 | 
+ 81.2 | 
+ 72.5 | 
+ 85.4 | 
+ 78.4 | 
+ 81.1 | 
+ 89.4 | 
+
+ + G-TLA(ours) | 
+ 80.2 | 
+ 84.5 | 
+ 82.3 | 
+ 72.0 | 
+ 90.4 | 
+ 80.2 | 
+ 81.2 | 
+ 89.6 | 
+
+ MSTCN | 
+ 77.6 | 
+ 80.3 | 
+ 78.9 | 
+ 69.4 | 
+ 86.6 | 
+ 77.0 | 
+ 78.0 | 
+ 87.2 | 
+
+ + G-TLA(ours) | 
+ 77.5 | 
+ 83.7 | 
+ 80.5 | 
+ 69.5 | 
+ 90.3 | 
+ 78.5 | 
+ 78.6 | 
+ 87.9 | 
+
+ Assembly101 | 
+ AsFormer | 
+ 35.2 | 
+ 5.7 | 
+ 9.8 | 
+ 29.0 | 
+ 4.8 | 
+ 8.2 | 
+ 41.1 | 
+ 30.4 | 
+
+ + G-TLA(ours) | 
+ 36.8 | 
+ 9.2 | 
+ 14.7 | 
+ 30.7 | 
+ 8.3 | 
+ 13.1 | 
+ 41.0 | 
+ 29.8 | 
+
+ MSTCN | 
+ 33.9 | 
+ 4.7 | 
+ 8.2 | 
+ 26.3 | 
+ 3.9 | 
+ 6.8 | 
+ 39.8 | 
+ 27.2 | 
+
+ + G-TLA(ours) | 
+ 34.9 | 
+ 8.0 | 
+ 13.0 | 
+ 30.2 | 
+ 5.8 | 
+ 9.7 | 
+ 39.2 | 
+ 28.5 | 
+
+ Table 6 : Ablate group classification(GP), logit adjustment(LA), temporal factor(TF). 
+
+ GP | 
+ LA | 
+ TF | 
+ MSTCN | 
+ ASFormer | 
+
+ Frame acc | 
+ Seg. F1 | 
+ Frame acc | 
+ Seg. F1 | 
+
+ Head | 
+ Tail | 
+ Hmean | 
+ Head | 
+ Tail | 
+ Hmean | 
+ Head | 
+ Tail | 
+ Hmean | 
+ Head | 
+ Tail | 
+ Hmean | 
+
+ ✗ | 
+ ✗ | 
+ ✗ | 
+ 65.1 | 
+ 37.7 | 
+ 47.7 | 
+ 53.3 | 
+ 38.7 | 
+ 44.8 | 
+ 69.7 | 
+ 39.8 | 
+ 50.7 | 
+ 69.9 | 
+ 43.9 | 
+ 53.9 | 
+
+ ✗ | 
+ ✓ | 
+ ✗ | 
+ 64.4 | 
+ 40.1 | 
+ 49.8 | 
+ 56.0 | 
+ 38.7 | 
+ 45.7 | 
+ 70.1 | 
+ 40.4 | 
+ 51.3 | 
+ 71.2 | 
+ 44.7 | 
+ 54.9 | 
+
+ ✗ | 
+ ✓ | 
+ ✓ | 
+ 65.7 | 
+ 41.3 | 
+ 50.7 | 
+ 56.3 | 
+ 38.9 | 
+ 46.0 | 
+ 69.4 | 
+ 41.7 | 
+ 52.2 | 
+ 70.7 | 
+ 44.8 | 
+ 54.9 | 
+
+ ✓ | 
+ ✗ | 
+ ✗ | 
+ 67.5 | 
+ 40.8 | 
+ 50.9 | 
+ 60.3 | 
+ 44.8 | 
+ 51.3 | 
+ 69.7 | 
+ 40.8 | 
+ 51.5 | 
+ 71.1 | 
+ 44.9 | 
+ 55.0 | 
+
+ ✓ | 
+ ✓ | 
+ ✗ | 
+ 66.5 | 
+ 41.8 | 
+ 51.3 | 
+ 59.9 | 
+ 44.7 | 
+ 51.2 | 
+ 70.2 | 
+ 41.4 | 
+ 52.1 | 
+ 71.4 | 
+ 44.7 | 
+ 55.0 | 
+
+ ✓ | 
+ ✓ | 
+ ✓ | 
+ 67.6 | 
+ 43.0 | 
+ 52.7 | 
+ 60.1 | 
+ 45.2 | 
+ 51.5 | 
+ 70.3 | 
+ 43.2 | 
+ 53.3 | 
+ 71.7 | 
+ 46.5 | 
+ 56.5 | 
+
+## 5.3 Ablation Studies
+
+ We present ablations on Breakfast; please see the Suppl. for other datasets. 
+
+ G-TLA Components. 
+We assess the contributions of group-wise classification (GP), naive logit adjustment (LA), and temporal factors (TF) in Tab.   6 . GP significantly reduces over-segmentation by 5.5% with MSTCN and 1.1% for ASFormer. Naive LA improves tail accuracy by 2.4% but decreases head accuracy by 0.7% for MSTCN. Temporal priors help reduce false positives that violate the ordering prior, further improving LA. Combining all our components within G-TLA achieves a balanced result in both frame and segment metrics. 
+
+ Table 7 : Varying η \eta for group-wise classification, with fixed number of groups n = 10 n=10 and τ = 0.5 \tau=0.5 on MSTCN 
+
+ η \eta | 
+ Frame acc | 
+ Seg. F1 | 
+
+ Head | 
+ Tail | 
+ Hmean | 
+ Head | 
+ Tail | 
+ Hmean | 
+
+ 0.1 | 
+ 67.3 | 
+ 41.0 | 
+ 51.0 | 
+ 60.4 | 
+ 44.0 | 
+ 50.9 | 
+
+ 0.3 | 
+ 67.2 | 
+ 42.1 | 
+ 51.8 | 
+ 60.5 | 
+ 44.8 | 
+ 51.5 | 
+
+ 0.5 | 
+ 67.6 | 
+ 43.0 | 
+ 52.7 | 
+ 60.1 | 
+ 45.2 | 
+ 51.5 | 
+
+ 0.7 | 
+ 67.5 | 
+ 42.3 | 
+ 52.1 | 
+ 61.1 | 
+ 45.7 | 
+ 52.2 | 
+
+ Table 8 : Varying τ \tau for temporal logit adjustment, with fixed number of groups n = 10 n=10 and η = 0.5 \eta=0.5 on MSTCN 
+
+ τ \tau | 
+ Frame acc | 
+ Seg. F1 | 
+
+ Head | 
+ Tail | 
+ Hmean | 
+ Head | 
+ Tail | 
+ Hmean | 
+
+ 0.1 | 
+ 67.4 | 
+ 40.8 | 
+ 50.9 | 
+ 60.9 | 
+ 43.3 | 
+ 50.6 | 
+
+ 0.3 | 
+ 67.5 | 
+ 41.8 | 
+ 51.6 | 
+ 61.0 | 
+ 43.2 | 
+ 50.6 | 
+
+ 0.5 | 
+ 67.6 | 
+ 43.0 | 
+ 52.7 | 
+ 60.1 | 
+ 45.2 | 
+ 51.5 | 
+
+ 0.7 | 
+ 67.6 | 
+ 42.4 | 
+ 52.1 | 
+ 60.6 | 
+ 43.9 | 
+ 50.9 | 
+
+ (a) MSTCN. 
+
+ (b) AsFormer. 
+
+ Figure 5 : Radar charts of different logit adjustment methods, measuring the performance along balanced and global metrics on Breakfast with MSTCN and AsFormer. 
+
+ Figure 6 : Head-Tail & Frame-Segment trade-offs on Breakfast with MSTCN. 
+
+ η \eta for group-wise classification. 
+ Tab.   8 shows the impact of hyperparameter η \eta in   Eq.   12 . A small η \eta reduces suppression of tail classes by down-weighting negative gradients from the ‘others’ class, but if too small, it harms group identification during inference. Conversely, a large η \eta over-emphasizes the ‘others’ class, harming tail performance. The results suggest an optimal value of η \eta is 0.5. 
+
+ τ \tau for temporal logit adjustment. A small τ \tau in Eq.   9 represents minimal adjustment, resulting in less improvement for tail classes in   Tab.   8 . Conversely, a large τ \tau biases towards tail classes and introduces more false positives, negatively impacting head and segment-wise performance. Our experiments show that τ = 0.5 \tau=0.5 achieves optimal performance. 
+
+## 5.4 Analyzing the effects of G-TLA
+
+ Individual metrics. Fig.   5 visualizes various methods’ global and per-class results with radar charts, including global accuracy, F1 score, and Edit score, as well as the harmonic mean of balanced accuracy and F1@25 score. Our method is significantly more balanced, as indicated by the largest enclosed area. In particular, our method excels in segment-wise performance, including Edit score and global & balanced F1 score, demonstrating our approach’s effectiveness in reducing over-segmentation while enhancing balanced accuracy. 
+
+ (a) "making cereals" activity on Breakfast using MSTCN. 
+
+ (b) "changing tire" activity on Youtube using MSTCN. 
+
+ Figure 7 : G-TLA effectively reduces activity-irrelevant predictions, e.g . actions ‘spoon powder’ and ‘stir milk’ on Breakfast, and ‘PUT SOIL’ on Youtube. G-TLA also mitigates predictions that violate temporal priors, e.g . ‘UNSCREEW WHEEL’ occurring before ‘START LOOSE’ on Youtube. 
+
+ Figure 8 : Distribution of True (TP) and False Positives (FP), categorized into: FP1 (activity-irrelevant), FP2 (activity-relevant with ordering violations), and FP3 (activity-relevant and following action ordering derived from temporal bounds).
+
+ Trade-off trends. Long-tail temporal action segmentation exhibits two distinct trade-offs. First is a head-tail trade-off, where the head is impacted negatively when the tail is improved. Second is a frame-segment trade-off, where enhancing the tail improves frame metrics but hurts segment metrics. The extent of these trade-offs is directly influenced by the hyperparameters of respective long-tail methods, as shown in Fig.   6 . Head performance involves head group metrics of per-class accuracy and F1 score, and tail performance involves tail group metrics. Frame performance measures the average of global and per-class accuracy, while segment performance involves Edit score, global F1@25, and per-class F1@25. As the plot indicates, our method achieves a much better balance than others. The curve of our method consistently remains above others, emphasizing the boost of tail classes. This contributes to improved balanced metrics while maintaining competitive head and segment performance. See the Supplementary for hyperparameters and trends on other datasets and backbones. 
+
+ Qualitative & quantitative results. 
+We qualitatively compare the predictions of logit adjustment methods. Fig.   8 shows the output of MSTCN on Breakfast and YouTube, revealing the common issue of introducing activity-irrelevant classes when enhancing tail classes. For instance, emphasizing the tail class ’stir milk’ on Breakfast introduces false positives in unrelated activity "making cereal" .
+Additionally, existing methods ignore action ordering, resulting in false positives that violate temporal priors, e.g . on Youtube, action ‘UNSCREW WHEEL’ is wrongly predicted before ‘START LOOSE’ for activity "changing tire" . Our proposed method effectively addresses both types of false positives, enhancing the overall prediction logic. We also report the quantitative results on Breakfast with MSTCN in Fig.   8 . Our method reduces the number of segments for activity-irrelevant(FP1) and ordering-violated(FP2) false positives, mitigating over-segmentation. Meanwhile, it also helps to increase true positives(TP) and reduce false positives that are both activity-relevant and ordering-valid(FP3), mainly due to the group-wise classification. 
+
+ Group identification accuracy. Group identification is crucial and impacts the final performance. Our group-wise classification improves activity identification. For instance, we achieve 90.1% accuracy compared to 87.2% of the MSTCN baseline on Breakfast. More details and results are in the Supplementary. 
+
+## 6 Conclusion
+
+ This paper targets long-tail temporal action segmentation, addressing challenges from temporal class correlations and performance trade-offs of head & tail classes at frame- & segment-level. Our proposed Group-wise Temporal Logit Adjustment (G-TLA) scheme integrates video activity labels and action order priors to capture class inter-dependencies, enhancing balanced performance while maintaining global performance. Future efforts would prioritize highly imbalanced datasets, considering both long-tail and few-shot learning scenarios. 
+
+## Acknowledgements
+
+ This research is supported by the Ministry of Education, Singapore, under the Academic Research Fund Tier 1 (FY2022). 
+
+## References
+
+ [1] 
+
+Alayrac, J.B., Bojanowski, P., Agrawal, N., Sivic, J., Laptev, I., Lacoste-Julien, S.: Unsupervised learning from narrated instruction videos. In: Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition. pp. 4575–4583 (2016)
+
+ [2] 
+
+Bhattacharya, S., Kalayeh, M.M., Sukthankar, R., Shah, M.: Recognition of complex events: Exploiting temporal dynamics between underlying concepts. In: Proceedings of the IEEE conference on computer vision and pattern recognition. pp. 2235–2242 (2014)
+
+ [3] 
+
+Brodersen, K.H., Ong, C.S., Stephan, K.E., Buhmann, J.M.: The balanced accuracy and its posterior distribution. In: 2010 20th international conference on pattern recognition. pp. 3121–3124. IEEE (2010)
+
+ [4] 
+
+Buda, M., Maki, A., Mazurowski, M.A.: A systematic study of the class imbalance problem in convolutional neural networks. Neural networks 106 , 249–259 (2018)
+
+ [5] 
+
+Byrd, J., Lipton, Z.: What is the effect of importance weighting in deep learning? In: International conference on machine learning. pp. 872–881. PMLR (2019)
+
+ [6] 
+
+Cai, J., Wang, Y., Hwang, J.N.: Ace: Ally complementary experts for solving long-tailed recognition in one-shot. In: Proceedings of the IEEE/CVF International Conference on Computer Vision. pp. 112–121 (2021)
+
+ [7] 
+
+Cao, K., Wei, C., Gaidon, A., Arechiga, N., Ma, T.: Learning imbalanced datasets with label-distribution-aware margin loss. Advances in neural information processing systems 32 (2019)
+
+ [8] 
+
+Carreira, J., Zisserman, A.: Quo vadis, action recognition? a new model and the kinetics dataset. In: proceedings of the IEEE Conference on Computer Vision and Pattern Recognition. pp. 6299–6308 (2017)
+
+ [9] 
+
+Cheng, Y., Fan, Q., Pankanti, S., Choudhary, A.: Temporal sequence modeling for video event detection. In: Proceedings of the IEEE conference on computer vision and pattern recognition. pp. 2227–2234 (2014)
+
+ [10] 
+
+Collell, G., Prelec, D., Patil, K.: Reviving threshold-moving: a simple plug-in bagging ensemble for binary and multiclass imbalanced data. arXiv preprint arXiv:1606.08698 (2016)
+
+ [11] 
+
+Cui, Y., Jia, M., Lin, T.Y., Song, Y., Belongie, S.: Class-balanced loss based on effective number of samples. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 9268–9277 (2019)
+
+ [12] 
+
+Ding, G., Sener, F., Yao, A.: Temporal action segmentation: An analysis of modern techniques. IEEE Transactions on Pattern Analysis and Machine Intelligence (2023)
+
+ [13] 
+
+Ding, G., Yao, A.: Leveraging action affinity and continuity for semi-supervised temporal action segmentation. In: European Conference on Computer Vision. pp. 17–32. Springer (2022)
+
+ [14] 
+
+Drummond, C., Holte, R.C., et al.: C4. 5, class imbalance, and cost sensitivity: why under-sampling beats over-sampling. In: Workshop on learning from imbalanced datasets II. vol. 11, pp. 1–8 (2003)
+
+ [15] 
+
+Farha, Y.A., Gall, J.: Ms-tcn: Multi-stage temporal convolutional network for action segmentation. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 3575–3584 (2019)
+
+ [16] 
+
+Fathi, A., Farhadi, A., Rehg, J.M.: Understanding egocentric activities. In: 2011 international conference on computer vision. pp. 407–414. IEEE (2011)
+
+ [17] 
+
+Fathi, A., Ren, X., Rehg, J.M.: Learning to recognize objects in egocentric activities. In: CVPR 2011. pp. 3281–3288. IEEE (2011)
+
+ [18] 
+
+Gao, S.H., Han, Q., Li, Z.Y., Peng, P., Wang, L., Cheng, M.M.: Global2local: Efficient structure search for video action segmentation. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 16805–16814 (2021)
+
+ [19] 
+
+Han, H., Wang, W.Y., Mao, B.H.: Borderline-smote: a new over-sampling method in imbalanced data sets learning. In: Advances in Intelligent Computing: International Conference on Intelligent Computing, ICIC 2005, Hefei, China, August 23-26, 2005, Proceedings, Part I 1. pp. 878–887. Springer (2005)
+
+ [20] 
+
+He, H., Garcia, E.A.: Learning from imbalanced data. IEEE Transactions on knowledge and data engineering 21 (9), 1263–1284 (2009)
+
+ [21] 
+
+Hu, X., Jiang, Y., Tang, K., Chen, J., Miao, C., Zhang, H.: Learning to segment the tail. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 14045–14054 (2020)
+
+ [22] 
+
+Huang, C., Li, Y., Loy, C.C., Tang, X.: Learning deep representation for imbalanced classification. In: Proceedings of the IEEE conference on computer vision and pattern recognition. pp. 5375–5384 (2016)
+
+ [23] 
+
+Jolly, K.: Machine learning with scikit-learn quick start guide: classification, regression, and clustering techniques in Python. Packt Publishing Ltd (2018)
+
+ [24] 
+
+Kang, B., Xie, S., Rohrbach, M., Yan, Z., Gordo, A., Feng, J., Kalantidis, Y.: Decoupling representation and classifier for long-tailed recognition. arXiv preprint arXiv:1910.09217 (2019)
+
+ [25] 
+
+Kim, B., Kim, J.: Adjusting decision boundary for class imbalanced learning. IEEE Access 8 , 81674–81685 (2020)
+
+ [26] 
+
+King, G., Zeng, L.: Logistic regression in rare events data. Political analysis 9 (2), 137–163 (2001)
+
+ [27] 
+
+Kuehne, H., Arslan, A., Serre, T.: The language of actions: Recovering the syntax and semantics of goal-directed human activities. In: Proceedings of the IEEE conference on computer vision and pattern recognition. pp. 780–787 (2014)
+
+ [28] 
+
+Kuehne, H., Arslan, A., Serre, T.: The language of actions: Recovering the syntax and semantics of goal-directed human activities. In: Proceedings of the IEEE conference on computer vision and pattern recognition. pp. 780–787 (2014)
+
+ [29] 
+
+Kuehne, H., Richard, A., Gall, J.: A hybrid rnn-hmm approach for weakly supervised temporal action segmentation. IEEE transactions on pattern analysis and machine intelligence 42 (4), 765–779 (2018)
+
+ [30] 
+
+Lea, C., Flynn, M.D., Vidal, R., Reiter, A., Hager, G.D.: Temporal convolutional networks for action segmentation and detection. In: proceedings of the IEEE Conference on Computer Vision and Pattern Recognition. pp. 156–165 (2017)
+
+ [31] 
+
+Lei, P., Todorovic, S.: Temporal deformable residual networks for action segmentation in videos. In: Proceedings of the IEEE conference on computer vision and pattern recognition. pp. 6742–6751 (2018)
+
+ [32] 
+
+Li, S.J., AbuFarha, Y., Liu, Y., Cheng, M.M., Gall, J.: Ms-tcn++: Multi-stage temporal convolutional network for action segmentation. IEEE Transactions on Pattern Analysis and Machine Intelligence pp. 1–1 (2020). https://doi.org/10.1109/TPAMI.2020.3021756
+
+ [33] 
+
+Li, Y., Wang, T., Kang, B., Tang, S., Wang, C., Li, J., Feng, J.: Overcoming classifier imbalance for long-tail object detection with balanced group softmax. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 10991–11000 (2020)
+
+ [34] 
+
+Lin, T.Y., Goyal, P., Girshick, R., He, K., Dollár, P.: Focal loss for dense object detection. In: Proceedings of the IEEE international conference on computer vision. pp. 2980–2988 (2017)
+
+ [35] 
+
+Liu, D., Li, Q., Dinh, A.D., Jiang, T., Shah, M., Xu, C.: Diffusion action segmentation. In: International Conference on Computer Vision (ICCV) (2023)
+
+ [36] 
+
+Menon, A., Narasimhan, H., Agarwal, S., Chawla, S.: On the statistical consistency of algorithms for binary classification under class imbalance. In: International Conference on Machine Learning. pp. 603–611. PMLR (2013)
+
+ [37] 
+
+Menon, A.K., Jayasumana, S., Rawat, A.S., Jain, H., Veit, A., Kumar, S.: Long-tail learning via logit adjustment. arXiv preprint arXiv:2007.07314 (2020)
+
+ [38] 
+
+Perrett, T., Damen, D.: Recurrent assistance: cross-dataset training of lstms on kitchen tasks. In: Proceedings of the IEEE International Conference on Computer Vision Workshops. pp. 1354–1362 (2017)
+
+ [39] 
+
+Perrett, T., Sinha, S., Burghardt, T., Mirmehdi, M., Damen, D.: Use your head: Improving long-tail video recognition. arXiv preprint arXiv:2304.01143 (2023)
+
+ [40] 
+
+Ren, M., Zeng, W., Yang, B., Urtasun, R.: Learning to reweight examples for robust deep learning. In: International conference on machine learning. pp. 4334–4343. PMLR (2018)
+
+ [41] 
+
+Sener, F., Chatterjee, D., Shelepov, D., He, K., Singhania, D., Wang, R., Yao, A.: Assembly101: A large-scale multi-view video dataset for understanding procedural activities. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 21096–21106 (2022)
+
+ [42] 
+
+Shen, L., Lin, Z., Huang, Q.: Relay backpropagation for effective learning of deep convolutional neural networks. In: Computer Vision–ECCV 2016: 14th European Conference, Amsterdam, The Netherlands, October 11–14, 2016, Proceedings, Part VII 14. pp. 467–482. Springer (2016)
+
+ [43] 
+
+Singh, B., Marks, T.K., Jones, M., Tuzel, O., Shao, M.: A multi-stream bi-directional recurrent neural network for fine-grained action detection. In: Proceedings of the IEEE conference on computer vision and pattern recognition. pp. 1961–1970 (2016)
+
+ [44] 
+
+Singhania, D., Rahaman, R., Yao, A.: Coarse to fine multi-resolution temporal convolutional network. arXiv preprint arXiv:2105.10859 (2021)
+
+ [45] 
+
+Stein, S., McKenna, S.J.: Combining embedded accelerometers with computer vision for recognizing food preparation activities. In: Proceedings of the 2013 ACM international joint conference on Pervasive and ubiquitous computing. pp. 729–738 (2013)
+
+ [46] 
+
+Stein, S., McKenna, S.J.: Combining embedded accelerometers with computer vision for recognizing food preparation activities. In: Proceedings of the 2013 ACM international joint conference on Pervasive and ubiquitous computing. pp. 729–738 (2013)
+
+ [47] 
+
+Tan, J., Wang, C., Li, B., Li, Q., Ouyang, W., Yin, C., Yan, J.: Equalization loss for long-tailed object recognition. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 11662–11671 (2020)
+
+ [48] 
+
+Wang, J., Zhang, W., Zang, Y., Cao, Y., Pang, J., Gong, T., Chen, K., Liu, Z., Loy, C.C., Lin, D.: Seesaw loss for long-tailed instance segmentation. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 9695–9704 (2021)
+
+ [49] 
+
+Wang, T., Li, Y., Kang, B., Li, J., Liew, J., Tang, S., Hoi, S., Feng, J.: The devil is in classification: A simple framework for long-tail instance segmentation. In: Computer Vision–ECCV 2020: 16th European Conference, Glasgow, UK, August 23–28, 2020, Proceedings, Part XIV 16. pp. 728–744. Springer (2020)
+
+ [50] 
+
+Wang, Y.X., Ramanan, D., Hebert, M.: Learning to model the tail. Advances in neural information processing systems 30 (2017)
+
+ [51] 
+
+Wang, Z., Gao, Z., Wang, L., Li, Z., Wu, G.: Boundary-aware cascade networks for temporal action segmentation. In: Computer Vision–ECCV 2020: 16th European Conference, Glasgow, UK, August 23–28, 2020, Proceedings, Part XXV 16. pp. 34–51. Springer (2020)
+
+ [52] 
+
+Yi, F., Wen, H., Jiang, T.: Asformer: Transformer for action segmentation. arXiv preprint arXiv:2110.08568 (2021)
+
+ [53] 
+
+Zhang, J., Liu, L., Wang, P., Shen, C.: To balance or not to balance: A simple-yet-effective approach for learning with long-tailed distributions. arXiv preprint arXiv:1912.04486 (2019)
+
+ [54] 
+
+Zhang, X., Wu, Z., Weng, Z., Fu, H., Chen, J., Jiang, Y.G., Davis, L.S.: Videolt: large-scale long-tailed video recognition. In: Proceedings of the IEEE/CVF International Conference on Computer Vision. pp. 7960–7969 (2021)
+
+ [55] 
+
+Zhao, Y., Chen, W., Tan, X., Huang, K., Zhu, J.: Adaptive logit adjustment loss for long-tailed visual recognition. In: Proceedings of the AAAI Conference on Artificial Intelligence. vol. 36, pp. 3472–3480 (2022)
+
+ [56] 
+
+Zhou, B., Cui, Q., Wei, X.S., Chen, Z.M.: Bbn: Bilateral-branch network with cumulative learning for long-tailed visual recognition. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 9719–9728 (2020)
+
+## Supplementary Material
+
+## A.  Long-tail Temporal Action Segmentation
+
+ The long tail problem has been overlooked in temporal action segmentation.
+State-of-the-art methods  [ 15 , 52 , 35 ] perform poorly and often do not predict any tail classes correctly. For example, MSTCN  [ 15 ] , ASFormer  [ 52 ] , and DiffAct  [ 35 ] how zero accuracies for 5, 5, and 4 out of 48 classes on the Breakfast dataset as shown in the per-class accuracy plot in Fig.   9 . Our paper is the first to address the long tail problem in temporal action segmentation. 
+
+ Figure 9 : Class-wise accuracy distribution on Breakfast with MSTCN, ASFormer and DiffAct. Classes are sorted by their frame counts in the training set. 
+
+## B.  Grouping Without Activity Labels
+
+ During training, our group-wise classification relies on grouping classes based on activity labels. However, in scenarios where the activity label is unavailable or should not be utilized, an alternative approach is forming groups through sequence clustering. Notably, clustering results often align with the underlying activity label. Some group examples are shown in Tab.   9 . During testing, we use Eq.   13 to identifyied groups. Details of the group identification results can be found in Sec. E. 
+
+ Table 9 : Grouping examples. 
+
+ Dataset | 
+ Group | 
+ Action Classes | 
+
+ Breakfast | 
+ “coffee” | 
+
+ take_cup , pour_sugar , spoon_sugar , SIL , 
+
+ pour_coffee , stir_coffee , pour_milk 
+ | 
+
+ GTEA | 
+ “Cluster 1” | 
+
+ Pour , Take , Close , Put , Open , Fold , Background 
+ | 
+
+## Clustering algorithm
+
+ We cluster sequences according to the action frequency distribution, leveraging its ability to capture the action co-occurrence patterns  [ 13 ] . Given a sequence i i , the action frequency distribution q q is defined as the normalized occurrence of frames for all the actions: 
+
+ | 
+ q i ( c ) = 1 T i ∑ t T i 𝟙 ( y t = c ) , c ∈ [ 1 , ⋯ L ] . q_{i}(c)=\frac{1}{T_{i}}\sum_{t}^{T_{i}}\mathbb{1}(y_{t}=c),\ \ c\in[1,\cdots L]. | 
+ | 
+ (14) | 
+
+ Then, we can define the distance criterion between two sequences i , j i,j using the Kullback-Leibler(KL)-divergence: 
+
+ | 
+ d ​ i ​ s ​ t ​ ( i , j ) = 1 2 ​ ∑ c q i ​ ( c ) ​ log ⁡ q i ​ ( c ) q j ​ ( c ) + q j ​ ( c ) ​ log ⁡ q j ​ ( c ) q i ​ ( c ) dist(i,j)=\frac{1}{2}\sum_{c}q_{i}(c)\log\frac{q_{i}(c)}{q_{j}(c)}+q_{j}(c)\log\frac{q_{j}(c)}{q_{i}(c)} | 
+ | 
+ (15) | 
+
+ We average over the forward and backward KL-divergence to ensure symmetry in the distance measure. Based on the defined distance criterion, we apply hierarchical clustering  [ 23 ] with a predefined number of groups and a tuned linkage criterion to establish the sequence-to-group mapping. 
+
+## Effect of the number of groups n n . 
+
+ We present results of using clustering on Breakfast with MSTCN to assess the impact of the number of groups. Setting the number of clusters to n = 10 n=10 yields the same groups as using the activity label. Further reducing n n leads to the merging of several activities. For instance, setting n = 8 n=8 merges the activities "ceareal" - "milk" and "friedegg" - "scrambledegg" . According to the results in Tab.   10 , finer clustering, i.e . more detailed separation of the activities, contributes to better performance by reducing the false positives from activity-irrelevent classes to a larger extent. 
+
+ Table 10 : Varying the number of groups n n for group-wise classification, with fixed η = 0.5 \eta=0.5 and τ = 0.5 \tau=0.5 
+
+ n n | 
+ Frame acc | 
+ Seg. F1 | 
+
+ Head | 
+ Tail | 
+ Hmean | 
+ Head | 
+ Tail | 
+ Hmean | 
+
+ 3 | 
+ 65.9 | 
+ 39.7 | 
+ 49.6 | 
+ 56.3 | 
+ 40.3 | 
+ 47.0 | 
+
+ 5 | 
+ 66.3 | 
+ 41.1 | 
+ 50.7 | 
+ 61.2 | 
+ 43.4 | 
+ 50.8 | 
+
+ 8 | 
+ 66.5 | 
+ 41.5 | 
+ 50.9 | 
+ 60.3 | 
+ 44.5 | 
+ 51.2 | 
+
+ 10 | 
+ 67.6 | 
+ 43.0 | 
+ 52.7 | 
+ 60.1 | 
+ 45.2 | 
+ 51.5 | 
+
+## C.  Temporal Priors
+
+ For an action c c , we defined two sets S b ​ f ​ [ c ] S_{bf}[c] and S a ​ f ​ [ c ] S_{af}[c] that contain actions that must precede and follow action c c . These two sets are utilized to fix the temporal bounds when employing logit adjustment on action c c . These two sets are exclusive and can be extracted from the training data. The algorithm for finding these two sets for a given class c c is given in Algorithm   1 . Examples of extracted temporal bounds for actions on Breakfast can be found in Tab.   11 . 
+
+ Algorithm 1 Exacting Temporal Bounds for Class c c 
+
+ Input: Training sequence labels 𝒴 \mathcal{Y} , Class c c 
+    Initialize: A = set() A=\text{set()} , B = set() B=\text{set()} 
+
+ 1: 
+
+ for Y ​ in ​ 𝒴 Y\ \text{in}\ \mathcal{Y} do   // for each sequence 
+
+ 2: 
+
+    if c ∉ Y c\notin Y then 
+
+ 3: 
+
+     continue 
+
+ 4: 
+
+    l ​ s ls = get_seg_label ( Y ) (Y)   // segment-wise label 
+
+ 5: 
+
+    i ​ d ​ s ids = l ​ s ls .index( c c )
+
+ 6: 
+
+    for i ∈ i ​ d ​ s i\in ids do 
+
+ 7: 
+
+     A = A ∪ l s [ i +1 : ] A=A\cup ls[i\text{+1}:]   // update actions after c c 
+
+ 8: 
+
+     B = B ∪ l s [ : i ] B=B\cup ls[:i]   // update actions before c c 
+
+ 9: 
+
+ S b ​ f ​ [ c ] = B − A S_{bf}[c]=B-A   // must precede c c 
+
+ 10: 
+
+ S a ​ f ​ [ c ] = A − B S_{af}[c]=A-B   // must follow c c 
+
+ Return: S b ​ f ​ [ c ] , S a ​ f ​ [ c ] S_{bf}[c],\ S_{af}[c] 
+
+ Table 11 : Examples of extracted temporal bounds for actions in Breakfast dataset. 
+
+ Actions | 
+ S b ​ f ​ [ c ] S_{bf}[c] | 
+ S a ​ f ​ [ c ] S_{af}[c] | 
+
+ pour cereals | 
+ take bowl | 
+ pour milk , stir cereals | 
+
+ take bowl | 
+ - | 
+ pour milk , pour cereals , stir cereals | 
+
+ add teabag | 
+ take cup | 
+ pour sugar , spoon sugar , stir tea | 
+
+ stir milk | 
+ take cup | 
+ - | 
+
+## D.  Experimental Setting
+
+## Dataset.
+
+ We conduct experiments on five benchmarks. (1) Breakfast consists of 1712 videos with ten video-level activities for making breakfast. On average, the videos are 2.3 minutes long with 48 action classes. (2) YouTube Instructional is a collected dataset that includes five instructional activities. It comprises 30 videos for each activity, totaling 46 unique action classes. (3) Assembly101 is a recently collected dataset for dissembling and assembling take-apart toys. It has a collection of 4321 videos with an average length of 7.1 minutes and 202 coarse actions. (4) GTEA contains 28 videos of seven procedural activities recorded in a single kitchen, with a total of 11 actions. (5) 50Salads is composed of 50 recorded videos of making mixed salads involving 19 actions. Despite the less imbalanced nature, we include the GTEA and 50Salads results for comprehensive evaluation, as these datasets are widely utilized within the research community. Data distribution of these datasets is illustrated in Fig.   10 . 
+
+ (a) GTEA 
+
+ (b) 50salads 
+
+ (c) Assembly101 
+
+ Figure 10 : Data distribution of Assembly101, GTEA, and 50salads. 
+
+## Implementation Details. 
+
+ The experimental configurations of base models are summarized in Tab.   12 . All models are trained to reduce over-segmentation with an extra smoothing loss  [ 15 ] with λ = 0.15 \lambda=0.15 . We follow the protocols in original papers for any details not specified here. As MSTCN and ASFormer are multi-stage models, the long-tail methods are exclusively applied at the final stage. Applying these methods to all stages results in degraded performance. 
+
+ Table 12 : Base model setup 
+
+ Model | 
+ Optimizer | 
+ lr | 
+ weight decay | 
+ Batch size | 
+ Epochs | 
+ Sample rate | 
+
+ MSTCN | 
+ Adam | 
+ 5 × 10 − 4 5\times 10^{-4} | 
+ - | 
+ 1 | 
+ 50 | 
+ 1 | 
+
+ ASFormer | 
+ Adam | 
+ 1 × 10 − 4 1\times 10^{-4} | 
+ 1 × 10 − 5 1\times 10^{-5} | 
+ 1 | 
+ 60 | 
+ 4 | 
+
+ We include several types of methods for comparison. 
+
+ • 
+
+ Re-weighting. Focal  [ 34 ] assigns different weights to samples based on their difficulty; CB  [ 11 ] calculates the weight for each class based on its effective number of samples. 
+
+ • 
+
+ Logit adjustment. LA  [ 37 ] and LDAM  [ 7 ] both adjust the logits based on the class prior, where the prior is estimated with the class-independent assumption. Seesaw  [ 48 ] dynamically re-balances the gradients of positive and negative samples by adjusting the logits. 
+
+ • 
+
+ Post-hoc process. τ \tau -norm  [ 24 ] normalizes the weights of a learned classifier to achieve a balanced classifier. 
+
+ • 
+
+ Ensemble. BAGS  [ 33 ] utilizes group-wise training by modulating the training for head and tail classes separately to ensures both are sufficiently trained. 
+
+ Hyperparameters used in above methods are selected through grid search. Hyperparameters that yield the best overall balanced and global metrics results are selected. Our method adopts the hyperparameter η \eta to balance the target and non-target group losses, and τ \tau as in LA  [ 37 ] to tune the head-tail trade-off. Tab.   13 gives the search space for different methods. Please refer to the references for the meaning of hyperparameters in each method. 
+
+ Table 13 : Search space of hyperparameters 
+
+ Method | 
+ Search space | 
+
+ Focal  [ 34 ] | 
+ γ ∈ { 0.5 , 1.0 , 1.5 } \gamma\in\{0.5,1.0,1.5\} | 
+
+ CB  [ 11 ] | 
+ β ∈ { 0.9 , 0.99 , 0.999 } \beta\in\{0.9,0.99,0.999\} | 
+
+ LA  [ 37 ] | 
+ τ ∈ { 0.1 , 0.3 , 0.5 , 0.7 } \tau\in\{0.1,0.3,0.5,0.7\} | 
+
+ LDAM  [ 7 ] | 
+ s ∈ { 1 , 3 , 5 , 10 } s\in\{1,3,5,10\} , m ∈ { 0.5 , 1.0 , 1.5 } m\in\{0.5,1.0,1.5\} | 
+
+ Seesaw  [ 48 ] | 
+ p ∈ { 0.1 , 0.2 , 0.4 } p\in\{0.1,0.2,0.4\} , q ∈ { 0.5 , 1.0 , 1.5 } q\in\{0.5,1.0,1.5\} | 
+
+ τ \tau -norm  [ 24 ] | 
+ τ ∈ { 0.5 , 1.0 , 1.5 } \tau\in\{0.5,1.0,1.5\} | 
+
+ BAGS  [ 33 ] | 
+ β ∈ { 2 , 4 , 8 } \beta\in\{2,4,8\} , N ∈ { 2 , 3 , 4 } N\in\{2,3,4\} | 
+
+ G-TLA(ours) | 
+ η ∈ { 0.1 , 0.3 , 0.5 , 1.0 } \eta\in\{0.1,0.3,0.5,1.0\} | 
+
+ The hyperparameters used for each dataset, backbone, and method are detailed in Table 14 . We omit τ \tau -norm in the tables as the results always favor τ = 1.0 \tau=1.0 for τ \tau -norm. Our approach adopts a group-wise classification framework, where the number of groups is decided either based on activity label or by clustering: for Breakfast and Youtube, we group based on activity labels with n n set to 10 and 5, respectively; for GTEA and Assembly, clustering forms groups with n n set to 3 and 2, respectively; for 50salads, group-wise classification is discarded, equivalent to n = 1 n=1 . 
+
+ Table 14 : Hyperparameters for different experimental settings. 
+
+ Data | 
+ Model | 
+ Focal  [ 34 ] | 
+ CB  [ 11 ] | 
+ LA  [ 37 ] | 
+ LDAM  [ 7 ] | 
+ Seesaw  [ 48 ] | 
+ BAGS  [ 33 ] | 
+ G-TLA | 
+
+ γ \gamma | 
+ β \beta | 
+ τ \tau | 
+ s , m s,m | 
+ p , q p,q | 
+ β , N \beta,N | 
+ η , τ \eta,\tau | 
+
+ Breakfast | 
+ MSTCN | 
+ 0.5 | 
+ 0.9 | 
+ 0.5 | 
+ 1.0, 0.5 | 
+ 0.4, 0.5 | 
+ 8, 3 | 
+ 0.5, 0.5 | 
+
+ ASFormer | 
+ 1.5 | 
+ 0.9 | 
+ 0.1 | 
+ 1.0, 1.5 | 
+ 0.1, 0.5 | 
+ 8, 3 | 
+ 0.1, 0.3 | 
+
+ YouTube | 
+ MSTCN | 
+ 1.0 | 
+ 0.9 | 
+ 0.3 | 
+ 1.0, 0.5 | 
+ 0.1, 0.5 | 
+ 4, 3 | 
+ 0.1, 0.5 | 
+
+ ASFormer | 
+ 1.0 | 
+ 0.9 | 
+ 0.3 | 
+ 1.0, 1.5 | 
+ 0.1, 1.5 | 
+ 8, 3 | 
+ 0.1, 0.3 | 
+
+ GTEA | 
+ MSTCN | 
+ - | 
+ 0.999 | 
+ 0.7 | 
+ - | 
+ - | 
+ - | 
+ 1.0, 0.5 | 
+
+ ASFormer | 
+ - | 
+ 0.9 | 
+ 0.5 | 
+ - | 
+ - | 
+ - | 
+ 1.0, 0.1 | 
+
+ 50salads | 
+ MSTCN | 
+ - | 
+ 0.9 | 
+ 0.5 | 
+ - | 
+ - | 
+ - | 
+ -, 0.3 | 
+
+ ASFormer | 
+ - | 
+ 0.99 | 
+ 0.7 | 
+ - | 
+ - | 
+ - | 
+ -, 0.3 | 
+
+ Assembly101 | 
+ MSTCN | 
+ - | 
+ 0.99 | 
+ 0.1 | 
+ - | 
+ - | 
+ - | 
+ 1.0, 0.1 | 
+
+ ASFormer | 
+ - | 
+ 0.9 | 
+ 0.3 | 
+ - | 
+ - | 
+ - | 
+ 1.0, 0.3 | 
+
+ Table 15 : Comparisons on YouTube with harmonic mean of head and tail classes over 3 runs. 
+
+ Model | 
+ Frame acc | 
+ Segment F1@25 | 
+
+ Head | 
+ Tail | 
+ Hmean | 
+ Head | 
+ Tail | 
+ Hmean | 
+
+ AsFormer | 
+ 53.1 | 
+ 17.2 | 
+ 26.0 | 
+ 47.6 | 
+ 20.2 | 
+ 28.4 | 
+
+ + G-TLA(ours) | 
+ 55.4 ± \pm 0.8 | 
+ 24.0 ± \pm 0.6 | 
+ 33.5 ± \pm 0.5 | 
+ 47.3 ± \pm 0.6 | 
+ 25.3 ± \pm 0.7 | 
+ 33.0 ± \pm 0.6 | 
+
+ MSTCN | 
+ 46.0 | 
+ 15.5 | 
+ 23.2 | 
+ 39.0 | 
+ 16.8 | 
+ 23.5 | 
+
+ + G-TLA(ours) | 
+ 48.7 ± \pm 1.0 | 
+ 21.8 ± \pm 0.8 | 
+ 30.0 ± \pm 0.8 | 
+ 41.7 ± \pm 0.4 | 
+ 20.1 ± \pm 0.5 | 
+ 27.1 ± \pm 0.5 | 
+
+ Table 16 : Comparison on Breakfast with harmonic mean on the head and tail classes over 3 runs. 
+
+ Model | 
+ Frame acc | 
+ Segment F1@25 | 
+
+ Head | 
+ Tail | 
+ Hmean | 
+ Head | 
+ Tail | 
+ Hmean | 
+
+ AsFormer | 
+ 69.7 | 
+ 39.8 | 
+ 50.7 | 
+ 69.9 | 
+ 43.9 | 
+ 53.9 | 
+
+ + G-TLA(ours) | 
+ 70.3 ± \pm 0.1 | 
+ 43.2 ± \pm 0.5 | 
+ 53.3 ± \pm 0.5 | 
+ 71.7 ± \pm 0.2 | 
+ 46.5 ± \pm 0.1 | 
+ 56.5 ± \pm 0.1 | 
+
+ MSTCN | 
+ 65.1 | 
+ 37.7 | 
+ 47.7 | 
+ 53.3 | 
+ 38.7 | 
+ 44.8 | 
+
+ + G-TLA(ours) | 
+ 67.6 ± \pm 0.4 | 
+ 43.0 ± \pm 0.6 | 
+ 52.7 ± \pm 0.6 | 
+ 60.1 ± \pm 0.8 | 
+ 45.2 ± \pm 0.4 | 
+ 51.5 ± \pm 0.6 | 
+
+ Table 17 : Global and balanced result summary for Breakfast. 
+
+ Model | 
+ Global | 
+ Balanced | 
+
+ Edit | 
+ Acc | 
+ F1@10 | 
+ F1@25 | 
+ F1@50 | 
+ Acc | 
+ F1@10 | 
+ F1@25 | 
+ F1@50 | 
+
+ MSTCN | 
+ 66.6 | 
+ 67.7 | 
+ 63.2 | 
+ 57.9 | 
+ 46.0 | 
+ 47.7 | 
+ 48.3 | 
+ 44.8 | 
+ 36.9 | 
+
+ + CB  [ 11 ] | 
+ 66.8 | 
+ 67.4 | 
+ 63.6 | 
+ 57.9 | 
+ 45.7 | 
+ 48.8 | 
+ 49.2 | 
+ 45.6 | 
+ 37.3 | 
+
+ + Focal  [ 34 ] | 
+ 67.3 | 
+ 68.5 | 
+ 63.1 | 
+ 57.5 | 
+ 45.5 | 
+ 46.7 | 
+ 48.4 | 
+ 44.4 | 
+ 35.6 | 
+
+ + BAGS  [ 33 ] | 
+ 66.3 | 
+ 68.5 | 
+ 65.1 | 
+ 59.8 | 
+ 47.5 | 
+ 49.4 | 
+ 51.1 | 
+ 47.4 | 
+ 38.5 | 
+
+ + τ \tau -norm  [ 24 ] | 
+ 66.3 | 
+ 67.9 | 
+ 62.4 | 
+ 57.0 | 
+ 45.1 | 
+ 46.6 | 
+ 47.1 | 
+ 43.8 | 
+ 35.8 | 
+
+ + LA  [ 37 ] | 
+ 67.2 | 
+ 67.6 | 
+ 63.1 | 
+ 57.9 | 
+ 45.6 | 
+ 49.8 | 
+ 49.0 | 
+ 45.7 | 
+ 36.8 | 
+
+ + LDAM  [ 7 ] | 
+ 67.1 | 
+ 67.5 | 
+ 63.4 | 
+ 58.1 | 
+ 46.1 | 
+ 48.0 | 
+ 49.1 | 
+ 45.6 | 
+ 37.4 | 
+
+ + Seesaw  [ 48 ] | 
+ 67.4 | 
+ 68.6 | 
+ 63.1 | 
+ 57.8 | 
+ 46.2 | 
+ 50.1 | 
+ 48.8 | 
+ 45.3 | 
+ 37.2 | 
+
+ + G-TLA(ours) | 
+ 71.3 | 
+ 70.3 | 
+ 68.3 | 
+ 62.9 | 
+ 50.0 | 
+ 52.7 | 
+ 54.5 | 
+ 51.5 | 
+ 41.5 | 
+
+ ASFormer | 
+ 74.5 | 
+ 72.4 | 
+ 75.5 | 
+ 69.9 | 
+ 56.1 | 
+ 50.7 | 
+ 57.1 | 
+ 53.9 | 
+ 44.6 | 
+
+ + CB  [ 11 ] | 
+ 74.9 | 
+ 71.9 | 
+ 75.6 | 
+ 69.7 | 
+ 55.8 | 
+ 51.6 | 
+ 57.9 | 
+ 54.9 | 
+ 45.6 | 
+
+ + Focal  [ 34 ] | 
+ 75.4 | 
+ 72.3 | 
+ 76.1 | 
+ 70.4 | 
+ 56.2 | 
+ 50.2 | 
+ 58.1 | 
+ 55.1 | 
+ 44.9 | 
+
+ + BAGS  [ 33 ] | 
+ 73.7 | 
+ 71.8 | 
+ 74.7 | 
+ 68.9 | 
+ 55.9 | 
+ 51.2 | 
+ 58.0 | 
+ 54.9 | 
+ 45.7 | 
+
+ + τ \tau -norm  [ 24 ] | 
+ 73.6 | 
+ 72.2 | 
+ 74.9 | 
+ 69.1 | 
+ 55.7 | 
+ 51.5 | 
+ 57.1 | 
+ 54.2 | 
+ 45.2 | 
+
+ + LA  [ 37 ] | 
+ 74.9 | 
+ 72.5 | 
+ 75.6 | 
+ 69.7 | 
+ 56.3 | 
+ 51.3 | 
+ 58.6 | 
+ 54.9 | 
+ 46.0 | 
+
+ + LDAM  [ 7 ] | 
+ 75.3 | 
+ 72.6 | 
+ 76.0 | 
+ 70.6 | 
+ 57.2 | 
+ 51.7 | 
+ 58.2 | 
+ 55.1 | 
+ 46.6 | 
+
+ + Seesaw  [ 48 ] | 
+ 74.9 | 
+ 72.5 | 
+ 75.7 | 
+ 70.1 | 
+ 56.3 | 
+ 51.8 | 
+ 58.6 | 
+ 55.5 | 
+ 45.8 | 
+
+ + G-TLA(ours) | 
+ 75.5 | 
+ 72.2 | 
+ 76.2 | 
+ 70.9 | 
+ 56.8 | 
+ 53.3 | 
+ 59.2 | 
+ 56.5 | 
+ 47.5 | 
+
+## E.  Additional Results
+
+## Main results.
+
+ We provide benchmark results with standard deviation over 3 runs in Tab.   16 and Tab.   15 . Each run is over 4 or 5 splits(depending on the dataset). We also show the detailed results on global metrics(Acc, F1@10, F1@25, F1@50, and edit score) and balanced metrics(Acc, F1@10, F1@25, F1@50) in Tab.   17 and Tab.   18 . Our method consistently outperforms others across datasets and backbones. These results affirm the effectiveness of our approach in mitigating over-segmentation while concurrently improving balanced metrics. The additional results on F1 scores at IoU thresholds of 0.10 and 0.50 further reveal the consistent trend of F1 scores at different thresholds across various methods. 
+
+ Table 18 : Global and balanced result summary for Youtube. 
+
+ Model | 
+ Global | 
+ Balanced | 
+
+ Edit | 
+ Acc | 
+ F1@10 | 
+ F1@25 | 
+ F1@50 | 
+ Acc | 
+ F1@10 | 
+ F1@25 | 
+ F1@50 | 
+
+ MSTCN | 
+ 51.9 | 
+ 68.0 | 
+ 44.7 | 
+ 39.1 | 
+ 23.7 | 
+ 23.2 | 
+ 27.5 | 
+ 23.5 | 
+ 15.0 | 
+
+ + CB  [ 11 ] | 
+ 50.9 | 
+ 66.3 | 
+ 44.9 | 
+ 38.7 | 
+ 24.0 | 
+ 25.9 | 
+ 27.7 | 
+ 23.3 | 
+ 15.7 | 
+
+ + Focal  [ 34 ] | 
+ 52.1 | 
+ 67.5 | 
+ 45.4 | 
+ 40.0 | 
+ 24.3 | 
+ 25.0 | 
+ 28.6 | 
+ 25.4 | 
+ 15.5 | 
+
+ + BAGS  [ 33 ] | 
+ 50.8 | 
+ 67.2 | 
+ 45.7 | 
+ 40.1 | 
+ 25.4 | 
+ 25.3 | 
+ 28.6 | 
+ 24.4 | 
+ 15.8 | 
+
+ + τ \tau -norm  [ 24 ] | 
+ 50.0 | 
+ 67.3 | 
+ 43.8 | 
+ 38.0 | 
+ 23.6 | 
+ 24.5 | 
+ 26.7 | 
+ 22.9 | 
+ 15.4 | 
+
+ + LA  [ 37 ] | 
+ 49.6 | 
+ 67.0 | 
+ 44.4 | 
+ 38.8 | 
+ 23.2 | 
+ 25.5 | 
+ 27.2 | 
+ 22.8 | 
+ 14.4 | 
+
+ + LDAM  [ 7 ] | 
+ 51.3 | 
+ 67.6 | 
+ 45.2 | 
+ 39.2 | 
+ 23.6 | 
+ 23.2 | 
+ 28.0 | 
+ 23.7 | 
+ 13.7 | 
+
+ + Seesaw  [ 48 ] | 
+ 51.5 | 
+ 67.9 | 
+ 45.4 | 
+ 39.7 | 
+ 23.2 | 
+ 25.0 | 
+ 27.6 | 
+ 24.1 | 
+ 14.0 | 
+
+ + G-TLA(ours) | 
+ 51.7 | 
+ 67.6 | 
+ 45.8 | 
+ 40.2 | 
+ 24.9 | 
+ 30.0 | 
+ 30.9 | 
+ 27.1 | 
+ 17.2 | 
+
+ ASFormer | 
+ 59.8 | 
+ 69.8 | 
+ 51.8 | 
+ 45.6 | 
+ 29.1 | 
+ 26.0 | 
+ 32.7 | 
+ 28.4 | 
+ 19.1 | 
+
+ + CB  [ 11 ] | 
+ 57.7 | 
+ 69.6 | 
+ 51.3 | 
+ 45.4 | 
+ 28.7 | 
+ 28.8 | 
+ 33.7 | 
+ 29.2 | 
+ 19.4 | 
+
+ + Focal  [ 34 ] | 
+ 59.3 | 
+ 69.7 | 
+ 52.5 | 
+ 46.6 | 
+ 29.8 | 
+ 26.1 | 
+ 35.2 | 
+ 29.8 | 
+ 18.2 | 
+
+ + BAGS  [ 33 ] | 
+ 57.0 | 
+ 69.3 | 
+ 51.1 | 
+ 45.1 | 
+ 29.6 | 
+ 29.3 | 
+ 34.1 | 
+ 30.0 | 
+ 20.4 | 
+
+ + τ \tau -norm  [ 24 ] | 
+ 58.4 | 
+ 69.0 | 
+ 50.8 | 
+ 44.3 | 
+ 28.7 | 
+ 27.6 | 
+ 32.2 | 
+ 28.5 | 
+ 19.0 | 
+
+ + LA  [ 37 ] | 
+ 56.3 | 
+ 67.9 | 
+ 51.3 | 
+ 45.1 | 
+ 27.5 | 
+ 31.3 | 
+ 35.0 | 
+ 30.5 | 
+ 19.7 | 
+
+ + LDAM  [ 7 ] | 
+ 57.8 | 
+ 69.0 | 
+ 51.1 | 
+ 44.8 | 
+ 28.4 | 
+ 29.4 | 
+ 33.8 | 
+ 29.3 | 
+ 19.2 | 
+
+ + Seesaw  [ 48 ] | 
+ 58.5 | 
+ 69.2 | 
+ 52.0 | 
+ 45.7 | 
+ 29.4 | 
+ 28.0 | 
+ 33.5 | 
+ 29.2 | 
+ 18.1 | 
+
+ + G-TLA(ours) | 
+ 58.9 | 
+ 69.9 | 
+ 52.8 | 
+ 46.2 | 
+ 29.9 | 
+ 33.5 | 
+ 38.8 | 
+ 33.0 | 
+ 22.5 | 
+
+## Extra plots for YouTube. 
+
+ We further visualize the global and per class results using radar charts on YouTube dataset in Fig.   11 , specifically comparing the performance of logit adjustment methods. The plot demonstrates the superior performance of our method, indicated by the largest enclosed area. Our method excels in segment-wise performance, including edit score and global & balanced F1 score. 
+
+ (a) MSTCN. 
+
+ (b) AsFormer. 
+
+ Figure 11 : Radar charts of logit adjustment methods, measuring the performance along balanced and global metrics on YouTube with MSTCN and AsFormer. 
+
+ Long-tail methods for temporal action segmentation exhibit two primary trade-offs: the head-tail trade-off, negatively impacting the head when improving the tail, and the frame-segment trade-off, wherein enhancing tail might adversely affects segment-wise performance. These trade-offs is directly influenced by the hyperparameters. We show these two trade-offs for various methods across backbones in Fig.   12 . We fix η = 0.1 \eta=0.1 and change τ ∈ { 0.1 , 0.3 , 0.5 } \tau\in\{0.1,0.3,0.5\} for the trend plotting of our method. For CB and LA, β ∈ { 0.9 , 0.99 , 0.999 } \beta\in\{0.9,0.99,0.999\} and τ ∈ { 0.3 , 0.5 , 0.7 } \tau\in\{0.3,0.5,0.7\} . For Seesaw, q q is fixed as 0.5, and p ∈ { 0.1 , 0.2 , 0.3 } p\in\{0.1,0.2,0.3\} . Notably, the curve of our method consistently outperforms others , emphasizing its effectiveness in balancing the learning between head and tail, as well as mitigating over-segmentation. 
+
+ (a) MSTCN. 
+
+ (b) AsFormer. 
+
+ Figure 12 : Head-Tail & Frame-Segment trade-offs on YouTube with MSTCN and AsFormer. 
+
+## Ablation study.
+
+ We present additional ablation studies on YouTube, highlighting the contributions of each component of our G-TLA in Tab.   19 . Compared to groupwise classification, temporal logit adjustment yields greater improvement, emphasizing the importance of incorporating temporal priors for YouTube. 
+
+ The effect of the hyperparameter η \eta on YouTube with MSTCN and AsFormer is shown in Tab.   21 and Tab.   21 . Small η \eta reduces suppression of tail classes, but if too small, it harms group identification during inference. Conversely, a large η \eta over-emphasizes the ‘others’ class, harming tail performance. 
+
+ Tab.   23 and Tab.   23 present the effect of the hyperparameter τ \tau on YouTube. A smaller τ \tau represents minimal adjustment, resulting in less improvement for tail classes. Conversely,
+a large value of τ \tau biases towards tail classes and introduces more false positives, causing more over-segmentation. 
+
+ Table 19 : Ablate group classification(GP), logit adjustment(LA), temporal factor(TF) on YouTube. 
+
+ GP | 
+ LA | 
+ TF | 
+ MSTCN | 
+ ASFormer | 
+
+ Frame acc | 
+ Seg. F1 | 
+ Frame acc | 
+ Seg. F1 | 
+
+ Head | 
+ Tail | 
+ Hmean | 
+ Head | 
+ Tail | 
+ Hmean | 
+ Head | 
+ Tail | 
+ Hmean | 
+ Head | 
+ Tail | 
+ Hmean | 
+
+ ✗ | 
+ ✗ | 
+ ✗ | 
+ 46.0 | 
+ 15.5 | 
+ 23.2 | 
+ 39.0 | 
+ 16.8 | 
+ 23.5 | 
+ 53.1 | 
+ 17.2 | 
+ 26.0 | 
+ 47.6 | 
+ 20.2 | 
+ 28.4 | 
+
+ ✗ | 
+ ✓ | 
+ ✗ | 
+ 46.0 | 
+ 17.6 | 
+ 25.5 | 
+ 39.4 | 
+ 16.0 | 
+ 22.8 | 
+ 53.9 | 
+ 22.1 | 
+ 31.3 | 
+ 46.9 | 
+ 22.5 | 
+ 30.5 | 
+
+ ✓ | 
+ ✗ | 
+ ✗ | 
+ 46.5 | 
+ 16.1 | 
+ 23.9 | 
+ 42.5 | 
+ 16.8 | 
+ 24.0 | 
+ 53.1 | 
+ 17.6 | 
+ 26.4 | 
+ 46.9 | 
+ 21.8 | 
+ 29.7 | 
+
+ ✓ | 
+ ✓ | 
+ ✗ | 
+ 48.9 | 
+ 19.9 | 
+ 28.3 | 
+ 42.3 | 
+ 17.7 | 
+ 25.0 | 
+ 55.3 | 
+ 20.6 | 
+ 30.0 | 
+ 47.1 | 
+ 21.8 | 
+ 29.8 | 
+
+ ✓ | 
+ ✓ | 
+ ✓ | 
+ 48.7 | 
+ 21.8 | 
+ 30.0 | 
+ 41.7 | 
+ 20.1 | 
+ 27.1 | 
+ 55.4 | 
+ 24.0 | 
+ 33.5 | 
+ 47.3 | 
+ 25.3 | 
+ 33.0 | 
+
+ Table 20 : Varying η \eta for group-wise classification, with fixed number of groups n = 5 n=5 and τ = 0.5 \tau=0.5 on YouTube with MSTCN. 
+
+ η \eta | 
+ Frame acc | 
+ Seg. F1 | 
+
+ Head | 
+ Tail | 
+ Hmean | 
+ Head | 
+ Tail | 
+ Hmean | 
+
+ 0.1 | 
+ 48.7 | 
+ 21.8 | 
+ 30.0 | 
+ 41.7 | 
+ 20.1 | 
+ 27.1 | 
+
+ 0.3 | 
+ 48.4 | 
+ 18.5 | 
+ 26.7 | 
+ 42.2 | 
+ 16.4 | 
+ 23.6 | 
+
+ 0.5 | 
+ 48.4 | 
+ 18.3 | 
+ 26.5 | 
+ 43.0 | 
+ 16.9 | 
+ 24.2 | 
+
+ Table 21 : Varying η \eta for group-wise classification, with fixed number of groups n = 5 n=5 and τ = 0.3 \tau=0.3 on YouTube with AsFormer. 
+
+ τ \tau | 
+ Frame acc | 
+ Seg. F1 | 
+
+ Head | 
+ Tail | 
+ Hmean | 
+ Head | 
+ Tail | 
+ Hmean | 
+
+ 0.1 | 
+ 55.4 | 
+ 24.0 | 
+ 33.5 | 
+ 47.3 | 
+ 25.3 | 
+ 33.0 | 
+
+ 0.3 | 
+ 55.6 | 
+ 21.6 | 
+ 31.1 | 
+ 48.4 | 
+ 21.8 | 
+ 30.1 | 
+
+ 0.5 | 
+ 55.4 | 
+ 19.3 | 
+ 30.0 | 
+ 48.6 | 
+ 21.5 | 
+ 29.8 | 
+
+ Table 22 : Varying τ \tau for temporal logit adjustment, with fixed number of groups n = 5 n=5 and η = 0.1 \eta=0.1 on Youtube with MSTCN. 
+
+ η \eta | 
+ Frame acc | 
+ Seg. F1 | 
+
+ Head | 
+ Tail | 
+ Hmean | 
+ Head | 
+ Tail | 
+ Hmean | 
+
+ 0.1 | 
+ 49.4 | 
+ 17.1 | 
+ 25.4 | 
+ 41.1 | 
+ 18.2 | 
+ 25.3 | 
+
+ 0.3 | 
+ 48.8 | 
+ 18.0 | 
+ 26.0 | 
+ 41.7 | 
+ 18.2 | 
+ 25.7 | 
+
+ 0.5 | 
+ 48.7 | 
+ 21.8 | 
+ 30.0 | 
+ 41.7 | 
+ 20.1 | 
+ 27.1 | 
+
+ 0.7 | 
+ 48.9 | 
+ 22.5 | 
+ 30.8 | 
+ 42.2 | 
+ 17.9 | 
+ 25.4 | 
+
+ Table 23 : Varying τ \tau for temporal logit adjustment, with fixed number of groups n = 5 n=5 and η = 0.1 \eta=0.1 on Youtube with AsFormer 
+
+ τ \tau | 
+ Frame acc | 
+ Seg. F1 | 
+
+ Head | 
+ Tail | 
+ Hmean | 
+ Head | 
+ Tail | 
+ Hmean | 
+
+ 0.1 | 
+ 54.3 | 
+ 18.9 | 
+ 27.9 | 
+ 49.5 | 
+ 21.1 | 
+ 29.7 | 
+
+ 0.3 | 
+ 55.4 | 
+ 24.0 | 
+ 33.5 | 
+ 47.3 | 
+ 25.3 | 
+ 33.0 | 
+
+ 0.5 | 
+ 55.4 | 
+ 23.4 | 
+ 32.9 | 
+ 46.7 | 
+ 23.6 | 
+ 30.6 | 
+
+## Group identification results.
+
+ Group identification impacts the final performance. Group identification accuracy is shown in Tab.   24 . The baseline selects predicted groups based on summed output probabilities within each group. Our groupwise classification improves activity identification, reducing false positives and enhancing both frame and segment-wise performance. For datasets without activity label, we use clustering results as ground truth. Our method improves group accuracy from 62.0%(baseline) to 83.0% on Assembly101 using MSTCN. 
+
+ Table 24 : Accuracy of group identification 
+
+ Method | 
+ Breakfast | 
+ Youtube | 
+
+ MSTCN | 
+ ASFormer | 
+ MSTCN | 
+ ASFormer | 
+
+ Baseline | 
+ 87.2 | 
+ 89.1 | 
+ 89.3 | 
+ 93.1 | 
+
+ G-TLA | 
+ 90.1 | 
+ 90.2 | 
+ 93.4 | 
+ 94.2 | 
+
+## Results on other datasets
+
+ In Tab.   25 , Tab.   26 , and Tab.   27 , we present our model’s performance on other three datasets for completeness. GTEA  [ 17 ] and 50Salads  [ 46 ] have smaller vocabulary sizes and are less imbalanced. Assembly101  [ 41 ] is long-tailed but less explored. We do not emphasize Assembly101 as the head classes are also not well-learned. Enhancing the tail classes is less meaningful when the head classes still perform poorly. We include several methods from each type to show the comparison. Our method demonstrates competitive results, further validating its effectiveness. 
+
+ Table 25 : Additional results on 50salads. 
+
+ Model | 
+ Frame acc | 
+ Segment F1@25 | 
+ Global | 
+
+ Head | 
+ Tail | 
+ Hmean | 
+ Head | 
+ Tail | 
+ Hmean | 
+ Edit | 
+ F1@25 | 
+ Acc | 
+
+ AsFormer | 
+ 90.6 | 
+ 77.4 | 
+ 83.5 | 
+ 87.5 | 
+ 80.3 | 
+ 83.8 | 
+ 79.0 | 
+ 82.3 | 
+ 85.2 | 
+
+ + CB  [ 11 ] | 
+ 90.9 | 
+ 78.1 | 
+ 84.0 | 
+ 88.4 | 
+ 81.4 | 
+ 84.8 | 
+ 78.7 | 
+ 83.2 | 
+ 85.8 | 
+
+ + τ \tau -norm  [ 24 ] | 
+ 90.4 | 
+ 77.5 | 
+ 83.5 | 
+ 87.7 | 
+ 80.2 | 
+ 83.8 | 
+ 78.9 | 
+ 82.2 | 
+ 85.2 | 
+
+ + LA  [ 37 ] | 
+ 90.2 | 
+ 78.3 | 
+ 83.8 | 
+ 89.8 | 
+ 82.1 | 
+ 85.7 | 
+ 79.8 | 
+ 84.5 | 
+ 85.4 | 
+
+ + G-TLA(ours) | 
+ 90.8 | 
+ 79.7 | 
+ 84.9 | 
+ 89.4 | 
+ 83.1 | 
+ 86.1 | 
+ 80.7 | 
+ 84.6 | 
+ 86.3 | 
+
+ MSTCN | 
+ 87.7 | 
+ 70.0 | 
+ 77.9 | 
+ 85.7 | 
+ 72.1 | 
+ 78.3 | 
+ 71.4 | 
+ 75.9 | 
+ 81.1 | 
+
+ + CB  [ 11 ] | 
+ 88.4 | 
+ 69.3 | 
+ 77.7 | 
+ 85.3 | 
+ 72.0 | 
+ 78.1 | 
+ 71.1 | 
+ 75.5 | 
+ 81.0 | 
+
+ + τ \tau -norm  [ 24 ] | 
+ 87.6 | 
+ 70.3 | 
+ 78.0 | 
+ 85.1 | 
+ 71.6 | 
+ 77.8 | 
+ 70.8 | 
+ 75.3 | 
+ 81.1 | 
+
+ + LA  [ 37 ] | 
+ 87.5 | 
+ 69.6 | 
+ 77.5 | 
+ 86.0 | 
+ 71.0 | 
+ 77.8 | 
+ 70.4 | 
+ 75.2 | 
+ 80.8 | 
+
+ + G-TLA(ours) | 
+ 89.0 | 
+ 71.7 | 
+ 79.4 | 
+ 86.8 | 
+ 73.8 | 
+ 79.8 | 
+ 72.0 | 
+ 77.3 | 
+ 81.9 | 
+
+ Table 26 : Additional results on GTEA. 
+
+ Model | 
+ Frame acc | 
+ Segment F1@25 | 
+ Global | 
+
+ Head | 
+ Tail | 
+ Hmean | 
+ Head | 
+ Tail | 
+ Hmean | 
+ Edit | 
+ F1@25 | 
+ Acc | 
+
+ AsFormer | 
+ 80.6 | 
+ 81.7 | 
+ 81.2 | 
+ 72.5 | 
+ 85.4 | 
+ 78.4 | 
+ 88.4 | 
+ 89.4 | 
+ 81.1 | 
+
+ + CB  [ 11 ] | 
+ 79.5 | 
+ 84.0 | 
+ 81.6 | 
+ 71.4 | 
+ 88.3 | 
+ 78.9 | 
+ 86.7 | 
+ 89.0 | 
+ 80.8 | 
+
+ + τ \tau -norm  [ 24 ] | 
+ 80.5 | 
+ 82.1 | 
+ 81.3 | 
+ 72.8 | 
+ 85.2 | 
+ 78.5 | 
+ 88.3 | 
+ 89.5 | 
+ 81.1 | 
+
+ + LA  [ 37 ] | 
+ 79.5 | 
+ 82.7 | 
+ 81.1 | 
+ 70.9 | 
+ 88.4 | 
+ 78.7 | 
+ 87.5 | 
+ 88.9 | 
+ 80.5 | 
+
+ + G-TLA(ours) | 
+ 80.2 | 
+ 84.5 | 
+ 82.3 | 
+ 72.0 | 
+ 90.4 | 
+ 80.2 | 
+ 87.9 | 
+ 89.6 | 
+ 81.2 | 
+
+ MSTCN | 
+ 77.6 | 
+ 80.3 | 
+ 78.9 | 
+ 69.4 | 
+ 86.6 | 
+ 77.0 | 
+ 84.8 | 
+ 87.2 | 
+ 78.0 | 
+
+ + CB  [ 11 ] | 
+ 76.2 | 
+ 82.6 | 
+ 79.3 | 
+ 68.8 | 
+ 90.1 | 
+ 78.0 | 
+ 85.3 | 
+ 87.7 | 
+ 78.5 | 
+
+ + τ \tau -norm  [ 24 ] | 
+ 77.5 | 
+ 80.6 | 
+ 79.0 | 
+ 69.2 | 
+ 86.8 | 
+ 77.0 | 
+ 84.5 | 
+ 87.2 | 
+ 78.0 | 
+
+ + LA  [ 37 ] | 
+ 77.0 | 
+ 83.0 | 
+ 79.8 | 
+ 69.8 | 
+ 86.3 | 
+ 77.2 | 
+ 85.4 | 
+ 87.2 | 
+ 78.5 | 
+
+ + G-TLA(ours) | 
+ 77.5 | 
+ 83.7 | 
+ 80.5 | 
+ 69.5 | 
+ 90.3 | 
+ 78.5 | 
+ 85.8 | 
+ 87.9 | 
+ 78.6 | 
+
+ Table 27 : Additional results on Assembly101. 
+
+ Model | 
+ Frame acc | 
+ Segment F1@25 | 
+ Global | 
+
+ Head | 
+ Tail | 
+ Hmean | 
+ Head | 
+ Tail | 
+ Hmean | 
+ Edit | 
+ F1@25 | 
+ Acc | 
+
+ AsFormer | 
+ 35.2 | 
+ 5.7 | 
+ 9.8 | 
+ 29.0 | 
+ 4.8 | 
+ 8.2 | 
+ 31.8 | 
+ 30.4 | 
+ 41.1 | 
+
+ + CB  [ 11 ] | 
+ 35.4 | 
+ 5.9 | 
+ 10.1 | 
+ 26.5 | 
+ 5.2 | 
+ 8.7 | 
+ 30.6 | 
+ 28.2 | 
+ 41.0 | 
+
+ + τ \tau -norm  [ 24 ] | 
+ 32.2 | 
+ 4.9 | 
+ 8.5 | 
+ 21.8 | 
+ 3.2 | 
+ 5.6 | 
+ 24.3 | 
+ 22.7 | 
+ 38.5 | 
+
+ + LA  [ 37 ] | 
+ 36.1 | 
+ 5.9 | 
+ 10.1 | 
+ 27.5 | 
+ 5.7 | 
+ 9.4 | 
+ 30.2 | 
+ 28.5 | 
+ 41.4 | 
+
+ + G-TLA(ours) | 
+ 36.8 | 
+ 9.2 | 
+ 14.7 | 
+ 30.7 | 
+ 8.3 | 
+ 13.1 | 
+ 30.7 | 
+ 29.8 | 
+ 41.0 | 
+
+ MSTCN | 
+ 33.9 | 
+ 4.7 | 
+ 8.2 | 
+ 26.3 | 
+ 3.9 | 
+ 6.8 | 
+ 30.1 | 
+ 27.2 | 
+ 39.8 | 
+
+ + CB  [ 11 ] | 
+ 32.5 | 
+ 7.3 | 
+ 11.9 | 
+ 27.1 | 
+ 4.5 | 
+ 7.7 | 
+ 25.1 | 
+ 22.4 | 
+ 37.9 | 
+
+ + τ \tau -norm  [ 24 ] | 
+ 34.0 | 
+ 4.3 | 
+ 7.6 | 
+ 25.9 | 
+ 4.2 | 
+ 7.2 | 
+ 30.5 | 
+ 27.4 | 
+ 39.6 | 
+
+ + LA  [ 37 ] | 
+ 34.1 | 
+ 7.4 | 
+ 12.1 | 
+ 27.3 | 
+ 5.6 | 
+ 9.3 | 
+ 30.0 | 
+ 26.2 | 
+ 39.5 | 
+
+ + G-TLA(ours) | 
+ 34.9 | 
+ 8.0 | 
+ 13.0 | 
+ 30.2 | 
+ 5.8 | 
+ 9.7 | 
+ 30.5 | 
+ 28.5 | 
+ 39.2 | 
+
+ Experimental support, please
+ view the build logs 
+ for errors. Generated by
+
+ L
+ A 
+ T
+ E 
+
+ xml 
+
+ .
+
+## Instructions for reporting errors
+
+ We are continuing to improve HTML versions of papers, and your feedback helps enhance accessibility and mobile
+ support. To report errors in the HTML that will help us improve conversion and rendering, choose any of the
+ methods listed below: 
+
+ Click the "Report Issue" ( 
+
+ ) button, located in the page header. 
+
+ Tip: You can select the relevant text first, to include it in your report. 
+ Our team has already identified the following issues . We appreciate your time reviewing and reporting rendering errors we
+ may not have found yet. Your efforts will help us improve the HTML versions for all readers, because disability
+ should not be a barrier to accessing research. Thank you for your continued support in championing open access for
+ all. 
+ Have a free development cycle? Help support accessibility at arXiv! Our collaborators at LaTeXML maintain a list of packages that need conversion , and welcome developer contributions . 
+
+ We gratefully acknowledge support from
+ our major funders ,
+ member institutions , ,
+ and all contributors.
+
+ About 
+ · 
+ Help 
+ · 
+ Contact 
+ · 
+ Subscribe 
+ · 
+ Copyright 
+ · 
+ Privacy 
+ · 
+ Accessibility 
+ · 
+ Operational Status (opens in new tab) 
+
+ Major funding support from 
+

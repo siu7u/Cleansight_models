@@ -23,7 +23,8 @@ def parse_args(argv=None):
     p.add_argument("--list-presets", action="store_true", help="列出全部数据源与目标位置")
     p.add_argument("--dataset", help="手动指定 ModelScope dataset id（覆盖 preset 的默认源）")
     p.add_argument("--output", help="本地输出目录（默认按 preset）")
-    p.add_argument("--depth", type=int, default=1, help="git clone --depth（默认 1）")
+    p.add_argument("--depth", type=int, default=1,
+                   help="git clone --depth（默认 1）；已存在的浅克隆增量更新沿用该值")
     p.add_argument("--branch", default="master", help="克隆分支（默认 master）")
     p.add_argument("--skip-lfs", action="store_true", help="跳过 LFS 大文件下载")
     return p.parse_args(argv)

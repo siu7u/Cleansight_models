@@ -13,6 +13,25 @@ Use this skill for work under `Cleansight_models` and for model assets that will
 
 Before changing code, benchmark scripts, configs, registry files, or docs, inspect the current repo state and preserve existing conventions.
 
+## Python 环境（必用后端 venv）
+
+需要调用 Python 环境时，一律使用 CleanSightBackend 的 venv，**不要自行创建**虚拟环境（不新建 venv/conda 环境、不在 `tmp/` 下自建 `venv-*` 来跑本仓库代码）：
+
+```bash
+source /home/caizh/programming/python_code/CleanSightBackend/.venv/bin/activate
+```
+
+等价地，可直接调用 `/home/caizh/programming/python_code/CleanSightBackend/.venv/bin/python`（如 `python -m framework.cleansight_eval.cli.train ...`）。
+
+- 所有训练/评测/数据脚本、`python -m framework.cleansight_eval.*` 命令均在该 venv 下执行；
+- 若该 venv 缺少依赖，先确认 backend 侧的安装方式或向用户说明，而不是自建环境；
+- 系统 python（pyenv/conda base）缺少 numpy/torch 等依赖时，不得用其运行本项目代码。
+
+**GPU 说明**：该 venv 的 torch 是 CUDA 构建（如 `2.8.0+cu128`），用户在交互终端使用时可正常
+GPU 训练。但自动化/沙箱 shell 可能没有 GPU 透传（`/dev/nvidia*` 不存在、NVML 初始化失败、
+`torch.cuda.is_available()=False`），此时**不代表 venv 不支持 GPU**，不要据此报告"环境仅 CPU"；
+需要 GPU 训练时由用户在交互终端执行。
+
 ## General Coding Discipline
 
 Bias toward caution over speed, especially for model, benchmark, registry, and backend-integration changes.
@@ -200,6 +219,37 @@ Whenever a tracked YAML file is added, modified, moved, renamed, or deleted:
 Before finishing YAML-related work, compare the documentation with
 `git ls-files '*.yaml' '*.yml'`. An unlisted tracked YAML file, a stale entry, or a
 broken link means the change is incomplete.
+
+## 周工作目录（`docs/weeks/`）
+
+**约定（2026-09-28 起生效）**：每一周的工作在 `docs/weeks/` 下**建一个文件夹**，
+该周产生的过程性文档、简报与实验记录都放在里面。
+
+- **一周 = 周六 ~ 次周五**（不是自然周 Monday–Sunday）。
+- 文件夹名 = `<起始周六>_<结束周五>`，格式 `YYYY-MM-DD_YYYY-MM-DD`，可直接按名称排序。
+- **建文件夹前先用 `date` 确认当天落在哪一周，不要凭推算**：
+
+  ```bash
+  date "+%Y-%m-%d %A"                 # 今天是星期几
+  date -d "last saturday" +%Y-%m-%d   # 本周起始周六
+  ```
+
+文件夹内容与维护方式：
+
+| 文件 | 作用 | 维护方式 |
+|---|---|---|
+| `README.md` | **本周简报**：本周结论、改了什么、遗留与下周计划 | **即时更新**——每完成一项就追加，不要攒到最后 |
+| 主题文档 | 该周新增的过程性文档（实验设计、机制说明、探针结果等） | 每份在简报里登记一行 |
+
+**判定一条内容该不该进周文件夹**：看它的生命周期。
+
+- 生命周期 **≤ 一周**（过程记录、当日结论、调试笔记）→ 放周文件夹。
+- **长期有效、会被跨周引用**（`EXPERIMENT_REPORT_*.md`、`docs/EVAL.md`、
+  `docs/MODELSET_OVERVIEW.md` 等）→ 仍放 `docs/` 根或既有位置，**由周简报索引**，
+  避免跨周链接失效。
+
+新增周文件夹后，在 `docs/weeks/README.md` §3 的索引表登记一行。
+约定建立之前产生的文档**不回填**，保留原位。
 
 ## Backend Integration Rules
 

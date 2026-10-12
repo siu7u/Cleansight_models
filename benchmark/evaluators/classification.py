@@ -5,11 +5,17 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from benchmark.core.result import EvaluationResult, MetricValue
+from framework.cleansight_eval.core.metrics import (
+    CLASSIFICATION_DECIMALS,
+    classification_metric_spec,
+)
 
-SPEC_PRECISION = "precision/multi-label-micro/v1; source=framework.cleansight_eval.classification"
-SPEC_RECALL = "recall/multi-label-micro/v1; source=framework.cleansight_eval.classification"
-SPEC_F1 = "f1/multi-label-micro/v1; source=framework.cleansight_eval.classification"
-SPEC_EXACT_MATCH = "exact-match/multi-label/v1; source=framework.cleansight_eval.classification"
+# 口径字符串统一来自 core 指标内核里的分类注册表（framework/cleansight_eval/core/metrics.py），
+# 与训练期 validation 的 val_* 是同一批指标、同一份实现；本模块只做三态翻译。
+SPEC_PRECISION = classification_metric_spec("precision")
+SPEC_RECALL = classification_metric_spec("recall")
+SPEC_F1 = classification_metric_spec("f1")
+SPEC_EXACT_MATCH = classification_metric_spec("exact_match")
 SPEC_MODEL_FORWARD = "latency/model-forward/not-measured/v2; excludes=production"
 
 
@@ -32,16 +38,16 @@ def evaluate(output: Any, options: Mapping[str, Any] | None = None) -> Evaluatio
 
     metrics: dict[str, MetricValue] = {
         "precision": MetricValue.computed(
-            round(float(micro.get("precision", 0.0)), 4), spec=SPEC_PRECISION
+            round(float(micro.get("precision", 0.0)), CLASSIFICATION_DECIMALS), spec=SPEC_PRECISION
         ),
         "recall": MetricValue.computed(
-            round(float(micro.get("recall", 0.0)), 4), spec=SPEC_RECALL
+            round(float(micro.get("recall", 0.0)), CLASSIFICATION_DECIMALS), spec=SPEC_RECALL
         ),
         "f1": MetricValue.computed(
-            round(float(micro.get("f1", 0.0)), 4), spec=SPEC_F1
+            round(float(micro.get("f1", 0.0)), CLASSIFICATION_DECIMALS), spec=SPEC_F1
         ),
         "exact_match": MetricValue.computed(
-            round(float(native.get("exact_match", 0.0)), 4), spec=SPEC_EXACT_MATCH
+            round(float(native.get("exact_match", 0.0)), CLASSIFICATION_DECIMALS), spec=SPEC_EXACT_MATCH
         ),
     }
 
@@ -50,9 +56,9 @@ def evaluate(output: Any, options: Mapping[str, Any] | None = None) -> Evaluatio
         if str(name) in per_class:
             item = per_class[str(name)]
             metric_details["per_class"][str(name)] = {
-                "precision": round(float(item.get("precision", 0)), 4),
-                "recall": round(float(item.get("recall", 0)), 4),
-                "f1": round(float(item.get("f1", 0)), 4),
+                "precision": round(float(item.get("precision", 0)), CLASSIFICATION_DECIMALS),
+                "recall": round(float(item.get("recall", 0)), CLASSIFICATION_DECIMALS),
+                "f1": round(float(item.get("f1", 0)), CLASSIFICATION_DECIMALS),
                 "support": int(item.get("support", 0)),
             }
         else:

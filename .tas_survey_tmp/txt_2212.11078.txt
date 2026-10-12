@@ -1,0 +1,2524 @@
+ 
+ C2F-TCN: A Framework for Semi and Fully Supervised Temporal Action Segmentation 
+ Report GitHub Issue 
+ × 
+ Title: 
+ Content selection saved. Describe the issue below: 
+ Description: 
+ Submit without GitHub 
+ Submit in GitHub 
+ arXiv is now an independent nonprofit! 
+ Learn more 
+ × 
+ Back to arXiv 
+ Why HTML? 
+ Report Issue 
+ Back to Abstract 
+ Download PDF 
+ Abstract 
+ I Introduction 
+ II Related Work 
+ II-A Temporal Action Segmentation 
+ II-B Varying Supervision in Segmentation 
+ II-C Complex Activity Recognition 
+ II-D Unsupervised Contrastive Feature Learning 
+ II-E Multi-Level Resolutions and Scaling 
+ III Base Segmentation Model C2F-TCN 
+ III-A Definitions 
+ III-B Base TCN 
+ III-C Coarse-to-Fine (C2F) Ensemble 
+ III-D Temporal Feature Augmentation Strategy 
+ III-E Calibration 
+ IV Fully Supervised Framework 
+ IV-A Temporal Action Segmentation 
+ IV-B Complex Activity Recognition 
+ V Semi-Supervised Framework 
+ V-A Unsupervised Representation Learning 
+ V-A 1 Frame-Level Contrastive Formulation 
+ V-A 2 Video-Level Contrastive Formulation 
+ V-A 3 Multi-Resolution Representation 
+ V-A 4 Evaluating the Learned Representation 
+ V-B Semi-Supervised Temporal Segmentation 
+ V-B 1 Classify Step: Learning 𝐆 , 𝐌 \mathbf{G},\mathbf{M} with 𝒟 L \mathcal{D}_{L} 
+ V-B 2 Contrast Step: Update 𝐌 \mathbf{M} with 𝒟 U ∪ 𝒟 L \mathcal{D}_{U}\cup\mathcal{D}_{L} 
+ V-B 3 Iterative-Contrast-Classify (ICC) 
+ VI Experiments 
+ VI-A Experimental Setup 
+ VI-B Evaluation of the Supervised Setup 
+ VI-B 1 Detailed Ablation on the Base Encoder-Decoder 
+ VI-B 2 Impact of the C2F-Ensemble 
+ VI-B 3 Impact of Temporal Feature Augmentation 
+ VI-B 4 Comparison with State-of-the-Art 
+ VI-C Evaluation of Complex Activity Recognition 
+ VI-D Uncertainty Quantification 
+ VI-E Evaluation of C2F-TCN on Representation Learning 
+ VI-E 1 Linear Classification Accuracy 
+ VI-E 2 Frame- and Video-Level Contrastive Learning 
+ VI-E 3 Multi-resolution representation 
+ VI-F Evaluation of Semi-Supervised Learning 
+ VI-F 1 ICC Components 
+ VI-F 2 Semi-Supervised vs Supervised 
+ VI-F 3 Comparison with State-of-the-Art 
+ VI-F 4 Other Baseline TCN Models 
+ VII Conclusion 
+ S1 Details of the C2F-TCN Architecture 
+ S1-A Training hyper-parameters used 
+ S2 Supervised C2F-TCN analysis 
+ S2-A Choice of the base window w 0 w_{0} : 
+ S2-B Impact of video length 
+ S2-C Ablation on loss functions 
+ S2-D Ensemble of the MSTCN layers 
+ S2-E Standard deviations in results 
+ S2-F Qualitative examples of segmentation 
+ S3 Unsupervised Representation Analysis 
+ S3-A Multi-resolution features 
+ S3-A 1 Inherent temporal continuity of our feature 𝐟 \mathbf{f} 
+ S3-A 2 Normalization: 
+ S3-B Sampling strategy, number of samples 2 ​ K 2K 
+ S3-C Impact of Temporal Feature Augmentation 
+ S3-D Input feature clustering 
+ S4 Semi-Supervised Learning Analysis 
+ S4-A ICC without unsupervised step 
+ S4-B Iterative progression of ICC results 
+ S4-B 1 Improvement after the Contrast step 
+ S4-B 2 Improvement after the Classify step 
+ S4-C Qualitative visualization of segmentation 
+ S4-D Standard deviations in results 
+ References 
+ License: CC BY 4.0
+arXiv:2212.11078v1 [cs.CV] 20 Dec 2022 
+ C2F-TCN: A Framework for Semi and Fully Supervised Temporal Action Segmentation 
+ Dipika Singhania
+ Rahul Rahaman
+ and Angela Yao
+ † † thanks: Dipika Singhania and Angela Yao is with the School of Computing, National Univeristy of Singapore.
+ E-mail: dipika16@comp.nus.edu.sg, ayao@comp.nus.edu.sg
+Rahul Rahaman is with the Department of Statistics and Data Science, National University of Singapore. Email: rahul.rahaman@u.nus.edu 
+ Abstract 
+ Temporal action segmentation tags action labels for every frame in an input untrimmed video containing multiple actions in a sequence. For the task of temporal action segmentation, we propose an encoder-decoder style architecture named C2F-TCN featuring a “coarse-to-fine” ensemble of decoder outputs. The C2F-TCN framework is enhanced with a novel model agnostic temporal feature augmentation strategy formed by the computationally inexpensive strategy of the stochastic max-pooling of segments. It produces more accurate and well-calibrated supervised results on three benchmark action segmentation datasets. We show that the architecture is flexible for both supervised and representation learning. In line with this, we present a novel unsupervised way to learn frame-wise representation from C2F-TCN. Our unsupervised learning approach hinges on the clustering capabilities of the input features and the formation of multi-resolution features from the decoder’s implicit structure. Further, we provide first semi-supervised temporal action segmentation results by merging representation learning with conventional supervised learning. Our semi-supervised learning scheme, called “Iterative-Contrastive-Classify (ICC)”, progressively improves in performance with more labeled data. The ICC semi-supervised learning in C2F-TCN, with 40% labeled videos, performs similar to fully supervised counterparts. 
+ Index Terms: Video analysis, Vision and Scene Understanding, Temporal Action Segmentation, Video Understanding, Temporal Convolution Network, Unsupervised Representation, Semi-Supervised Learning.
+ I Introduction 
+ Videos of goal-oriented complex activities, e.g. ‘frying eggs’ , often have multiple steps or actions in a sequence over time, e.g. ‘pour oil’ , ‘crack egg’ , …, ‘put on plate’ . This work addresses temporal action segmentation , referring to the automatic labeling of each video frame with action labels. Unlike the few-second-long clips used in action recognition [ 1 ] , temporal action segmentation targets longer video sequences that last up to 10 minutes, requiring dedicated architectures. 
+ Feed-forward temporal convolutional networks (TCNs) have proven to be highly effective for temporal action segmentation. Two common variants differ in their temporal resolution handling: Encoder-decoders (ED-TCN) [ 2 , 3 , 4 ] shrink and then expand the temporal resolution using layer-wise pooling and upsampling. Multi-stage architectures (MS-TCN) [ 5 , 6 , 7 , 8 , 9 ] expand the temporal receptive field via dilated convolutions but maintain constant temporal resolutions. ED-TCNs use a single classification stage while MS-TCNs use multiple stages that refine the classification output. 
+ MS-TCNs are now the preferred architecture for action segmentation as they are more accurate than ED-TCNs. However, their multi-stage architecture is not well-suited to representation learning as the classification refinement process makes it difficult to decouple the representation learning from the classification itself. Class probability refinement stages cannot be learnt with representation learning, and thus the parameters of these stages cannot be trained during this phase.
+Therefore, we revisit the ED-TCN architecture to explore its potential for principled feature learning. 
+ The shrink-and-expand property is particularly noteworthy as it inherently produces multiple temporal resolutions of feature representations. This work leverages multi-resolution to improve the ED-TCN architecture for supervised segmentation and unsupervised representation learning. To this end, we present a new ED-TCN architecture called the Coarse-to-Fine TCN (C2F-TCN), showing its generalization capabilities in supervised and semi-supervised temporal action segmentation as well as in complex activity recognition. 
+ C2F-TCN Architecture. 
+C2F-TCN, like existing ED-TCNs [ 2 , 3 ] , follows a U-Net [ 10 ] style encoder-decoder with 1-D operations in the temporal dimension. At the heart of the C2F-TCN architecture, and its main novelty compared to existing ED-TCNs, is an ensemble of probabilistic decoder outputs. Each successive decoder layer in the ensemble increases in temporal resolution, hence the “coarse-to-fine” name. The coarse-to-fine ensemble affords several desirable properties. Firstly,
+it significantly improves segmentation performance by reducing over-segmentation, i.e. highly fragmented segmentation outputs. Secondly, it is highly effective at mitigating over-confidence [ 11 ] and leads to more calibrated segmentation outputs. 
+ To help train the C2F-TCN, we propose a novel temporal feature augmentation (FA) strategy. Augmentations are common at the image level, with various perturbations and mixes [ 12 , 13 ] . For video, the same augmentations can be applied to each frame [ 14 , 15 ] . However, in temporal segmentation, the standard practice is to use snippet-level pre-computed features like IDT [ 16 ] or I3D [ 1 ] as inputs instead of frames. As such, no previous segmentation works [ 6 , 7 , 8 , 5 , 9 ] have considered augmentation at feature level for training. This work introduces the first augmentation strategy for temporal action segmentation at the feature level. Specifically, we sub-sample temporal sequences by stochastically max-pooling segments of input features in time. This FA strategy is lightweight, significantly improves the segmentation accuracy across various TCNs, and reduces fragmentation. It also leads to better-calibrated segmentation results. As a result, C2F-TCN with FA surpasses the state-of-the-art for three benchmark segmentation datasets. The proposed framework can also be adapted to recognize complex activity, with accuracies exceeding dedicated models [ 17 , 18 ] by a large margin.
+ Unsupervised Representation Learning. Equipped with the C2F-TCN architecture and a FA strategy for learning,
+we formulate an unsupervised representation learning algorithm suitable for temporal action segmentation.
+We are hereby inspired by the success of the contrastive SimCLR framework for images [ 19 ] , videos [ 20 , 21 ] , and other areas of machine learning [ 22 , 23 ] . The standard SimCLR technique brings representations of images [ 19 ] or videos [ 20 ] close to their augmented counterparts during training. However, directly extending this scheme to the long video sequences of temporal action segmentation would incur significant computational expense. Moreover, a direct extension of SimCLR would likely be ineffective, as temporal segmentation models need to capture similarities of semantically similar yet temporally disjoint frames. As the action segments vary in length and content for different video sequences, it is difficult to distinguish whether a feature belongs to the same or different action labels. This makes it non-trivial to incorporate contrastive learning into an unsupervised temporal segmentation task. 
+ In light of this, we design a novel strategy to form the positive and negative sets of contrastive learning without labels. Leveraging the clustering capabilities of the input I3D features enables features in the same cluster to be pulled together while pushing other features apart. An additional advantage of coupling C2F-TCN with contrastive learning is the decoder’s progressive temporal upsampling. This enables us to form a feature representation that integrates multiple temporal resolutions while enforcing temporal continuity by design. Combining the unsupervised representation learning with supervised segmentation, we formulate a new semi-supervised setting that trains on only a small fraction of labeled videos. 
+ Semi-Supervised Iterative-Contrast-Classify (ICC). 
+In temporal action segmentation, a fully supervised setting requires frame-wise labels for every single video. To improve the annotation efficiency, we works towards formulating a semi-supervised ”Iterative-Contrast-Classify” (ICC) that requires labels from only a fraction of the training videos. ICC fully utilizes the labeled and unlabeled data by updating the representations while learning to segment sequences and assigning pseudo-labels to the unlabeled videos.
+We achieve noteworthy segmentation performance with just 5% labeled videos; with 40% labeled videos, we almost match full supervision (see Fig. 9 , Tab. XIV ).
+To the best of our knowledge, our work is the first to apply semi-supervised learning for temporal action segmentation.
+The closest works in spirit [ 24 , 25 ] are weakly-supervised and require (weak) labels for every training video (see Fig. 1 left). 
+ Fig. 1: Left: Overview of the temporal action segmentation task with TCN. Right: Comparison of forms of supervision in temporal segmentation. 
+ Our main contributions can be summarized as follows. 
+ • 
+ C2F-TCN, an improved encoder-decoder architecture that features a “coarse-to-fine” ensemble of decoder outputs. C2F-TCN is
+flexible for both supervised and representation learning. 
+ • 
+ A model-agnostic temporal FA strategy for segmentation with improvements in accuracy, calibration, and fragmentation. 
+ • 
+ An unsupervised representation learning approach that leverages clustering and video continuity. The representation learning is enhanced by a novel multi-resolution representation that inherently encodes sequence variations and temporal continuity. 
+ • 
+ A semi-supervised formulation of temporal action segmentation with an accompanying ICC algorithm that iteratively fine-tunes representations and strengthens segmentation performance with few labeled videos. 
+ • 
+ C2F-TCN, combined with FA, is more calibrated and accurate than the fully supervised state-of-the-art by a large margin. In the semi-supervised setting, our ICC algorithm boasts impressive performance with just 5% labeled videos; with 40%, ICC becomes comparable to fully supervised counterparts. 
+ Part of this work was first published in [ 26 ] , where we proposed unsupervised representation learning and its application in the semi-supervised ICC. In this journal extension, we comprehensively show and evaluate the design of the C2F-TCN architecture for fully supervised temporal action segmentation and complex activity recognition. We also introduce a model-agnostic temporal FA strategy that increases the accuracy and calibration of C2F-TCN and other existing TCNs. The C2F-TCN framework is more accurate, is calibrated, and unifies supervised, unsupervised representation and semi-supervised temporal action segmentation. 
+ II Related Work 
+ II-A Temporal Action Segmentation 
+ The task of temporal action segmentation requires information about both
+fine-grained spatio-temporal motion along with long-range temporal patterns in order to parse the action compositions within a complex activity. Local motion information is captured via IDT [ 16 ] or Kinetics-pretrained I3D [ 1 ] features, which are then further used by segmentation models to capture long-range temporal patterns.
+Segmentation models initially consisted of RNNs [ 27 , 28 , 29 , 30 ] , but they are less effective and slow, especially for long sequences. Feed-forward TCNs, such as ED-TCN [ 2 ] and its variants [ 4 , 3 ] and MS-TCN [ 6 , 5 ] and its variants [ 7 , 8 ] , perform faster and offer higher performance than RNNs. Throughout this work, we refer to the improved version [ 6 ] as MS-TCN rather than its earlier version [ 5 ] . MS-TCN has been shown to have higher accuracy than ED-TCN.
+This work proposes an improved ED-TCN with novel coarse-to-fine ensembling that is more calibrated and accurate. 
+ Following the success of MS-TCN [ 6 ] , several works have built upon it to improve the over-segmentation, and thus the accuracy, of MS-TCNs. GatedR [ 8 ] adds GRU in the refinement stages of MS-TCN. BCN [ 7 ] trains an additional boundary detection model apart from MS-TCN and merges the outputs of the segmentation and boundary model using a post-processing step. ASRF [ 31 ] extracts features from a fully supervised MS-TCN and builds temporal models and a boundary network over the features extracted from the MS-TCN, thus adding another phase of training and inference after MS-TCN. Unlike these, we handle over-fragmentation with our ensembled prediction in C2F-TCN and the model-agnostic feature-augmentation strategy, thereby eliminating the need for any additional networks or training phases. 
+ II-B Varying Supervision in Segmentation 
+ The different types of supervision used in temporal action segmentation are illustrated in Fig. 1 .
+ Fully supervised methods require every-frame annotations for all the videos in the dataset. TCN frameworks include pool-and-upsample style encoder-decoders [ 2 , 3 ] or temporal resolution preserving MS-TCNs [ 6 , 5 , 7 , 8 , 9 ] . Weakly supervised methods bypass every-frame annotations and use labels such as ordered lists of actions [ 4 , 32 , 33 , 34 , 35 ] 
+or a small percentage of action timestamps (TSS) [ 25 , 24 ] for all videos. TSS [ 25 ] uses single timestamp labels for every action in all training videos and SSTDA [ 24 ] uses labels for 65% of timestamps in all training videos. We propose the first semi-supervised setup requiring every-frame annotations, but for only a few training videos. Our setup is analogous to semi-supervised image segmentation [ 36 , 37 ] i.e. most training images are un-annotated, while a few are fully annotated. The analogue of TSS [ 25 ] is point-supervision [ 38 ] , i.e. labeling one pixel from each object of every training image. While TSS requires one frame label for each action and the overall percentage of labeled frames is very small (0.03%), the annotation effort should not be underestimated. Annotators must still watch all the videos, and labeling timestamp frames gives only a 6X speedup compared to densely labeling all frames [ 39 ] . 
+ Additionally, unsupervised approaches use clustering, including k k -means [ 40 ] , agglomerative [ 41 ] , and discriminative clustering [ 42 ] .
+To improve clustering performance, some works [ 40 , 43 ] learn representation by predicting frame-wise features’ absolute temporal positions in the video. Different from these, in our unsupervised representation learning we implicitly capture the relative temporal relationships based on temporal distance rather than absolute positions. Unsupervised clustering approaches can only segment the videos, however, the task of temporal segmentation involves both segmenting and labeling the action segments. Therefore, unsupervised clusters segments evaluated based on Hungarian matching to ground truth labels is not directly comparable to other form of supervision like full supervision or weak supervision. In fact, by using the same representation with two different clustering algorithms, the Hungarian matching segmentation results can vary widely.
+Rather than developing an unsupervised clustering algorithm, we develop an unsupervised feature learning task that helps to create discriminative features wherein a simple linear classifier can separate features according to action classes. The linear classifier evaluation protocol is widely used to evaluate unsupervised representation learning tasks [ 19 , 44 , 45 ] , whereby a linear classifier is trained on features from the frozen base network, and test accuracy is used as a proxy to evaluate for learnt representation quality. Beyond linear evaluation, we also evaluate our learning task by fine-tuning for semi-supervised learning; good segmentation results are hereby achieved for training with only a few labeled videos. 
+ II-C Complex Activity Recognition 
+ The task of complex activity recognition aims to classify the goal-oriented activity label of the video.
+Complex activity recognition [ 46 , 47 , 48 , 17 ] follows the strategy of temporal action segmentation (different from strategies of standard short trimmed video recognition [ 1 , 49 , 50 , 51 ] ). and uses pre-computed snippet-level features as inputs for dedicated sequence-level models designed for recognition [ 52 , 46 , 47 , 48 , 17 , 18 ] . Given the similarity in the approaches, we posit that the same TCN architecture can be designed for both segmentation and recognition with minimal changes. We here directly use the C2F-TCN’s temporal max-pooled final encoder representation
+with a linear classifier, which we find to be effective without the need for dedicated architectures. 
+ Fig. 2: Our model C2F-TCN, utilizing the decoder’s implicit multiple resolution structure to produce Coarse-to-fine Ensemble predictions for segmentation; encoder’s output for activity recognition. 
+ II-D Unsupervised Contrastive Feature Learning 
+ Contrastive learning dates back to [ 53 ] but was more recently formalized in SimCLR [ 19 ] . Most works [ 22 , 23 , 54 , 55 ] hinge on well-defined data augmentations, with the goal of bringing together the original and augmented samples in the feature space. 
+ The few direct extensions of SimCLR for video [ 56 , 20 , 21 ] target action recognition in short clips a few seconds long. Others integrate contrastive learning
+by bringing together next-frame feature predictions with actual representations [ 57 , 21 ] , using path-object tracks for cycle-consistency [ 58 ] , and considering multiple viewpoints [ 59 ] or accompanying modalities like audio [ 60 ] or text [ 61 ] . These works inspire us to develop contrastive learning for long-range segmentation. However, previous works differ fundamentally in both the aim, i.e. learning the underlying distribution of cycle-consistency in short clips, and input data, e.g. multiple viewpoints or modalities. 
+ II-E Multi-Level Resolutions and Scaling 
+ A number of works ranging from semantic segmentation [ 62 , 63 ] to video temporal action detection [ 64 , 18 , 65 ] incorporate multiple scales to improve performance. Various ways to incorporate multi-scaling are using multiple sliding windows [ 66 , 67 ] , a multi-resolution attention network [ 66 , 18 ] , or multi-resolution loss functions [ 62 , 63 , 64 ] . Feature Pyramid networks [ 64 , 63 ] are the most similar to our work in that they use the decoder’s implicit layers’ multi-resolution feature. However, they utilize multi-resolution outputs from different decoder layers via layer-wise loss functions (choosing the final layer outputs as a prediction). In contrast, our C2F-Ensemble utilizes multi-resolution probabilities by constructing an ensembled prediction probability vector during both training and inference. Our experiments suggest that the proposed ensemble performs better than using loss at every layer. 
+ III Base Segmentation Model C2F-TCN 
+ III-A Definitions 
+ We denote a video as V ∈ ℝ T × F \text{V}\in\mathbb{R}^{T\times F} ; for each temporal location t < T t\!<\!T ,
+frame V ​ [ t ] ∈ ℝ F \text{V}[t]\in\mathbb{R}^{F} is a F F -dimensional pre-trained I3D feature.
+Note, the input I3D feature is from a model pre-trained on the Kinetics dataset [ 1 ] and is not fine-tuned on our segmentation datasets. 
+ Temporal action segmentation (depicted on the right side of Fig. 1 ) aims to map each frame feature V ​ [ t ] \text{V}[t] to an action label y ^ ​ [ t ] ∈ 𝒜 \hat{y}[t]\in\mathcal{A} , where 𝒜 := { 1 , … , C } \mathcal{A}:=\{1,...,C\} represents the set of C C actions. A temporal segmentation model M M takes V as input and produces predictions M ⁡ ( V ) = 𝐩 ∈ ℝ T × C M(\text{V})=\mathbf{p}\in\mathbb{R}^{T\times C} , where for each time t < T t<T , 𝐩 ⁡ [ t ] ∈ ℝ C \mathbf{p}[t]\in\mathbb{R}^{C} is a probability vector of dimension C C , and 𝐩 ⁡ [ t , k ] \mathbf{p}[t,k] denotes the probability assigned to the k t ​ h k^{th} class. The predicted label for each t t is then obtained by y ^ ​ [ t ] = arg ⁡ max k ⁡ 𝐩 ⁡ [ t , k ] \hat{y}[t]=\argmax_{k}\;\mathbf{p}[t,k] and the corresponding probability by p ^ ​ [ t ] = max k ⁡ 𝐩 ⁡ [ t , k ] \hat{p}[t]=\max_{k}\;\mathbf{p}[t,k] over all possible actions in k ∈ 𝒜 k\in\mathcal{A} .
+Additionally, for some video datasets (like Breakfast [ 52 ] ), each video has a higher-level complex activity label c ∈ { 1 , … , C V } c\in\{1,\ldots,C_{\text{V}}\} . The complex activity specifies an underlying objective, e.g. ‘making coffee’ for the action sequence { \{ ‘take cup’ , ‘pour coffee’ , ‘add sugar’ , ‘stir’ } \} . 
+ III-B Base TCN 
+ Our base model is an encoder-decoder TCN with three components, i.e. 𝐌 := ( 𝚽 : 𝚪 : 𝚿 ) \mathbf{M}:=(\mathbf{\Phi}:\mathbf{\Gamma}:\mathbf{\Psi}) , with encoder 𝚽 \mathbf{\Phi} , bottleneck 𝚪 \mathbf{\Gamma} , and decoder 𝚿 \mathbf{\Psi} (depicted in Fig. 2 ). Compared to previous ED-TCNs architectures [ 2 , 3 ] , our architecture is deeper, has smaller temporal convolution kernels, and has added skip connections and a bottleneck layer. Our detailed architecture improvement is verified through experimentation, but these changes alone are insufficient to make the ED-TCN architecture a competitive alternative to MS-TCN. The major novel component of our proposed encoder-decoder architecture design (ie. Coarse-to-Fine(C2F) Ensemble ) is outlined in Sec. III-C .
+Our rationale behind improving the ED-TCN architecture for the task of temporal action segmentation is 1) to have an implicit multiple temporal resolution feature structure and 2) to separate the representation learning from the classification layer. Neither of these properties holds for current state-of-the-art MS-TCN [ 6 ] architecture, as it is a feed-forward TCN with fixed temporal resolution and uses multiple probability refinement stages. 
+ Encoder 𝚽 \mathbf{\Phi} : The input to the encoder comprises down-sampled frame-level features V i ​ n ∈ ℝ T i ​ n × F {\text{V}}^{in}\in\mathbb{R}^{T^{in}\times F} . We down-sample (in time) the full video V of length T T to V i ​ n {\text{V}}^{in} of length T i ​ n T^{in} (see Sec. III-D ).
+The encoder consists of a 1-D convolution unit 𝚽 ( 0 ) \mathbf{\Phi}^{(0)} and six sequential encoder layers { 𝚽 ( u ) : u ≤ 6 } \{\mathbf{\Phi}^{(u)}\!:\!u\!\leq\!6\} . In the beginning, 𝚽 ( 0 ) \mathbf{\Phi}^{(0)} projects V i ​ n {\text{V}}^{in} to the feature of dimension T i ​ n × d 0 T^{in}\times d_{0} ;
+for u ≥ 1 u\!\geq\!1 , the outputs of 𝚽 ( u ) \mathbf{\Phi}^{(u)} are ℝ T u × d u \mathbb{R}^{T_{u}\times d_{u}} , where T u T_{u} and d u d_{u} are the temporal and feature dimensions of each layer u u , respectively.
+Each encoder layer has a 1-D temporal convolution and a max-pooling that halves the temporal dimension to T u = ⌈ T i ​ n 2 u ⌉ T_{u}=\lceil\frac{T^{in}}{2^{u}}\rceil . The final encoder output 𝐟 e ​ n \mathbf{f}^{en} has a temporal dimension T e ​ n := T 6 := ⌈ T i ​ n 64 ⌉ T^{en}:=T_{6}:=\lceil\frac{T^{in}}{64}\rceil and a latent dimension d 6 d_{6} .
+ Bottleneck 𝚪 \mathbf{\Gamma} : 
+To ensure flexibility in varying the lengths of input videos and to facilitate temporal augmentation,
+we introduce a temporal pyramid pooling. Pyramid pooling has been used in image recognition and segmentation [ 68 , 69 , 70 , 71 , 72 ] as well as video recognition [ 73 , 74 ] .
+The input to the bottleneck 𝚪 \mathbf{\Gamma} is the final encoder 𝚽 ( 6 ) \mathbf{\Phi}^{(6)} ’s output 𝐟 e ​ n \mathbf{f}^{en} (shown in Fig. 2 ). We apply four parallel temporal max-poolings of varying kernel sizes { w i γ : i ≤ 4 } \{w^{\gamma}_{i}:i\leq 4\} , reducing 𝐟 e ​ n \mathbf{f}^{en} ’s length to ⌊ T e ​ n w i γ ⌋ \left\lfloor\frac{T^{en}}{w^{\gamma}_{i}}\right\rfloor . Each feature is then collapsed to a single latent dimension by a shared 1D convolution of kernel size 1 (keeping the temporal dimension fixed) before upsampling back to the original temporal dimension T e ​ n T^{en} . Along with 𝐟 e ​ n \mathbf{f}^{en} , the four features of dimension T e ​ n × 1 T^{en}{}\times 1 are concatenated
+along latent dimension
+to produce a bottleneck output of size T e ​ n × ( 4 + d e ​ n ) {T^{en}{}\times(4+d^{en})} . 
+ Decoder 𝚿 \mathbf{\Psi} : The decoder is structurally symmetric to the encoder; it has six layers { 𝚿 ( u ) : u ≤ 6 } \{\mathbf{\Psi}^{(u)}:u\!\leq\!6\} , each containing an up-sampling unit and a convolution block. For each u u , the up-sampling unit linearly interpolates
+inputs to an output of twice the temporal length before concatenating with encoder 𝚽 ( 6 − u ) \mathbf{\Phi}^{(6-u)} ’s output via a skip connection.
+The output of the u t ​ h u^{th} decoder block 𝚿 ( u ) \mathbf{\Psi}^{(u)} , has the temporal dimension T 6 − u = ⌈ T i ​ n 2 6 − u ⌉ T_{6-u}=\lceil\frac{T^{in}}{2^{6-u}}\rceil and a latent dimension of 128 128 . The skip connections merge global information from the decoder with local information from the encoder. The final layer 𝚿 ( 6 ) \mathbf{\Psi}^{(6)} , with a skip connection from 𝚽 ( 0 ) \mathbf{\Phi}^{(0)} , generates an output of size T i ​ n × 128 {T^{in}\times 128} . During inference, the action predictions { y ^ t : t ≤ T i ​ n } \{\hat{y}_{t}:t\leq T_{in}\} are up-sampled back to the full length T T to compare with the original ground truth y = { y ⁡ [ t ] } t = 1 T \textbf{y}=\{y[t]\}^{T}_{t=1} for proper evaluation. 
+ Fig. 3: Performance of different decoder layers: The left plot shows a qualitative example of our model’s segmentation result, where each color denotes an action. We see that C2F-Ensemble (C2F-Ensem) best matches the ground truth (GT) compred to the other layers. Additionally, in C2F-Ensem, the over-fragmentation (blue) patch from the last decoder layer ( Ψ 6 \Psi^{6} ) is removed. The right bar chart shows the quantitative overall performance of the different layers and the C2F-Ensemble. C2F-Ensem has highest Edit, MoF and F1@50. 
+ III-C Coarse-to-Fine (C2F) Ensemble 
+ Standard encoder-decoders projects the last decoder layer’s representation to obtain class probability outputs. We propose ensembling the probability results from several decoder layers.
+We project the representation from the u t ​ h u^{th} decoder block 𝚿 ( u ) \mathbf{\Psi}^{(u)} to C C dimensions, i.e. the number of action classes. This is followed by a softmax to obtain class probabilities 𝐩 ( u ) \mathbf{p}^{(u)} and a temporal upsampling via linear interpolation to the input temporal length T i ​ n T^{in} . Finally, for any ≤ t ≤ T i ​ n 1\!\leq\!t\!\leq T^{in} , the ensembled prediction 𝐩 e ​ n ​ s ​ [ t ] ∈ ℝ C {\mathbf{p}}^{ens}[t]\in\mathbb{R}^{C} is 
+ 𝐩 e ​ n ​ s ​ [ t ] = ∑ u α u ⋅ 𝐩 ^ ( u ) ​ [ t ] , ∑ u α u = 1 , α u > 0 \displaystyle{\mathbf{p}}^{ens}[t]\!=\!\sum_{u}\alpha_{u}\cdot\hat{\mathbf{p}}^{(u)}[t],\qquad\sum_{u}\alpha_{u}\!=\!1,\;\alpha_{u}\!>\!0 
+ (1) 
+ where α u \alpha_{u} is the ensemble weight of the u t ​ h u^{th} decoder and 𝐩 ^ ( u ) := Up ​ [ 𝐩 ( u ) , T i ​ n ] \hat{\mathbf{p}}^{(u)}:=\text{Up}{\left[\mathbf{p}^{(u)},T^{in}\right]} is the u t ​ h u^{th} decoder probability output 𝐩 ( u ) \mathbf{p}^{(u)} , up-sampled to a temporal dimension of T i ​ n T^{in} . The sum is done action-wise and the final predicted label is calculated as 
+ y ^ ​ [ t ] = arg ⁡ max k ∈ 𝒜 ​ 𝐩 ens ​ [ t , k ] . \hat{y}[t]=\underset{k\in\mathcal{A}}{\argmax}\,{\mathbf{p}}^{ens}[t,k]. 
+ (2) 
+ where 𝐩 e ​ n ​ s ​ [ t , k ] {\mathbf{p}}^{ens}[t,k] is the probability assigned to action class k k . 
+ We refer to 𝐩 e ​ n ​ s {\mathbf{p}}^{ens} as the coarse-to-fine (C2F) ensemble ; applying it to our base TCN model 𝐌 := ( 𝚽 : 𝚪 : 𝚿 ) \mathbf{M}:=(\mathbf{\Phi}:\mathbf{\Gamma}:\mathbf{\Psi}) results in our C2F-TCN. ‘Coarse-to-Fine” refers to the progressive increase in the temporal resolution of the decoder.
+Decoder layers are ensembled via different upsampling rates.
+Our rationale for ensembling is twofold. Firstly, the 𝐩 ( u ) \mathbf{p}^{(u)} from earlier decoder layers are inherently coarser in their temporal resolution, making them less susceptible to over-segmentation (since the 𝐩 ( u ) \mathbf{p}^{(u)} of temporal dimension ⌈ T i ​ n 2 ( 6 − u ) ⌉ \lceil\frac{T^{in}}{2^{(6-u)}}\rceil is upsampled 2 ( 6 − u ) {2^{(6-u)}} times to obtain T i ​ n {T^{in}} size outputs). Including them in the ensemble makes it an implicit way to mitigate over-fragmentation errors without the need for additional boundary-detection-model or refinement stages.
+Secondly, standard network outputs tend to be over-confident in their predictions, and ensembles are an effective way to reduce overconfidence (see Sec. VI-D ). 
+ III-D Temporal Feature Augmentation Strategy 
+ Training augmentations. 
+To augment the sequences, we down-sample the pre-trained feature representations V and their ground truths y . A naive downsampling with random sampling would simply decimate in the temporal dimension features. As an alternative, we opt to use an aggregate (max-pooling) operation over time to create various perturbed features. Max-pooling is computationally efficient yet effective in aggregating video segments [ 18 ] , and we represent multiple temporal resolutions by varying the pooling window. At time t t , for some temporal window w w , the pooled feature can be defined as 
+ V w [ t ] = max τ ∈ [ w t , w t + w ) V [ τ ] , \text{V}^{w}[t]=\max_{\tau\in\left[wt,wt+w\right)}\text{V}[\tau], 
+ (3) 
+ while taking the ground truth action that is the most frequent in the window [ w t , w t + w ) \left[wt,wt+w\right) as the corresponding label 
+ y w [ t ] = arg ⁡ max k ∈ 𝒜 ∑ τ = wt wt + w 𝕀 [ y [ τ ] = k ] , y^{w}[t]=\underset{k\in\mathcal{A}}{\argmax}\sum_{\tau=wt}^{wt+w}\mathbb{I}{\left[y[\tau]=k\right]}, 
+ (4) 
+ where 𝕀 ⁡ [ ⋅ ] \mathbb{I}{\left[\cdot\right]} is the indicator function. The pooled features V w \text{V}^{w} and ground truth 𝐲 w \mathbf{y}^{w} are of temporal length T w := ⌈ T w ⌉ T^{w}\!:=\!\left\lceil\frac{T}{w}\right\rceil and are used as input features ( V i ​ n \text{V}^{in} ) and ground truth, respectively, during training.
+The augmentation is made stochastic by drawing w w from a probability distribution π \pi . π \pi is parameterized by a base window w 0 w_{0} , sampled with a probability of π 0 = 0.5 \pi_{0}=0.5 , and a uniform distribution over w w within a range of ⌊ w 0 2 ⌋ \left\lfloor\frac{w_{0}}{2}\right\rfloor to 2 ​ w 0 2w_{0} : 
+ π = { π 0 : w = w 0 ( 1 − π 0 ) / ( 2 ​ w 0 − ⌊ w 0 2 ⌋ ) : ⌊ w 0 2 ⌋ ≤ w ≤ 2 ​ w 0 , w ≠ w 0 0 : otherwise \displaystyle\pi=\left\{\begin{array}[]{ll}\pi_{0}&:\,w=w_{0}\\
+(1-\pi_{0})/(2w_{0}-\left\lfloor\frac{w_{0}}{2}\right\rfloor)&:\,\left\lfloor\frac{w_{0}}{2}\right\rfloor\!\leq\!w\!\leq 2w_{0},w\!\neq\!w_{0}\\
+0&:\,\,\text{otherwise}\\
+\end{array}\right. 
+ Two advantages of the training augmentation strategy are that it (1) encourages model robustness with respect to a wide range of temporal resolutions and (2) reduces the cost of processing a video down-sampled by window-size w w by a factor of w w . 
+ Test-time augmentations (TTA). We further leverage augmentations during inference by augmenting the test input features with various w w and then combining the predictions after interpolating back to the original temporal length T T . The final predictive probability 𝐩 T ​ T ​ A \mathbf{p}^{TTA} is estimated as the expected prediction over π \pi : 
+ 𝐩 T ​ T ​ A [ t , k ] = 𝔼 w ∼ π [ 𝐩 e ​ n ​ s [ t , k | V w ] ] , \displaystyle\mathbf{p}^{TTA}[t,k]=\mathbb{E}_{w\sim\pi}\Big[\mathbf{p}^{ens}[t,k\,|\text{V}^{w}]\Big], 
+ (5) 
+ where 𝐩 e ​ n ​ s [ t , k | V w ] \mathbf{p}^{ens}[t,k\,|\text{V}^{w}] is the ensemble probability computed with the input feature V w \text{V}^{w} . 
+ III-E Calibration 
+ Calibration measures the over/under-confidence of predictions. A given prediction y ^ ​ [ t ] = arg ⁡ max k ⁡ 𝐩 ⁡ [ t , k ] \hat{y}[t]=\argmax_{k}\mathbf{p}[t,k] has a confidence p ^ ​ [ t ] := max k ⁡ 𝐩 ⁡ [ t , k ] \hat{p}[t]:=\max_{k}\mathbf{p}[t,k] ,i.e. the maximum probability prediction. The associated accuracy of a confidence, acc ​ ( p ) \text{acc}(p) , is the action classification accuracy for all frames with p ^ ​ [ t ] = p \hat{p}[t]=p . Ideally, acc should be high for high confidences and vice versa. A model is calibrated if acc ​ ( p ) = p , ∀ p ∈ [ 0 , 1 ] \text{acc}(p)\!=\!p,\,\forall p\in[0,1] ; it is over-confident (or under-confident) if acc ​ ( p ) ≤ p \text{acc}(p)\!\leq\!p (or acc ​ ( p ) > p \text{acc}(p)\!>\!p ).
+The acc for a range of confidence 𝒫 ⊂ [ 0 , 1 ] \mathcal{P}\subset[0,1] is defined as 
+ acc ​ ( 𝒫 ) := ∑ t 𝕀 [ y ^ [ t ] = y [ t ] ] ⋅ 𝕀 [ p ^ [ t ] ∈ 𝒫 ] ∑ t 𝕀 [ p ^ [ t ] ∈ 𝒫 ] . \displaystyle\text{acc}(\mathcal{P}):=\frac{\sum_{t}\mathbb{I}\Big[\hat{y}[t]=y[t]\Big]\cdot\mathbb{I}\Big[\hat{p}[t]\in\mathcal{P}\Big]}{\sum_{t}\mathbb{I}\Big[\hat{p}[t]\in\mathcal{P}\Big]}. 
+ The confidence 𝒫 \mathcal{P} denoted as conf ​ ( 𝒫 ) \text{conf}(\mathcal{P}) is the average of all the confidence values within 𝒫 \mathcal{P} . We use these notions to later measure the calibration performance in Sec. VI-D . 
+ Calibration is a neglected aspect of temporal action segmentation, and our work is the first to point this out
+as well as provide remedies for it.
+We show that the standard models are extremely over-confident( Fig. 8 ). Our two main contributions (coarse-to-fine ensemble and the temporal FA strategy) not only result in improved segmentation performance but also significantly improve the calibration ( Fig. 8 ). 
+ IV Fully Supervised Framework 
+ IV-A Temporal Action Segmentation 
+ We use a standard frame-level cross-entropy loss ℒ CE \mathcal{L}_{\text{CE}} and transition loss ℒ TR \mathcal{L}_{\text{TR}} , as per previous works [ 6 , 7 ] : 
+ ℒ CE = − 1 T ∑ t ∑ k ∈ 𝒜 𝕀 [ y [ t ] = k ] ⋅ log 𝐩 e ​ n ​ s [ t , k ] , \mathcal{L}_{\text{CE}}=-\frac{1}{T}\sum_{t}\sum_{k\in\mathcal{A}}\mathbb{I}{\left[y[t]=k\right]}\cdot\log\mathbf{p}^{ens}[t,k], 
+ (6) 
+ where y ⁡ [ t ] y[t] is the ground truth label and 𝐩 e ​ n ​ s ​ [ t , k ] \mathbf{p}^{ens}[t,k] is the coarse-to-fine probability (see Eq. 1 ) for class k k . The transition loss ℒ TR \mathcal{L}_{\text{TR}} encourages the same action label in neighbouring frames: 
+ ℒ TR = 1 T ​ ∑ t ∑ k min ⁡ ( δ ⁡ [ t , k ] , ε m ​ a ​ x ) 2 , \mathcal{L}_{\text{TR}}=\frac{1}{T}\sum_{t}\sum_{k}\min{\left(\delta[t,k],\varepsilon_{max}\right)}^{2}, 
+ (7) 
+ where, δ ⁡ [ t , k ] := | log ⁡ 𝐩 e ​ n ​ s ​ [ t , k ] − log ⁡ 𝐩 e ​ n ​ s ​ [ t − 1 , k ] | \delta[t,k]:=\left|\log\mathbf{p}^{ens}[t,k]-\log\mathbf{p}^{ens}[t-1,k]\right| is the inter-frame difference of log-probabilities, and ε m ​ a ​ x > 0 \varepsilon_{max}>0 is the maximum threshold for δ ⁡ [ t , k ] \delta[t,k] . We use a joint loss ℒ = ℒ CE + λ TR ​ ℒ TR \mathcal{L}=\mathcal{L}_{\text{CE}}+\lambda_{\text{TR}}\mathcal{L}_{\text{TR}} with λ TR = 0.15 \lambda_{\text{TR}}\!=\!0.15 , ε m ​ a ​ x = 4 \varepsilon_{max}=4 as used in [ 6 ] . 
+ We apply a single loss directly to the ensembled output;
+While other frameworks, like MS-TCN and FPN [ 62 , 63 , 64 ] , apply loss to each stage individually and use only final layer predictions at inference. The equivalent of applying losses to the up-sampled outputs of each decoder layer has less performance benefit than the proposed C2F-Ensemble (shown in Tab. IV ). 
+ IV-B Complex Activity Recognition 
+ We adapt C2F-TCN by temporally max-pooling the final encoder representation 𝐟 e ​ n \mathbf{f}^{en} (from 𝚽 ( 6 ) \mathbf{\Phi}^{(6)} of temporal dimension T 6 = ⌈ T i ​ n / 64 ⌉ T_{6}=\lceil T^{in}/64\rceil ) over time, obtaining a video-level representation. After that, we apply a two-layer MLP followed by a softmax σ \sigma to obtain 
+ 𝐩 V = σ ⁡ [ MLP ​ [ max t ⁡ ( 𝐟 e ​ n ​ [ t ] ) ] ] , \mathbf{p}_{\text{V}}=\sigma{\left[\text{MLP}{\left[\max_{t}(\mathbf{f}^{en}[t])\right]}\right]}, 
+ (8) 
+ where 𝐩 V ∈ ℝ + C V \mathbf{p}_{\text{V}}\in\mathbb{R}^{C_{\text{V}}}_{+} is the probability vector for the C V C_{\text{V}} complex activities. Intuitively, max-pooling retains the important information without needing to consider the order of actions in the complex activity. Similar to [ 48 , 17 ] , we train this network without frame-wise action cross-entropy loss and apply only the following video-level cross-entropy loss: 
+ ℒ V = − ∑ c ∈ 𝒜 V 𝕀 [ y V = c ] ⋅ log 𝐩 V [ c ] . \mathcal{L}_{\text{V}}=-\sum_{c\in\mathcal{A}_{\text{V}}}\mathbb{I}{\left[y_{\text{V}}=c\right]}\cdot\log\mathbf{p}_{\text{V}}{\left[c\right]}. 
+ (9) 
+ where y V y_{\text{V}} is the ground truth, and 𝐩 V ​ [ c ] \mathbf{p}_{\text{V}}{\left[c\right]} is the predicted probability assigned to complex activity class c c for video V . 
+ V Semi-Supervised Framework 
+ In the semi-supervised framework (illustrated in Fig. 1 ) we use only a small fraction of labelled training videos instead of using all labelled training video as described in fully supervised setting ( Sec. IV-A ).
+We formulate the semi-supervised learning using our base temporal segmentation model
+the C2F-TCN (see Sec. III ), although our method is also applicable to other base encoder-decoder models such as ED-TCN [ 2 ] .
+For simplicity, unless otherwise explicitly noted, e.g. in Sec. V-A3 , we treat the temporal dimension of all the videos as a normalized unit interval t ∈ [ 0 , 1 ] t\in[0,1] , i.e. T = 1 T\!=\!1 . As before, each video frame V ​ [ t ] \text{V}[t] has a ground truth action label y ⁡ [ t ] ∈ 𝒜 := { 1 , … , C } y[t]\in\mathcal{A}:=\{1,...,C\} from a pre-defined set of C C action classes. 
+ Fig. 4: Unsupervised Representation Learning Depiction: Step 1 (bottom orange panel): Pass pre-trained I3D inputs V V into the base TCN and generate a multi-resolution representation 𝐟 \mathbf{f} . Step 2 (middle pink panel): Cluster the I3D inputs V V within a training mini-batch and generates frame-wise cluster labels l l . Step 3 (top green panel): Representation 𝐟 \mathbf{f} and its corresponding cluster label l l are sampled based on a temporal proximity sampling strategy to form feature set ℱ \mathcal{F} . Step 4: Apply contrastive learning to “pull together” (green arrows) similar samples in the positive set and “push apart” (red arrows) other samples in the negative set. 
+ Learning Framework & Data Split: 
+Our semi-supervised framework has two stages. First, we apply an unsupervised representation learning to learn model 𝐌 \mathbf{M} ( Sec. V-A ). Subsequently, model 𝐌 \mathbf{M} is trained (fine-tuned) with linear projection layers (action classifiers) on a small portion of the labeled training videos to produce the semi-supervised model ( 𝐌 : 𝐆 \mathbf{M}:\mathbf{G} )
+( Sec. V-B ). For representation learning, we follow the convention of previous unsupervised works [ 40 , 43 ] 
+in which actions y y are unknown but the complex activity of each video y V y_{\text{V}} is known 1 1 
+ 1 
+ The label is used implicitly, as the unsupervised methods are applied to videos of each complex activity individually. . For the semi-supervised stage, the ground truth y y is used for a small subset of labeled video 𝒟 L \mathcal{D}_{L} out of a larger training dataset 𝒟 = 𝒟 U ∪ 𝒟 L \mathcal{D}=\mathcal{D}_{U}\cup\mathcal{D}_{L} , where 𝒟 U \mathcal{D}_{U} denotes the unlabeled videos. 
+ Contrastive Learning 
+We use contrastive learning for our unsupervised frame-wise representation learning. Following the formalism of [ 19 ] , we define a set of features ℱ := { 𝐟 i , i ∈ ℐ } \mathcal{F}\!:=\!\{\mathbf{f}_{i},i\!\in\!\mathcal{I}\} indexed by a set ℐ \mathcal{I} . Each feature 𝐟 i ∈ ℱ \mathbf{f}_{i}\!\in\!\mathcal{F} is associated with two disjoint sets of indices 𝒫 i ⊂ ℐ ∖ { i } \mathcal{P}_{i}\!\subset\!\mathcal{I}\!\setminus\!\{i\} and 𝒩 i ⊂ ℐ ∖ { i } \mathcal{N}_{i}\!\subset\!\mathcal{I}\!\setminus\!\{i\} . The features in the positive set 𝒫 i \mathcal{P}_{i} should be similar to 𝐟 i \mathbf{f}_{i} , while the features in the negative set 𝒩 i \mathcal{N}_{i} should be contrasted with 𝐟 i \mathbf{f}_{i} . For each j ∈ 𝒫 i j\in\mathcal{P}_{i} , the contrastive probability p i ​ j p_{ij} is defined as 
+ p i ​ j = e τ ​ ( 𝐟 i , 𝐟 j ) e τ ​ ( 𝐟 i , 𝐟 j ) + ∑ k ∈ 𝒩 i e τ ​ ( 𝐟 i , 𝐟 k ) , p_{ij}=\frac{e_{\tau}{\left(\mathbf{f}_{i},\mathbf{f}_{j}\right)}}{e_{\tau}{\left(\mathbf{f}_{i},\mathbf{f}_{j}\right)}+\sum_{k\in\mathcal{N}_{i}}e_{\tau}{\left(\mathbf{f}_{i},\mathbf{f}_{k}\right)}}, 
+ (10) 
+ where the term e τ = exp ⁡ { cos ​ ( 𝐟 i , 𝐟 j ) / τ } e_{\tau}=\exp\{\text{cos}(\mathbf{f}_{i},\mathbf{f}_{j})/\tau\} is the exponential of the cosine similarity between 𝐟 i \mathbf{f}_{i} and 𝐟 j \mathbf{f}_{j} scaled by temperature τ \tau . Maximizing the probability in Eq. ( 10 ) ensures that 𝐟 i , 𝐟 j \mathbf{f}_{i},\mathbf{f}_{j} are similar while also decreasing the cosine similarity between 𝐟 i \mathbf{f}_{i} and any feature in the negative set. The key to effective contrastive learning is to identify the relevant positive and negative sets to perform the targeted task. 
+ V-A Unsupervised Representation Learning 
+ We apply contrastive learning at the frame level, based on input feature clustering and temporal continuity ( Sec. V-A1 ), and at the video-level, by leveraging the complex activity labels ( Sec. V-A2 ). The two objectives are merged into a common loss that is applied to our multi-temporal resolution feature representations ( Sec. V-A3 ). 
+ V-A 1 Frame-Level Contrastive Formulation 
+ Input Clustering: 
+Our construction of positive and negative sets should respect the distinction between different action classes. But, as the setting is unsupervised, there are no labels to guide the formation of these sets. Hence, we propose leveraging the discriminative properties of the pre-trained input I3D features to initialize the positive and negative sets. The clusters are formed on the input features, but the contrastive learning is done over the representation 𝐟 \mathbf{f} produced by the C2F-TCN model (yellow panel in Fig. 4 ). 
+ Specifically, we cluster the individual frame-wise inputs V ​ [ t ] \text{V}[t] for all the videos within a small batch. We use k-means clustering and set the number of clusters as 2 ​ C 2C (ablations in Apepndeix-C), i.e. twice the number of actions, to allow variability even within the same action. After clustering, each frame t t is assigned the cluster label l ⁡ [ t ] ∈ { 1 , … , 2 ​ C } l[t]\in\{1,\ldots,2C\} .
+Note that this simple clustering does not require videos of the same (or different) complex activities to appear in a mini-batch. It also does not incorporate temporal information – this differs from previous unsupervised works [ 40 , 43 ] that embed absolute temporal locations into the input features before clustering. 
+ Representation Sampling Strategy: 
+The videos used for action segmentation are long, i.e. 1-18k frames. Contrasting all the frames of every video in a batch would be too computationally expensive to consider, whereas contrastive loss of even a few representations back-propagates through the entire hierarchical TCN. To this end, a fixed number of frames are dynamically sampled from each video to form the feature (representation) set ℱ \mathcal{F} for each batch of videos (shown in green panel of Fig. 4 ). Note that the sampling is applied to the feature representations 𝐟 = 𝐌 ⁡ ( V ) \mathbf{f}=\mathbf{M}(\text{V}) , and not to the inputs V , and that the full input V is required to pass through the TCN to generate 𝐟 \mathbf{f} . 
+ Let ℐ \mathcal{I} denote the feature set index (as in sec V ), and for any feature index ( n , i ) ∈ ℐ (n,i)\!\in\!\mathcal{I} , let n n denote the video-id and i i the sample-id within that video. For a video V n \text{V}_{n} and a fixed K > 0 K\!>\!0 , we sample 2 ​ K 2K frames { t i n : i ≤ 2 ​ K } ⊂ [ 0 , 1 ] \{t^{n}_{i}:i\!\leq\!2K\}\subset[0,1] and obtain the feature set ℱ n := { 𝐟 n ​ [ t i n ] : i ≤ 2 ​ K } \mathcal{F}_{n}\!:=\!\{\mathbf{f}_{n}[t^{n}_{i}]\!:\!i\!\leq\!2K\} . To do so, we divide the unit interval [ 0 , 1 ] [0,1] into K K equal partitions and randomly choose a single frame from each partition. Another K K frames are then randomly chosen ε \varepsilon away ( ε ≪ 1 / K \varepsilon\ll 1/K )
+from each of the first K K samples. This strategy ensures diversity (the first K K samples) while having nearby ε − \varepsilon- distanced features (the second K K samples). This aim is to either enforce temporal continuity, if they are the same action, or learn boundaries, if they are different actions (approximated by the cluster labels l l when actions labels are unknown). 
+ Frame-Level Positive and Negative Sets: Constructing the positive and negative set for each index ( n , i ) ∈ ℐ (n,i)\in\mathcal{I} requires a notion of similar features. The complex activity label is a strong cue, as there are either few or no shared actions across the different complex activities. For video V n \text{V}_{n} with complex activity c n c_{n} , we contrast index ( m , j ) (m,j) with ( n , i ) (n,i) if c m ≠ c n c_{m}\neq c_{n} . In datasets without meaningful complex activities (50Salads, GTEA), this condition is not applicable. 
+ The cluster labels l l of the input features already provides some separation between actions (see Table X ); we impose an additional temporal proximity condition to minimize the possibility of a different action in the same cluster. Formally, we bring the representation with index ( n , i ) (n,i) close to ( m , j ) (m,j) if their cluster labels are the same, i.e l n ​ [ t i n ] = l m ​ [ t j m ] l_{n}[t^{n}_{i}]=l_{m}[t^{m}_{j}] , and if they are close-by in time, i.e. , | t i n − t j m | ≤ δ |t^{n}_{i}-t^{m}_{j}|\leq\delta . For datasets with significant variations in the action sequence, e.g. 50Salads, the same action may occur at very different parts of the video; thus, we choose higher δ \delta , vs. smaller δ \delta , for actions that follow more regular ordering, e.g. Breakfast.
+Sampled features belonging to the same cluster, but exceeding the temporal proximity, i.e. l n ​ [ t i n ] = l m ​ [ t j m ] l_{n}[t^{n}_{i}]=l_{m}[t^{m}_{j}] but | t i n − t j m | > δ |t^{n}_{i}-t^{m}_{j}|>\delta , are not considered for either the positive or the negative set. 
+ Putting together the criteria from complex activity labels, clustering and temporal proximity, our positive set ( 𝒫 n , i \mathcal{P}_{n,i} ) and negative set ( 𝒩 n , i \mathcal{N}_{n,i} ) for index ( n , i ) (n,i) , are defined as 
+ 𝒫 n , i \displaystyle\mathcal{P}_{n,i}\! 
+ = { ( m , j ) : c m = c n , | t i n − t j m | < δ , l n [ t i n ] = l m [ t j m ] } \displaystyle=\!\{(m,j)\!:c_{m}=c_{n},|t^{n}_{i}-t^{m}_{j}|<\delta,\,l_{n}[t^{n}_{i}]=l_{m}[t^{m}_{j}]\} 
+ 𝒩 n , i \displaystyle\mathcal{N}_{n,i} 
+ = { ( m , j ) : c m ≠ c n } ∪ \displaystyle=\{(m,j)\!:c_{m}\neq c_{n}\}\,\cup{} 
+ (11) 
+ { ( m , j ) : c m = c n , l n [ t i n ] ≠ l m [ t j m ] } \displaystyle\qquad\{(m,j)\!:c_{m}=c_{n},l_{n}[t^{n}_{i}]\neq l_{m}[t^{m}_{j}]\} 
+ where m , n m,n are video indices, t i n t^{n}_{i} is the frame-id corresponding to the i t ​ h i^{th} sample of video n n ,
+ c n c_{n} is the complex activity of video n n , and l n ​ [ t i n ] l_{n}[t^{n}_{i}] the cluster label of frame t i n t^{n}_{i} .
+For an index ( m , j ) ∈ 𝒫 n , i (m,j)\in\mathcal{P}_{n,i} , i.e. belonging to the positive set of ( n , i ) (n,i) , the contrastive probability becomes 
+ p i ​ j n ​ m = e τ ​ ( 𝐟 n ​ [ t i n ] , 𝐟 m ​ [ t j m ] ) e τ ​ ( 𝐟 n ​ [ t i n ] , 𝐟 m ​ [ t j m ] ) + ∑ ( r , k ) ∈ 𝒩 n , i e τ ​ ( 𝐟 n ​ [ t i n ] , 𝐟 r ​ [ t k r ] ) . \displaystyle\!\!\!\!p^{nm}_{ij}\!=\!\frac{e_{\tau}\Big(\mathbf{f}_{n}[t^{n}_{i}],\mathbf{f}_{m}[t^{m}_{j}]\Big)}{e_{\tau}\Big(\mathbf{f}_{n}[t^{n}_{i}],\mathbf{f}_{m}[t^{m}_{j}]\Big)+\!\!\sum\limits_{(r,k)\in\mathcal{N}_{n,i}}\!\!\!\!e_{\tau}\Big(\mathbf{f}_{n}[t^{n}_{i}],\mathbf{f}_{r}[t^{r}_{k}]\Big)}. 
+ (12) 
+ where e τ e_{\tau} is the τ \tau -scaled exponential cosine similarity of Eq. ( 10 ). For a feature representation 𝐟 n ​ [ t i n ] \mathbf{f}_{n}[t^{n}_{i}] , Fig. 4 visualizes the positive set with pull-together green arrows and negative set with push-apart red arrows. 
+ V-A 2 Video-Level Contrastive Formulation 
+ To further emphasize global differences between different complex activities, we construct video-level summary features 𝐡 n ∈ ℝ d \mathbf{h}_{n}\in\mathbb{R}^{d} 
+by max-pooling the frame-level features 𝐟 n ∈ ℝ T n × d \mathbf{f}_{n}\in\mathbb{R}^{T_{n}\times d} along the temporal dimension. For video V n \text{V}_{n} , we define video-level feature 𝐡 n = max 1 ≤ t ≤ T n ⁡ 𝐟 n ​ [ t ] \mathbf{h}_{n}=\max_{1\leq t\leq T_{n}}\mathbf{f}_{n}[t] . Intuitively, the max-pooling captures permutation-invariant features and has been found to be effective for aggregating video segments [ 18 ] . With features 𝐡 n \mathbf{h}_{n} , a video-level contrastive learning is formulated. Reusing the index set as video-ids, ℐ = { 1 , … , | 𝒟 | } \mathcal{I}=\{1,...,|\mathcal{D}|\} , we define a feature set ℋ := { 𝐡 n : n ≤ | 𝒟 | } \mathcal{H}:=\{\mathbf{h}_{n}\!:n\leq|\mathcal{D}|\} , where for each video n n , there is a positive set 𝒫 n := { m : c m = c n } \mathcal{P}_{n}:=\{m\!:c_{m}=c_{n}\} and a negative set 𝒩 n = ℐ ∖ 𝒫 n \mathcal{N}_{n}=\mathcal{I}\setminus\mathcal{P}_{n} . For video n n and another video m ∈ 𝒫 n m\in\mathcal{P}_{n} in its positive set, the contrastive probability can be defined as 
+ p n ​ m = e τ ​ ( 𝐡 n , 𝐡 m ) e τ ​ ( 𝐡 n , 𝐡 m ) + ∑ r ∈ 𝒩 n e τ ​ ( 𝐡 n , 𝐡 r ) . \displaystyle p_{nm}=\frac{e_{\tau}{\left(\mathbf{h}_{n},\mathbf{h}_{m}\right)}}{e_{\tau}{\left(\mathbf{h}_{n},\mathbf{h}_{m}\right)}+\sum_{r\in\mathcal{N}_{n}}e_{\tau}{\left(\mathbf{h}_{n},\mathbf{h}_{r}\right)}}. 
+ (13) 
+ For our final unsupervised representation learning we use a contrastive loss function ℒ con \mathcal{L}_{\text{con}} that sums the video-level and frame-level contrastive losses: 
+ ℒ con = − 1 N 1 ∑ n ∑ m ∈ 𝒫 n log p n ​ m − 1 N 2 ∑ n , i ∑ m , j ∈ 𝒫 n , i log p n ​ m i ​ j , \displaystyle\!\!\mathcal{L}_{\text{con}}\!=\!-\tfrac{1}{N_{1}}\sum_{n}\!\!\sum_{m\in\!\mathcal{P}_{n}}\log p_{nm}\!-\!\tfrac{1}{N_{2}}\!\!\sum_{n,i}\sum_{{m,j}\in\mathcal{P}_{n,i}}\!\!\!\!\log p^{nm}_{ij}, 
+ (14) 
+ where N 1 = ∑ n | 𝒫 n | , N 2 = ∑ n , i | 𝒫 n , i | N_{1}=\sum_{n}|\mathcal{P}_{n}|,N_{2}=\sum_{n,i}|\mathcal{P}_{n,i}| , and p i ​ j n ​ m , p n ​ m p^{nm}_{ij},p_{nm} are as defined in equation ( 12 ) and ( 13 ) respectively. In practice, we compute this loss over mini-batches of videos. 
+ V-A 3 Multi-Resolution Representation 
+ This work shows that constructing an appropriate representation can significantly boost the performance of contrastive learning.
+For this subsection, we switch to an absolute integer temporal index, i.e. for a video V the frame indices are t ∈ { 1 , … , T } t\in\{1,\ldots,T\} , where T ≥ 1 T\geq 1 . Recall that the decoder layer 𝚿 \mathbf{\Psi}{} of our C2F-TCN has six layers; each layer 𝚿 ( u ) \mathbf{\Psi}^{(u)} produces features 𝐳 u , ≤ u ≤ 6 \mathbf{z}_{u},1\!\leq\!u\!\leq\!6 while progressively doubling the temporal resolution, i.e. the length of 𝐳 u \mathbf{z}_{u} is ⌈ T / 2 6 − u ⌉ \left\lceil T/2^{6-u}\right\rceil .
+The temporally coarser features provide more global sequence-level information, while the temporally fine-grained features contain more local information. 
+ To leverage the full range of resolutions, we combine { 𝐳 1 , … , 𝐳 6 } \{\mathbf{z}_{1},\ldots,\mathbf{z}_{6}\} into a new feature 𝐟 \mathbf{f} . Specifically, we upsample each decoder feature 𝐳 u \mathbf{z}_{u} to 𝐳 ^ u := Up ​ ( 𝐳 u , T ) {\hat{\mathbf{z}}}_{u}:=\text{Up}{\left(\mathbf{z}_{u},T\right)} having a common length T T using a temporal up-sampling function Up ​ ( ⋅ , T ) \text{Up}{\left(\cdot,T\right)} , i.e. with ‘linear’ interpolation.
+The final frame-level representation for frame t t is defined as 𝐟 [ t ] = ( 𝐳 ¯ 1 [ t ] : 𝐳 ¯ 2 [ t ] : … : 𝐳 ¯ 6 [ t ] ) \mathbf{f}[t]={\left(\bar{\mathbf{z}}_{1}[t]:\bar{\mathbf{z}}_{2}[t]:\ldots:\bar{\mathbf{z}}_{6}[t]\right)} , where 𝐳 ¯ u ​ [ t ] = 𝐳 ^ u ​ [ t ] / ‖ 𝐳 ^ u ​ [ t ] ‖ \bar{\mathbf{z}}_{u}[t]={\hat{\mathbf{z}}}_{u}[t]/\left\|{\hat{\mathbf{z}}}_{u}[t]\right\| , i.e. 𝐳 ^ u ​ [ t ] {\hat{\mathbf{z}}}_{u}[t] is normalized and then concatenated along the latent dimension for each t t (see Fig. 4 ).
+It immediately follows that for frames ≤ s , t ≤ T 1\!\leq\!s,t\!\leq\!T , the cosine similarity cos ​ ( ⋅ ) \text{cos}(\cdot) can be expressed as 
+ cos ​ ( 𝐟 ⁡ [ t ] , 𝐟 ⁡ [ s ] ) = ∑ u = 1 6 ω u ⋅ cos ​ ( 𝐳 u ​ [ t ] , 𝐳 u ​ [ s ] ) . \displaystyle\text{cos}(\mathbf{f}[t],\mathbf{f}[s])=\sum_{u=1}^{6}\omega_{u}\cdot\text{cos}(\mathbf{z}_{u}[t],\mathbf{z}_{u}[s]). 
+ (15) 
+ As a result of our construction, the weights in Eq. 15 become ω u = 1 6 \omega_{u}=\frac{1}{6} , i.e. each decoder layer makes an equal contribution to the cosine similarity. Normalizing after concatenation, would cause Eq. ( 15 )’s coefficients ω u ∝ ‖ 𝐳 u ​ [ t ] ‖ ⋅ ‖ 𝐳 u ​ [ s ] ‖ \omega_{u}\propto\left\|\mathbf{z}_{u}[t]\right\|\cdot\left\|\mathbf{z}_{u}[s]\right\| .
+The importance of this ordering is verified in Appendix C. 
+ Advantages: 
+Our representation 𝐟 \mathbf{f} implicitly encodes some degree of temporal continuity by design. In ‘ nearest ’ up-sampling, it can be shown that for frames ≤ s , t ≤ T 1\!\leq\!s,t\!\leq\!T , if ⌊ t / 2 u ⌋ = ⌊ s / 2 u ⌋ \left\lfloor t/2^{u}\right\rfloor=\left\lfloor s/2^{u}\right\rfloor for some integer u u , it is implied that cos ​ ( 𝐟 ⁡ [ t ] , 𝐟 ⁡ [ s ] ) ≥ 1 − u / 3 \text{cos}\!\left(\mathbf{f}[t],\mathbf{f}[s]\right)\geq 1-u/3 (detailed derivation in Appendix C).
+Including temporally coarse features like 𝐳 1 \mathbf{z}_{1} and 𝐳 2 \mathbf{z}_{2} allows the finer-grained local features 𝐳 6 \mathbf{z}_{6} to disagree with nearby frames without harming the temporal continuity. This makes the representations less prone to the common occurring problem of over-segmentation. This is demonstrated by the significant improvement in the Edit and F1 scores in the last row of Tab. XI .
+ V-A 4 Evaluating the Learned Representation 
+ To evaluate the learned representations, we train a linear classifier 𝐆 f \mathbf{G}_{f} on 𝐟 \mathbf{f} (i.e. representations extracted from frozen C2F-TCN unsupervised trained model) to classify frame-wise action labels. This form of evaluation is directly in lines with widely used linear evaluation protocols of unsupervised representation learning [ 75 , 19 , 76 ] . The assumption is that if the unsupervised learned features are sufficiently strong, then a simple linear classifier is sufficient to separate the action classes, and test accuracy is used as a proxy for evaluating representation quality.
+While our representation learning is unsupervised, evaluation classifier 𝐆 f \mathbf{G}_{f} is fully supervised (i.e. with cross-entropy loss ℒ ce \mathcal{L}_{\text{ce}} ), using ground truth labels y y over the standard datasets’ splits. 
+ Fig. 5: Depiction of Iterative-Contrast-Classify algorithm 
+ V-B Semi-Supervised Temporal Segmentation 
+ After unsupervised representation learning, model 𝐌 \mathbf{M} cannot yet be applied for action segmentation. The decoder output must be coupled with a linear projection 𝐆 \mathbf{G} and a softmax to generate the actual segmentation. 𝐆 \mathbf{G} can only be learned using labels, i.e. from 𝒟 L \mathcal{D}_{L} , though the labels can be further leveraged to fine-tune 𝐌 \mathbf{M} ( Sec. V-B1 ). Afterwards, 𝐌 \mathbf{M} and 𝐆 \mathbf{G} can be applied to unlabeled data 𝒟 U \mathcal{D}_{U} to generate pseudo-labels. The pooled set of labels from 𝒟 L ∪ 𝒟 U \mathcal{D}_{L}\cup\mathcal{D}_{U} can then be applied to update 𝐌 \mathbf{M} ( Sec. V-B2 ). By cycling between these updates, we propose an Iterative-Contrast-Classify (ICC) algorithm ( Sec. V-B3 ) that performs semi-supervised action segmentation (see overview in Fig. 5 ). 
+ V-B 1 Classify Step: Learning 𝐆 , 𝐌 \mathbf{G},\mathbf{M} with 𝒟 L \mathcal{D}_{L} 
+ Similar to the supervised C2F-TCN, each decoder layer’s representations 𝐳 u {\mathbf{z}}_{u} (temporal dim ⌈ T / 2 6 − u ⌉ \left\lceil T/2^{6-u}\right\rceil ) is projected with a linear layer 𝐆 u \mathbf{G}_{u} to C C -dimensional vector, where C C is the number of action classes. This is followed by a softmax to obtain class probabilities 𝐩 u \mathbf{p}_{u} and a linear interpolation in time to up-sample back to the input length T T . For frame t t , the prediction 𝐩 ⁡ [ t ] {\mathbf{p}}[t] is a weighted ensemble of up-sampled 𝐩 u \mathbf{p}_{u} , i.e. 𝐩 ⁡ [ t ] = ∑ u α u ⋅ up ​ ( 𝐩 u , T ) {\mathbf{p}}[t]\!=\!\sum_{u}\alpha_{u}\cdot\text{up}(\mathbf{p}_{u},T) , where α u \alpha_{u} is the ensemble weight of decoder u u with ∑ α u = 1 \sum\alpha_{u}\!=\!1 , and up ​ ( 𝐩 u , T ) \text{up}{\left(\mathbf{p}_{u},T\right)} denotes the upsampled decoder output of length T T . The sum is action-wise and the final predicted action label is
+ y ^ ​ [ t ] = arg ⁡ max k ∈ 𝒜 ⁡ 𝐩 ⁡ [ t , k ] \hat{y}[t]={\argmax}_{k\in\mathcal{A}}\,{\mathbf{p}}[t,k] . Note that 𝐆 := { 𝐆 u } \mathbf{G}:=\{\mathbf{G}_{u}\} differs from the evaluation linear classifier 𝐆 f \mathbf{G}_{f} of Sec. V-A4 . 𝐆 f \mathbf{G}_{f} is used to evaluate the representation 𝐟 \mathbf{f} , whereas { 𝐆 u } \{\mathbf{G}_{u}\} is used for semi-supervised learning with only labeled data 𝒟 L \mathcal{D}_{L} . 
+ In addition to learning 𝐆 \mathbf{G} , 𝒟 L \mathcal{D}_{L} can also be leveraged to fine-tune 𝐌 \mathbf{M} .
+In Eq. ( 11 ), the positive and negative sets 𝒫 n , i \mathcal{P}_{n,i} and 𝒩 n , i \mathcal{N}_{n,i} can be modified for 𝒟 L \mathcal{D}_{L} to use the ground truth labels by replacing the unsupervised cluster labels l n ​ [ t i n ] l_{n}[t^{n}_{i}] with ground truth action labels y n ​ [ t i n ] y_{n}[t^{n}_{i}] . Note that the learning rate used for fine-tuning the parameters of the model 𝐌 \mathbf{M} is significantly lower than the linear projection layers 𝐆 u \mathbf{G}_{u} . The loss used is ℒ = ℒ ce ​ ( 𝒟 L ) + ℒ con ′ ​ ( 𝒟 L ) \mathcal{L}=\mathcal{L}_{\text{ce}}(\mathcal{D}_{L})+\mathcal{L}_{\text{con}}^{\prime}(\mathcal{D}_{L}) , where ℒ con ′ \mathcal{L}_{\text{con}}^{\prime} is as defined in Eq. ( 14 ) but with l n ​ [ t i n ] l_{n}[t^{n}_{i}] replaced by y n ​ [ t i n ] y_{n}[t^{n}_{i}] . 
+ V-B 2 Contrast Step: Update 𝐌 \mathbf{M} with 𝒟 U ∪ 𝒟 L \mathcal{D}_{U}\cup\mathcal{D}_{L} 
+ After fine-tuning, 𝐌 \mathbf{M} and 𝐆 \mathbf{G} can be used to
+predict frame-level action labels y ^ n \hat{y}_{n} for any unlabeled videos, i.e. pseudo-labels for 𝒟 U \mathcal{D}_{U} . This affords the possibility of updating the representation in 𝐌 \mathbf{M} . To that end, we again modify 𝒫 n , i , 𝒩 n , i \mathcal{P}_{n,i},\mathcal{N}_{n,i} in Eq. ( 11 ) by replacing the cluster labels l n ​ [ t i n ] l_{n}[t^{n}_{i}] with the pseudo-labels y ^ n ​ [ t ] \hat{y}_{n}[t] and ground truth labels y n ​ [ t i n ] y_{n}[t^{n}_{i}] for 𝒟 U \mathcal{D}_{U} and 𝒟 L \mathcal{D}_{L} respectively. 𝐌 \mathbf{M} is then updated by applying the loss ℒ ′ = ℒ con ′ ​ ( 𝒟 U ∪ 𝒟 L ) \mathcal{L}^{\prime}=\mathcal{L}_{\text{con}}^{\prime}(\mathcal{D}_{U}\cup\mathcal{D}_{L}) ,
+where ℒ con ′ \mathcal{L}_{\text{con}}^{\prime} is as defined in Eq. ( 14 ) . 
+ V-B 3 Iterative-Contrast-Classify (ICC) 
+ The pseudo-labels for 𝒟 U \mathcal{D}_{U} are significantly more representative of the (unseen) action labels than the clusters obtained from the input I3D features used in the unsupervised stage. Thus, we can improve our contrastive representation by using the pseduo-labels (obtained after classify ) for another contrast step. This refined representation can, in turn, help in finding better pseudo-labels through another following classify step. By iterating between the contrast and classify steps in Sec. V-B1 and Sec. V-B2 (see Fig. 5 ), we can progressively improve the performance of the semi-supervised segmentation. The segmentation performance is evaluated at the end of the classify step after the training of 𝐆 \mathbf{G} . We denote the combined model of 𝐌 \mathbf{M} and 𝐆 \mathbf{G} for each iteration i i as ICC i \text{ICC}_{i} . In this way, initial unsupervised representation learning can be considered the “contrast” step of ICC 1 \text{ICC}_{1} , where cluster labels are used instead of pseudo-labels. Performance saturates after 4 4 iterations of contrast-classify ; we refer to ICC 4 \text{ICC}_{4} as our final semi-supervised result. 
+ VI Experiments 
+ Breakfast 
+ 50Salads 
+ GTEA 
+ Method 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ ED-TCN [ 2 ] 
+ – 
+ – 
+ – 
+ – 
+ – 
+ 68.0 
+ 63.9 
+ 52.6 
+ 52.6 
+ 64.7 
+ 72.2 
+ 69.3 
+ 56.0 
+ – 
+ 64.0 
+ TDRN [ 3 ] 
+ – 
+ – 
+ – 
+ – 
+ – 
+ 72.9 
+ 68.5 
+ 57.2 
+ 66.0 
+ 68.1 
+ 79.2 
+ 74.4 
+ 62.7 
+ 74.1 
+ 70.1 
+ Our Base M 
+ 59.8 
+ 55.6 
+ 45.8 
+ 60.1 
+ 69.3 
+ 72.1 
+ 68.6 
+ 57.8 
+ 63.8 
+ 78.5 
+ 87.9 
+ 86.1 
+ 71.6 
+ 84.1 
+ 77.8 
+ TABLE I: Our base model M exceeds the performance of existing encoder-decoder TCNs in most metrics for all three datasets. 
+ VI-A Experimental Setup 
+ Datasets. 
+We evaluate our method on three standard benchmark datasets and additionally on a new challenging segmentation dataset, Assembly101 [ 77 ] .
+Breakfast Actions [ 52 ] is a third-person view dataset of 1.7k videos with 10 complex activities of making breakfast, with 48 action classes.
+50Salads [ 78 ] features 25 people making 2 mixed salads. There are 50 videos with 19 different action classes. GTEA [ 79 ] captures 28 egocentric videos with 11 different action classes. Assembly101 [ 18 ] contain 4321 videos with 202 different action classes.
+ Evaluation. We follow recent works and report Mean-over-frames(MoF), segment-wise edit distance (Edit) and F ​ 1 F1 -scores with IoU thresholds of 0.10 0.10 , 0.25 0.25 and 0.50 0.50 ( F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} ). For Breakfast, 50Salads and Gtea, we use features pre-computed from a pre-trained Kinetics I3D model [ 1 ] and follow the dataset-designated cross-validation. For Assembly101 [ 77 ] , we use the dataset’s available features from the TSM [ 80 ] model fine-tuned on Epic-Kitchens datasets [ 81 ] and the designated train-val-test splits.
+For the semi-supervised framework, we use the specified train-test splits for each dataset and randomly select 5 % 5\% or 10 % 10\% of videos from the training split for labeled dataset 𝒟 L \mathcal{D}_{L} . As GTEA and 50Salads are small, we use 3 3 and 5 5 videos as 5% and 10%, respectively, to incorporate all C C actions.
+We report mean and standard deviation of five different selections in Appendix D. For unsupervised representation learning, we use all the unlabeled videos in the dataset, which is in line with other unsupervised works [ 40 , 24 ] . 
+ Implementation Details The C2F-TCN architecture and choice of hyper-parameters is detailed in the Appendix A. A base window w 0 w_{0} of { 10 , 20 , 4 , 20 } \{10,20,4,20\} is applied for Breakfast, 50Salads, GTEA and Assembly-101, respectively. The w 0 w_{0} ’s are chosen to be small enough for no actions to be dropped during down-sampling.
+For all datasets, we use the weights for the coarse-to-fine ensembling of decoder layer i.e α u = 1 n , ∀ u ∈ [ 1 , … , n ] \alpha_{u}=\frac{1}{n},\;\forall u\in[1,\ldots,n] , where n n is number of decoder layers.
+ For the semi-supervised setup, we sample frames from each video with K = { 20 , 60 , 20 } K=\{20,60,20\} partitions, ε ≈ 1 3 ​ K \varepsilon\!\!\approx\!\!\frac{1}{3K} for sampling, and temporal proximity δ = { 0.03 , 0.5 , 0.02 } \delta\!=\!\{0.03,0.5,0.02\} for Breakfast, 50Salads, and GTEA, respectively.
+The contrastive temperature τ \tau in Eqs. ( 12 ) and ( 13 ) is set to 0.1 0.1 . We also leverage the FA of C2F-TCN in semi-supervised learning. 
+ VI-B Evaluation of the Supervised Setup 
+ VI-B 1 Detailed Ablation on the Base Encoder-Decoder 
+ Breakfast 
+ 50Salads 
+ GTEA 
+ Method 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ without TPP layer 𝚪 \mathbf{\Gamma} 
+ 70.9 70.9 
+ 67.6 67.6 
+ 56.5 56.5 
+ 67.9 67.9 
+ 75.5 75.5 
+ 82.7 82.7 
+ 80.9 80.9 
+ 71.0 71.0 
+ 74.5 74.5 
+ 84.0 84.0 
+ 90.6 90.6 
+ 89.3 89.3 
+ 78.4 78.4 
+ 87.3 87.3 
+ 80.4 80.4 
+ with TPP layer 𝚪 \mathbf{\Gamma} 
+ 71.9 
+ 68.8 
+ 58.5 
+ 68.9 
+ 76.6 
+ 84.3 
+ 81.7 
+ 72.8 
+ 76.3 
+ 84.5 
+ 92.3 
+ 90.1 
+ 80.3 
+ 88.5 
+ 81.2 
+ TABLE II: Temporal pyramid pooling (TPP) is the most effective when inputs are of varying resolution. Without a TPP layer from our full stack, i.e. C2F-TCN + FA, performance is reduced, most notably in F1@50 for 50Salads and GTEA. 
+ Breakfast 
+ 50Salads 
+ GTEA 
+ Method 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ *ED-TCN [ 2 ] 
+ 48.1 
+ 43.6 
+ 30.9 
+ 49.2 
+ 55.3 
+ 69.2 
+ 65.3 
+ 53.4 
+ 62.7 
+ 66.5 
+ 75.7 
+ 72.7 
+ 60.4 
+ 76.7 
+ 66.1 
+ + C2F-Ensem 
+ 49.0 
+ 44.2 
+ 31.6 
+ 49.6 
+ 56.4 
+ 70.5 
+ 66.7 
+ 53.8 
+ 63.3 
+ 68.5 
+ 76.7 
+ 72.9 
+ 63.4 
+ 76.8 
+ 67.6 
+ C2F-Ensem Gain 
+ +0.9 
+ +0.6 
+ +0.7 
+ +0.4 
+ +1.1 
+ +1.3 
+ +1.4 
+ +0.4 
+ +0.6 
+ +2.0 
+ +1.0 
+ +0.2 
+ 3.0 
+ +0.1 
+ +1.5 
+ Our Base M 
+ 59.8 
+ 55.6 
+ 45.8 
+ 60.1 
+ 69.3 
+ 72.1 
+ 68.6 
+ 57.8 
+ 63.8 
+ 78.5 
+ 87.9 
+ 86.1 
+ 71.6 
+ 84.1 
+ 77.8 
+ + C2F-Ensem(C2F-TCN) 
+ 64.9 
+ 60.6 
+ 49.7 
+ 63.2 
+ 70.2 
+ 75.6 
+ 72.7 
+ 61.2 
+ 69.1 
+ 79.6 
+ 89.9 
+ 88.3 
+ 75.9 
+ 86.8 
+ 79.6 
+ C2F-Ensem Gain 
+ +5.1 
+ +5.0 
+ +3.9 
+ +3.1 
+ +0.9 
+ +2.9 
+ +4.1 
+ +3.4 
+ +5.3 
+ +1.1 
+ +2.0 
+ +2.2 
+ +4.3 
+ +2.7 
+ +1.8 
+ TABLE III: Gain with the C2F-Ensemble in both ED-TCN and our base model M . *ED-TCN is our implementation with ℒ TR \mathcal{L}_{\text{TR}} . 
+ We report our base TCN model M=( 𝚽 , 𝚪 , 𝚿 \mathbf{\Phi}{},\mathbf{\Gamma}{},\mathbf{\Psi}{} ) with the probability outputs 𝐩 ( 6 ) \mathbf{p}^{(6)} from the last decoder layer (i.e. without ensembling) in Tab. I . Compared to older encoder-decoders like ED-TCN [ 2 ] and TDRN [ 3 ] , our network is deeper (6 layers vs. 2),
+but has approximately the same parameters ( ≈ \approx 6M) as we use smaller kernels ( 5 5 vs 25 25 for ED-TCN, 50 50 for TDRN) and skip connections similar to the Unet [ 10 , 71 ] style architecture. Our designed base encoder-decoder architecture outperformed ED-TCN [ 2 ] and TDRN [ 3 ] in most metrics on all three datasets (in
+ Tab. I ). 
+ Relationship between Skip Connection and Number of Layers As mentioned in Sec. III , each decoder layer concatenates its up-sampled outputs with encoder 𝚽 ( 6 − i ) \mathbf{\Phi}_{(6-i)} ’s layers output via a skip connection . Fig. 6 visualizes the impact of skip connections with an increase in the number of layers of the ED-TCN (keeping the kernel size fixed at 25). With an increase in the number of layers, the MoF of the ED-TCN drastically decreases. However, with added skip connections (similar to Unet [ 10 ] ) and an increase in the number of layers, the scores increase again. The MoF saturates at roughly six layers, which corresponds to our choice. 
+ Fig. 6: Skip connection ablation on 50Salads: Skip connections help to increase the MoF of the ED-TCN architecture, and its impact is highlighted by the increase in the number of layers of the ED-TCN architecture. 
+ Impact of Kernel Size Fig. 7 shows that a convolution kernel of size 5 in the 6-layered C2F-TCN model is sufficient to obtain competitive scores. The base model scores (in orange) increased with larger kernel sizes, saturating at kernel size 25, at the expense of more model parameters. We observe, however, that the C2F ensembling gave the greatest improvement (shown in red) for the TCN with size 5 kernels. By incorporating the C2F ensemble, the resulting scores are competitive against the use of larger kernels (and thereby more model parameters).
+As the ensembling requires no additional parameters, yet can improve scores, this again affirms our architecture choice in ensembling. 
+ Fig. 7: Kernel size ablation on 50Salads: C2F-Ensemble and FA helps in gaining competitive results even with a smaller kernel size. Reducing the convolution kernel size from 25 to 5 within our 6 layered C2F-TCN model leads to a reduction in the parameters from ≈ \approx 20M to ≈ \approx 6M with similar results. 
+ Impact of the Bottleneck Layer 
+Table II shows the impact of the temporal pooling layer, used to handle multiple temporal resolutions, which is characteristic of video datasets. It is also added through our augmentation strategy. To highlight the importance of including a multi-resolution hidden feature representation at the bottleneck, we show scores after the removal of the bottleneck layer from our final C2F-TCN + FA. The scores decreased in all the datasets and metrics. Interestingly, the biggest impact was seen in the metric F1@50, which is the most strict criteria for over-segmentation. 
+ Method 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ Base ( 𝚽 , 𝚪 , 𝚿 \mathbf{\Phi},\mathbf{\Gamma},\mathbf{\Psi} ) 
+ 59.8 
+ 55.6 
+ 45.8 
+ 60.1 
+ 69.3 
+ (+) loss at each decoder 
+ 59.2 
+ 55.1 
+ 45.6 
+ 58.7 
+ 70.6 
+ (+) learned α u \alpha_{u} 
+ 61.8 
+ 57.8 
+ 47.6 
+ 61.4 
+ 70.5 
+ (+) fixed α u \alpha_{u} (C2F-TCN) 
+ 64.9 
+ 60.6 
+ 49.7 
+ 63.2 
+ 70.2 
+ TABLE IV: Ablation on ensembling weights on Breakfast. 
+ Breakfast 
+ 50Salads 
+ GTEA 
+ Method 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ MS-TCN [ 6 ] 
+ 64.1 
+ 58.6 
+ 45.9 
+ 65.6 
+ 67.6 
+ 80.7 
+ 78.5 
+ 70.1 
+ 74.3 
+ 83.7 
+ 87.8 
+ 86.2 
+ 74.4 
+ 82.6 
+ 78.9 
+ (+) FA-Train 
+ 70.2 
+ 66.7 
+ 56.5 
+ 67.5 
+ 70.3 
+ 81.4 
+ 79.8 
+ 72.0 
+ 76.0 
+ 84.1 
+ 88.7 
+ 85.7 
+ 74.2 
+ 82.8 
+ 78.7 
+ (+) FA-Train-Test 
+ 70.8 
+ 67.6 
+ 56.8 
+ 67.7 
+ 71.3 
+ 82.8 
+ 80.4 
+ 72.2 
+ 76.1 
+ 84.2 
+ 88.8 
+ 85.7 
+ 74.1 
+ 82.8 
+ 79.0 
+ FA Gain 
+ +6.7 
+ +8.9 
+ +10.9 
+ +2.1 
+ +3.7 
+ +2.1 
+ +1.9 
+ +2.1 
+ +1.8 
+ +0.5 
+ +1.0 
+ -0.5 
+ -0.3 
+ +0.2 
+ +0.1 
+ C2F-TCN 
+ 64.9 
+ 60.6 
+ 49.7 
+ 63.2 
+ 70.2 
+ 75.6 
+ 72.7 
+ 61.2 
+ 69.1 
+ 79.6 
+ 89.9 
+ 88.3 
+ 75.9 
+ 86.8 
+ 79.6 
+ (+) FA-Train 
+ 70.8 
+ 67.5 
+ 57.3 
+ 67.5 
+ 74.3 
+ 78.9 
+ 77.1 
+ 66.9 
+ 72.5 
+ 81.9 
+ 92.2 
+ 89.9 
+ 80.2 
+ 88.0 
+ 81.2 
+ (+) FA-Train-Test 
+ 71.9 
+ 68.8 
+ 58.5 
+ 68.9 
+ 76.6 
+ 84.3 
+ 81.7 
+ 72.8 
+ 76.3 
+ 84.5 
+ 92.3 
+ 90.1 
+ 80.3 
+ 88.5 
+ 81.2 
+ FA Gain 
+ +7.0 
+ +8.9 
+ +8.7 
+ +5.7 
+ +6.3 
+ +8.7 
+ +9.0 
+ 11.6 
+ +7.2 
+ +2.4 
+ +2.4 
+ +1.8 
+ +4.4 
+ +1.7 
+ +1.6 
+ TABLE V: Our feature augmentation (FA) strategy significantly improves the performance of both MS-TCN and C2F-TCN. 
+ VI-B 2 Impact of the C2F-Ensemble 
+ Instead of adding loss on the last layer, we add loss on the “coarse-to-fine ensemble” probabilities ( Sec. III-C ). We show the increment with C2F-Ensemble on all datasets, both with existing ED-TCN (our implementation with added loss ℒ TR \mathcal{L}_{\text{TR}} ) and with our base model M in Tab. III . The increment in ED-TCN is comparatively small because it contains 2 decoder layers, compared to the 6 used here. Ensembling decoder layers on our model M gives a significant improvement in Edit and F1 scores on all three datasets. The ensemble is easy to implement and requires no additional network components. In Appendix B we show that the ensembled probabilities of multiple layers in MS-TCN [ 6 ] do not yield higher results as there is no diversity in the temporal resolution of representation. 
+ Forcing weights ( α i \alpha_{i} ) on lower decoder layers via equal weighting, as done here, performed better than (1) learning α i \alpha_{i} and (2) applying individual losses to each decoding layer (see Tab. IV ). Learned weights lead to lower Edit and F1 scores than fixed weights because learned weights emphasize latter decoder layers, leading to higher MoF but also higher fragmentation. 
+ Fig. 3 shows an analysis of the C2F-Ensemble compared to the individual decoder layers 𝚿 ( u ) \mathbf{\Psi}^{(u)} . The left plot shows a sample prediction, highlighting that the
+fragmentation errors of the last decoder 𝚿 ( 6 ) \mathbf{\Psi}^{(6)} were mitigated by the earlier layers. The plot on the right shows that the fourth decoder 𝚿 ( 4 ) \mathbf{\Psi}^{(4)} performed best individually, however,
+the ensemble yielded the highest value for all scores, especially in Edit distance – the measure most affected by fragmentation. 
+ VI-B 3 Impact of Temporal Feature Augmentation 
+ Tab. V shows the gains with our augmentation strategy during training (FA-Train) and testing (FA-Train-Test) when applied to MS-TCN [ 6 ] and our C2F-TCN. FA consistently improved the performance of C2F-TCN in all three datasets. Applying FA on top of MS-TCN generally led to better results, most notably on Breakfast, but it was less impressive on GTEA. GTEA has marginal decreases in F1; we speculate that the short segments, a characteristic of GTEA, became completely lost in the coarser windows. On the larger Breakfast and 50Salads datasets, MS-TCN with FA outperformed in most metrics compared to BCN/GatedR i.e. MS-TCN with additional refinement modules (shown in Tab. VI ). 
+ Breakfast 
+ 50Salads 
+ GTEA 
+ Method 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ MS-TCN [ 6 ] 
+ 64.1 
+ 58.6 
+ 45.9 
+ 65.6 
+ 67.6 
+ 80.7 
+ 78.5 
+ 70.1 
+ 74.3 
+ 83.7 
+ 87.8 
+ 86.2 
+ 74.4 
+ 82.6 
+ 78.9 
+ GatedR [ 8 ] 
+ 71.1 
+ 65.7 
+ 53.6 
+ 70.6 
+ 67.7 
+ 78.0 
+ 76.2 
+ 67.0 
+ 71.4 
+ 80.7 
+ 89.1 
+ 87.5 
+ 72.8 
+ 83.5 
+ 76.7 
+ BCN [ 7 ] 
+ 68.7 
+ 65.5 
+ 55.0 
+ 66.2 
+ 70.4 
+ 82.3 
+ 81.3 
+ 74.0 
+ 74.3 
+ 84.4 
+ 88.5 
+ 87.1 
+ 77.3 
+ 84.4 
+ 79.8 
+ DTGRM [ 82 ] 
+ 57.5 
+ 54.0 
+ 43.3 
+ 58.7 
+ 65.0 
+ 75.4 
+ 72.8 
+ 63.9 
+ 67.5 
+ 82.6 
+ – 
+ – 
+ – 
+ – 
+ – 
+ G2L [ 9 ] 
+ 74.9 
+ 69.0 
+ 55.2 
+ 73.3 
+ 70.7 
+ 80.3 
+ 78.0 
+ 69.8 
+ 73.4 
+ 82.2 
+ 89.9 
+ 87.3 
+ 75.8 
+ 84.6 
+ 78.5 
+ C2F-TCN 
+ 64.9 
+ 60.6 
+ 49.7 
+ 63.2 
+ 70.2 
+ 75.6 
+ 72.7 
+ 61.2 
+ 69.1 
+ 79.6 
+ 89.9 
+ 88.3 
+ 75.9 
+ 86.8 
+ 79.6 
+ MS-TCN (+) FA 
+ 70.8 
+ 67.6 
+ 56.8 
+ 67.7 
+ 71.3 
+ 82.8 
+ 80.4 
+ 72.2 
+ 76.1 
+ 84.2 
+ 88.8 
+ 85.7 
+ 74.1 
+ 82.8 
+ 79.0 
+ C2F-TCN (+) FA 
+ 71.9 
+ 69.0 
+ 58.5 
+ 68.9 
+ 76.6 
+ 84.3 
+ 81.7 
+ 72.8 
+ 76.3 
+ 84.5 
+ 92.3 
+ 90.1 
+ 80.3 
+ 88.5 
+ 81.2 
+ TABLE VI: State-of-the-art comparisons verifying that C2F-TCN with our feature augmentation (FA) exceeds other methods in most metrics in all datasets. We obtain noteworthy gains of +3.3 F1@50, +5.9 MoF on the largest Breakfast dataset and significantly exceed other methods on 50Salads and GTEA. 
+ Method 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MF 
+ MS-TCN [ 6 ] 
+ 17.1 
+ 14.1 
+ 8.7 
+ 21.0 
+ 21.2 
+ C2F-TCN 
+ 20.2 
+ 16.6 
+ 10.8 
+ 22.3 
+ 22.5 
+ TABLE VII: C2F-TCN outperforms MS-TCN in the task of coarse segmentation on the challenging Assembly101 dataset. 
+ Fig. 8: Uncertainty quantification: Calibration curves
+analyzing our ensemble (left) and showing the impact of feature augmentation (middle). The ideal curve sits at 0; values above and below indicate under-/over-confidence, respectively. Our ensemble is better calibrated and less over-confident than the final decoder layers as well as MS-TCN. Adding our feature augmentation strategy ‘ (+FA) ’ further improves the calibration of our own model and MS-TCN. The rightmost plot is the density of the entropy of probability for incorrect predictions. Our C2F ensemble is more uncertain about wrong predictions than MS-TCN. 
+ VI-B 4 Comparison with State-of-the-Art 
+ Tab. VI compares our results with the most recent segmentation works, MS-TCN [ 6 ] , GatedR [ 8 ] , BCN [ 7 ] , GTRM [ 82 ] , and Global2Local(G2L) [ 9 ] . All listed works use I ​ 3 ​ D I3D features. We omit works not directly comparable, such as [ 31 ] , which uses features extracted from an already-trained MS-TCN, and [ 24 ] , which accesses (unlabeled) test videos during training. BCN, GatedR and G2L are built on top of MS-TCN, a feedforward TCN with fixed temporal resolution. DGTRM is built on graph convolutional networks. ED-TCN and our C2F-TCN are encoder-decoder architectures that down- and then up-sample in time. 
+ Our model outperformed the state-of-the-art scores by +5.9% and +3.3% on the MoF and F1@50, respectively, on Breakfast, the largest of the three datasets. G2L, formed using neural architecture search to improve MS-TCN’s receptive field, had a slightly higher performance than our method in Breakfast Edit and F1@10 scores; however, we exceeded it in all other metrics and datasets. For 50Salads, we outperformed by +2.0 % on Edit and F1@10. For F1@50, we were slightly lower than BCN, but BCN is worse for all other metrics and datasets. On GTEA, we outperformed the state-of-the-art scores on all metrics by large margins.
+From these strong scores, we conclude that C2F-TCN generalizes well to different datasets. 
+ In Tab. VII , we apply MS-TCN [ 6 ] and C2F-TCN for a coarse-action segmentation task on the Assembly101 dataset and show that C2F-TCN outperforms MS-TCN. 
+ VI-C Evaluation of Complex Activity Recognition 
+ Method 
+ I3D 
+ Fine-tuned 
+ features 
+ features 
+ Timeception [ 48 ] 
+ 71.3 
+ 86.9 
+ PIC [ 17 ] 
+ - 
+ 89.9 
+ Actor-Focus [ 83 ] 
+ 72.0 
+ 89.9 
+ Ours Encoder( 𝚽 \mathbf{\Phi} ) Model 
+ 92.4 
+ - 
+ (+) FA-Train 
+ 94.6 
+ - 
+ margin wrt SOTA 
+ +22.6 
+ +4.7 
+ TABLE VIII: Complex Activity Recognition on the Breakfast dataset: The encoder of C2F-TCN with feature augmentation outperforms previous state-of-the-art even without fine-tuned features. 
+ Tab. VIII compares various dedicated frameworks, namely Timeception [ 48 ] , PIC [ 17 ] , and Actor-Focus [ 83 ] ,
+on Breakfast. To ensure a fair comparison, the same
+ : 335 1357\!\!:\!\!335 
+train-test split from Timeception is used. We employ Kinetics pre-trained I3D features that are not fine-tuned on Breakfast, while previous works report additional results with fine-tuning. Our base encoder 𝚽 \mathbf{\Phi} model was +20.9% above the other methods that do not use fine-tuned features and +2.5% above those using fine-tuned features. Adding our FA and without using fine-tuned features, we exceeded the state-of-the-art results derived using fine-tuned features by +4.7%. 
+ VI-D Uncertainty Quantification 
+ Using calibration notations from Sec. III-E , we partition the confidence values into N N equal length bins 𝒫 n := ( n N , n + 1 N ] \mathcal{P}_{n}:=(\frac{n}{N},\frac{n+1}{N}] and plot the difference between the associated accuracy and the confidence, i.e. acc ​ ( 𝒫 n ) − conf ​ ( 𝒫 n ) \text{acc}(\mathcal{P}_{n})-\text{conf}(\mathcal{P}_{n}) . Perfectly calibrated outputs would sit at 0 0 ; over or under 0 0 indicates under-/over-confidence.
+The left plot of Fig. 8 shows that each decoding layer became progressively more over-confident, especially at higher confidence values. Ensembling the results generally results in calibration levels similar to earlier decoders 𝚿 ( 3 ) \mathbf{\Psi}^{(3)} and 𝚿 ( 4 ) \mathbf{\Psi}^{(4)} , while achieving much higher accuracy (see Fig. 3 ). The middle plot shows that our FA improved the calibration of both C2F-TCN and MS-TCN. Thus, C2F-Ensemble and FA are two efficient ways to improve the calibration of segmentation models. Calibration is important for real-life application, i.e. the model must not have highly confident wrong predictions. To show this effect,
+the last plot calculates the Shannon entropy of probability predictions for the incorrectly classified frames of all test videos. Higher entropy indicates more uncertainty in prediction. We plot the entropy density for MS-TCN and C2F-TCN. C2F-TCN was more uncertain in the wrong predictions density plot and thus more calibrated. 
+ Breakfast 
+ 50Salads 
+ GTEA 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MF 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MF 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MF 
+ Input I3D Baseline 
+ 4.9 
+ 2.5 
+ 0.9 
+ 5.3 
+ 30.2 
+ 12.2 
+ 7.9 
+ 4.0 
+ 8.4 
+ 55.0 
+ 48.5 
+ 42.2 
+ 26.4 
+ 40.2 
+ 61.9 
+ Our Representations 
+ 57.0 
+ 51.7 
+ 39.1 
+ 51.3 
+ 70.5 
+ 40.8 
+ 36.2 
+ 28.1 
+ 32.4 
+ 62.5 
+ 70.8 
+ 65.0 
+ 48.0 
+ 65.7 
+ 69.1 
+ Improvement 
+ 52.1 
+ 49.2 
+ 38.2 
+ 46.0 
+ 40.3 
+ 28.6 
+ 28.3 
+ 24.1 
+ 24.0 
+ 7.5 
+ 22.3 
+ 22.8 
+ 21.6 
+ 25.5 
+ 7.2 
+ TABLE IX: Our unsupervised learning represents a large improvement in segmentation compared to input features. 
+ VI-E Evaluation of C2F-TCN on Representation Learning 
+ Breakfast 
+ 50Salads 
+ GTEA 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ Cluster 
+ 11.7 
+ 8.0 
+ 3.9 
+ 12.2 
+ 36.1 
+ 18.5 
+ 13.7 
+ 8.5 
+ 13.6 
+ 50.8 
+ 57.3 
+ 48.6 
+ 31.6 
+ 52.4 
+ 60.5 
+ (+) Proximity 
+ 24.4 
+ 19.2 
+ 11.5 
+ 21.3 
+ 50.0 
+ 18.6 
+ 13.5 
+ 8.0 
+ 13.5 
+ 51.6 
+ 62.9 
+ 56.6 
+ 38.0 
+ 52.6 
+ 62.2 
+ (+) Video-Level 
+ 42.9 
+ 37.6 
+ 26.6 
+ 36.4 
+ 66.1 
+ – 
+ – 
+ – 
+ – 
+ – 
+ – 
+ – 
+ – 
+ – 
+ – 
+ TABLE X: Contribution of clustering and time-proximity conditions and video-level constraints for contrastive learning (with 𝐳 6 \mathbf{z}_{6} ). 
+ Breakfast 
+ 50Salads 
+ GTEA 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ Last-Layer( 𝐳 6 \mathbf{z}_{6} ) 
+ 42.9 
+ 37.6 
+ 26.6 
+ 36.4 
+ 66.1 
+ 18.6 
+ 13.5 
+ 8.0 
+ 13.5 
+ 51.6 
+ 62.9 
+ 56.6 
+ 38.0 
+ 52.6 
+ 62.2 
+ Multi-Resolution( 𝐟 \mathbf{f} ) 
+ 57.0 
+ 51.7 
+ 39.1 
+ 51.3 
+ 70.5 
+ 40.8 
+ 36.2 
+ 28.1 
+ 32.4 
+ 62.5 
+ 70.8 
+ 65.0 
+ 48.0 
+ 65.7 
+ 69.1 
+ Improvement 
+ 14.1 
+ 14.1 
+ 12.5 
+ 14.9 
+ 4.4 
+ 22.2 
+ 22.7 
+ 20.1 
+ 18.9 
+ 10.9 
+ 7.9 
+ 8.4 
+ 10.0 
+ 13.1 
+ 6.9 
+ TABLE XI: Using Multi-Resolution( 𝐟 \mathbf{f} ) representation instead of a final decoder 𝐳 6 \mathbf{z}_{6} significantly improves the learned representation scores. 
+ VI-E 1 Linear Classification Accuracy 
+ Tab. IX shows our unsupervised representation learning (see Sec. V-A4 ) results. We evaluate the input I3D features with a linear evaluation protocol to serve as a baseline. Our representation brings significant gains over the input I3D, verifying the ability of the base TCN to perform the task of segmentation with our designed unsupervised learning. 
+ VI-E 2 Frame- and Video-Level Contrastive Learning 
+ Tab. X breaks down the contributions from Sec. V-A1 and Sec. V-A2 when forming the positive and negative sets of contrastive learning from Eq. ( 11 ) . The ‘ Cluster ’ row applies the cluster labels condition i.e. l n ​ [ t i n ] = l m ​ [ t j m ] l_{n}[t^{n}_{i}]=l_{m}[t^{m}_{j}] and ‘ (+) Proximity ’ adds the condition | t i n − t j m | < δ |t^{n}_{i}-t^{m}_{j}|<\delta .
+Adding time proximity was more effective for Breakfast and GTEA, likely because their videos follow a more rigid sequencing than 50Salads. Adding the Video-Level contrastive loss from Sec. V-A2 in Breakfast gave a further boost. 
+ VI-E 3 Multi-resolution representation 
+ Tab. XI verifies that our multi-resolution representation 𝐟 \mathbf{f} (see Sec. V-A3 ) outperformed the use of only the final decoder layer feature 𝐳 6 \mathbf{z}_{6} by very large margins. Gains are especially notable for the F1 score and Edit distance, verifying that 𝐟 \mathbf{f} has less over-segmentation. 
+ VI-F Evaluation of Semi-Supervised Learning 
+ VI-F 1 ICC Components 
+ Tab. XII shows the progressive improvements as we increase the number of iterations of our proposed ICC algorithm. The gain in performance was especially noticeable for the Edit and F1 scores.
+The reported segmentation results are from after the classify step. The improvements gained by updating the feature representation after the contrast step but before the classify step of the next iteration are shown in Appendix C. 
+ Breakfast 
+ 50Salads 
+ GTEA 
+ Method 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ ≈ \approx 5 
+ ICC 1 \text{ICC}_{1} 
+ 54.5 
+ 48.7 
+ 33.3 
+ 54.6 
+ 64.2 
+ 41.3 
+ 37.2 
+ 27.8 
+ 35.4 
+ 57.3 
+ 70.3 
+ 66.5 
+ 49.5 
+ 64.7 
+ 66.0 
+ ICC 2 \text{ICC}_{2} 
+ 56.9 
+ 51.9 
+ 34.8 
+ 56.5 
+ 65.4 
+ 45.7 
+ 40.9 
+ 30.7 
+ 40.9 
+ 59.5 
+ 77.0 
+ 70.6 
+ 54.1 
+ 67.8 
+ 68.0 
+ ICC 3 \text{ICC}_{3} 
+ 59.9 
+ 53.3 
+ 35.5 
+ 56.3 
+ 64.2 
+ 50.1 
+ 46.7 
+ 35.3 
+ 43.7 
+ 60.9 
+ 77.6 
+ 71.2 
+ 54.2 
+ 71.3 
+ 68.0 
+ ICC 4 \text{ICC}_{4} 
+ 60.2 
+ 53.5 
+ 35.6 
+ 56.6 
+ 65.3 
+ 52.9 
+ 49.0 
+ 36.6 
+ 45.6 
+ 61.3 
+ 77.9 
+ 71.6 
+ 54.6 
+ 71.4 
+ 68.2 
+ Gain 
+ 5.7 
+ 4.8 
+ 2.3 
+ 2.0 
+ 1.1 
+ 11.6 
+ 11.8 
+ 8.8 
+ 10.2 
+ 4.0 
+ 7.6 
+ 5.1 
+ 5.1 
+ 6.7 
+ 2.2 
+ TABLE XII: Progressive semi-supervised improvement with more iterations of ICC on the 3 benchmark datasets with 5% labeled training data. 
+ Breakfast 
+ 50Salads 
+ GTEA 
+ % D L D_{L} 
+ Method 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ ≈ \approx 5 
+ Supervised 
+ 15.7 
+ 11.8 
+ 5.9 
+ 19.8 
+ 26.0 
+ 30.5 
+ 25.4 
+ 17.3 
+ 26.3 
+ 43.1 
+ 64.9 
+ 57.5 
+ 40.8 
+ 59.2 
+ 59.7 
+ Semi-Super 
+ 60.2 
+ 53.5 
+ 35.6 
+ 56.6 
+ 65.3 
+ 52.9 
+ 49.0 
+ 36.6 
+ 45.6 
+ 61.3 
+ 77.9 
+ 71.6 
+ 54.6 
+ 71.4 
+ 68.2 
+ Gain 
+ 44.5 
+ 41.7 
+ 29.7 
+ 36.8 
+ 39.3 
+ 22.4 
+ 23.6 
+ 19.3 
+ 19.3 
+ 18.2 
+ 13.0 
+ 14.1 
+ 13.8 
+ 12.2 
+ 8.5 
+ ≈ \approx 10 
+ Supervised 
+ 35.1 
+ 30.6 
+ 19.5 
+ 36.3 
+ 40.3 
+ 45.1 
+ 38.3 
+ 26.4 
+ 38.2 
+ 54.8 
+ 66.2 
+ 61.7 
+ 45.2 
+ 62.5 
+ 60.6 
+ Semi-Super 
+ 64.6 
+ 59.0 
+ 42.2 
+ 61.9 
+ 68.8 
+ 67.3 
+ 64.9 
+ 49.2 
+ 56.9 
+ 68.6 
+ 83.7 
+ 81.9 
+ 66.6 
+ 76.4 
+ 73.3 
+ Gain 
+ 29.5 
+ 28.4 
+ 22.7 
+ 25.6 
+ 28.5 
+ 22.2 
+ 26.6 
+ 22.8 
+ 18.7 
+ 13.8 
+ 17.5 
+ 20.2 
+ 21.4 
+ 13.9 
+ 12.7 
+ 100 
+ Supervised* 
+ 70.8 
+ 67.5 
+ 57.3 
+ 67.5 
+ 74.3 
+ 78.9 
+ 77.1 
+ 66.9 
+ 72.5 
+ 81.9 
+ 92.2 
+ 89.9 
+ 80.2 
+ 88.0 
+ 81.2 
+ TABLE XIII: Our final all-metrics evaluation of the proposed ICC algorithm on 3 benchmark action segmentation datasets. Semi-Super (our ICC 4 \text{ICC}_{4} ) significantly outperforms a supervised counterpart using the same labeled data amount. See also Fig. 9 . *our C2F-TCN without test-augmentation. 
+ VI-F 2 Semi-Supervised vs Supervised 
+ Tab. XIII shows
+our final ‘Semi-Super’ results, i.e. ICC 4 \text{ICC}_{4} , for various percentages of labeled data. We compare the ‘Supervised’ case of training the base model C2F-TCN with the same labeled dataset 𝒟 L \mathcal{D}_{L} ;
+ICC significantly outperforms the supervised counterparts’ baselines for all metrics (see also Fig. 9 ) and for all amounts of training data.
+The 100% supervised C2F-TCN results are reported without test-time augmentations.
+In fact, with just 5% of labeled videos, there is only 9% less in MoF in the Breakfast actions compared to fully supervised (100%). Using less than 5% (3 videos for 50Salads and GTEA) for training videos does not ensure coverage of all the actions. 
+ VI-F 3 Comparison with State-of-the-Art 
+ As the first to perform semi-supervised temporal action segmentation, our work is not directly comparable with other works. Table XIV shows that our MoF is competitive with other forms of supervision on all three datasets. TSS and SSTDA uses weak labels for all training videos, while our work requires full labels for only few training videos. 
+ Fig. 9: Our semi-supervised approach on the Breakfast dataset shows impressive performance with just 5% labeled videos; at 40%, we almost match the MoF of a 100% fully supervised setup. 
+ Method 
+ Breakfast 
+ 50Salads 
+ GTEA 
+ MS-TCN [ 6 ] 
+ 67.6 
+ 83.7 
+ 78.9 
+ SSTDA [ 24 ] 
+ 70.2 
+ 83.2 
+ 79.8 
+ Full 
+ *C2F-TCN 
+ 74.3 
+ 81.9 
+ 81.2 
+ SSTDA(65%) [ 24 ] 
+ 65.8 
+ 80.7 
+ 75.7 
+ Weakly 
+ TSS [ 25 ] 
+ 64.1 
+ 75.6 
+ 66.4 
+ Ours ICC (40%) 
+ 71.1 
+ 78.0 
+ 78.4 
+ Ours ICC (10%) 
+ 68.8 
+ 68.6 
+ 73.3 
+ Semi 
+ Ours ICC (5%) 
+ 65.3 
+ 61.3 
+ 68.2 
+ TABLE XIV: Our semi-supervised results are competitive against different supervision levels. With 40% labeled training videos, we are close in terms of MoF with fully supervised C2F-TCN counterpart.* indicates with test augmentation. 
+ % 𝒟 L \mathcal{D}_{L} 
+ Method 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ 100% 
+ *Full-Supervised 
+ 70.5 
+ 66.7 
+ 53.8 
+ 63.3 
+ 68.5 
+ 5% 
+ Supervised 
+ 32.4 
+ 26.5 
+ 14.8 
+ 25.5 
+ 39.1 
+ 5% 
+ our ICC 
+ 39.3 
+ 34.4 
+ 21.6 
+ 32.7 
+ 46.4 
+ 5% 
+ Gain 
+ 6.9 
+ 7.9 
+ 6.8 
+ 7.2 
+ 7.3 
+ TABLE XV: Our semi-supervised (final ICC 4 \text{ICC}_{4} ) results with ED-TCN [ 2 ] on 50salads with 5% labeled data significantly improves over its supervised counterpart.* indicates our implementation from Tab. III 
+ VI-F 4 Other Baseline TCN Models 
+ We try our entire semi-supervised ICC algorithm Fig. 5 
+using two other base TCN models: ED-TCN (an encoder-decoder architecture) and MS-TCN (a wavenet-like refinement architecture). 
+ ED-TCN: We show that our proposed ICC works with ED-TCN [ 2 ] in Tab. XV , whereby ICC showed improved performance over its supervised counterpart. Due to the smaller capacity of ED-TCN compared to C2F-TCN (as indicated by the fully supervised performance of ED-TCN 68.5% vs C2F-TCN 79.6% MoF), the ICC algorithm improvement with ED-TCN was lower
+compared to
+C2F-TCN. Model capacity influence on representation learning is in line with findings shown in SimCLR [ 19 ] constrastive framework. 
+ MS-TCN: Our proposed unsupervised representation learning did not work well with MS-TCN [ 6 ] . This was possibly due to the fact that MS-TCN is not designed for representation learning as 3 out of the 4 model blocks consist of refinement stages, whereby each stage takes class probability vectors as input from the previous stages. Therefore, representation learning and classifier cannot be decoupled, making alternative classifier-representation learning algorithms difficult. Further, MS-TCN does not have multiple temporal resolution representation such as the encoder-decoder architecture, which plays a significant role in our contrastive learning, as discussed earlier. 
+ VII Conclusion 
+ In this work, we designed a temporal encoder-decoder model C2F-TCN
+combining both the coarse and fine decoder outputs of different temporal resolutions.
+In the supervised setting, we performed a coarse-to-fine ensemble of the predictions from the decoding layers, which achieved state-of-the-art performance in supervised temporal action segmentation.
+Ensembled representation produced calibrated predictions with better uncertainty measures, which is crucial for real-world deployment.
+Additionally, the encoder of our C2F-TCN architecture
+achieved state-of-the-art performance in activity recognition, indicating the generalization capability of the model.
+In the unsupervised feature learning framework, we formed multi-resolution representation implicitly with outputs from multiple decoder layers of C2F-TCN, bringing temporal continuity, and consequently large improvements in contrastive representation learning.
+We showed and utilized the fact that the pre-trained input features that capture the semantics and motion of short-trimmed video segments can be used to learn higher-level representations to interpret long video sequences. Our final iterative semi-supervised learning algorithm ICC can significantly reduce the annotation efforts, with 40% labeled videos approximately achieving fully supervised (100%) performance. 
+ As a future direction, we would also like to extend our framework to a combined semi and weak supervision setup. Moreover, we would like to explore using the framework for video domain adaptation, as it is strongly linked with unsupervised contrastive feature learning. 
+ Although our proposed methods are extremely strong, like previous temporal action segmentation works, our setup also utilizes pre-computed features to avoid the computation expenses of end-to-end training. This serves as a motivation for us to design less computationally expensive end-to-end learning frameworks. Furthermore, similar to previous state-of-the-art TCNs, C2F-TCN also requires the entire video to be available for inference. Hence, the scope is limited to offline temporal action segmentation. 
+ Appendix S1 Details of the C2F-TCN Architecture 
+ The following presents the detailed model architecture explained in section 3.1. To define the model, we first define a block called the double_conv block, where double_conv(in_c, out_c) = Conv1D(in_c, out_c, kernel=5, pad=1) → \xrightarrow{} BatchNorm1D(out_c) → \xrightarrow{} ReLU() → \xrightarrow{} Conv1D(out_c, out_c, kernel=5, pad=1) → \xrightarrow{} BatchNorm1D(out_c) → \xrightarrow{} ReLU() ; in_c denotes the input channel’s dimension and out_c denotes the output channel’s dimension. Using this block, our model M M is defined, as detailed in Table T16 . The output from 𝚿 ( i ) \mathbf{\Psi}^{(i)} is then projected to the number of classes and followed by a softmax operation to produce probability vectors 𝐩 ( i ) \mathbf{p}^{(i)} , as described in section 3.2 of the main paper. Our model has a total of ≈ \approx 6 million trainable parameters. 
+ Stage 
+ Input 
+ Model 
+ Output 
+ 𝚽 0 \mathbf{\Phi}_{0} 
+ T i ​ n × 2048 T_{in}\times 2048 
+ double_conv(2048, 256) 
+ T i ​ n × 256 T_{in}\times 256 
+ 𝚽 1 \mathbf{\Phi}_{1} 
+ T i ​ n × 256 T_{in}\times 256 
+ MaxPool1D(2) 
+ double_conv(256, 256) 
+ T i ​ n 2 × 256 \frac{T_{in}}{2}\times 256 
+ 𝚽 2 \mathbf{\Phi}_{2} 
+ T i ​ n 2 × 256 \frac{T_{in}}{2}\times 256 
+ MaxPool1D(2) 
+ double_conv(256, 256) 
+ T i ​ n 4 × 256 \frac{T_{in}}{4}\times 256 
+ 𝚽 3 \mathbf{\Phi}_{3} 
+ T i ​ n 4 × 256 \frac{T_{in}}{4}\times 256 
+ MaxPool1D(2) 
+ double_conv(256, 128) 
+ T i ​ n 8 × 128 \frac{T_{in}}{8}\times 128 
+ 𝚽 4 \mathbf{\Phi}_{4} 
+ T i ​ n 8 × 128 \frac{T_{in}}{8}\times 128 
+ MaxPool1D(2) 
+ double_conv(128, 128) 
+ T i ​ n 16 × 128 \frac{T_{in}}{16}\times 128 
+ 𝚽 5 \mathbf{\Phi}_{5} 
+ T i ​ n 16 × 128 \frac{T_{in}}{16}\times 128 
+ MaxPool1D(2) 
+ double_conv(128, 128) 
+ T i ​ n 32 × 128 \frac{T_{in}}{32}\times 128 
+ 𝚽 6 \mathbf{\Phi}_{6} 
+ T i ​ n 32 × 128 \frac{T_{in}}{32}\times 128 
+ MaxPool1D(2) 
+ double_conv(128, 128) 
+ T i ​ n 64 × 128 \frac{T_{in}}{64}\times 128 
+ 𝚪 \mathbf{\Gamma} 
+ T i ​ n 64 × 128 \frac{T_{in}}{64}\times 128 
+ MaxPool1D(2, 3, 5, 6) 
+ conv1d(in_c=132, out_c=132, k=3, p=1) 
+ T i ​ n 64 × 132 \frac{T_{in}}{64}\times 132 
+ 𝚿 1 \mathbf{\Psi}_{1} 
+ T i ​ n 64 × 132 \frac{T_{in}}{64}\times 132 
+ T i ​ n 32 × 128 \frac{T_{in}}{32}\times 128 
+ Upsample1D(2) 
+ concat_ 𝚽 5 \mathbf{\Phi}_{5} (132, 128) 
+ double_conv(260, 128) 
+ T i ​ n 32 × 128 \frac{T_{in}}{32}\times 128 
+ 𝚿 2 \mathbf{\Psi}_{2} 
+ T i ​ n 32 × 128 \frac{T_{in}}{32}\times 128 
+ T i ​ n 16 × 128 \frac{T_{in}}{16}\times 128 
+ Upsample1D(2) 
+ concat_ 𝚽 4 \mathbf{\Phi}_{4} (128, 128) 
+ double_conv(256, 128) 
+ T i ​ n 16 × 128 \frac{T_{in}}{16}\times 128 
+ 𝚿 3 \mathbf{\Psi}_{3} 
+ T i ​ n 16 × 128 \frac{T_{in}}{16}\times 128 
+ T i ​ n 8 × 128 \frac{T_{in}}{8}\times 128 
+ Upsample1D(2) 
+ concat_ 𝚽 3 \mathbf{\Phi}_{3} (128, 128) 
+ double_conv(256, 128) 
+ T i ​ n 8 × 128 \frac{T_{in}}{8}\times 128 
+ 𝚿 4 \mathbf{\Psi}_{4} 
+ T i ​ n 8 × 128 \frac{T_{in}}{8}\times 128 
+ T i ​ n 4 × 256 \frac{T_{in}}{4}\times 256 
+ Upsample1D(2) 
+ concat_ 𝚽 2 \mathbf{\Phi}_{2} (128, 256) 
+ double_conv(384, 128) 
+ T i ​ n 4 × 128 \frac{T_{in}}{4}\times 128 
+ 𝚿 5 \mathbf{\Psi}_{5} 
+ T i ​ n 4 × 128 \frac{T_{in}}{4}\times 128 
+ T i ​ n 2 × 256 \frac{T_{in}}{2}\times 256 
+ Upsample1D(2) 
+ concat_ 𝚽 1 \mathbf{\Phi}_{1} (128, 256) 
+ double_conv(384, 128) 
+ T i ​ n 2 × 128 \frac{T_{in}}{2}\times 128 
+ 𝚿 6 \mathbf{\Psi}_{6} 
+ T i ​ n 2 × 128 \frac{T_{in}}{2}\times 128 
+ T i ​ n × 256 T_{in}\times 256 
+ Upsample1D(2) 
+ concat_ 𝚽 0 \mathbf{\Phi}_{0} (128, 256) 
+ double_conv(384, 128) 
+ T i ​ n × 128 T_{in}\times 128 
+ TABLE T16: Encoder-Decoder Architecture M = ( 𝚽 , 𝚪 , 𝚿 ) M=(\mathbf{\Phi},\mathbf{\Gamma},\mathbf{\Psi}) 
+ w 0 = 5 w_{0}=5 
+ w 0 = 10 w_{0}=10 
+ w 0 = 20 w_{0}=20 
+ Edit 
+ MoF 
+ Edit 
+ MoF 
+ Edit 
+ MoF 
+ 64.7 
+ 74.6 
+ 68.9 
+ 76.6 
+ 64.3 
+ 74.1 
+ TABLE T17: Breakfast variations with Base-Window ( w 0 w_{0} ) 
+ Duration 
+ ≤ 1 \leq\!1 min 
+ > 1 >\!1 and ≤ 2.5 \leq\!2.5 
+ > 2.5 >\!2.5 min 
+ No. of Videos 
+ 534 534 
+ 584 584 
+ 594 594 
+ MSTCN [ 6 ] 
+ 68.7 68.7 
+ 70.5 70.5 
+ 70.2 70.2 
+ Ours C2F-TCN 
+ 68.9 68.9 
+ 69.8 69.8 
+ 69.7 69.7 
+ (+) FA-Train 
+ 72.9 72.9 
+ 72.9 72.9 
+ 72.7 72.7 
+ (+) FA-Train-Test 
+ 73.0 \mathbf{73.0} 
+ 73.3 \mathbf{73.3} 
+ 75.9 \mathbf{75.9} 
+ TABLE T18: MoF for varying lengths of videos in Breakfast. 
+ Method 
+ F1@{10, 25, 50} 
+ Edit 
+ MoF 
+ MSTCN 
+ 80.7 
+ 78.5 
+ 70.1 
+ 74.3 
+ 83.7 
+ MSTCN (+) Ens. 
+ 73.0 
+ 71.1 
+ 64.7 
+ 66.3 
+ 83.3 
+ TABLE T19: Ensemble of multiple layers of MSTCN [ 6 ] architecture is not useful as it contains video representations of same temporal resolution without diversity required for ensembling. 
+ Method 
+ F1@{10, 25, 50} 
+ Edit 
+ MoF 
+ ℒ CE \mathcal{L}_{\text{CE}} 
+ 83.2 
+ 80.8 
+ 71.3 
+ 73.3 
+ 84.1 
+ ℒ CE \mathcal{L}_{\text{CE}} + ℒ TR \mathcal{L}_{\text{TR}} 
+ 84.3 
+ 81.7 
+ 72.8 
+ 76.5 
+ 84.5 
+ TABLE T20: Loss function ablation with C2F-TCN on 50salads. 
+ S1-A Training hyper-parameters used 
+ For all three datasets, Breakfast, 50Salads and GTEA, we use features pre-extracted from an I3D model [ 1 ] pre-trained on Kinetics, and follow the k k -fold cross-validation averaging to report our final results. Here, k = { 4 , 5 , 4 } k=\{4,5,4\} for Breakfast, 50Salads and GTEA, respectively.
+The evaluation metrics and features follow the convention of other recent temporal video segmentation methods [ 6 , 7 ] . The feature augmentation’s base sampling window w 0 w_{0} is { 10 , 20 , 4 } \{10,20,4\} for Breakfast, 50Salads and GTEA, respectively, in the supervised and semi-supervised setup. The training hyperparameters for the different datasets and setups are summarized in Tab. T21 . 
+ Breakfast 
+ 50Salads 
+ GTEA 
+ Supervision 
+ Step 
+ LR 
+ WD 
+ Eps. 
+ BS 
+ LR 
+ WD 
+ Eps. 
+ BS 
+ LR 
+ WD 
+ Eps. 
+ BS 
+ Full 
+ 1e-4 
+ 3e-3 
+ 600 
+ 100 
+ 3e-4 
+ 1e-3 
+ 600 
+ 25 
+ 5e-4 
+ 3e-4 
+ 600 
+ 11 
+ Unsupervised 
+ Contrast step (model 𝐌 \mathbf{M} ) 
+ 1e-3 
+ 3e-3 
+ 100 
+ 100 
+ 1e-3 
+ 1e-3 
+ 100 
+ 50 
+ 1e-3 
+ 3e-4 
+ 100 
+ 21 
+ Semi 
+ Classify step (classifier 𝐆 \mathbf{G} ) 
+ 1e-2 
+ 3e-3 
+ 700 
+ 100 
+ 1e-2 
+ 1e-3 
+ 1800 
+ 5 
+ 1e-2 
+ 3e-4 
+ 1800 
+ 5 
+ Classify step (model 𝐌 \mathbf{M} ) 
+ 1e-5 
+ 3e-3 
+ 700 
+ 100 
+ 1e-5 
+ 1e-3 
+ 1800 
+ 5 
+ 1e-5 
+ 3e-4 
+ 1800 
+ 5 
+ TABLE T21: The training hyperparameters’ learning rate (LR), weight-decay (WD), epochs (Eps.) and batch size (BS) used for the different datasets for full, unsupervised and semi-supervised learning. 
+ Dataset 
+ F1@10 
+ F1@25 
+ F1@50 
+ Edit 
+ MoF 
+ Breakfast 
+ 71.9 ± \pm 0.6 
+ 68.8 ± \pm 0.7 
+ 58.5 ± \pm 0.8 
+ 68.9 ± \pm 1.3 
+ 76.6 ± \pm 0.9 
+ 50Salads 
+ 84.3 ± \pm 0.7 
+ 81.7 ± \pm 0.4 
+ 72.8 ± \pm 0.7 
+ 76.3 ± \pm 0.8 
+ 84.5 ± \pm 0.8 
+ GTEA 
+ 92.3 ± \pm 1.1 
+ 90.1 ± \pm 0.7 
+ 80.3 ± \pm 0.9 
+ 88.5 ± \pm 1.5 
+ 81.2 ± \pm 0.4 
+ TABLE T22: Mean and standard deviation for our final proposed C2F-TCN+FA , reported in Table 6 of the main paper. 
+ Appendix S2 Supervised C2F-TCN analysis 
+ S2-A Choice of the base window w 0 w_{0} : 
+ A (too) small w 0 w_{0} leads to a very small range of stochastic windows, i.e. [ ⌊ w 0 2 ⌋ , 2 ​ w 0 ] [\left\lfloor\frac{w_{0}}{2}\right\rfloor,2w_{0}] , and does not allow sufficient training augmentations, while a (too) large w 0 w_{0} completely absorbs (removes) the smaller actions. The ablation results of the base window for the Breakfast dataset are given in Table T17 . As the Breakfast dataset has videos with a frame rate of 15 fps, a base window w 0 = 10 w_{0}\!=\!10 is about 0.67 s. This duration is less than the minimum duration of 99% of all sub-actions. Similarly, 50Salads has 30 fps features, so we use w 0 = 20 w_{0}=20 . GTEA has many very small segments, sometimes even less than 10 frames (although most are larger than 8 frames), so w 0 = 4 w_{0}=4 is used for GTEA to capture all actions. 
+ S2-B Impact of video length 
+ To obtain a closer look, we split the videos into three length categories and tally the results. To enable a comparison, we train an MSTCN [ 6 ] model, which achieves comparable or higher scores than reported in the original paper for all metrics. Tab. T18 shows the MoF % \% for various video lengths. We observe that after the training augmentation (row 3), the performance improves regardless of the video length. Most notably, for longer videos ( ≥ 2.5 \geq 2.5 mins), our final proposal with test time augmentation achieves +5.7% MoF over the MSTCN model. 
+ S2-C Ablation on loss functions 
+ As discussed in section 4.1 of the main paper, we apply the loss on 𝐩 e ​ n ​ s ​ [ t ] \mathbf{p}^{ens}[t] instead of every layer loss (used in [ 7 , 6 ] ). However, we use the same loss function, cross-entropy loss ℒ CE \mathcal{L}_{\text{CE}} and transition loss ℒ TR \mathcal{L}_{\text{TR}} , as per previous work [ 6 , 7 ] . Table Tab. T20 shows the impact of adding the transition loss on 𝐩 e ​ n ​ s ​ [ t ] \mathbf{p}^{ens}[t] . The transition loss brings a maximum improvement in the Edit distance scores, which is similar to previous works. 
+ S2-D Ensemble of the MSTCN layers 
+ We verify the improvements from adding C2F ensembling for both our architecture and ED-TCN in Table 2 in the main paper. 
+ We also try to form an ensemble from the outputs of the different stages of MSTCN [ 6 ] . However, as shown in Tab. T19 , the ensembling (instead of loss at every layer) curiously decreases the original scores. We speculate that there is insufficient diversity in the temporal resolution representations of the MSTCN stages, rendering the ensembled representation less useful. However, as shown in Table 5 of the main paper, feature augmentation does bring improvement in the accuracy and efficiency of the handling sequences for the MSTCN-type architecture. 
+ S2-E Standard deviations in results 
+ Tab. T22 shows the deviations of our final results as reported in Table 6 of the main paper for 4 4 runs with different random seeds. For each metric, we report the results in the format m ​ e ​ a ​ n ± s ​ t ​ d mean\pm std , i.e. the means and the standard deviations for the 4 4 runs. For the smallest GTEA dataset, the deviation in the results is higher than in Breakfast and 50Salads. 
+ S2-F Qualitative examples of segmentation 
+ Fig. F10 visualizes some of the segmentation output (top down) Ground Truth (GT), C2F-TCN with feature augmentation ( C2FTCN+FA ), from C2FTCN (i.e. without augmentation), and finally MSTCN. We compute the corresponding MoF and F1@50 above all the outputs except for GT. We see that C2FTCN, even without feature augmentation, has lower over-segmentation (fragmentation) than MSTCN. Further adding the augmentation i.e. ( C2FTCN+FA ) best matches the ground truth segmentation ( GT ). 
+ Fig. F10: Qualitative examples of segmentation outputs. Different colors represent different actions. We see that our final model C2FTCN+FA best matches the ground truth(GT). MS-TCN gives certain extra segments like “brown” patch and “red” patch. 
+ Appendix S3 Unsupervised Representation Analysis 
+ S3-A Multi-resolution features 
+ Breakfast 
+ 50Salads 
+ GTEA 
+ Method 
+ F ​ 1 ​ { 10 , 25 , 50 } F1\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ { 10 , 25 , 50 } F1\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ { 10 , 25 , 50 } F1\{10,25,50\} 
+ Edit 
+ MoF 
+ Alternate 𝐟 ′ [ t ] \mathbf{f}^{{}^{\prime}}[t] 
+ 44.3 
+ 38.3 
+ 26.1 
+ 40.9 
+ 60.9 
+ 32.9 
+ 27.3 
+ 19.9 
+ 26.5 
+ 51.2 
+ 56.4 
+ 48.6 
+ 31.3 
+ 52.1 
+ 58.9 
+ Proposed 𝐟 ⁡ [ t ] \mathbf{f}[t] 
+ 57.0 
+ 51.7 
+ 39.1 
+ 51.3 
+ 70.5 
+ 40.8 
+ 36.2 
+ 28.1 
+ 32.4 
+ 62.5 
+ 70.8 
+ 65.0 
+ 48.0 
+ 65.7 
+ 69.1 
+ TABLE T23: Importance of normalization order in the formation of our Multi-Resolution Representation. 
+ S3-A 1 Inherent temporal continuity of our feature 𝐟 \mathbf{f} 
+ The inherent temporal continuity encoded in our multi-resolution feature is discussed in Section 5.1.3 of the main paper. For the nearest neighbor upsampling strategy, the multi-resolution feature 𝐟 \mathbf{f} has the property of being similar for nearby frames. Coarser features like { 𝐳 1 , 𝐳 2 , 𝐳 3 } \{\mathbf{z}_{1},\mathbf{z}_{2},\mathbf{z}_{3}\} are more similar than fine-grained features at higher decoder layers. This also gives independence to the higher resolution features to have high variability even for nearby frames. 
+ Specifically, for two frames t , s ∈ ℕ t,s\in\mathbb{N} , if ⌊ t / 2 u ⌋ = ⌊ s / 2 u ⌋ \left\lfloor t/2^{u}\right\rfloor=\left\lfloor s/2^{u}\right\rfloor for some integer u > 0 u>0 , then cos ​ ( 𝐟 ⁡ [ t ] , 𝐟 ⁡ [ s ] ) ≥ 1 − u / 3 \text{cos}\!\left(\mathbf{f}[t],\mathbf{f}[s]\right)\geq 1-u/3 . This follows from the fact that for nearest upsampling, ⌊ t / 2 u ⌋ = ⌊ s / 2 u ⌋ \left\lfloor t/2^{u}\right\rfloor=\left\lfloor s/2^{u}\right\rfloor for some 0 ≤ u ≤ 5 0\leq u\leq 5 , implies that 
+ 𝐳 v ​ [ t ] = 𝐳 v ​ [ s ] for all 1 ≤ v ≤ 6 − u . \displaystyle\mathbf{z}_{v}[t]=\mathbf{z}_{v}[s]\quad\text{for all}\quad 1\leq v\leq 6-u. 
+ (16) 
+ Meaning, the lower-resolution features coincide with proximal frames. As discussed and shown in equation (15) of the main paper, all the layers make an equal contribution while calculating the similarity of our multi-resolution feature. For t , s t,s , with ⌊ t / 2 u ⌋ = ⌊ s / 2 u ⌋ \left\lfloor t/2^{u}\right\rfloor=\left\lfloor s/2^{u}\right\rfloor for some 0 ≤ u ≤ 5 0\leq u\leq 5 , we start with the equation (15) of the main text to derive – 
+ cos ​ ( 𝐟 ​ [ t ] , 𝐟 ​ [ s ] ) \displaystyle\text{cos}\!\left(\mathbf{f}[t],\mathbf{f}[s]\right) 
+ = ∑ v = 1 6 1 6 ⋅ cos ​ ( 𝐳 v ​ [ t ] , 𝐳 v ​ [ s ] ) \displaystyle=\sum_{v=1}^{6}\frac{1}{6}\cdot\text{cos}\!\left(\mathbf{z}_{v}[t],\mathbf{z}_{v}[s]\right) 
+ = ∑ v = 1 6 − u 1 6 ⋅ cos ​ ( 𝐳 v ​ [ t ] , 𝐳 v ​ [ s ] ) + ∑ v = 7 − u 6 1 6 ⋅ cos ​ ( 𝐳 v ​ [ t ] , 𝐳 v ​ [ s ] ) \displaystyle=\sum_{v=1}^{6-u}\frac{1}{6}\cdot\text{cos}\!\left(\mathbf{z}_{v}[t],\mathbf{z}_{v}[s]\right)+\sum_{v=7-u}^{6}\frac{1}{6}\cdot\text{cos}\!\left(\mathbf{z}_{v}[t],\mathbf{z}_{v}[s]\right) 
+ = 6 − u 6 + ∑ v = 7 − u 6 1 6 ⋅ cos ( 𝐳 u [ t ] , 𝐳 u [ s ] ) ( from ( 16 ) ) \displaystyle=\frac{6-u}{6}+\sum_{v=7-u}^{6}\frac{1}{6}\cdot\text{cos}\!\left(\mathbf{z}_{u}[t],\mathbf{z}_{u}[s]\right)\quad{\left(\text{from \eqref{eq.nearest_meaning}}\right)} 
+ ≥ 6 − u 6 − u 6 ( as cos ( ⋅ , ⋅ ) ≥ − 1 ) \displaystyle\geq\frac{6-u}{6}-\frac{u}{6}\qquad\qquad{\left(\text{as}\,\,\text{cos}\!\left(\cdot,\cdot\right)\geq-1\right)} 
+ = 1 − u 3 . \displaystyle=1-\frac{u}{3}. 
+ That means for ⌊ t / 2 u ⌋ = ⌊ s / 2 u ⌋ \left\lfloor t/2^{u}\right\rfloor=\left\lfloor s/2^{u}\right\rfloor for some 0 ≤ u ≤ 5 0\leq u\leq 5 implies cos ​ ( 𝐟 ⁡ [ t ] , 𝐟 ⁡ [ s ] ) ≥ 1 − u 3 \text{cos}\!\left(\mathbf{f}[t],\mathbf{f}[s]\right)\geq 1-\frac{u}{3} . The inequality is trivial for u > 5 u>5 . 
+ S3-A 2 Normalization: 
+ Our proposed multi-resolution feature, as outlined in Section 5.1.3 of the main paper, is defined for frame t t as 𝐟 [ t ] = ( 𝐳 ¯ 1 [ t ] : 𝐳 ¯ 2 [ t ] : … : 𝐳 ¯ 6 [ t ] ) \mathbf{f}[t]={\left(\bar{\mathbf{z}}_{1}[t]:\bar{\mathbf{z}}_{2}[t]:\ldots:\bar{\mathbf{z}}_{6}[t]\right)} , where 𝐳 ¯ u ​ [ t ] = 𝐳 ^ u ​ [ t ] / ‖ 𝐳 ^ u ​ [ t ] ‖ \bar{\mathbf{z}}_{u}[t]={\hat{\mathbf{z}}}_{u}[t]/\left\|{\hat{\mathbf{z}}}_{u}[t]\right\| , i.e. 𝐳 ^ u ​ [ t ] {\hat{\mathbf{z}}}_{u}[t] , the upsampled feature from decoder u u is normalized first for each frame and then concatenated along the latent dimension.
+An alternative and naive construction would be to apply normalization after concatenation, i.e. 𝐟 ′ [ t ] = ( 𝐳 ^ 1 [ t ] : 𝐳 ^ 2 [ t ] : … : 𝐳 ^ 6 [ t ] ) \mathbf{f}^{{}^{\prime}}[t]={\left(\hat{\mathbf{z}}_{1}[t]:\hat{\mathbf{z}}_{2}[t]:\ldots:\hat{\mathbf{z}}_{6}[t]\right)} . The features 𝐳 ^ u \hat{\mathbf{z}}_{u} are the upsampled un-normalized feature vector of decoder layer u u . Note that a final normalization of 𝐟 ′ [ t ] \mathbf{f}^{{}^{\prime}}[t] is no longer necessary as the cosine similarity is invariant. We verify in T23 that applying normalization before concatenation is critical. 
+ Breakfast 
+ 50Salads 
+ GTEA 
+ Method 
+ F ​ 1 ​ { 10 , 25 , 50 } F1\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ { 10 , 25 , 50 } F1\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ { 10 , 25 , 50 } F1\{10,25,50\} 
+ Edit 
+ MoF 
+ No Augment 
+ 55.6 
+ 50.2 
+ 36.5 
+ 49.4 
+ 69.4 
+ 40.0 
+ 34.1 
+ 27.0 
+ 31.0 
+ 62.3 
+ 70.0 
+ 63.4 
+ 47.2 
+ 65.6 
+ 69.0 
+ Augment 
+ 57.0 
+ 51.7 
+ 39.1 
+ 51.3 
+ 70.5 
+ 40.8 
+ 36.2 
+ 28.1 
+ 32.4 
+ 62.5 
+ 70.8 
+ 65.0 
+ 48.0 
+ 65.7 
+ 69.1 
+ TABLE T24: Impact of using Temporal Feature Augmentation Strategy on Unsupervised Representation Learning 
+ Samples( 2 ​ K 2K ) 
+ F ​ 1 ​ { 10 , 25 , 50 } F1\{10,25,50\} 
+ Edit 
+ MoF 
+ 60 
+ 38.5 
+ 33.2 
+ 25.1 
+ 29.9 
+ 62.5 
+ 120 
+ 40.8 
+ 36.2 
+ 28.1 
+ 32.4 
+ 62.5 
+ 180 
+ 39.1 
+ 34.5 
+ 27.3 
+ 30.8 
+ 62.1 
+ TABLE T25: Ablation results of the number of samples per video required for representation learning. 
+ Type (Number) 
+ Breakfast 
+ 50Salads 
+ GTEA 
+ FINCH ( A A ) 
+ 61.7 
+ 56.3 
+ 56.7 
+ Kmeans ( A A ) 
+ 70.0 
+ 60.4 
+ 65.6 
+ Kmeans ( ≈ 2 ​ A \approx 2A ) 
+ 70.5 
+ 62.5 
+ 69.1 
+ TABLE T26: Unsupervised Representation’s MoF variation with different clustering types and number of clusters used during training. A A denotes the number of unique actions in the dataset. 
+ S3-B Sampling strategy, number of samples 2 ​ K 2K 
+ We show ablations for the choice of 2 ​ K 2K (i.e. number of representation samples drawn per video, as described in section 5.1.1 of main paper) in Tab. T25 . Thus, our value of 2 ​ K 2K is determined by experimental validation. In 50salads with 2 ​ K = 120 2K=120 and a batch size of 50, we obtain roughly 0.6 million positive samples per batch, with each positive sample having roughly around 6.5K negative samples. 
+ S3-C Impact of Temporal Feature Augmentation 
+ In Table T24 we show the improvements in unsupervised features linear evaluation scores when training with feature-augmentation(FA). 
+ Method 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ Supervised 
+ 30.5 
+ 25.4 
+ 17.3 
+ 26.3 
+ 43.1 
+ ICC-wo-unsupervised 
+ 42.6 
+ 37.5 
+ 25.3 
+ 35.2 
+ 53.4 
+ ICC-with-unsupervised 
+ 52.9 
+ 49.0 
+ 36.6 
+ 45.6 
+ 61.3 
+ TABLE T27: “ICC-wo-unsupervised” (removing the initial unsupervised representation learning from ICC) on 50Salads with 5% 𝒟 L \mathcal{D}_{L} . The ICC results are from the fourth iteration i.e. ( ICC 4 \text{ICC}_{4} ). 
+ F1@10 
+ F1@25 
+ F1@50 
+ Edit 
+ MoF 
+ Unsupervised 
+ 40.8 
+ 36.2 
+ 28.1 
+ 32.4 
+ 62.5 
+ ICC 2 \text{ICC}_{\text{2}} 
+ 51.3 
+ 46.6 
+ 36.5 
+ 44.7 
+ 61.3 
+ ICC 3 \text{ICC}_{\text{3}} 
+ 52.5 
+ 47.2 
+ 36.5 
+ 45.4 
+ 62.1 
+ ICC 4 \text{ICC}_{\text{4}} 
+ 52.6 
+ 47.7 
+ 38.1 
+ 46.7 
+ 61.3 
+ TABLE T28: Improvement in representation on 50Salads for 5% labelled data with more iterations of ICC. Note: Representation is evaluated with 100% data with a simple Linear Classifier, as discussed in section 4.4. 
+ S3-D Input feature clustering 
+ As described in section 5.1.1 of the main paper, unsupervised feature learning requires cluster labels from the input features. We cluster at the mini-batch level with a standard k k -means and then compare with Finch [ 84 ] , an agglomerative clustering that has been shown to be useful in unsupervised temporal segmentation [ 41 ] . Comparing the two in Tab. T26 , we observe that K K -means performs better. We speculate that this is because Finch is designed for per-video clustering. In contrast, our clustering on the mini-batch is on a dataset level, i.e., over multiple video sequences of different complex activities. 
+ To choose k k in the k k -means clustering, we choose ≈ 2 ​ C \approx 2C ( C C denotes the number of unique actions) number of clusters, resulting in K = { 100 , 40 , 30 } K=\{100,40,30\} for the Breakfast, 50Salads, and GTEA datasets, respectively. The advantage of using ≈ 2 ​ C \approx 2C clusters versus simply C C is verified in Tab. T26 . The improvement is greater for datasets with fewer action classes like GTEA and 50Salads than the Breakfast action dataset. 
+ Appendix S4 Semi-Supervised Learning Analysis 
+ Breakfast 
+ 50Salads 
+ GTEA 
+ % D L D_{L} 
+ Method 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ F ​ 1 ​ @ ​ { 10 , 25 , 50 } F1@\{10,25,50\} 
+ Edit 
+ MoF 
+ ≈ \approx 10 
+ ICC 1 \text{ICC}_{1} 
+ 57.0 
+ 51.9 
+ 36.3 
+ 56.3 
+ 65.7 
+ 51.1 
+ 45.6 
+ 34.5 
+ 42.8 
+ 65.3 
+ 82.2 
+ 78.9 
+ 63.8 
+ 75.6 
+ 72.2 
+ ICC 2 \text{ICC}_{2} 
+ 60.0 
+ 54.5 
+ 38.8 
+ 59.5 
+ 66.7 
+ 56.5 
+ 51.6 
+ 39.2 
+ 48.9 
+ 67.1 
+ 83.4 
+ 80.1 
+ 64.2 
+ 75.9 
+ 72.9 
+ ICC 3 \text{ICC}_{3} 
+ 62.3 
+ 56.5 
+ 40.4 
+ 60.6 
+ 67.8 
+ 60.7 
+ 56.9 
+ 45.0 
+ 52.4 
+ 68.2 
+ 83.5 
+ 80.8 
+ 64.5 
+ 76.3 
+ 73.1 
+ ICC 4 \text{ICC}_{4} 
+ 64.6 
+ 59.0 
+ 42.2 
+ 61.9 
+ 68.8 
+ 67.3 
+ 64.9 
+ 49.2 
+ 56.9 
+ 68.6 
+ 83.7 
+ 81.9 
+ 66.6 
+ 76.4 
+ 73.3 
+ Gain 
+ 7.6 
+ 7.1 
+ 5.9 
+ 5.6 
+ 3.1 
+ 16.2 
+ 19.3 
+ 14.7 
+ 14.1 
+ 3.3 
+ 1.5 
+ 3.0 
+ 2.8 
+ 0.8 
+ 1.1 
+ TABLE T29: Quantitative evaluation of progressive semi-supervised improvement with more iterations of ICC with ≈ \approx 10% labelled training videos. 
+ Dataset 
+ ICC(Num Videos) 
+ F1@10 
+ F1@25 
+ F1@50 
+ Edit 
+ MoF 
+ Breakfast 
+ ICC 1 \text{ICC}_{1} ( ≈ 63 \approx 63 Videos) 
+ 54.5 ± \pm 1.2 
+ 48.7 ± \pm 1.1 
+ 33.3 ± \pm 1.1 
+ 54.6 ± \pm 0.9 
+ 64.2 ± \pm 1.3 
+ ICC 4 \text{ICC}_{4} ( ≈ 63 \approx 63 videos) 
+ 60.2 ± \pm 1.5 
+ 53.5 ± \pm 1.3 
+ 35.6 ± \pm 0.9 
+ 56.6 ± \pm 1.2 
+ 65.3 ± \pm 1.8 
+ ICC 1 \text{ICC}_{1} ( ≈ 120 \approx 120 Videos) 
+ 57.0 ± \pm 1.9 
+ 51.9 ± \pm 2.1 
+ 36.3 ± \pm 1.3 
+ 56.3 ± \pm 1.2 
+ 65.7 ± \pm 1.9 
+ ICC 4 \text{ICC}_{4} ( ≈ 120 \approx 120 Videos) 
+ 64.6 ± \pm 2.1 
+ 59.0 ± \pm 1.9 
+ 42.2 ± \pm 2.5 
+ 61.9 ± \pm 2.2 
+ 68.8 ± \pm 1.3 
+ 50salads 
+ ICC 1 \text{ICC}_{1} (3 Videos) 
+ 41.3 ± \pm 1.9 
+ 37.2 ± \pm 1.5 
+ 27.8 ± \pm 1.1 
+ 35.4 ± \pm 1.6 
+ 57.3 ± \pm 2.3 
+ ICC 4 \text{ICC}_{4} (3 videos) 
+ 52.9 ± \pm 2.2 
+ 49.0 ± \pm 2.2 
+ 36.6 ± \pm 2.0 
+ 45.6 ± \pm 1.4 
+ 61.3 ± \pm 2.3 
+ ICC 1 \text{ICC}_{1} (5 Videos) 
+ 51.1 ± \pm 2.1 
+ 45.6 ± \pm 1.3 
+ 34.5 ± \pm 1.7 
+ 42.8 ± \pm 1.1 
+ 65.3 ± \pm 0.8 
+ ICC 4 \text{ICC}_{4} (5 videos) 
+ 67.3 ± \pm 1.8 
+ 64.9 ± \pm 2.5 
+ 49.2 ± \pm 1.8 
+ 56.9 ± \pm 2.1 
+ 68.6 ± \pm 0.7 
+ TABLE T30: Mean and standard deviation for 5 different selections of 5% and 10% labelled videos from Breakfast and 50Salads. For each metric we report the results in the format m ​ e ​ a ​ n ± s ​ t ​ d mean\pm std , i.e. the means and the standard deviation for the 5 runs. 
+ S4-A ICC without unsupervised step 
+ In Tab. T27 , we show the results of our ICC without the initial “unsupervised representation learning” as “ICC-Wo-Unsupervised” . This essentially means that the 2 n ​ d 2^{nd} row of Tab. T27 represents the scenario in which we remove from our ICC algorithm the 1 s ​ t 1^{st} contrast step that is learned with cluster labels. The improvement in scores over the supervised setup is quite low compared to the full-ICC with the unsupervised pre-training, shown as “ICC-With-Unsupervised” . This verifies the importance of our unsupervised learning step in ICC. 
+ S4-B Iterative progression of ICC results 
+ We discuss our detailed semi-supervised algorithm in section 5.2 of our main paper and provide a visualization of the algorithm in Figure 7. 
+ Fig. F11: A qualitative example taken from 50Salads, showing progressive improvement in segmentation results with number of iterations of ICC. Some segments become more aligned to ground truth (GT), leading to improved MoF and F1@50 scores. 
+ S4-B 1 Improvement after the Contrast step 
+ In Table T28 we show the improvement in representation after each contrast step. Due to the usage of better pseudo-labels obtained from the preceding classify step, the following contrast step results in better representations as more iterations are performed. For the 5% labelled videos of the 50Salads dataset, we can see that there is a clear improvement in the F1 and Edit scores as more iterations are performed. Note that the evaluation of the learned representation is linear evaluation protocol as described in section 5.1.4 of the main text. 
+ S4-B 2 Improvement after the Classify step 
+ In Table 12 of the main text, we show the progressive improvement in performance for the 5% labelled videos, evaluated after the classify step of each ICC iteration. In Tab. T29 , we show the same progressive improvements for the 10% videos. The evaluation is done after the classify step of each iteration of the algorithm. Our ICC raises the overall scores on all datasets, with stronger improvements in the F1 and Edit scores. 
+ S4-C Qualitative visualization of segmentation 
+ In Fig. F11 we use an example of the segmentation results from the 50Salads dataset to show how the segmentation results improve (become more aligned with GT with increase in MoF and F1@50) with more iterations of ICC. 
+ S4-D Standard deviations in results 
+ We show our standard deviations in results for the 50Salads and Breakfast datasets for variations in labelled data used in Tab. T30 . We show the variation in results for ICC 1 \text{ICC}_{1} and ICC 4 \text{ICC}_{4} when we take 5 different random selections of 5%, 10% labelled videos in Breakfast and 50Salads from the corresponding training splits. We report the means and standard deviations for the different choices in the m ​ e ​ a ​ n ± s ​ t ​ d mean\pm std format. 
+ Acknowledgements 
+ The authors would like to thank
+National Research Foundation, Singapore (under its AI Singapore Programme (AISG Award No: AISG2-RP-2020-016)) for the research support. Any opinions, findings and conclusions or recommendations expressed in this material are those of the author(s) and do not reflect the views of National Research Foundation, Singapore. 
+ References 
+ [1] 
+J. Carreira and A. Zisserman, “Quo vadis, action recognition? a new model and
+the kinetics dataset,” in proceedings of the IEEE Conference on
+Computer Vision and Pattern Recognition , 2017.
+ [2] 
+C. Lea, M. D. Flynn, R. Vidal, A. Reiter, and G. D. Hager, “Temporal
+convolutional networks for action segmentation and detection,” in
+ proceedings of the IEEE Conference on Computer Vision and Pattern
+Recognition , 2017.
+ [3] 
+P. Lei and S. Todorovic, “Temporal deformable residual networks for action
+segmentation in videos,” in Proceedings of the IEEE conference on
+computer vision and pattern recognition , 2018.
+ [4] 
+L. Ding and C. Xu, “Weakly-supervised action segmentation with iterative soft
+boundary assignment,” in Proceedings of the IEEE Conference on
+Computer Vision and Pattern Recognition , 2018.
+ [5] 
+Y. A. Farha and J. Gall, “Ms-tcn: Multi-stage temporal convolutional network
+for action segmentation,” in Proceedings of the IEEE/CVF Conference on
+Computer Vision and Pattern Recognition , 2019.
+ [6] 
+S.-J. Li, Y. AbuFarha, Y. Liu, M.-M. Cheng, and J. Gall, “Ms-tcn++:
+Multi-stage temporal convolutional network for action segmentation,”
+ IEEE Transactions on Pattern Analysis and Machine Intelligence , 2020.
+ [7] 
+Z. Wang, Z. Gao, L. Wang, Z. Li, and G. Wu, “Boundary-aware cascade networks
+for temporal action segmentation,” in European Conference on Computer
+Vision , 2020.
+ [8] 
+D. Wang, Y. Yuan, and Q. Wang, “Gated forward refinement network for action
+segmentation,” Neurocomputing , vol. 407, 2020.
+ [9] 
+S.-H. Gao, Q. Han, Z.-Y. Li, P. Peng, L. Wang, and M.-M. Cheng, “Global2local:
+Efficient structure search for video action segmentation,” in
+ Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern
+Recognition , 2021.
+ [10] 
+O. Ronneberger, P. Fischer, and T. Brox, “U-net: Convolutional networks for
+biomedical image segmentation,” in International Conference on Medical
+image computing and computer-assisted intervention , 2015.
+ [11] 
+R. Rahaman and A. H. Thiery, “Uncertainty quantification and deep ensembles,”
+in Advances in Neural Information Processing Systems , vol. 34, 2021.
+ [12] 
+H. Zhang and M. Cisse, “mixup: Beyond empirical risk minimization,” in
+ International Conference on Learning Representations , 2018.
+ [13] 
+S. Yun, D. Han, S. J. Oh, S. Chun, J. Choe, and Y. Yoo, “Cutmix:
+Regularization strategy to train strong classifiers with localizable
+features,” in Proceedings of the IEEE/CVF International Conference on
+Computer Vision , 2019.
+ [14] 
+L. Wang, Y. Xiong, Z. Wang, Y. Qiao, D. Lin, X. Tang, and L. Van Gool,
+“Temporal segment networks: Towards good practices for deep action
+recognition,” in European conference on computer vision , 2016.
+ [15] 
+T. Han, W. Xie, and A. Zisserman, “Video representation learning by dense
+predictive coding,” in Proceedings of the IEEE/CVF International
+Conference on Computer Vision Workshops , 2019.
+ [16] 
+H. Wang and C. Schmid, “Action recognition with improved trajectories,” in
+ Proceedings of the IEEE international conference on computer vision ,
+2013.
+ [17] 
+N. Hussein, E. Gavves, and A. W. Smeulders, “Pic: Permutation invariant
+convolution for recognizing long-range activities,” arXiv preprint
+arXiv:2003.08275 , 2020.
+ [18] 
+F. Sener, D. Singhania, and A. Yao, “Temporal aggregate representations for
+long-range video understanding,” in European Conference on Computer
+Vision , 2020.
+ [19] 
+T. Chen, S. Kornblith, M. Norouzi, and G. Hinton, “A simple framework for
+contrastive learning of visual representations,” in International
+conference on machine learning . PMLR,
+2020.
+ [20] 
+R. Qian, T. Meng, B. Gong, M.-H. Yang, H. Wang, S. Belongie, and Y. Cui,
+“Spatiotemporal contrastive video representation learning,” in
+ Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern
+Recognition , 2021.
+ [21] 
+G. Lorre, J. Rabarisoa, A. Orcesi, S. Ainouz, and S. Canu, “Temporal
+contrastive pretraining for video action recognition,” in Proceedings
+of the IEEE/CVF Winter Conference on Applications of Computer Vision , 2020.
+ [22] 
+X. Chen, L. Yao, T. Zhou, J. Dong, and Y. Zhang, “Momentum contrastive
+learning for few-shot covid-19 diagnosis from chest ct images,”
+ Pattern Recognition , vol. 113, 2021.
+ [23] 
+R. Rahaman, A. Ghosh, and A. H. Thiery, “Pretrained equivariant features
+improve unsupervised landmark discovery,” arXiv preprint
+arXiv:2104.02925 , 2021.
+ [24] 
+M.-H. Chen, B. Li, Y. Bao, G. AlRegib, and Z. Kira, “Action segmentation with
+joint self-supervised temporal domain adaptation,” in Proceedings of
+the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2020.
+ [25] 
+Z. Li, Y. A. Farha, and J. Gall, “Temporal action segmentation from timestamp
+supervision,” in Proceedings of the IEEE/CVF Conference on Computer
+Vision and Pattern Recognition , 2021.
+ [26] 
+D. Singhania, R. Rahaman, and A. Yao, “Iterative contrast-classify for
+semi-supervised temporal action segmentation,” in AAAI Conference on
+Artificial Intelligence(AAAI) , 2022.
+ [27] 
+A. Richard and J. Gall, “Temporal action detection using a statistical
+language model,” in Proceedings of the IEEE Conference on Computer
+Vision and Pattern Recognition , 2016.
+ [28] 
+B. Singh, T. K. Marks, M. Jones, O. Tuzel, and M. Shao, “A multi-stream
+bi-directional recurrent neural network for fine-grained action detection,”
+in Proceedings of the IEEE conference on computer vision and pattern
+recognition , 2016.
+ [29] 
+T. Perrett and D. Damen, “Recurrent assistance: cross-dataset training of
+lstms on kitchen tasks,” in Proceedings of the IEEE International
+Conference on Computer Vision Workshops , 2017.
+ [30] 
+H. Kuehne, A. Richard, and J. Gall, “A hybrid rnn-hmm approach for weakly
+supervised temporal action segmentation,” IEEE transactions on pattern
+analysis and machine intelligence , vol. 42, 2018.
+ [31] 
+Y. Ishikawa, S. Kasai, Y. Aoki, and H. Kataoka, “Alleviating over-segmentation
+errors by detecting action boundaries,” in Proceedings of the IEEE/CVF
+Winter Conference on Applications of Computer Vision , 2021.
+ [32] 
+A. Richard, H. Kuehne, A. Iqbal, and J. Gall, “Neuralnetwork-viterbi: A
+framework for weakly supervised video learning,” in Proceedings of the
+IEEE Conference on Computer Vision and Pattern Recognition , 2018.
+ [33] 
+C.-Y. Chang, D.-A. Huang, Y. Sui, L. Fei-Fei, and J. C. Niebles, “D3tw:
+Discriminative differentiable dynamic time warping for weakly supervised
+action alignment and segmentation,” in Proceedings of the IEEE/CVF
+Conference on Computer Vision and Pattern Recognition , 2019.
+ [34] 
+J. Li, P. Lei, and S. Todorovic, “Weakly supervised energy-based learning for
+action segmentation,” in Proceedings of the IEEE/CVF International
+Conference on Computer Vision , 2019.
+ [35] 
+Y. Souri, M. Fayyaz, L. Minciullo, G. Francesca, and J. Gall, “Fast weakly
+supervised action segmentation using mutual consistency,” IEEE
+Transactions on Pattern Analysis and Machine Intelligence , 2021.
+ [36] 
+W.-C. Hung, Y.-H. Tsai, Y.-T. Liou, Y.-Y. Lin, and M.-H. Yang, “Adversarial
+learning for semi-supervised semantic segmentation,” in Proceedings of
+the British Machine Vision Conference (BMVC) , 2018.
+ [37] 
+S. Mittal, M. Tatarchenko, and T. Brox, “Semi-supervised semantic segmentation
+with high-and low-level consistency,” IEEE transactions on pattern
+analysis and machine intelligence , vol. 43, no. 4, 2019.
+ [38] 
+A. Bearman, O. Russakovsky, V. Ferrari, and L. Fei-Fei, “What’s the point:
+Semantic segmentation with point supervision,” in European conference
+on computer vision , 2016.
+ [39] 
+F. Ma, L. Zhu, Y. Yang, S. Zha, G. Kundu, M. Feiszli, and Z. Shou, “Sf-net:
+Single-frame supervision for temporal action localization,” in
+ European conference on computer vision , 2020.
+ [40] 
+A. Kukleva, H. Kuehne, F. Sener, and J. Gall, “Unsupervised learning of action
+classes with continuous temporal embedding,” in Proceedings of the
+IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2019.
+ [41] 
+M. S. Sarfraz, N. Murray, V. Sharma, A. Diba, L. Van Gool, and R. Stiefelhagen,
+“Temporally-weighted hierarchical clustering for unsupervised action
+segmentation,” in Proceedings of the IEEE/CVF Conference on Computer
+Vision and Pattern Recognition , 2021.
+ [42] 
+F. Sener and A. Yao, “Unsupervised learning and segmentation of complex
+activities from video,” in Proceedings of the IEEE Conference on
+Computer Vision and Pattern Recognition , 2018.
+ [43] 
+R. G. VidalMata, W. J. Scheirer, A. Kukleva, D. Cox, and H. Kuehne, “Joint
+visual-temporal embedding for unsupervised learning of actions in untrimmed
+sequences,” in Proceedings of the IEEE/CVF Winter Conference on
+Applications of Computer Vision , 2021.
+ [44] 
+R. Zhang, P. Isola, and A. A. Efros, “Colorful image colorization,” in
+ European conference on computer vision , 2016.
+ [45] 
+P. Bachman, R. D. Hjelm, and W. Buchwalter, “Learning representations by
+maximizing mutual information across views,” Advances in neural
+information processing systems , vol. 32, 2019.
+ [46] 
+R. Girdhar, D. Ramanan, A. Gupta, J. Sivic, and B. Russell, “Actionvlad:
+Learning spatio-temporal aggregation for action classification,” in
+ Proceedings of the IEEE Conference on Computer Vision and Pattern
+Recognition , 2017.
+ [47] 
+N. Hussein, E. Gavves, and A. W. Smeulders, “Videograph: Recognizing
+minutes-long human activities in videos,” in ICCV Workshop on Scene
+Graph Representation and Learning , 2019.
+ [48] 
+——, “Timeception for complex action recognition,” in Proceedings of
+the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2019.
+ [49] 
+C. Feichtenhofer, A. Pinz, and A. Zisserman, “Convolutional two-stream network
+fusion for video action recognition,” in Proceedings of the IEEE
+conference on computer vision and pattern recognition , 2016.
+ [50] 
+X. Wang, R. Girshick, A. Gupta, and K. He, “Non-local neural networks,” in
+ Proceedings of the IEEE Conference on Computer Vision and Pattern
+Recognition , 2018.
+ [51] 
+S. Ji, W. Xu, M. Yang, and K. Yu, “3d convolutional neural networks for human
+action recognition,” IEEE transactions on pattern analysis and machine
+intelligence , vol. 35, 2012.
+ [52] 
+H. Kuehne, A. Arslan, and T. Serre, “The language of actions: Recovering the
+syntax and semantics of goal-directed human activities,” in
+ Proceedings of the IEEE conference on computer vision and pattern
+recognition , 2014.
+ [53] 
+R. Hadsell, S. Chopra, and Y. LeCun, “Dimensionality reduction by learning an
+invariant mapping,” in IEEE Computer Society Conference on Computer
+Vision and Pattern Recognition , 2006.
+ [54] 
+K. He, H. Fan, Y. Wu, S. Xie, and R. Girshick, “Momentum contrast for
+unsupervised visual representation learning,” in Proceedings of the
+IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2020.
+ [55] 
+P. Khosla, P. Teterwak, C. Wang, A. Sarna, Y. Tian, P. Isola, A. Maschinot,
+C. Liu, and D. Krishnan, “Supervised contrastive learning,” Advances
+in Neural Information Processing Systems , vol. 33, 2020.
+ [56] 
+Y. Bai, H. Fan, I. Misra, G. Venkatesh, Y. Lu, Y. Zhou, Q. Yu, V. Chandra, and
+A. Yuille, “Can temporal information help with contrastive self-supervised
+learning?” arXiv preprint arXiv:2011.13046 , 2020.
+ [57] 
+Q. Kong, W. Wei, Z. Deng, T. Yoshinaga, and T. Murakami, “Cycle-contrast for
+self-supervised video representation learning,” Advances in Neural
+Information Processing Systems , vol. 33, 2020.
+ [58] 
+N. Wang, W. Zhou, and H. Li, “Contrastive transformation for self-supervised
+correspondence learning,” arXiv preprint arXiv:2012.05057 , 2020.
+ [59] 
+P. Sermanet, C. Lynch, Y. Chebotar, J. Hsu, E. Jang, S. Schaal, S. Levine, and
+G. Brain, “Time-contrastive networks: Self-supervised learning from video,”
+in 2018 IEEE International Conference on Robotics and Automation
+(ICRA) , 2018.
+ [60] 
+H. Alwassel, D. Mahajan, B. Korbar, L. Torresani, B. Ghanem, and D. Tran,
+“Self-supervised learning by cross-modal audio-video clustering,”
+ Advances in Neural Information Processing Systems , vol. 33, 2020.
+ [61] 
+A. Miech, J.-B. Alayrac, L. Smaira, I. Laptev, J. Sivic, and A. Zisserman,
+“End-to-end learning of visual representations from uncurated instructional
+videos,” in Proceedings of the IEEE/CVF Conference on Computer Vision
+and Pattern Recognition , 2020.
+ [62] 
+B. Cheng, M. D. Collins, Y. Zhu, T. Liu, T. S. Huang, H. Adam, and L.-C. Chen,
+“Panoptic-deeplab: A simple, strong, and fast baseline for bottom-up
+panoptic segmentation,” in Proceedings of the IEEE/CVF conference on
+computer vision and pattern recognition , 2020.
+ [63] 
+T.-Y. Lin, P. Dollár, R. Girshick, K. He, B. Hariharan, and S. Belongie,
+“Feature pyramid networks for object detection,” in Proceedings of
+the IEEE conference on computer vision and pattern recognition , 2017.
+ [64] 
+L. Li, T. Kong, F. Sun, and H. Liu, “Deep point-wise prediction for action
+temporal proposal,” in International conference on neural information
+processing , 2019.
+ [65] 
+Y. Zhang, C. Zhou, F. Chang, and A. C. Kot, “Multi-resolution attention
+convolutional neural network for crowd counting,” Neurocomputing ,
+vol. 329, 2019.
+ [66] 
+J. Gao, Z. Yang, and R. Nevatia, “Cascaded boundary regression for temporal
+action detection,” arXiv preprint arXiv:1705.01180 , 2017.
+ [67] 
+P. Weinzaepfel, Z. Harchaoui, and C. Schmid, “Learning to track for
+spatio-temporal action localization,” in Proceedings of the IEEE
+international conference on computer vision , 2015.
+ [68] 
+K. He, X. Zhang, S. Ren, and J. Sun, “Spatial pyramid pooling in deep
+convolutional networks for visual recognition,” IEEE transactions on
+pattern analysis and machine intelligence , vol. 37, 2015.
+ [69] 
+L.-C. Chen, Y. Zhu, G. Papandreou, F. Schroff, and H. Adam, “Encoder-decoder
+with atrous separable convolution for semantic image segmentation,” 2018.
+ [70] 
+L.-C. Chen, G. Papandreou, I. Kokkinos, K. Murphy, and A. L. Yuille, “Deeplab:
+Semantic image segmentation with deep convolutional nets, atrous convolution,
+and fully connected crfs,” IEEE transactions on pattern analysis and
+machine intelligence , vol. 40, 2017.
+ [71] 
+Z. Gu, J. Cheng, H. Fu, K. Zhou, H. Hao, Y. Zhao, T. Zhang, S. Gao, and J. Liu,
+“Ce-net: Context encoder network for 2d medical image segmentation,”
+ IEEE transactions on medical imaging , vol. 38, 2019.
+ [72] 
+K. He, X. Zhang, S. Ren, and J. Sun, “Spatial pyramid pooling in deep
+convolutional networks for visual recognition,” IEEE transactions on
+pattern analysis and machine intelligence , vol. 37, 2015.
+ [73] 
+P. Wang, Y. Cao, C. Shen, L. Liu, and H. T. Shen, “Temporal pyramid
+pooling-based convolutional neural network for action recognition,”
+ IEEE Transactions on Circuits and Systems for Video Technology ,
+vol. 27, 2016.
+ [74] 
+Z. Zheng, G. An, D. Wu, and Q. Ruan, “Spatial-temporal pyramid based
+convolutional neural network for action recognition,” Neurocomputing ,
+vol. 358, 2019.
+ [75] 
+C. Feichtenhofer, H. Fan, B. Xiong, R. Girshick, and K. He, “A large-scale
+study on unsupervised spatiotemporal representation learning,” in
+ Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern
+Recognition , 2021.
+ [76] 
+M. Caron, I. Misra, J. Mairal, P. Goyal, P. Bojanowski, and A. Joulin,
+“Unsupervised learning of visual features by contrasting cluster
+assignments,” Advances in Neural Information Processing Systems ,
+vol. 33, 2020.
+ [77] 
+F. Sener, D. Chatterjee, D. Shelepov, K. He, D. Singhania, R. Wang, and A. Yao,
+“Assembly101: A large-scale multi-view video dataset for understanding
+procedural activities,” in Proceedings of the IEEE/CVF Conference on
+Computer Vision and Pattern Recognition , 2022.
+ [78] 
+S. Stein and S. J. McKenna, “Combining embedded accelerometers with computer
+vision for recognizing food preparation activities,” in Proceedings of
+the 2013 ACM international joint conference on Pervasive and ubiquitous
+computing , 2013.
+ [79] 
+A. Fathi, X. Ren, and J. M. Rehg, “Learning to recognize objects in egocentric
+activities,” in Proceedings of the IEEE/CVF Conference on Computer
+Vision and Pattern Recognition , 2011.
+ [80] 
+J. Lin, C. Gan, and S. Han, “Tsm: Temporal shift module for efficient video
+understanding,” in Proceedings of the IEEE/CVF International
+Conference on Computer Vision , 2019.
+ [81] 
+D. Damen, H. Doughty, G. M. Farinella, S. Fidler, A. Furnari, E. Kazakos,
+D. Moltisanti, J. Munro, T. Perrett, W. Price et al. , “Scaling
+egocentric vision: The epic-kitchens dataset,” in Proceedings of the
+European Conference on Computer Vision (ECCV) , 2018.
+ [82] 
+D. Wang, D. Hu, X. Li, and D. Dou, “Temporal relational modeling with
+self-supervision for action segmentation,” in AAAI Conference on
+Artificial Intelligence(AAAI) , 2021.
+ [83] 
+L. Ballan, O. Strafforello, and K. Schutte, “Long-term behaviour recognition
+in videos with actor-focused region attention.” in VISIGRAPP (5:
+VISAPP) , 2021.
+ [84] 
+S. Sarfraz, V. Sharma, and R. Stiefelhagen, “Efficient parameter-free
+clustering using first neighbor relations,” in Proceedings of the
+IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2019.
+ Dipika Singhania 
+is a PhD candidate at School of Computing, National University of Singapore. She received
+his bachelor degree from IIEST, India in
+2013. Her research interests include video recognition and segmentation using deep learning. 
+ Rahul Rahaman is a PhD candidate at Department of Statistics and Data Science, National University of Singapore. He received
+his masters and bachelor degree from Indian Statistical Institute in
+2011 and 2013 respectively. His research interests include uncertainty quantification and use of less supervision in videos and images. 
+ Angela Yao is a Assistant Professor in Computer Science at the School of Computing since 2018, where she leads the Computer Vision and Machine Learning group. She works on topics ranging from segmentation, pose estimation, to video understanding. Before NUS, she was a junior professor at the University of Bonn, Germany. She received her PhD in 2012 from ETH Zurich. 
+ Experimental support, please
+ view the build logs 
+ for errors. Generated by
+ L
+ A 
+ T
+ E 
+ xml 
+ .
+ Instructions for reporting errors 
+ We are continuing to improve HTML versions of papers, and your feedback helps enhance accessibility and mobile
+ support. To report errors in the HTML that will help us improve conversion and rendering, choose any of the
+ methods listed below: 
+ Click the "Report Issue" ( ) button, located in the page header. 
+ Tip: You can select the relevant text first, to include it in your report. 
+ Our team has already identified the following issues . We appreciate your time reviewing and reporting rendering errors we
+ may not have found yet. Your efforts will help us improve the HTML versions for all readers, because disability
+ should not be a barrier to accessing research. Thank you for your continued support in championing open access for
+ all. 
+ Have a free development cycle? Help support accessibility at arXiv! Our collaborators at LaTeXML maintain a list of packages that need conversion , and welcome developer contributions . 
+ We gratefully acknowledge support from
+ our major funders ,
+ member institutions , ,
+ and all contributors.
+ About 
+ · 
+ Help 
+ · 
+ Contact 
+ · 
+ Subscribe 
+ · 
+ Copyright 
+ · 
+ Privacy 
+ · 
+ Accessibility 
+ · 
+ Operational Status (opens in new tab) 
+ Major funding support from 
+

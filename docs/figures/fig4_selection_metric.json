@@ -1,0 +1,38 @@
+{
+  "figure": "fig4_selection_metric",
+  "title": "Checkpoint selection metric comparison",
+  "source": "docs/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md §2.4（8 seed 配对；rho 来自 326 run 迁移体检）",
+  "data": {
+    "metrics": [
+      "edit",
+      "F1@0.1",
+      "acc"
+    ],
+    "arms": {
+      "val_f1_0.5 (current default)": [
+        49.13,
+        38.69,
+        54.64
+      ],
+      "val_edit (recommended)": [
+        51.08,
+        40.01,
+        53.98
+      ],
+      "val_f1_0.25 (3-seed ref)": [
+        46.97,
+        39.68,
+        53.66
+      ]
+    },
+    "val_edit_vs_default": {
+      "edit_delta": 9.63,
+      "p_edit": 0.0107,
+      "insert_recall_delta": 5.46,
+      "p_insert": 0.0214,
+      "seeds_won": "6/8"
+    },
+    "spearman_rho_default_vs_test": 0.199,
+    "n_runs_surveyed": 326
+  }
+}

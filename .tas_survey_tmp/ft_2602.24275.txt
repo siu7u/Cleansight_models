@@ -1,0 +1,2516 @@
+ 
+
+ Hierarchical Action Learning for Weakly-Supervised Action Segmentation 
+
+## Report GitHub Issue
+
+ × 
+
+ Title: 
+
+ Content selection saved. Describe the issue below: 
+
+ Description: 
+
+ Submit without GitHub 
+ Submit in GitHub 
+
+ arXiv is now an independent nonprofit! 
+ Learn more 
+ × 
+
+ Back to arXiv 
+
+ Why HTML? 
+
+ Report Issue 
+
+ Back to Abstract 
+
+ Download PDF 
+
+ Abstract 
+ 1 Introduction 
+ 2 Related Works 
+
+ 2.1 Weakly-Supervised Action Segmentation 
+ 2.2 Causal Representation Learning 
+
+ 3 Preliminaries 
+
+ 3.1 Data Generation Process 
+ 3.2 Problem Statement 
+
+ 4 Approach 
+
+ 4.1 Augmented Data Generation Process 
+ 4.2 Hierarchical Action Learning Model 
+
+ Video Modeling with variational inference. 
+ Smoothness Transition Constraint. 
+ Model Summary 
+
+ 4.3 Comparison with Existing Methods 
+
+ 5 Theoretical Analysis 
+
+ 5.1 Identifiability of Action and Visual Variables 
+
+ Intuition and Proof Sketch: 
+
+ 5.2 Identifiability of Latent Action Variables 
+
+ Proof Sketch: 
+
+ 6 Experiments 
+
+ 6.1 Datasets 
+ 6.2 Baselines 
+ 6.3 Evaluation Metric 
+ 6.4 Qualitative Results and Discussion 
+
+ Comparison with Existing Methods. 
+
+ 6.5 Case Studies 
+ 6.6 Ablation Study 
+ 6.7 Visualization Results 
+
+ 7 Summary 
+ 8 Acknowledgment 
+ References 
+ 9 Extended Related Work 
+
+ 9.1 Weakly-Supervised Action Segmentation 
+ 9.2 Causal Representation Learning 
+
+ 10 Proof 
+
+ 10.1 Useful Theorems and Lemmas 
+ 10.2 Proof of Block-wise Identifiability of Latent Action and Visual Variables. 
+ 10.3 Proof of Block-wise Identifiability of Latent Action variables. 
+
+ 11 Implementation Details 
+
+ 11.1 Model Details 
+ 11.2 Experiment Details 
+ 11.3 Basic Training Settings 
+ 11.4 Computational Efficiency Analysis 
+ 11.5 Hyperparameter Sensitivity Analysis 
+
+ 12 Additional Experimental Results 
+
+ 12.1 Ablation Study Extensions 
+ 12.2 Linear Probing Results 
+ 12.3 Empirical Motivation 
+
+ 13 Discussion of the Identification Results 
+
+ 13.1 Bounded, Continues and Positive Density 
+ 13.2 Injective Linear Operators 
+ 13.3 Non-singular Jacobia 
+
+ 14 More Qualitative Results 
+
+ License: arXiv.org perpetual non-exclusive license
+
+arXiv:2602.24275v1 [cs.CV] 27 Feb 2026 
+
+## Hierarchical Action Learning for Weakly-Supervised Action Segmentation
+
+ Junxian Huang
+
+ Affiliation:  Guangdong University of Technology
+
+ Email:  huangjunxian459@gmail.com 
+
+ Ruichu Cai
+
+ Affiliation:  Guangdong University of Technology
+
+ Email:  leizigin@gmail.com 
+
+ Hao Zhu
+
+ Affiliation:  Guangdong University of Technology
+
+ Juntao Fang
+
+ Affiliation:  Guangdong University of Technology
+
+ Boyan Xu
+
+ Affiliation:  Guangdong University of Technology
+
+ Weilin Chen
+
+ Affiliation:  Guangdong University of Technology
+
+ Zijian Li
+
+ Affiliation:  Carnegie Mellon University
+
+ Affiliation:  Mohamed bin Zayed University of Artificial Intelligence
+
+ Shenghua Gao
+
+ Affiliation:  University of Hong Kong
+
+## Abstract
+
+ Humans perceive actions through key transitions that structure actions across multiple abstraction levels, whereas machines, relying on visual features, tend to over-segment. This highlights the difficulty of enabling hierarchical reasoning in video understanding. Interestingly, we observe that lower-level visual and high-level action latent variables evolve at different rates, with low-level visual variables changing rapidly, while high-level action variables evolve more slowly, making them easier to identify. Building on this insight, we propose the Hierarchical Action Learning ( HAL ) model for weakly-supervised action segmentation. Our approach introduces a hierarchical causal data generation process, where high-level latent action governs the dynamics of low-level visual features. To model these varying timescales effectively, we introduce deterministic processes to align these latent variables over time. The HAL model employs a hierarchical pyramid transformer to capture both visual features and latent variables, and a sparse transition constraint is applied to enforce the slower dynamics of high-level action variables. This mechanism enhances the identification of these latent variables over time. Under mild assumptions, we prove that these latent action variables are strictly identifiable. Experimental results on several benchmarks show that the HAL model significantly outperforms existing methods for weakly-supervised action segmentation, confirming its practical effectiveness in real-world applications. 1 1 
+ 1 
+
+ https://github.com/DMIRLAB-Group/HAL 
+
+ * * footnotetext: Corresponding authors. 
+
+## 1 Introduction
+
+ Figure 1 : An action segmentation example in the CrossTask dataset. (a) Real-world action videos exhibit different levels of representation, where action representations change more smoothly than visual representations. (b) A hierarchical data generation process of action videos, where high-level latent action variables govern the evolution of low-level visual variables. (c) Action segmentation results show that action-level segmentation better aligns with the ground truth than visual-level segmentation. 
+
+ Weakly-supervised action segmentation [ 12 ] , relying on coarse annotations such as action transcripts [ 54 ] rather than detailed frame-level labels [ 56 , 1 ] , is one of the most fundamental tasks in video understanding [ 47 ] , with applications in human activity recognition [ 21 ] and video retrieval [ 74 ] . 
+
+ Several methods have been proposed for weakly-supervised action segmentation [ 11 , 55 , 62 ] , among which those based on action transcripts [ 11 ] can be divided into iterative two-stage and single-stage approaches. The iterative methods start with initially estimated labels and refine them through repeated alignment and update steps. For example, ISBA [ 12 ] first divides the video uniformly and then refines the segmentation using soft labels, while TASL [ 54 ] progressively aligns training videos with transcripts. Single-stage approaches directly align transcripts with video frames. ATBA [ 78 ] identifies key action transitions for alignment, and 2by2 [ 5 ] employs a Siamese network to determine whether two videos represent the same activity. Recently, the pose-aware model [ 86 ] leverages pose-guided contrastive learning to improve action segmentation in instructional videos. 
+
+ Despite the remarkable progress, existing methods mainly rely on visual-level representations, where frequent fluctuations in appearance often lead to over-segmentation and noisy boundaries. As illustrated in Figure  1 (a) with a CrossTask example, visual variations are easily mistaken for action transitions, resulting in false boundaries. In contrast, humans perceive activities through hierarchical action structures, where a few key transitions organize actions across multiple levels of abstraction. Motivated by this observation, we hypothesize that videos contain hierarchical latent variables that evolve at different temporal rates, low-level visual variables change rapidly, while high-level action variables evolve more slowly and capture stable semantic patterns (as shown in Figure  1 (b) and (c)). These high-level action variables summarize the progression of an activity and naturally mitigate over-segmentation. 
+
+ However, modeling such hierarchical latent structures is non-trivial. Without explicit constraints, the dynamic visual variables can become entangled with the higher-level action representations, producing unstable boundaries. Interestingly, the temporal asymmetry between fast-changing visual features and slowly evolving action variables provides a valuable inductive cue. Enforcing sparsity and smooth transitions on high-level action can therefore disentangle them from visual fluctuations and facilitate identifiability. 
+
+ Based on this insight, we propose the Hierarchical Action Learning ( HAL ) model for weakly-supervised action segmentation. We formulate a hierarchical causal data generation process, where high-level latent action governs the dynamics of low-level visual variables. To model their asynchronous evolution, we introduce deterministic temporal alignment processes that maintain consistency between action and visual layers. Moreover, we design a pyramidal transformer architecture that captures multi-level dependencies, coupled with a sparse transition constraint to enforce the slower dynamics of high-level action. This inductive bias enables theoretical identifiability of the action variables over time. Extensive experiments on several benchmarks demonstrate that the proposed HAL model surpasses existing methods, validating its effectiveness in capturing structured, multi-level action dynamics in real-world videos. 
+
+## 2 Related Works
+
+## 2.1 Weakly-Supervised Action Segmentation
+
+ Weakly-supervised action segmentation methods [ 3 , 23 , 39 , 40 , 64 , 44 , 54 , 66 , 7 , 8 , 85 ] aim to reduce reliance on frame-level annotations. Four main supervision forms are commonly studied: transcripts, action sets, timestamps, and textual descriptions.
+Transcript-based approaches use ordered action lists without frame-level alignment, offering strong annotation efficiency. They include iterative two-stage methods, which generate and refine pseudo labels [ 39 , 64 , 40 , 12 , 54 ] , and single-stage methods that learn alignment end-to-end [ 23 , 66 , 7 , 44 , 73 , 8 ] . While effective, some suffer from high computational cost.
+Action-set supervision provides only unordered action collections. Early work [ 65 ] infers likely sequences via contextual and duration models. Later methods [ 16 , 45 , 46 , 55 ] improve pseudo-label generation and enable end-to-end training through constrained or differentiable formulations.
+Timestamp-based methods use sparse frame annotations to infer full segmentations. They often refine pseudo labels iteratively [ 48 , 62 , 31 , 72 ] , employing EM frameworks or graph propagation to improve label consistency and handle missing timestamps.
+Text-based supervision provides natural but noisy cues. Prior work aligns text and video [ 57 , 4 , 2 , 88 ] , or learns joint multimodal embeddings [ 61 , 70 ] . Recent studies [ 69 , 17 , 20 ] enhance alignment robustness via generative or structured models. 
+
+## 2.2 Causal Representation Learning
+
+ Independent Component Analysis (ICA) is a core approach for uncovering identifiable causal representations [ 63 , 58 , 76 ] . Classical ICA assumes that observations arise from a linear mixture of independent latent variables [ 10 , 30 , 43 , 83 ] , but this assumption rarely holds in real-world nonlinear settings. To guarantee identifiability in nonlinear ICA, additional conditions such as sparsity or auxiliary variables are introduced [ 87 , 28 , 33 , 51 ] .
+Aapo et al. [ 32 ] established the first theoretical foundation by showing that, under exponential-family latent distributions, identifiability can be achieved via auxiliary information (e.g., domain, time, or labels) [ 26 , 27 , 29 ] . Later works [ 36 , 77 , 34 , 79 ] relaxed these assumptions, proving identifiability without restricting latent distributions. 
+
+ In unsupervised scenarios, structural priors such as mechanism sparsity are used to isolate latent factors [ 41 , 42 , 84 ] . Extensions to time series [ 26 , 19 , 52 , 24 , 79 ] exploit temporal nonstationarity for identifiability, with permutation-based objectives handling stationary cases. More recent methods (e.g., TDRL [ 81 ] , LEAP [ 82 ] , CtrlNS [ 71 ] ) leverage independent noise or transition sparsity to recover latent dynamics; however, models like CtrlNS remain limited to a single-layer latent structure, constraining their ability to capture multi-level temporal factors. 
+
+## 3 Preliminaries
+
+## 3.1 Data Generation Process
+
+ We start with the original data generation process that is shown in Figure 1 (b). The observed variables X = [ 𝐱 1 , ⋯ , 𝐱 T ] ∈ ℝ T × d X=[\mathbf{x}_{1},\cdots,\mathbf{x}_{T}]\in\mathbb{R}^{T\times d} , which also represent a feature sequence of the video with T T frames. We define V = [ 𝐯 1 , ⋯ , 𝐯 T ] ∈ ℝ T × n v V=[\mathbf{v}_{1},\cdots,\mathbf{v}_{T}]\in\mathbb{R}^{T\times n_{v}} as the sequence of visual latent variables, and c = [ 𝐜 1 , ⋯ , 𝐜 T ′ ] ∈ ℝ T ′ × n c c=[\mathbf{c}_{1},\cdots,\mathbf{c}_{T^{\prime}}]\in\mathbb{R}^{T^{\prime}\times n_{c}} as the sequence of action latent variables, where T ′ ≤ T T^{\prime}\leq T since the latent action variables change more slowly than visual variables. Suppose the observed variable 𝐱 t \mathbf{x}_{t} is obtained by applying an invertible mixing function g g to visual variables 𝐯 t \mathbf{v}_{t} , without the presence of noise. Mathematically, we have: 
+
+ | 
+ 𝐱 t = g ⁡ ( 𝐯 t ) \small\mathbf{x}_{t}=g(\mathbf{v}_{t}) | 
+ | 
+ (1) | 
+
+ For the i i -th dimensional latent variable v t , i v_{t,i} (visual level, timestamp t t ), it is generated via a latent causal process associated with Pa d ​ ( v t , i ) \text{Pa}_{d}(v_{t,i}) (time-delayed parent, local temporal dependencies) and Pa h ​ ( v t , i ) \text{Pa}_{h}(v_{t,i}) (hierarchical parent, stable high-level context). Formally, this process is formulated as: 
+
+ | 
+ v t , i = f i v ​ ( Pa d ​ ( v t , i ) , Pa h ​ ( v t , i ) , ϵ t , i v ) , with ​ ϵ t , i v ∼ p ϵ t , v v , \small v_{t,i}=f^{v}_{i}\left(\text{Pa}_{d}(v_{t,i}),\text{Pa}_{h}(v_{t,i}),\epsilon_{t,i}^{v}\right),\hskip 9.24994pt\text{with}\hskip 9.24994pt\epsilon_{t,i}^{v}\sim p_{\epsilon_{t,v}^{v}}, | 
+ | 
+ (2) | 
+
+ where ϵ t , i v \epsilon_{t,i}^{v} is a temporally and spatially independent noise sampled from p ϵ t , i v p_{\epsilon_{t,i}^{v}} . The action variables 𝐜 t \mathbf{c}_{t} is only related to the time-delayed parent Pa d ​ ( c t , i ) \text{Pa}_{d}(c_{t,i}) , which is formalized as: 
+
+ | 
+ c t , i = f i c ​ ( Pa d ​ ( c t , i ) , ϵ t , i c ) , with ​ ϵ t , i c ∼ p ϵ t , i c . \small c_{t,i}=f^{c}_{i}\left(\text{Pa}_{d}(c_{t,i}),\epsilon_{t,i}^{c}\right),\hskip 9.24994pt\text{with}\hskip 9.24994pt\epsilon_{t,i}^{c}\sim p_{\epsilon_{t,i}^{c}}. | 
+ | 
+ (3) | 
+
+## 3.2 Problem Statement
+
+ Given a T T -frame video, the goal is to predict a sequence of action Y ^ = [ y ^ 1 , ⋯ , y ^ T ] \hat{Y}=[\hat{y}_{1},\cdots,\hat{y}_{T}] , where each label y ^ t ∈ U \hat{y}_{t}\in U and U = { 1 , 2 , ⋯ , | U | } U=\{1,2,\cdots,|U|\} denotes the set of action categories in the dataset, including a category for the background. In the weakly supervised action segmentation, the frame-level ground-truth label sequence Y = [ y 1 , ⋯ , y T ] Y=[y_{1},\cdots,y_{T}] is not accessible during training. Instead, the model is provided with an ordered sequence of action labels, referred to as a transcript, denoted by A = [ a 1 , ⋯ , a M ] A=[a_{1},\cdots,a_{M}] , where each a m ∈ U a_{m}\in U , and M M indicates the total number of action segments in the video, including those corresponding to background. 
+
+ Figure 2 : 
+Illustration of the augmented data generation process and the framework of the HAL model. (a) The original data generation process is augmented by introducing pseudo-states and aligning the number of latent action with visual variables. The dashed arrows denote the unknown deterministic transitions. (b) The overall framework of HAL consists of a pyramidal transformer-based backbone for feature extraction, visual and action encoders for latent visual and action variables, visual and action decoder for reconstruction, and the smoothness transition constraint that enforces the identification of latent action variables.
+
+## 4 Approach
+
+ Based on the aforementioned data generation process, we propose the Hierarchical Action Learning ( HAL ) model. Specifically, we first present the augmented data generation process (Figure 2 (a)) for the tractability. We then detail the implementation of the HAL model in Figure 2 (b). 
+
+## 4.1 Augmented Data Generation Process
+
+ As shown in Figure 1 (b), each high-level latent action variables corresponds to multiple latent visual variables. However, existing models typically encode a fixed number of latent variables, making it difficult to accommodate the original generative process directly. To bridge this gap, we propose an augmented data generation process, illustrated in Figure 2 (a). This augmentation consists of two steps. First, since the number of latent action variables is smaller than that of latent visual variables, we introduce pseudo-states (the dashed boxes) to align their quantities.
+Second, to encode the prior knowledge that latent action variables evolve more slowly than latent visual variables, we model the transitions between pseudo-states as deterministic but unknown processes (dashed arrows). In this augmented causal graph, the number of latent action variables is consistent with the number of latent visual variables (i.e., video length), allowing us to leverage existing backbones for multi-level feature extraction, while preserving the prior that action transitions are smoother than those of latent visual variables.
+The aforementioned augmentation equivalently transforms a stochastic process 𝐜 t − 1 → 𝐜 t + 2 \framebox{$\mathbf{c}_{t-1}$}\rightarrow\framebox{$\mathbf{c}_{t+2}$} into a mixing process 𝐜 t − 1 ⇢               𝐜 t         ⇢               𝐜 t + 1         → 𝐜 t + 2 \framebox{$\mathbf{c}_{t-1}$}\dashrightarrow\hbox to15.03pt{\vbox to12.34pt{\pgfpicture\makeatletter\hbox{\hskip 7.51596pt\lower-6.17221pt\hbox to0.0pt{\lxSVG@begingroup@{_scopebegin=1} \lxSVG@begingroup@{stroke=#000000} \lxSVG@begingroup@{fill=#000000} \lxSVG@setlinewidth{\the\pgflinewidth}\lxSVG@begingroup@{stroke-width=0.4pt} \lx@inpgf@ignorespaces\nullfont\hbox to0.0pt{\lxSVG@begingroup@{_scopebegin=1} {
+{{}}\lx@inpgf@ignorespaces\hbox{\hbox{{\lxSVG@begingroup@{_scopebegin=1} \lxSVG@setdash{3.0pt,3.0pt}{0.0pt}\lxSVG@begingroup@{stroke-dasharray={3.0pt,3.0pt},stroke-dashoffset=0.0pt} \lx@inpgf@ignorespaces{{}{}{{
+{}{}}}{
+{}{}}
+{{}{{\lx@inpgf@ignorespaces}}}{{}{\lx@inpgf@ignorespaces}}{}{{}{\lx@inpgf@ignorespaces}}
+{\lxSVG@begingroup@{_scopebegin=1} \lxSVG@setdash{3.0pt,3.0pt}{0.0pt}\lxSVG@begingroup@{stroke-dasharray={3.0pt,3.0pt},stroke-dashoffset=0.0pt} \lx@inpgf@ignorespaces{}\lxSVG@stroke\lxSVG@drawpath@unclipped{M -10.12 -8.26 h 20.25 v 16.53 h -20.25 Z}{fill:none} \lx@inpgf@ignorespaces
+\lxSVG@closescope }{{{{\lx@inpgf@ignorespaces}}\lxSVG@begingroup@{_scopebegin=1} \lxSVG@transformcm{1.0}{0.0}{0.0}{1.0}{-4.31596pt}{-1.47221pt}\lxSVG@begingroup@{transform=matrix(1.0 0.0 0.0 1.0 -5.97 -2.04)} \pgfsys@hbox{58}\lxSVG@closescope }}}
+\lxSVG@closescope }}}
+}
+\lxSVG@closescope {{
+{}{}{}}}{\lx@inpgf@ignorespaces}{\lx@inpgf@ignorespaces}\hss}\lxSVG@discardpath\lxSVG@closescope \hss}}\lxSVG@closescope\endpgfpicture}}\dashrightarrow\hbox to25.16pt{\vbox to13.18pt{\pgfpicture\makeatletter\hbox{\hskip 12.57848pt\lower-6.58888pt\hbox to0.0pt{\lxSVG@begingroup@{_scopebegin=1} \lxSVG@begingroup@{stroke=#000000} \lxSVG@begingroup@{fill=#000000} \lxSVG@setlinewidth{\the\pgflinewidth}\lxSVG@begingroup@{stroke-width=0.4pt} \lx@inpgf@ignorespaces\nullfont\hbox to0.0pt{\lxSVG@begingroup@{_scopebegin=1} {
+{{}}\lx@inpgf@ignorespaces\hbox{\hbox{{\lxSVG@begingroup@{_scopebegin=1} \lxSVG@setdash{3.0pt,3.0pt}{0.0pt}\lxSVG@begingroup@{stroke-dasharray={3.0pt,3.0pt},stroke-dashoffset=0.0pt} \lx@inpgf@ignorespaces{{}{}{{
+{}{}}}{
+{}{}}
+{{}{{\lx@inpgf@ignorespaces}}}{{}{\lx@inpgf@ignorespaces}}{}{{}{\lx@inpgf@ignorespaces}}
+{\lxSVG@begingroup@{_scopebegin=1} \lxSVG@setdash{3.0pt,3.0pt}{0.0pt}\lxSVG@begingroup@{stroke-dasharray={3.0pt,3.0pt},stroke-dashoffset=0.0pt} \lx@inpgf@ignorespaces{}\lxSVG@stroke\lxSVG@drawpath@unclipped{M -17.13 -8.84 h 34.26 v 17.68 h -34.26 Z}{fill:none} \lx@inpgf@ignorespaces
+\lxSVG@closescope }{{{{\lx@inpgf@ignorespaces}}\lxSVG@begingroup@{_scopebegin=1} \lxSVG@transformcm{1.0}{0.0}{0.0}{1.0}{-9.37848pt}{-1.05554pt}\lxSVG@begingroup@{transform=matrix(1.0 0.0 0.0 1.0 -12.98 -1.46)} \pgfsys@hbox{58}\lxSVG@closescope }}}
+\lxSVG@closescope }}}
+}
+\lxSVG@closescope {{
+{}{}{}}}{\lx@inpgf@ignorespaces}{\lx@inpgf@ignorespaces}\hss}\lxSVG@discardpath\lxSVG@closescope \hss}}\lxSVG@closescope\endpgfpicture}}\rightarrow\framebox{$\mathbf{c}_{t+2}$} , where 𝐜 t \mathbf{c}_{t} and 𝐜 t + 1 \mathbf{c}_{t+1} denote the pseudo-states; ⇢ \dashrightarrow and → \rightarrow denotes the deterministic and stochastic transitions, respectively. 
+
+ Compared with stochastic transition, where extra information is brought via exogenous noise, since the transition of the pseudo-states is deterministic, no extra information is brought, so 𝐜 t − 1 \framebox{$\mathbf{c}_{t-1}$} , 𝐜 t \mathbf{c}_{t} , and 𝐜 t + 1 \mathbf{c}_{t+1} can be denoted as the same latent action, preserving the prior that the latent action evolve more slowly than the latent visual variables. As a result, the lengths of the latent action and visual variables are aligned, which facilitates subsequent modeling. 
+
+## 4.2 Hierarchical Action Learning Model
+
+ In this section, we devise the Hierarchical Action Learning model, which is built on the pyramid transformer-based architecture with a smoothness transition constraint to enforce different changing speeds of hierarchical latent variables. 
+
+## Video Modeling with variational inference.
+
+ Similar to the methods that model video or image data with the variational auto-encoder at the feature level [ 9 ] , we first leverage a visual transformer-based backbone network [ 78 ] to extract the low-dimensional feature 𝐛 1 : T \mathbf{b}_{1:T} . Then we can take 𝐱 1 : T \mathbf{x}_{1:T} as 𝐛 1 : T \mathbf{b}_{1:T} and model the augmented data generation process with variational inference. We begin by deriving the evidence lower bound (ELBO), as shown below: 
+
+ | 
+ E L B O = 𝔼 q ( 𝐯 1 : T | 𝐛 1 : T ) log p ( 𝐛 1 : T | 𝐯 1 : T ) ⏟ ℒ r − ( D K ​ L ( q ( 𝐯 1 : T | 𝐛 1 : T ) | | p ( 𝐯 1 : T ) ) + D K ​ L ( q ( 𝐜 1 : T | 𝐯 1 : T ) | | p ( 𝐜 1 : T ) ) ) ⏟ ℒ K ​ L , \small\begin{split}&ELBO=\underbrace{\mathbb{E}_{q(\mathbf{v}_{1:T}|\mathbf{b}_{1:T})}\log p(\mathbf{b}_{1:T}|\mathbf{v}_{1:T})}_{\mathcal{L}_{r}}-\\
+&\underbrace{\Big(D_{KL}\big(q(\mathbf{v}_{1:T}|\mathbf{b}_{1:T})||p(\mathbf{v}_{1:T})\big)+D_{KL}\big(q(\mathbf{c}_{1:T}|\mathbf{v}_{1:T})||p(\mathbf{c}_{1:T})\big)\Big)}_{\mathcal{L}_{KL}}\end{split}, | 
+ | 
+ (4) | 
+
+ where ℒ r \mathcal{L}_{r} denotes the reconstruction loss, and ℒ K ​ L \mathcal{L}_{KL} denotes the Kullback–Leibler divergence. Moreover, the distributions q ( 𝐯 1 : T | 𝐛 1 : T ) q(\mathbf{v}_{1:T}|\mathbf{b}_{1:T}) and q ( 𝐜 1 : T | 𝐯 1 : T ) q(\mathbf{c}_{1:T}|\mathbf{v}_{1:T}) approximate the priors of the latent variables and correspond to the visual encoder and action encoder in Figure  2 (b), respectively. Both are implemented using Transformer architectures. And p ( 𝐛 1 : T | 𝐯 1 : T ) p(\mathbf{b}_{1:T}|\mathbf{v}_{1:T}) is used to reconstruct the feature 𝐛 1 : T \mathbf{b}_{1:T} . Mathematically, the aforementioned backbone network, visual encoder, action encoder and visual decoder, action decoder are formulated by ϕ \phi , ψ \psi , η \eta , κ \kappa and ξ \xi , respectively as follows: 
+
+ | 
+ 𝐛 1 : T = ϕ ( 𝐱 1 : T ) , 𝐯 ^ 1 : T = ψ ( 𝐛 1 : T ) , 𝐜 ^ 1 : T = η ( 𝐯 ^ 1 : T ) , 𝐛 ^ 1 : T = κ ( 𝐯 ^ 1 : T ) , 𝐯 ^ 1 : T ′ = ξ ( 𝐜 ^ 1 : T ) , \small\begin{split}\mathbf{b}_{1:T}=\phi(\mathbf{x}_{1:T})&,\hskip 9.24994pt\hat{\mathbf{v}}_{1:T}=\psi(\mathbf{b}_{1:T}),\hskip 9.24994pt\hat{\mathbf{c}}_{1:T}=\eta(\hat{\mathbf{v}}_{1:T}),\\
+\hat{\mathbf{b}}_{1:T}&=\kappa(\hat{\mathbf{v}}_{1:T}),\hskip 9.24994pt\hat{\mathbf{v}}_{1:T}^{\prime}=\xi(\hat{\mathbf{c}}_{1:T}),\end{split} | 
+ | 
+ (5) | 
+
+ where 𝐛 ^ 1 : T \hat{\mathbf{b}}_{1:T} denotes the reconstructed features. 
+
+## Smoothness Transition Constraint.
+
+ To incorporate the inductive bias that latent action variables evolve more slowly than the latent visual variables, we further propose the smoothness transition constraint. First, since the latent action and visual variables may operate on different scales, we need to apply normalization to align them onto a consistent scale. Specifically, we employ the L2 normalization on the latent action variables and the latent visual variables, which are formulated as follows: 
+
+ | 
+ 𝐯 ¯ 1 : T = L 2 ( 𝐯 1 : T ) , 𝐜 ¯ 1 : T = L 2 ( 𝐜 1 : T ) , \small\overline{\mathbf{v}}_{1:T}=L2(\mathbf{v}_{1:T}),\hskip 9.24994pt\overline{\mathbf{c}}_{1:T}=L2(\mathbf{c}_{1:T}), | 
+ | 
+ (6) | 
+
+ where 𝐯 ¯ 1 : T \overline{\mathbf{v}}_{1:T} and 𝐜 ¯ 1 : T \overline{\mathbf{c}}_{1:T} denote the normalized latent visual and action variables, respectively. Sequentially, we quantify the changes of latent visual and action variables to further constraint the prior that the latent action change more slowly than latent visual variables, as shown in Equation ( 7 ) 
+
+ | 
+ Δ ​ V ¯ = { | 𝐯 ¯ 2 − 𝐯 ¯ 1 | , ⋯ , | 𝐯 ¯ T − 𝐯 ¯ T − 1 | } , Δ ​ C ¯ = { | 𝐜 ¯ 2 − 𝐜 ¯ 1 | , ⋯ , | 𝐜 ¯ T − 𝐜 ¯ T − 1 | } , \small\begin{split}\Delta\overline{V}&=\{|\overline{\mathbf{v}}_{2}-\overline{\mathbf{v}}_{1}|,\cdots,|\overline{\mathbf{v}}_{T}-\overline{\mathbf{v}}_{T-1}|\},\\
+\Delta\overline{C}&=\{|\overline{\mathbf{c}}_{2}-\overline{\mathbf{c}}_{1}|,\cdots,|\overline{\mathbf{c}}_{T}-\overline{\mathbf{c}}_{T-1}|\},\end{split} | 
+ | 
+ (7) | 
+
+ where Δ ​ V ¯ \Delta\overline{V} and Δ ​ C ¯ \Delta\overline{C} denote the changing degrees of latent visual and action variables, respectively. 
+
+ As a results, we can constrain the changing of different layers of latent variables by 
+
+ | 
+ ℒ s = ReLU ​ ( ∑ t = 1 T − 1 𝐰 c ​ Δ ​ C ¯ − ∑ i = 1 T − 1 𝐰 v ​ Δ ​ V ¯ ) ⏟ (i) + δ ​ ∑ t = 1 T − 1 𝐰 c ​ Δ ​ C ¯ ⏟ (ii) , \small\begin{split}\mathcal{L}_{s}&=\underbrace{\textbf{ReLU}(\sum_{t=1}^{T-1}\mathbf{w}_{c}\Delta\overline{C}-\sum_{i=1}^{T-1}\mathbf{w}_{v}\Delta\overline{V})}_{\textbf{(i)}}+\underbrace{\delta\sum_{t=1}^{T-1}\mathbf{w}_{c}\Delta\overline{C}}_{\textbf{(ii)}},\end{split} | 
+ | 
+ (8) | 
+
+ where δ \delta is a hyper-parameter; 𝐰 c \mathbf{w}_{c} and 𝐰 v \mathbf{w}_{v} are the weights that make the changing parts more significant, which are calculated by a S ​ o ​ f ​ t ​ M ​ A ​ X SoftMAX activation as follows: 
+
+ | 
+ 𝐰 c = SoftMAX ​ ( Δ ​ C ¯ ) , 𝐰 v = SoftMAX ​ ( Δ ​ V ¯ ) . \small\mathbf{w}_{c}=\text{SoftMAX}(\Delta\overline{C}),\hskip 9.24994pt\mathbf{w}_{v}=\text{SoftMAX}(\Delta\overline{V}). | 
+ | 
+ (9) | 
+
+ Intuition: Equation ( 8 ) implies that 1) When the estimated latent action variables change faster than the latent visual variables, i.e., ∑ t = 1 T − 1 𝐰 c ​ Δ ​ C ¯ − ∑ i = 1 T − 1 𝐰 v ​ Δ ​ V ¯ > 0 \sum_{t=1}^{T-1}\mathbf{w}_{c}\Delta\overline{C}-\sum_{i=1}^{T-1}\mathbf{w}_{v}\Delta\overline{V}>0 , the term (i) in Equation ( 8 ) imposes a constraint to ensure that the latent action variables evolve more slowly than the latent visual variables; 2) In the mean while, term (ii) further enforces the temporal smoothness of the latent action variables by penalizing rapid changes, encouraging consistency over time. Please refer to the Ablation Study subsection for the comprehensive effectiveness of each component of the proposed smoothness transition constraint. 
+
+## Model Summary
+
+ By combining the aforementioned ELBO, the smoothness transition constraint with the classifier loss for segmentation, we can finally formalize the total loss of the proposed HAL model as follows: 
+
+ | 
+ ℒ t ​ o ​ t ​ a ​ l = ℒ y − α ⋅ E ​ L ​ B ​ O + β ⋅ ℒ s , \small\begin{split}\mathcal{L}_{total}&=\mathcal{L}_{y}-\alpha\cdot ELBO+\beta\cdot\mathcal{L}_{s},\end{split} | 
+ | 
+ (10) | 
+
+ where we follow the total loss as ℒ y \mathcal{L}_{y} from ATBA [ 78 ] , α \alpha and β \beta are hyper-parameters. 
+
+## 4.3 Comparison with Existing Methods
+
+ Although existing methods for action segmentation also leverage techniques like smoothness or hierarchical modeling, we would like to highlight that the proposed method is different from the existing methods in the following ways: 1) Compared with the existing smoothness-based methods like Gaussian Smoothing [ 13 ] and Boundary Smoothing [ 78 ] , our method constrains the smoothness on the latent variables, i.e., the latent action variables instead of the predicted label. 2) Compared with the methods like [ 67 , 60 ] that also model videos in a hierarchical manner, our method can show that the high-level latent action variables can be identified with theoretical guarantees. 
+
+## 5 Theoretical Analysis
+
+ To show the theoretical guarantees, we begin with the definition of block-wise identification and linear operators. 
+
+## Definition 1 . 
+
+ [ Block-wise Identifiability of Latent Action c t \mathbf{c}_{t} and Visual Variables v t \mathbf{v}_{t} [ 75 ] ]
+
+The block-wise identifiability of ( 𝐯 t , 𝐜 t ) ∈ ℝ n v + n c (\mathbf{v}_{t},\mathbf{c}_{t})\in\mathbb{R}^{n_{v}+n_{c}} means that for ground-truth ( 𝐯 t , 𝐜 t ) (\mathbf{v}_{t},\mathbf{c}_{t}) , there exists ( 𝐯 ^ t , 𝐜 ^ t ) ∈ ℝ n v + n c (\hat{\mathbf{v}}_{t},\hat{\mathbf{c}}_{t})\in\mathbb{R}^{n_{v}+n_{c}} and an invertible function h 𝐯 , 𝐜 : ℝ n v + n c → ℝ n v + n c h_{\mathbf{v},\mathbf{c}}:\mathbb{R}^{n_{v}+n_{c}}\rightarrow\mathbb{R}^{n_{v}+n_{c}} , such that ( 𝐯 t , 𝐜 t ) = h ⁡ ( 𝐯 ^ t , 𝐜 ^ t ) (\mathbf{v}_{t},\mathbf{c}_{t})=h(\hat{\mathbf{v}}_{t},\hat{\mathbf{c}}_{t}) . 
+
+ Although the above definition is stated for ( 𝐯 t , 𝐜 t ) (\mathbf{v}_{t},\mathbf{c}_{t}) , it naturally extends to the case of latent action variables 𝐜 t \mathbf{c}_{t} . Specifically, when we say that the latent action variables 𝐜 t ∈ ℝ n c \mathbf{c}_{t}\in\mathbb{R}^{n_{c}} is block-wise identifiable (as shown in Theorem 1 ), we mean that there exists an estimated 𝐜 ^ t ∈ ℝ n c \hat{\mathbf{c}}_{t}\in\mathbb{R}^{n_{c}} and an invertible function h c : ℝ n c → ℝ n c h_{c}:\mathbb{R}^{n_{c}}\rightarrow\mathbb{R}^{n_{c}} such that 𝐜 t = h c ​ ( 𝐜 ^ t ) \mathbf{c}_{t}=h_{c}(\hat{\mathbf{c}}_{t}) . 
+
+## Definition 2 ( Linear Operator [ 22 , 14 ] ) . 
+
+ Consider two random variables 𝐚 \mathbf{a} and 𝐛 \mathbf{b} with support 𝒜 \mathcal{A} and ℬ \mathcal{B} , the linear operator L 𝐛 | 𝐚 L_{\mathbf{b}|\mathbf{a}} is defined as a mapping from a probability function p 𝐚 p_{\mathbf{a}} in some function space ℱ ⁡ ( 𝒜 ) \mathcal{F}(\mathcal{A}) onto the probability function p 𝐛 = L 𝐛 | 𝐚 ∘ p 𝐚 p_{\mathbf{b}}=L_{\mathbf{b}|\mathbf{a}}\circ p_{\mathbf{a}} in some function space ℱ ⁡ ( ℬ ) \mathcal{F}(\mathcal{B}) , 
+
+ | 
+ ℱ ( 𝒜 ) → ℱ ( ℬ ) : p 𝐛 = L 𝐛 | 𝐚 ∘ p 𝐚 = ∫ 𝒜 p 𝐛 | 𝐚 ( ⋅ | 𝐚 ) p 𝐚 ( 𝐚 ) d 𝐚 . \small\mathcal{F}(\mathcal{A})\rightarrow\mathcal{F}(\mathcal{B}):p_{\mathbf{b}}=L_{\mathbf{b}|\mathbf{a}}\circ p_{\mathbf{a}}=\int_{\mathcal{A}}p_{\mathbf{b}|\mathbf{a}}(\cdot|\mathbf{a})p_{\mathbf{a}}(\mathbf{a})d\mathbf{a}. | 
+ | 
+ (11) | 
+
+ Intuitively, the definition of the linear operator describes a transformation from one probability function p a ​ ( a ) p_{a}(a) to another probability function p b ​ ( b ) p_{b}(b) . Please refer to supplementary material for more discussion, explanation, and examples of the linear operator. Based on the aforementioned definitions, we first show that the hierarchical latent variables ( 𝐯 t , 𝐜 t ) (\mathbf{v}_{t},\mathbf{c}_{t}) are block-wise identifiable in Lemma 1 . 
+
+## 5.1 Identifiability of Action and Visual Variables
+
+## Lemma 1 . 
+
+ Figure 3 : Intuitions of the theoretical results, where the solid and dashed arrows denote the stochastic and deterministic transitions, respectively. (a) The identification of ( 𝐯 t , 𝐜 t ) (\mathbf{v}_{t},\mathbf{c}_{t}) can be achieved by leveraging five consecutive temporal observations. (b) By introducing the independent noises ϵ t − 1 v , ϵ t v , ϵ t + 1 v \epsilon^{v}_{t-1},\epsilon^{v}_{t},\epsilon^{v}_{t+1} , the stochastic transition processes 𝐯 t − 2 → 𝐯 t − 1 \mathbf{v}_{t-2}\rightarrow\mathbf{v}_{t-1} and 𝐯 t → 𝐯 t + 1 \mathbf{v}_{t}\rightarrow\mathbf{v}_{t+1} can be effectively transformed into corresponding deterministic transition processes. 
+
+ ( Block-wise Identification of ( v t , c t ) (\mathbf{v}_{t},\mathbf{c}_{t}) . ) Suppose the observed, latent visual, and latent action variables follow the augmented data generation process in Figure 2 (a). By matching the true joint distribution of 5 numbers of adjacent video frames, i.e., { 𝐱 t − 2 , 𝐱 t − 1 , 𝐱 t , 𝐱 t + 1 , 𝐱 t + 2 } \{\mathbf{x}_{t-2},\mathbf{x}_{t-1},\mathbf{x}_{t},\mathbf{x}_{t+1},\mathbf{x}_{t+2}\} , we further make the following assumptions: 
+
+ • 
+
+ A1 ( Bounded and Continuous Density ): The joint distribution of 𝐱 t \mathbf{x}_{t} , 𝐯 t \mathbf{v}_{t} , 𝐜 t \mathbf{c}_{t} , and their marginal and conditional densities are bounded and continuous. 
+
+ • 
+
+ A2 ( Injective Linear Operators ): The linear operators L 𝐱 t + 1 | 𝐯 t , 𝐜 t L_{\mathbf{x}_{t+1}|\mathbf{v}_{t},\mathbf{c}_{t}} and L 𝐱 t − 1 | 𝐱 t + 1 L_{\mathbf{x}_{t-1}|\mathbf{x}_{t+1}} are injective for bounded function space. 
+
+ • 
+
+ A3 ( Positive Density ): For all [ 𝐯 t , 𝐜 t ] , [ 𝐯 t , 𝐜 t ] ′ ∈ 𝒱 t ∪ 𝒞 t [\mathbf{v}_{t},\mathbf{c}_{t}],[\mathbf{v}_{t},\mathbf{c}_{t}]^{\prime}\in\mathcal{V}_{t}\cup\mathcal{C}_{t} with [ 𝐯 t , 𝐜 t ] ≠ [ 𝐯 t , 𝐜 t ] ′ [\mathbf{v}_{t},\mathbf{c}_{t}]\neq[\mathbf{v}_{t},\mathbf{c}_{t}]^{\prime} the set { 𝐱 t : p ⁡ ( 𝐱 t | 𝐯 t , 𝐜 t ) ≠ p ⁡ ( 𝐱 t | 𝐯 t ′ , 𝐜 t ′ ) } \{\mathbf{x}_{t}:p(\mathbf{x}_{t}|\mathbf{v}_{t},\mathbf{c}_{t})\neq p(\mathbf{x}_{t}|\mathbf{v}_{t}^{\prime},\mathbf{c}_{t}^{\prime})\} has positive probability. 
+
+ Suppose that the learned ( g ^ , f ^ , p ϵ ^ ) (\hat{g},\hat{f},p_{\hat{\epsilon}}) to achieve Equation ( 1 ) - ( 3 ), then the latent visual and action variables ( 𝐯 t , 𝐜 t ) (\mathbf{v}_{t},\mathbf{c}_{t}) are block-wise identifiable. 
+
+## Intuition and Proof Sketch:
+
+ Please refer to the detailed proof in supplementary material. This theoretical extension builds upon the work of [ 22 ] , where the latent variables are assumed to be single-layered. Under this assumption, three consecutive observations are sufficient to characterize the dynamics of the latent variable ( 𝐯 t , 𝐜 t ) (\mathbf{v}_{t},\mathbf{c}_{t}) . In contrast, our model involves a two-layer latent structure, where additional observations, i.e., 𝐱 t − 2 \mathbf{x}_{t-2} and 𝐱 t + 2 \mathbf{x}_{t+2} , are required to identify ( 𝐯 t , 𝐜 t ) (\mathbf{v}_{t},\mathbf{c}_{t}) . Intuitively, these five observations effectively capture the underlying temporal evolution of latent variables, as shown in Figure  3 (a). 
+
+ The proof can be separated into two steps. First, we can construct an eigenvalue-eigenfunction decomposition regarding the integral operator by leveraging the definition of linear operators. Sequentially, using the uniqueness of spectral decomposition (Theorem XV.4.3.5 [ 14 ] ), latent variables ( 𝐯 t , 𝐜 t ) (\mathbf{v}_{t},\mathbf{c}_{t}) are block-wise identifiable when the marginal distribution of observations is matched. 
+
+## 5.2 Identifiability of Latent Action Variables
+
+ Based on the identifiability of ( 𝐯 t , 𝐜 t ) (\mathbf{v}_{t},\mathbf{c}_{t}) , we further leverage the hierarchical property of latent variables to show that the latent action 𝐜 t \mathbf{c}_{t} are block-wise identifiable, i.e., the estimated 𝐜 ^ t \hat{\mathbf{c}}_{t} only contains the information of true 𝐜 t \mathbf{c}_{t} . 
+
+## Theorem 1 . 
+
+ ( Block-wise Identifiability of Latent Action Variables. ) Suppose assumptions for Lemma 1 hold and for each action-level block, it has at least two latent visual variables as descendants in data generation process in Figure 3 (b), we further make the following assumptions: 
+
+ • 
+
+ A4 ( non-singular Jacobian ): Each f m f_{m} has non-singular Jacobian matrices almost anywhere and f m f_{m} is invertible. 
+
+ Then by matching the marginal distribution of observed variables and modeling the hierarchical relationships, the latent action variables can be block-wise identifiable. 
+
+## Proof Sketch:
+
+ The proof can be found in supplementary material. The intuition is shown in Figure 3 (b), where we turn the stochastic transition processes 𝐯 t − 2 → 𝐯 t − 1 \mathbf{v}_{t-2}\rightarrow\mathbf{v}_{t-1} and 𝐯 t → 𝐯 t + 1 \mathbf{v}_{t}\rightarrow\mathbf{v}_{t+1} into the deterministic transition processes by introducing independent noise, i.e., ( 𝐯 t − 2 , ϵ t − 1 v ) ⇢ 𝐯 t − 1 (\mathbf{v}_{t-2},\epsilon^{v}_{t-1})\dashrightarrow\mathbf{v}_{t-1} and ( 𝐯 t , ϵ t + 1 v ) ⇢ 𝐯 t + 1 (\mathbf{v}_{t},\epsilon^{v}_{t+1})\dashrightarrow\mathbf{v}_{t+1} . Sequentially, since the mixing procedure from 𝐯 t \mathbf{v}_{t} to 𝐱 t \mathbf{x}_{t} is assumed to be deterministic, 𝐯 t − 1 \mathbf{v}_{t-1} and 𝐯 t + 1 \mathbf{v}_{t+1} are independent when 𝐱 t \mathbf{x}_{t} and 𝐜 t \mathbf{c}_{t} are conditioned. As a result, we can leverage the fact that ϵ t − 1 v , 𝐜 t \epsilon^{v}_{t-1},\mathbf{c}_{t} , and ϵ t + 1 v \epsilon^{v}_{t+1} are conditionally independent to prove that 𝐜 t \mathbf{c}_{t} are block-wise identifiable. Based on this intuition, we can draw the proof sketch as follows.
+First, we construct an invertible transformation between the estimated variables ( 𝐜 ^ t , 𝐯 ^ t − 2 , 𝐯 ^ t , ϵ ^ t − 1 v , ϵ ^ t + 1 v ) (\hat{\mathbf{c}}_{t},\hat{\mathbf{v}}_{t-2},\hat{\mathbf{v}}_{t},\hat{\epsilon}^{v}_{t-1},\hat{\epsilon}^{v}_{t+1}) and the ground-truth variables ( 𝐜 t , 𝐯 t − 2 , 𝐯 t , ϵ t − 1 v , ϵ t + 1 v ) (\mathbf{c}_{t},\mathbf{v}_{t-2},\mathbf{v}_{t},\epsilon^{v}_{t-1},\epsilon^{v}_{t+1}) by leveraging the deterministic transition. Sequentially, by leveraging the independence between 𝐜 t \mathbf{c}_{t} and 𝐯 t − 2 , 𝐯 t , ϵ t − 1 v , ϵ t + 1 v \mathbf{v}_{t-2},\mathbf{v}_{t},\epsilon^{v}_{t-1},\epsilon^{v}_{t+1} , we can show that the action variables 𝐜 t \mathbf{c}_{t} is not the function of 𝐯 ^ t − 2 , 𝐯 ^ t , ϵ ^ t − 1 v \hat{\mathbf{v}}_{t-2},\hat{\mathbf{v}}_{t},\hat{\epsilon}^{v}_{t-1} and ϵ ^ t + 1 v \hat{\epsilon}^{v}_{t+1} , implying that 𝐜 t \mathbf{c}_{t} is only the function of 𝐜 ^ t \hat{\mathbf{c}}_{t} and 𝐜 t \mathbf{c}_{t} are block-wise identifiable. The identification results can be found in the supplementary material. 
+
+## 6 Experiments
+
+## 6.1 Datasets
+
+ We consider the following benchmark datasets for weakly-supervised action segmentation. The Breakfast dataset [ 37 ] contains approximately 77 hours of video material and covers 48 distinct action categories. The CrossTask dataset [ 88 ] contains 4.7K teaching videos (lasting 374 hours), covering 83 tasks and areas such as cooking and car repair. Hollywood Extended dataset [ 3 ] contains 937 video clips from 69 Hollywood movies. Each clip is labeled with the action sequence, and the clips are divided into time intervals of 10 frames in length. The GTEA dataset [ 15 ] contains 28 videos collected from 4 participants, annotated with 11 fine-grained action categories(e.g., take, spread, pour, and stir). We follow the setting of ATBA [ 78 ] . Specifically, for the Breakfast dataset, we use the provided 4 training/test splits and report the mean and standard deviation.
+For the Hollywood dataset, we conduct a 10-fold cross-validation. For the CrossTask dataset, we utilize the released training/test split. For the GTEA dataset, we use the 4 training/test splits. 
+
+## 6.2 Baselines
+
+ We consider different types of baselines. As for the Viterbi-based method, we choose HMM+RNN [ 64 ] , CDFL [ 44 ] , TASL [ 54 ] , and NN-Viterbi [ 66 ] . For the Dynamic Time Warping (DTW)-based method, we consider D3TW [ 7 ] and DP-DTW [ 8 ] . Additionally, we evaluate other representative approaches such as TCFPN+ISBA [ 12 ] , MuCon [ 73 ] , POC [ 55 ] , and AdaAct [ 85 ] . We also consider the recent advanced framework like CtrlNS [ 71 ] . 
+
+## 6.3 Evaluation Metric
+
+ The evaluation metrics employed in the test include Mean-over-Frames ( MoF ), Mean-over-Frames without Background ( MoF-bg ), Intersection-over-Union ( IoU ), and Intersection-over-Detection ( IoD ). The definitions of IoU and IoD are formulated as follows: | I ​ ⋂ I ∗ | / | I ​ ⋃ I ∗ | |I\bigcap I^{*}|/|I\bigcup I^{*}| and | I ​ ⋂ I ∗ | / | I | |I\bigcap I^{*}|/|I| , where I ∗ I^{*} and I I are the ground-truth (GT) segmentation and the predicted segmentation. The definitions of IoU and IoD follow ISBA [ 12 ] . 
+
+ Table 1 : Experiment results on Breakfast dataset. 
+
+ Breakfast | 
+
+ Method | 
+ MoF | 
+ MoF-Bg | 
+ IoU | 
+ IoD | 
+
+ HMM+RNN [ 64 ] | 
+ 33.3 | 
+ - | 
+ - | 
+ - | 
+
+ TCFPN+ISBA [ 12 ] | 
+ 38.4/36.4±1.0 | 
+ 38.4 | 
+ 24.2 | 
+ 40.6 | 
+
+ NN-Viterbi [ 66 ] | 
+ 43.0/39.7±2.4 | 
+ - | 
+ - | 
+ - | 
+
+ D3TW [ 7 ] | 
+ 45.7 | 
+ - | 
+ - | 
+ - | 
+
+ CDFL [ 44 ] | 
+ 50.2/48.1±2.5 | 
+ 48.0 | 
+ 33.7 | 
+ 45.4 | 
+
+ DP-DTW [ 8 ] | 
+ 50.8 | 
+ - | 
+ 35.6 | 
+ 45.1 | 
+
+ TASL [ 54 ] | 
+ 47.8 | 
+ - | 
+ 35.2 | 
+ 46.1 | 
+
+ MuCon [ 73 ] | 
+ 48.5±1.8 | 
+ 50.3 | 
+ 40.9 | 
+ 54.0 | 
+
+ POC [ 55 ] | 
+ 45.7 | 
+ - | 
+ 38.3 | 
+ 46.4 | 
+
+ AdaAct [ 85 ] | 
+ 51.2 | 
+ 48.3 | 
+ 36.3 | 
+ 46.4 | 
+
+ ATBA [ 78 ] | 
+ 53.9±1.2 | 
+ 54.4±1.2 | 
+ 41.1±0.7 | 
+ 61.7±1.1 | 
+
+ HAL(Ours) | 
+ 56.3 ±1.3 | 
+ 57.2 ±1.6 | 
+ 42.6 ±1.9 | 
+ 62.4 ±2.5 | 
+
+ Table 2 : Experiment results on the CrossTask dataset. 
+
+ CrossTask | 
+
+ Method | 
+ MoF | 
+ MoF-Bg | 
+ IoU | 
+ IoD | 
+
+ NN-Viterbi [ 66 ] | 
+ 26.5 | 
+ - | 
+ 10.7 | 
+ 24.0 | 
+
+ CDFL [ 44 ] | 
+ 31.9 | 
+ - | 
+ 11.5 | 
+ 23.8 | 
+
+ TASL [ 54 ] | 
+ 40.7 | 
+ 27.4 | 
+ 14.5 | 
+ 25.1 | 
+
+ POC [ 55 ] | 
+ 42.8 | 
+ 17.6 | 
+ 15.6 | 
+ - | 
+
+ ATBA [ 78 ] | 
+ 50.6±1.3 | 
+ 31.3±0.7 | 
+ 20.9±0.4 | 
+ 44.6 ±0.7 | 
+
+ CtrlNS [ 71 ] | 
+ 54.0 ±0.9 | 
+ - | 
+ 15.7±0.5 | 
+ 23.6±0.8 | 
+
+ HAL(Ours) | 
+ 54.0 ±0.8 | 
+ 35.0 ±1.1 | 
+ 21.6 ±0.4 | 
+ 41.9±0.7 | 
+
+ Table 3 : Experiment results on the Hollywood dataset. 
+
+ Hollywood Extended | 
+
+ Method | 
+ MoF | 
+ MoF-Bg | 
+ IoU | 
+ IoD | 
+
+ HMM+RNN [ 64 ] | 
+ - | 
+ - | 
+ 11.9 | 
+ - | 
+
+ TCFPN+ISBA [ 12 ] | 
+ 28.7 | 
+ 34.5 | 
+ 12.6 | 
+ 18.3 | 
+
+ D3TW [ 7 ] | 
+ 33.6 | 
+ - | 
+ - | 
+ - | 
+
+ CDFL [ 44 ] | 
+ 45.0 | 
+ 40.6 | 
+ 19.5 | 
+ 25.8 | 
+
+ TASL [ 54 ] | 
+ 42.1 | 
+ 27.2 | 
+ 23.3 | 
+ 33.0 | 
+
+ MuCon [ 73 ] | 
+ - | 
+ 41.6 | 
+ 12.9 | 
+ - | 
+
+ ATBA [ 78 ] | 
+ 47.7±2.5 | 
+ 40.2±1.6 | 
+ 30.9±1.6 | 
+ 55.8±0.8 | 
+
+ CtrlNS [ 71 ] | 
+ 52.9 ±3.1 | 
+ - | 
+ 32.7±1.3 | 
+ 52.4±1.8 | 
+
+ HAL(Ours) | 
+ 51.0±1.7 | 
+ 41.9 ±3.7 | 
+ 33.4 ±1.4 | 
+ 56.8 ±1.8 | 
+
+ Table 4 : Experiment results on the GTEA dataset. 
+
+ GTEA | 
+
+ Method | 
+ MoF | 
+ MoF-Bg | 
+ IoU | 
+ IoD | 
+
+ NN-Viterbi [ 66 ] ♯ \sharp | 
+ 25.7±2.5 | 
+ 25.9±2.8 | 
+ 13.0±1.8 | 
+ 18.9±2.3 | 
+
+ CDFL [ 44 ] ♯ \sharp | 
+ 31.4±3.1 | 
+ 31.9±4.0 | 
+ 15.5±1.4 | 
+ 22.8±2.6 | 
+
+ POC [ 55 ] ♯ \sharp | 
+ 18.4±4.5 | 
+ 22.2±6.1 | 
+ 7.3±2.7 | 
+ 11.2±3.6 | 
+
+ ATBA [ 78 ] ♯ \sharp | 
+ 42.2±4.3 | 
+ 42.7±5.6 | 
+ 24.4±1.9 | 
+ 47.2±4.1 | 
+
+ CtrlNS [ 71 ] ♯ \sharp | 
+ 33.3±3.9 | 
+ 33.1±5.9 | 
+ 18.9±2.1 | 
+ 38.3±4.4 | 
+
+ HAL(Ours) | 
+ 45.2 ±5.4 | 
+ 46.0 ±6.6 | 
+ 25.6 ±2.2 | 
+ 49.2 ±2.7 | 
+
+## 6.4 Qualitative Results and Discussion
+
+## Comparison with Existing Methods.
+
+ Experimental results on the Breakfast, CrossTask, and Hollywood datasets are presented in Table 1 , 2 , 3 and 4 . The results of the Breakfast, CrossTask, and Hollywood datasets are reported by [ 78 ] . ♯ \sharp -The reported results are obtained by us via rerunning the open sources. Best results are in bold. 
+
+ The proposed HAL model consistently surpasses all baselines across most action segmentation metrics, demonstrating its strong effectiveness under weak supervision. Notably, HAL achieves the highest scores on the IoU and IoD metrics across most of the datasets, highlighting its ability to capture structured, hierarchical action representations. The slightly lower IoD performance on the CrossTask and MoF on the Hollywood datasets can be attributed to the greater diversity and complexity of background scenes, which pose additional challenges for accurate background modeling.
+The performance gains of our method mainly stem from the proposed smoothness regularization term, ℒ s \mathcal{L}_{s} , which enforces temporal consistency in high-level action transitions. This constraint promotes better alignment between the estimated and ground-truth segmentations, leading to notable improvements in IoU and IoD. While HAL achieves comparable MoF results to ATBA and CtrlNS, its advantage lies in segmenting videos based on hierarchical action variables rather than raw visual features. By mitigating the influence of transient visual variations and irrelevant background noise, our approach yields more accurate and semantically coherent segmentation results. 
+
+## 6.5 Case Studies
+
+ We further provide qualitative case studies of action segmentation in Figure  4 . From the visualization results, several observations can be made. (1) Our proposed HAL model exhibits stable and coherent segmentation even in complex action spaces, such as those in the Breakfast dataset. Compared with representative methods like ATBA and CtrlNS, HAL maintains smoother temporal boundaries and avoids the frequent boundary oscillations commonly observed in prior models. (2) As illustrated in Figure  4 , segmentation based solely on visual representations (e.g., HAL-V) often produces fragmented and abrupt transitions, leading to inconsistent action boundaries and noisy temporal patterns. In contrast, our hierarchical approach, which segments based on high-level action variables, yields results that align much more closely with the ground truth. The smoother and semantically consistent transitions in our predictions highlight the benefit of modeling slowly evolving hierarchical action, which effectively suppress spurious fluctuations in the visual domain and enhance the temporal coherence of the final segmentation. 
+
+ Figure 4 : Qualitative results of P04-cam01-P04-pancake on the Breakfast dataset. 
+
+ Table 5: Ablation studies on the split 1 of Breakfast dataset. 
+
+ EXP | 
+ ℒ r \mathcal{L}_{r} | 
+ ℒ s \mathcal{L}_{s} | 
+ ℒ K ​ L \mathcal{L}_{KL} | 
+ δ \delta | 
+ MoF | 
+ IoU | 
+ IoD | 
+
+ 1 | 
+ - | 
+ - | 
+ - | 
+ - | 
+ 53.3 | 
+ 40.1 | 
+ 58.7 | 
+
+ 2 | 
+ ✓ | 
+ - | 
+ - | 
+ - | 
+ 54.3 | 
+ 38.4 | 
+ 61.6 | 
+
+ 3 | 
+ - | 
+ ✓ | 
+ - | 
+ - | 
+ 54.6 | 
+ 40.3 | 
+ 61.6 | 
+
+ 4 | 
+ - | 
+ - | 
+ ✓ | 
+ - | 
+ 54.5 | 
+ 42.0 | 
+ 61.0 | 
+
+ 5 | 
+ - | 
+ - | 
+ - | 
+ ✓ | 
+ 53.9 | 
+ 41.1 | 
+ 59.4 | 
+
+ 6 | 
+ ✓ | 
+ ✓ | 
+ ✓ | 
+ ✓ | 
+ 56.6 | 
+ 42.6 | 
+ 62.1 | 
+
+## 6.6 Ablation Study
+
+ To evaluate the contribution of individual components, we conducted several experiments, summarized in Table  5 , to assess both their separate and combined effects. The evaluation metrics include MoF, IoU, and IoD. Results from Experiments 1–5 demonstrate a steady improvement in MoF, confirming the positive impact of each component. Incorporating both ℒ r \mathcal{L}_{r} and ℒ K ​ L \mathcal{L}_{KL} further enhances performance, emphasizing the importance of modeling video distributions. However, adding ℒ r \mathcal{L}_{r} alone (Exp. 2) leads to overemphasis on feature reconstruction, causing overly expanded segmentations and a decrease in IoU. In Experiment 6, combining all components achieves the highest scores across all metrics, validating the effectiveness of the full framework and showing that integration strengthens the model while enabling more robust segmentation. 
+
+ Figure 5 : Illustration of T-SNE Visualization of latent variables. (a) and (b) show scatter plots of the latent action and visual variables of the propsoed method, respectively. (c) shows the output of ATBA after dimensionality reduction. 
+
+## 6.7 Visualization Results
+
+ To further show the effectiveness of hierarchical latent variables, we further provide T-SNE visualization results in Figure  5 , where Figure  5 (a) and (b) denote the visualization results from latent action variables and visual variables, respectively. Figure  5 (c) illustrates the results of the ATBA model. In order to ensure a fair comparison, we visualized the same number of layers in the ATBA model as in our model’s high-level action variables. According to the visualization results, we observe the following conclusions: 1) Compared to ATBA, our method produces denser clusters, indicating that our results are more stable and compact latent variable representations. This denser clustering suggests our model effectively avoids over-segmentation by leveraging high-level action structures to reduce noise from visual features. 2) High-level latent variables show greater cohesion than low-level variables. This demonstrates that high-level action variables are more stable and align better with ground-truth segmentation, validating the effectiveness of our approach in capturing hierarchical dynamics. 
+
+## 7 Summary
+
+ This paper proposes a Hierarchical Action Learning ( HAL ) model for weakly supervised action segmentation, addressing over-segmentation and noisy boundaries that arise from reliance on low-level visual cues. Unlike existing approaches, HAL introduces a hierarchical causal framework in which slowly evolving high-level Action variables govern the dynamics of rapidly changing visual variables. Technically, the model combines an augmented generative process, a pyramidal transformer, and temporal smoothness constraints to disentangle Action and visual representations and capture multi-scale temporal structure. Theoretically, the model guarantees identifiability of high-level Action variables under mild assumptions. Overall, this work provides both a principled and effective approach to improving weakly supervised action segmentation through hierarchical causal reasoning. Extending this idea to video generation will be an interesting future direction. 
+
+## 8 Acknowledgment
+
+ This research was supported in part by National Science and Technology Major Project (2021ZD0111502), Natural Science Foundation of China (U24A20233) and CCF-DiDi GAIA Collaborative Research Funds (CCF-DiDi GAIA 202521). 
+
+## References
+
+ [1] 
+ H. Ahn and D. Lee (2021) 
+
+ Refining action segmentation with hierarchical video representations .
+
+ In Proceedings of the IEEE/CVF international conference on computer vision ,
+
+ pp. 16302–16310 .
+
+ Cited by: §1 .
+
+ [2] 
+ J. Alayrac, P. Bojanowski, N. Agrawal, J. Sivic, I. Laptev, and S. Lacoste-Julien (2016) 
+
+ Unsupervised learning from narrated instruction videos .
+
+ In Proceedings of the IEEE conference on computer vision and pattern recognition ,
+
+ pp. 4575–4583 .
+
+ Cited by: §2.1 ,
+ §9.1 .
+
+ [3] 
+ P. Bojanowski, R. Lajugie, F. Bach, I. Laptev, J. Ponce, C. Schmid, and J. Sivic (2014) 
+
+ Weakly supervised action labeling in videos under ordering constraints .
+
+ In Computer Vision–ECCV 2014: 13th European Conference, Zurich, Switzerland, September 6-12, 2014, Proceedings, Part V 13 ,
+
+ pp. 628–643 .
+
+ Cited by: §11.3 ,
+ §14 ,
+ §2.1 ,
+ §6.1 ,
+ §9.1 .
+
+ [4] 
+ P. Bojanowski, R. Lajugie, E. Grave, F. Bach, I. Laptev, J. Ponce, and C. Schmid (2015) 
+
+ Weakly-supervised alignment of video with text .
+
+ In Proceedings of the IEEE international conference on computer vision ,
+
+ pp. 4462–4470 .
+
+ Cited by: §2.1 ,
+ §9.1 .
+
+ [5] 
+ E. Bueno-Benito and M. Dimiccoli (2024) 
+
+ 2by2: weakly-supervised learning for global action segmentation .
+
+ In International Conference on Pattern Recognition ,
+
+ pp. 380–395 .
+
+ Cited by: §1 .
+
+ [6] 
+ R. J. Carroll, X. Chen, and Y. Hu (2010) 
+
+ Identification and estimation of nonlinear models using two samples with nonclassical measurement errors .
+
+ Journal of nonparametric statistics 22 ( 4 ), pp. 379–399 .
+
+ Cited by: §13.2 .
+
+ [7] 
+ C. Chang, D. Huang, Y. Sui, L. Fei-Fei, and J. C. Niebles (2019) 
+
+ D3tw: discriminative differentiable dynamic time warping for weakly supervised action alignment and segmentation .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 3546–3555 .
+
+ Cited by: §2.1 ,
+ §6.2 ,
+ Table 1 ,
+ Table 3 ,
+ §9.1 ,
+ §9.1 .
+
+ [8] 
+ X. Chang, F. Tung, and G. Mori (2021) 
+
+ Learning discriminative prototypes with dynamic time warping .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 8395–8404 .
+
+ Cited by: §2.1 ,
+ §6.2 ,
+ Table 1 ,
+ §9.1 ,
+ §9.1 .
+
+ [9] 
+ G. Chen, Y. Shen, Z. Chen, X. Song, Y. Sun, W. Yao, X. Liu, and K. Zhang (2024) 
+
+ Caring: learning temporal causal representation under non-invertible generation process .
+
+ arXiv preprint arXiv:2401.14535 .
+
+ Cited by: §4.2 .
+
+ [10] 
+ P. Comon (1994) 
+
+ Independent component analysis, a new concept? .
+
+ Signal processing 36 ( 3 ), pp. 287–314 .
+
+ Cited by: §2.2 ,
+ §9.2 .
+
+ [11] 
+ G. Ding, F. Sener, and A. Yao (2023) 
+
+ Temporal action segmentation: an analysis of modern techniques .
+
+ IEEE Transactions on Pattern Analysis and Machine Intelligence 46 ( 2 ), pp. 1011–1030 .
+
+ Cited by: §1 .
+
+ [12] 
+ L. Ding and C. Xu (2018) 
+
+ Weakly-supervised action segmentation with iterative soft boundary assignment .
+
+ In Proceedings of the IEEE conference on computer vision and pattern recognition ,
+
+ pp. 6508–6516 .
+
+ Cited by: §1 ,
+ §1 ,
+ §2.1 ,
+ §6.2 ,
+ §6.3 ,
+ Table 1 ,
+ Table 3 ,
+ §9.1 .
+
+ [13] 
+ Z. Du, X. Wang, G. Zhou, and Q. Wang (2022) 
+
+ Fast and unsupervised action boundary detection for action segmentation .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 3323–3332 .
+
+ Cited by: §4.3 .
+
+ [14] 
+ N. Dunford and J. T. Schwartz (1988) 
+
+ Linear operators, part 1: general theory .
+
+ John Wiley & Sons .
+
+ Cited by: §10.2 ,
+ §5.1 ,
+ Definition 2 ,
+ Theorem 2 .
+
+ [15] 
+ A. Fathi, X. Ren, and J. M. Rehg (2011) 
+
+ Learning to recognize objects in egocentric activities .
+
+ In CVPR 2011 ,
+
+ pp. 3281–3288 .
+
+ Cited by: §11.3 ,
+ §14 ,
+ §6.1 .
+
+ [16] 
+ M. Fayyaz and J. Gall (2020) 
+
+ Sct: set constrained temporal transformer for set supervised action segmentation .
+
+ In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition ,
+
+ pp. 501–510 .
+
+ Cited by: §2.1 ,
+ §9.1 .
+
+ [17] 
+ D. Fried, J. Alayrac, P. Blunsom, C. Dyer, S. Clark, and A. Nematzadeh (2020) 
+
+ Learning to segment actions from observation and narration .
+
+ arXiv preprint arXiv:2005.03684 .
+
+ Cited by: §2.1 ,
+ §9.1 .
+
+ [18] 
+ L. Gresele, P. K. Rubenstein, A. Mehrjou, F. Locatello, and B. Schölkopf (2020) 
+
+ The incomplete rosetta stone problem: identifiability results for multi-view nonlinear ica .
+
+ In UAI ,
+
+ pp. 217–227 .
+
+ Cited by: §9.2 .
+
+ [19] 
+ H. Hälvä and A. Hyvarinen (2020) 
+
+ Hidden markov nonlinear ica: unsupervised learning from nonstationary time series .
+
+ In Conference on UAI ,
+
+ pp. 939–948 .
+
+ Cited by: §2.2 ,
+ §9.2 .
+
+ [20] 
+ T. Han, W. Xie, and A. Zisserman (2022) 
+
+ Temporal alignment networks for long-term video .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 2906–2916 .
+
+ Cited by: §2.1 ,
+ §9.1 .
+
+ [21] 
+ M. Hoai, Z. Lan, and F. De la Torre (2011) 
+
+ Joint segmentation and classification of human actions in video .
+
+ In CVPR 2011 ,
+
+ pp. 3265–3272 .
+
+ Cited by: §1 .
+
+ [22] 
+ Y. Hu and S. M. Schennach (2008) 
+
+ Instrumental variable treatment of nonclassical measurement error models .
+
+ Econometrica 76 ( 1 ), pp. 195–216 .
+
+ Cited by: §10.2 ,
+ §13.1 ,
+ §13.2 ,
+ §5.1 ,
+ Definition 2 ,
+ Lemma 2 .
+
+ [23] 
+ D. Huang, L. Fei-Fei, and J. C. Niebles (2016) 
+
+ Connectionist temporal modeling for weakly supervised action labeling .
+
+ In European conference on computer Vision ,
+
+ pp. 137–153 .
+
+ Cited by: §2.1 ,
+ §9.1 ,
+ §9.1 .
+
+ [24] 
+ Z. Huang, H. Wang, J. Zhao, and N. Zheng (2023) 
+
+ Latent processes identification from multi-view time series .
+
+ International Joint Conference on Artificial Intelligence-23 .
+
+ Cited by: §2.2 ,
+ §9.2 .
+
+ [25] 
+ A. Hyvärinen, I. Khemakhem, and R. Monti (2024) 
+
+ Identifiability of latent-variable and structural-equation models: from linear to nonlinear .
+
+ Ann Inst Stat Math 76 ( 1 ), pp. 1–33 .
+
+ Cited by: §9.2 ,
+ §9.2 .
+
+ [26] 
+ A. Hyvarinen and H. Morioka (2016) 
+
+ Unsupervised feature extraction by time-contrastive learning and nonlinear ica .
+
+ Conference and Workshop on Neural Information Processing Systems 29 .
+
+ Cited by: §2.2 ,
+ §2.2 ,
+ §9.2 ,
+ §9.2 .
+
+ [27] 
+ A. Hyvarinen and H. Morioka (2017) 
+
+ Nonlinear ica of temporally dependent stationary sources .
+
+ In AISTATS ,
+
+ pp. 460–469 .
+
+ Cited by: §2.2 ,
+ §9.2 .
+
+ [28] 
+ A. Hyvärinen and P. Pajunen (1999) 
+
+ Nonlinear independent component analysis: existence and uniqueness results .
+
+ Neural networks 12 ( 3 ), pp. 429–439 .
+
+ Cited by: §2.2 ,
+ §9.2 ,
+ §9.2 .
+
+ [29] 
+ A. Hyvarinen, H. Sasaki, and R. Turner (2019) 
+
+ Nonlinear ica using auxiliary variables and generalized contrastive learning .
+
+ In The 22nd International Conference on AISTATS ,
+
+ pp. 859–868 .
+
+ Cited by: §2.2 ,
+ §9.2 .
+
+ [30] 
+ A. Hyvärinen (2013) 
+
+ Independent component analysis: recent advances .
+
+ Philos. Trans. Royal Soc. A 371 ( 1984 ), pp. 20110534 .
+
+ Cited by: §2.2 ,
+ §9.2 .
+
+ [31] 
+ H. Khan, S. Haresh, A. Ahmed, S. Siddiqui, A. Konin, M. Z. Zia, and Q. Tran (2022) 
+
+ Timestamp-supervised action segmentation with graph convolutional networks .
+
+ In 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) ,
+
+ pp. 10619–10626 .
+
+ Cited by: §2.1 ,
+ §9.1 .
+
+ [32] 
+ I. Khemakhem, D. Kingma, R. Monti, and A. Hyvarinen (2020) 
+
+ Variational autoencoders and nonlinear ica: a unifying framework .
+
+ In International conference on AISTATS ,
+
+ pp. 2207–2217 .
+
+ Cited by: §2.2 ,
+ §9.2 .
+
+ [33] 
+ I. Khemakhem, R. Monti, D. Kingma, and A. Hyvarinen (2020) 
+
+ Ice-beem: identifiable conditional energy-based deep models based on nonlinear ica .
+
+ Conference and Workshop on Neural Information Processing Systems 33 , pp. 12768–12778 .
+
+ Cited by: §2.2 ,
+ §9.2 ,
+ §9.2 .
+
+ [34] 
+ L. Kong, B. Huang, F. Xie, E. Xing, Y. Chi, and K. Zhang (2023) 
+
+ Identification of nonlinear latent hierarchical models .
+
+ Conference and Workshop on Neural Information Processing Systems 36 , pp. 2010–2032 .
+
+ Cited by: §2.2 ,
+ §9.2 .
+
+ [35] 
+ L. Kong, M. Q. Ma, G. Chen, E. P. Xing, Y. Chi, L. Morency, and K. Zhang (2023) 
+
+ Understanding masked autoencoders via hierarchical latent variable models .
+
+ In IEEE Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 7918–7928 .
+
+ Cited by: §13.1 ,
+ §13.3 .
+
+ [36] 
+ L. Kong, S. Xie, W. Yao, Y. Zheng, G. Chen, P. Stojanov, V. Akinwande, and K. Zhang (2022) 
+
+ Partial disentanglement for domain adaptation .
+
+ In International Conference on Machine Learning ,
+
+ pp. 11455–11472 .
+
+ Cited by: §2.2 ,
+ §9.2 .
+
+ [37] 
+ H. Kuehne, A. Arslan, and T. Serre (2014) 
+
+ The language of actions: recovering the syntax and semantics of goal-directed human activities .
+
+ In Proceedings of the IEEE conference on computer vision and pattern recognition ,
+
+ pp. 780–787 .
+
+ Cited by: §11.3 ,
+ §14 ,
+ §6.1 .
+
+ [38] 
+ H. Kuehne, J. Gall, and T. Serre (2016) 
+
+ An end-to-end generative framework for video segmentation and recognition .
+
+ In 2016 IEEE Winter Conference on Applications of Computer Vision (WACV) ,
+
+ pp. 1–8 .
+
+ Cited by: §9.1 .
+
+ [39] 
+ H. Kuehne, A. Richard, and J. Gall (2017) 
+
+ Weakly supervised learning of actions from transcripts .
+
+ Computer Vision and Image Understanding 163 , pp. 78–89 .
+
+ Cited by: §2.1 ,
+ §9.1 ,
+ §9.1 .
+
+ [40] 
+ H. Kuehne, A. Richard, and J. Gall (2018) 
+
+ A hybrid rnn-hmm approach for weakly supervised temporal action segmentation .
+
+ IEEE transactions on pattern analysis and machine intelligence 42 ( 4 ), pp. 765–779 .
+
+ Cited by: §2.1 ,
+ §9.1 ,
+ §9.1 .
+
+ [41] 
+ S. Lachapelle, T. Deleu, D. Mahajan, I. Mitliagkas, Y. Bengio, S. Lacoste-Julien, and Q. Bertrand (2023) 
+
+ Synergies between disentanglement and sparsity: generalization and identifiability in multi-task learning .
+
+ In International Conference on Machine Learning ,
+
+ pp. 18171–18206 .
+
+ Cited by: §2.2 ,
+ §9.2 .
+
+ [42] 
+ S. Lachapelle and S. Lacoste-Julien (2022) 
+
+ Partial disentanglement via mechanism sparsity .
+
+ CRL 2022 .
+
+ Cited by: §2.2 ,
+ §9.2 .
+
+ [43] 
+ T. Lee and T. Lee (1998) 
+
+ Independent component analysis .
+
+ Springer .
+
+ Cited by: §2.2 ,
+ §9.2 .
+
+ [44] 
+ J. Li, P. Lei, and S. Todorovic (2019) 
+
+ Weakly supervised energy-based learning for action segmentation .
+
+ In Proceedings of the IEEE/CVF international conference on computer vision ,
+
+ pp. 6243–6251 .
+
+ Cited by: §2.1 ,
+ §6.2 ,
+ Table 1 ,
+ Table 2 ,
+ Table 3 ,
+ Table 4 ,
+ §9.1 ,
+ §9.1 .
+
+ [45] 
+ J. Li and S. Todorovic (2020) 
+
+ Set-constrained viterbi for set-supervised action segmentation .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 10820–10829 .
+
+ Cited by: §2.1 ,
+ §9.1 .
+
+ [46] 
+ J. Li and S. Todorovic (2021) 
+
+ Anchor-constrained viterbi for set-supervised action segmentation .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 9806–9815 .
+
+ Cited by: §2.1 ,
+ §9.1 .
+
+ [47] 
+ K. Li, Y. Wang, Y. He, Y. Li, Y. Wang, Y. Liu, Z. Wang, J. Xu, G. Chen, P. Luo, et al. (2024) 
+
+ Mvbench: a comprehensive multi-modal video understanding benchmark .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 22195–22206 .
+
+ Cited by: §1 .
+
+ [48] 
+ Z. Li, Y. Abu Farha, and J. Gall (2021) 
+
+ Temporal action segmentation from timestamp supervision .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 8365–8374 .
+
+ Cited by: §2.1 ,
+ §9.1 .
+
+ [49] 
+ Z. Li, M. Fu, J. Huang, Y. Shen, R. Cai, Y. Sun, G. Chen, and K. Zhang (2025) 
+
+ Towards identifiability of hierarchical temporal causal representation learning .
+
+ arXiv preprint arXiv:2510.18310 .
+
+ Cited by: §9.2 .
+
+ [50] 
+ Z. Li, Y. Shen, K. Zheng, R. Cai, X. Song, M. Gong, Z. Zhu, G. Chen, and K. Zhang (2024) 
+
+ On the identification of temporally causal representation with instantaneous dependence .
+
+ arXiv preprint arXiv:2405.15325 .
+
+ Cited by: §9.2 .
+
+ [51] 
+ Z. Li, Z. Xu, R. Cai, Z. Yang, Y. Yan, Z. Hao, G. Chen, and K. Zhang (2023) 
+
+ Identifying semantic component for robust molecular property prediction .
+
+ arXiv preprint arXiv:2311.04837 .
+
+ Cited by: §2.2 ,
+ §9.2 ,
+ §9.2 .
+
+ [52] 
+ P. Lippe, S. Magliacane, S. Löwe, Y. M. Asano, T. Cohen, and S. Gavves (2022) 
+
+ Citris: causal identifiability from temporal intervened sequences .
+
+ In International Conference on Machine Learning ,
+
+ pp. 13557–13603 .
+
+ Cited by: §2.2 ,
+ §9.2 .
+
+ [53] 
+ Y. Liu, A. Alahi, C. Russell, M. Horn, D. Zietlow, B. Schölkopf, and F. Locatello (2023) 
+
+ Causal triplet: an open challenge for intervention-centric causal representation learning .
+
+ In Conference on CLeaR ,
+
+ pp. 553–573 .
+
+ Cited by: §9.2 .
+
+ [54] 
+ Z. Lu and E. Elhamifar (2021) 
+
+ Weakly-supervised action segmentation and alignment via transcript-aware union-of-subspaces learning .
+
+ In Proceedings of the IEEE/CVF International Conference on Computer Vision ,
+
+ pp. 8085–8095 .
+
+ Cited by: §1 ,
+ §1 ,
+ §2.1 ,
+ §6.2 ,
+ Table 1 ,
+ Table 2 ,
+ Table 3 ,
+ §9.1 ,
+ §9.1 .
+
+ [55] 
+ Z. Lu and E. Elhamifar (2022) 
+
+ Set-supervised action learning in procedural task videos via pairwise order consistency .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 19903–19913 .
+
+ Cited by: §1 ,
+ §2.1 ,
+ §6.2 ,
+ Table 1 ,
+ Table 2 ,
+ Table 4 ,
+ §9.1 .
+
+ [56] 
+ Z. Lu and E. Elhamifar (2024) 
+
+ Fact: frame-action cross-attention temporal modeling for efficient action segmentation .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 18175–18185 .
+
+ Cited by: §1 .
+
+ [57] 
+ J. Malmaud, J. Huang, V. Rathod, N. Johnston, A. Rabinovich, and K. Murphy (2015) 
+
+ What’s cookin’? interpreting cooking videos using text, speech and vision .
+
+ arXiv preprint arXiv:1503.01558 .
+
+ Cited by: §2.1 ,
+ §9.1 .
+
+ [58] 
+ A. Mansouri, J. Hartford, Y. Zhang, and Y. Bengio (2023) 
+
+ Object-centric architectures enable efficient causal representation learning .
+
+ International Conference on Learning Representations 2024 .
+
+ Cited by: §2.2 ,
+ §9.2 .
+
+ [59] 
+ L. Mattner (1993) 
+
+ Some incomplete but boundedly complete location families .
+
+ The Annals of Statistics , pp. 2158–2161 .
+
+ Cited by: Example 2 .
+
+ [60] 
+ R. Mounir, S. Vijayaraghavan, and S. Sarkar (2023) 
+
+ Streamer: streaming representation learning and event segmentation in a hierarchical manner .
+
+ Advances in Neural Information Processing Systems 36 , pp. 45694–45715 .
+
+ Cited by: §4.3 .
+
+ [61] 
+ A. Radford, J. W. Kim, C. Hallacy, A. Ramesh, G. Goh, S. Agarwal, G. Sastry, A. Askell, P. Mishkin, J. Clark, et al. (2021) 
+
+ Learning transferable visual models from natural language supervision .
+
+ In International conference on machine learning ,
+
+ pp. 8748–8763 .
+
+ Cited by: §2.1 ,
+ §9.1 .
+
+ [62] 
+ R. Rahaman, D. Singhania, A. Thiery, and A. Yao (2022) 
+
+ A generalized and robust framework for timestamp supervision in temporal action segmentation .
+
+ In European Conference on Computer Vision ,
+
+ pp. 279–296 .
+
+ Cited by: §1 ,
+ §2.1 ,
+ §9.1 .
+
+ [63] 
+ G. Rajendran, S. Buchholz, B. Aragam, B. Schölkopf, and P. Ravikumar (2024) 
+
+ Learning interpretable concepts: unifying causal representation learning and foundation models .
+
+ Conference and Workshop on Neural Information Processing Systems 2024 .
+
+ Cited by: §2.2 ,
+ §9.2 .
+
+ [64] 
+ A. Richard, H. Kuehne, and J. Gall (2017) 
+
+ Weakly supervised action learning with rnn based fine-to-coarse modeling .
+
+ In Proceedings of the IEEE conference on Computer Vision and Pattern Recognition ,
+
+ pp. 754–763 .
+
+ Cited by: §2.1 ,
+ §6.2 ,
+ Table 1 ,
+ Table 3 ,
+ §9.1 ,
+ §9.1 .
+
+ [65] 
+ A. Richard, H. Kuehne, and J. Gall (2018) 
+
+ Action sets: weakly supervised action segmentation without ordering constraints .
+
+ In Proceedings of the IEEE conference on Computer Vision and Pattern Recognition ,
+
+ pp. 5987–5996 .
+
+ Cited by: §2.1 ,
+ §9.1 .
+
+ [66] 
+ A. Richard, H. Kuehne, A. Iqbal, and J. Gall (2018) 
+
+ Neuralnetwork-viterbi: a framework for weakly supervised video learning .
+
+ In Proceedings of the IEEE conference on Computer Vision and Pattern Recognition ,
+
+ pp. 7386–7395 .
+
+ Cited by: §2.1 ,
+ §6.2 ,
+ Table 1 ,
+ Table 2 ,
+ Table 4 ,
+ §9.1 ,
+ §9.1 .
+
+ [67] 
+ S. Sarfraz, N. Murray, V. Sharma, A. Diba, L. Van Gool, and R. Stiefelhagen (2021) 
+
+ Temporally-weighted hierarchical clustering for unsupervised action segmentation .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 11225–11234 .
+
+ Cited by: §4.3 .
+
+ [68] 
+ B. Schölkopf, F. Locatello, S. Bauer, N. R. Ke, N. Kalchbrenner, A. Goyal, and Y. Bengio (2021) 
+
+ Toward causal representation learning .
+
+ Proceedings of the IEEE 109 ( 5 ), pp. 612–634 .
+
+ Cited by: §9.2 .
+
+ [69] 
+ O. Sener, A. R. Zamir, S. Savarese, and A. Saxena (2015) 
+
+ Unsupervised semantic parsing of video collections .
+
+ In Proceedings of the IEEE International conference on Computer Vision ,
+
+ pp. 4480–4488 .
+
+ Cited by: §2.1 ,
+ §9.1 .
+
+ [70] 
+ N. Shvetsova, B. Chen, A. Rouditchenko, S. Thomas, B. Kingsbury, R. S. Feris, D. Harwath, J. Glass, and H. Kuehne (2022) 
+
+ Everything at once-multi-modal fusion transformer for video retrieval .
+
+ In Proceedings of the ieee/cvf conference on computer vision and pattern recognition ,
+
+ pp. 20020–20029 .
+
+ Cited by: §2.1 ,
+ §9.1 .
+
+ [71] 
+ X. Song, Z. Li, G. Chen, Y. Zheng, Y. Fan, X. Dong, and K. Zhang (2024) 
+
+ Causal temporal representation learning with nonstationary sparse transition .
+
+ Advances in Neural Information Processing Systems 37 , pp. 77098–77131 .
+
+ Cited by: §2.2 ,
+ §6.2 ,
+ Table 2 ,
+ Table 3 ,
+ Table 4 ,
+ §9.2 .
+
+ [72] 
+ Y. Souri, Y. A. Farha, E. Bahrami, G. Francesca, and J. Gall (2022) 
+
+ Robust action segmentation from timestamp supervision .
+
+ arXiv preprint arXiv:2210.06501 .
+
+ Cited by: §2.1 ,
+ §9.1 .
+
+ [73] 
+ Y. Souri, M. Fayyaz, L. Minciullo, G. Francesca, and J. Gall (2021) 
+
+ Fast weakly supervised action segmentation using mutual consistency .
+
+ IEEE Transactions on Pattern Analysis and Machine Intelligence 44 ( 10 ), pp. 6196–6208 .
+
+ Cited by: §2.1 ,
+ §6.2 ,
+ Table 1 ,
+ Table 3 ,
+ §9.1 .
+
+ [74] 
+ X. Sun, X. Long, D. He, S. Wen, and Z. Lian (2021) 
+
+ VSRNet: end-to-end video segment retrieval with text query .
+
+ Pattern Recognition 119 , pp. 108027 .
+
+ Cited by: §1 .
+
+ [75] 
+ J. Von Kügelgen, Y. Sharma, L. Gresele, W. Brendel, B. Schölkopf, M. Besserve, and F. Locatello (2021) 
+
+ Self-supervised learning with data augmentations provably isolates content from style .
+
+ Advances in neural information processing systems 34 , pp. 16451–16467 .
+
+ Cited by: Definition 1 .
+
+ [76] 
+ L. Wendong, A. Kekić, J. von Kügelgen, S. Buchholz, M. Besserve, L. Gresele, and B. Schölkopf (2024) 
+
+ Causal component analysis .
+
+ Conference and Workshop on Neural Information Processing Systems 36 .
+
+ Cited by: §2.2 ,
+ §9.2 .
+
+ [77] 
+ S. Xie, L. Kong, M. Gong, and K. Zhang (2023) 
+
+ Multi-domain image generation and translation with identifiability guarantees .
+
+ In The Eleventh International Conference on Learning Representations ,
+
+ Cited by: §2.2 ,
+ §9.2 .
+
+ [78] 
+ A. Xu and W. Zheng (2024) 
+
+ Efficient and effective weakly-supervised action segmentation via action-transition-aware boundary alignment .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 18253–18262 .
+
+ Cited by: §1 ,
+ §11.1 ,
+ §4.2 ,
+ §4.2 ,
+ §4.3 ,
+ §6.1 ,
+ §6.4 ,
+ Table 1 ,
+ Table 2 ,
+ Table 3 ,
+ Table 4 .
+
+ [79] 
+ H. Yan, L. Kong, L. Gui, Y. Chi, E. Xing, Y. He, and K. Zhang (2024) 
+
+ Counterfactual generation with identifiability guarantees .
+
+ Conference and Workshop on Neural Information Processing Systems 36 .
+
+ Cited by: §2.2 ,
+ §2.2 ,
+ §9.2 ,
+ §9.2 .
+
+ [80] 
+ D. Yao, D. Xu, S. Lachapelle, S. Magliacane, P. Taslakian, G. Martius, J. von Kügelgen, and F. Locatello (2023) 
+
+ Multi-view causal representation learning with partial observability .
+
+ International Conference on Learning Representations 2024 .
+
+ Cited by: §9.2 .
+
+ [81] 
+ W. Yao, G. Chen, and K. Zhang (2022) 
+
+ Temporally disentangled representation learning .
+
+ Conference and Workshop on Neural Information Processing Systems 35 , pp. 26492–26503 .
+
+ Cited by: §2.2 ,
+ §9.2 .
+
+ [82] 
+ W. Yao, Y. Sun, A. Ho, C. Sun, and K. Zhang (2021) 
+
+ Learning temporally causal latent processes from general temporal data .
+
+ International Conference on Learning Representations 2022 .
+
+ Cited by: §2.2 ,
+ §9.2 .
+
+ [83] 
+ K. Zhang and L. Chan (2007) 
+
+ Kernel-based nonlinear independent component analysis .
+
+ In International Conference on Independent Component Analysis and Signal Separation ,
+
+ pp. 301–308 .
+
+ Cited by: §2.2 ,
+ §9.2 .
+
+ [84] 
+ K. Zhang, S. Xie, I. Ng, and Y. Zheng (2024) 
+
+ Causal representation learning from multiple distributions: a general setting .
+
+ International Conference on Machine Learning 2024 .
+
+ Cited by: §2.2 ,
+ §9.2 .
+
+ [85] 
+ R. Zhang, S. Wang, Y. Duan, Y. Tang, Y. Zhang, and Y. Tan (2023) 
+
+ Hoi-aware adaptive network for weakly-supervised action segmentation .
+
+ In Proceedings of the Thirty-Second International Joint Conference on Artificial Intelligence ,
+
+ pp. 1722–1730 .
+
+ Cited by: §2.1 ,
+ §6.2 ,
+ Table 1 ,
+ §9.1 .
+
+ [86] 
+ Z. Zhao, R. Ghoddoosian, I. Dwivedi, N. Agarwal, and B. Dariush (2025) 
+
+ Pose-aware weakly-supervised action segmentation .
+
+ In Proceedings of the Computer Vision and Pattern Recognition Conference ,
+
+ pp. 97–107 .
+
+ Cited by: §1 .
+
+ [87] 
+ Y. Zheng, I. Ng, and K. Zhang (2022) 
+
+ On the identifiability of nonlinear ica: sparsity and beyond .
+
+ Conference and Workshop on Neural Information Processing Systems 35 , pp. 16411–16422 .
+
+ Cited by: §2.2 ,
+ §9.2 ,
+ §9.2 .
+
+ [88] 
+ D. Zhukov, J. Alayrac, R. G. Cinbis, D. Fouhey, I. Laptev, and J. Sivic (2019) 
+
+ Cross-task weakly supervised learning from instructional videos .
+
+ In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,
+
+ pp. 3537–3545 .
+
+ Cited by: §11.3 ,
+ §2.1 ,
+ §6.1 ,
+ §9.1 .
+
+ Supplementary Material 
+
+## 9 Extended Related Work 
+
+## 9.1 Weakly-Supervised Action Segmentation
+
+ Weakly-supervised action segmentation approaches [ 3 , 23 , 39 , 40 , 64 , 44 , 54 , 66 , 7 , 8 , 85 ] seek to reduce the dependence on detailed frame-level annotations. In the context of action segmentation, four primary forms of weak supervision have been studied: transcripts, action sets, timestamps, and textual descriptions (e.g., narrations). Among them, transcripts provide an action sequence without frame-level alignment, while action sets offer an unordered collection of actions appearing in the video. Timestamps indicate the occurrence of specific actions at particular time points. 
+
+ A transcript provides a sequential list of actions occurring in a video, but does not include precise frame-level timing information. This type of supervision offers substantial advantages in terms of annotation efficiency, as it removes the requirement for detailed, frame-wise labeling. Approaches utilizing transcripts generally adopt either a single-stage design or an iterative two-step learning paradigm. Iterative two-stage methods first generate initial frame-level labels from the action transcript, then refine them through repeated updates. HTK [ 39 ] adapts a supervised HMM-GMM model [ 38 ] to weak supervision by uniformly initializing segments and refining them using transcripts. Richard et al. [ 64 , 40 ] replace GMMs with RNNs and introduce latent sub-actions for finer motion modeling. ISBA [ 12 ] starts with uniform segmentation and gradually adjusts boundaries using soft labels. TASL [ 54 ] iteratively aligns video frames with transcripts to improve segmentation. Single-stage methods aim to overcome the initialization sensitivity of two-stage approaches. ECTC [ 23 ] aligns transcripts with video frames using temporal classification while enforcing consistency. NN-Viterbi [ 66 ] integrates visual, context, and length models, generating pseudo-labels via Viterbi decoding. D3TW [ 7 ] introduces a differentiable loss to distinguish between correct and incorrect transcripts. Building on this, CDFL [ 44 ] uses a segmentation graph to model valid/invalid alignments and compares their energies. Despite strong performance, NN-Viterbi and CDFL incur high computational costs. To address this, MuCon [ 73 ] reduces training time with a dual-branch design enforcing mutual consistency. DP-DTW [ 8 ] learns class-specific prototypes and improves action discrimination for temporal recognition. 
+
+ Action sets specify only the presence of actions in a video, without indicating their order or frequency, making them a weaker supervision form than transcripts. Early work by Richard et al. [ 65 ] models temporal segmentation under action set supervision by integrating contextual, duration, and action models to infer the most probable action sequence for a given video, formulated as a maximum likelihood problem solvable using the Viterbi algorithm. Later methods, such as SCT [ 16 ] , directly learn segmentation from action sets through region-wise predictions and frame-level consistency constraints. SCV [ 45 ] enhances pseudo-label generation via a constrained Viterbi approach and an n n -pair loss. ACV [ 46 ] extends SCV by proposing a differentiable formulation that enables end-to-end training and eliminates the reliance on post-processing steps. POC [ 55 ] proposes a loss formulation that leverages the cross-video consistency of action pair ordering to enforce temporal alignment between the predicted segments and the
+extracted templates. 
+
+ Timestamp supervision provides sparse frame annotations instead of dense labels, offering a cost-effective alternative to full supervision. Some methods [ 48 , 31 ] assume one timestamp per action, while others [ 62 ] support arbitrary sampling. Typically, these approaches generate pseudo frame-wise labels that are refined iteratively. Li et al. [ 48 ] detect action transitions and apply a confidence loss to guide predictions around timestamps. EM-TSS [ 62 ] employs an EM framework to infer full sequences from sparse labels, offering greater flexibility in annotation and outperforming approaches constrained to one timestamp per action. GCN-TSS [ 31 ] introduces a GNN-based approach where video frames are modeled as graph nodes, with edges weighted by feature similarity. Labels from sparsely annotated frames are propagated across the graph to infer full segmentations, assuming all action instances are timestamped. In contrast, RAS-TSS [ 72 ] relaxes this assumption by allowing incomplete annotations and expands segment boundaries around timestamps to reduce ambiguity and better handle missing labels. 
+
+ Narrations and subtitles, often available alongside instructional videos, offer a valuable but weak supervisory signal for temporal understanding. Prior work has leveraged such text for alignment [ 57 , 4 ] or step localization [ 88 , 2 ] and recent efforts in multi-modal learning [ 61 , 70 ] explore joint embeddings across vision, language, and occasionally audio. However, a key limitation is the frequent misalignment between textual and visual content. To address this, Sener et al. [ 69 ] propose a hybrid generative model combining visual and textual vocabularies across videos for shared action discovery, while Fried et al. [ 17 ] assume a canonical transcript per activity class and use a semi-Markov model for structured alignment. More recent approaches [ 20 ] focus on aligning narrations to specific segments within instructional videos. 
+
+## 9.2 Causal Representation Learning
+
+ To recover latent variables with theoretical guarantees of identifiability [ 80 , 68 , 53 , 18 ] , Independent Component Analysis (ICA) has been widely employed for uncovering causal representations [ 63 , 58 , 76 , 50 ] . Traditional ICA approaches typically rely on the assumption that observed variables are generated through a linear mixture of latent variables [ 10 , 30 , 43 , 83 ] . However, identifying such a linear mixing function is nontrivial in practical, real-world settings. To establish identifiability in more general nonlinear ICA models, additional assumptions are introduced, such as sparsity in the data generation process and the incorporation of auxiliary variables [ 87 , 28 , 25 , 33 , 51 ] . 
+
+ In particular, the work of Aapo et al. provides the first theoretical foundation for identifiability in such settings [ 32 ] . When latent sources are assumed to follow distributions from the exponential family, identifiability can be achieved by integrating auxiliary information such as domain indices, temporal markers, or class labels [ 32 , 26 , 27 , 29 ] . Moreover, recent studies [ 36 , 77 , 34 , 79 ] demonstrate that the identifiability of individual components in nonlinear ICA can be achieved without relying on exponential family assumptions. 
+
+ To enable identifiability in unsupervised scenarios, many approaches have introduced structural assumptions such as sparsity in the generative mechanisms [ 87 , 28 , 25 , 33 , 51 ] . For instance, Lachapelle et al. [ 41 , 42 ] propose mechanism sparsity regularization as an inductive bias to isolate distinct causal latent factors. Zhang et al. [ 84 ] utilize sparse latent structures and establish identifiability under conditions of distributional shifts, without requiring explicit supervision. Besides, nonlinear ICA is extended to the time-series setting for learning identifiable representations from temporal data [ 26 , 79 , 24 , 19 , 52 ] . For example, Aapo et al. [ 26 ] propose a theoretical framework based on nonstationary variances across time segments to identify latent sources in temporally varying data. In the stationary case, researchers utilize permutation-based contrastive learning methods to disentangle latent components. 
+
+ More recent advances incorporate independent noise and variability history information. Importantly, TDRL  [ 81 ] and LEAP  [ 82 ] exploit such features to facilitate identifiability. CHiLD  [ 49 ] , a recently proposed framework for hierarchical temporal causal representation learning, leverages temporal contextual observations and hierarchical sparsity to achieve identifiability of multi-layer latent dynamics. By introducing a nonstationary sparse transition assumption, CtrlNS  [ 71 ] establishes identifiability from a theoretical perspective and empirically demonstrates its framework’s effectiveness in uncovering latent factors and distribution shifts. Although CtrlNS can also be applied to the action segmentation task, its latent variables are limited to a single layer, which restricts its ability to capture the varying dynamics across different levels of latent factors. 
+
+## 10 Proof
+
+## 10.1 Useful Theorems and Lemmas
+
+## Theorem 2 . 
+
+ (Theorem XV 4.5 in [ 14 ] Part I ​ I ​ I III ) 
+A bounded operator T T is a spectral operator if and only if it is the sum T = S + N T=S+N of a bounded scalar type operator S S and a quasi-nilpotent operator N N commuting with S S . Furthermore, this decomposition is unique and T T and S S have the same spectrum and the same resolution of the identity. 
+
+## Lemma 2 . 
+
+ (Lemma 1 in  [ 22 ] )
+
+Under Assumption A2, if L z | x L_{z|x} is injective, then L x | z − 1 L_{x|z}^{-1} exists and is densely defined over 𝒢 ⁡ ( 𝒳 ) \mathscr{G}(\mathscr{X}) (for 𝒢 = ℒ 1 , ℒ bnd 1 \mathscr{G}=\mathscr{L}^{1},\mathscr{L}^{1}_{\mathrm{bnd}} ). 
+
+## 10.2 Proof of Block-wise Identifiability of Latent Action and Visual Variables.
+
+## Lemma 3 . 
+
+ ( Block-wise Identification of ( v t , c t ) (\mathbf{v}_{t},\mathbf{c}_{t}) . ) Suppose the observed, latent visual, and latent action variables follow the augmented data generation process in Figure 2 (a). By matching the true joint distribution of 5 numbers of adjacent video frames, i.e., { 𝐱 t − 2 , 𝐱 t − 1 , 𝐱 t , 𝐱 t + 1 , 𝐱 t + 2 } \{\mathbf{x}_{t-2},\mathbf{x}_{t-1},\mathbf{x}_{t},\mathbf{x}_{t+1},\mathbf{x}_{t+2}\} , we further make the following assumptions: 
+
+ • 
+
+ A1 ( Bounded and Continuous Density ): The joint distribution of 𝐱 t \mathbf{x}_{t} , 𝐯 t \mathbf{v}_{t} , 𝐜 t \mathbf{c}_{t} , and their marginal and conditional densities are bounded and continuous. 
+
+ • 
+
+ A2 ( Injective Linear Operators ): The linear operators L 𝐱 t + 1 | 𝐯 t , 𝐜 t L_{\mathbf{x}_{t+1}|\mathbf{v}_{t},\mathbf{c}_{t}} and L 𝐱 t − 1 | 𝐱 t + 1 L_{\mathbf{x}_{t-1}|\mathbf{x}_{t+1}} are injective for bounded function space. 
+
+ • 
+
+ A3 ( Positive Density ): For all [ 𝐯 t , 𝐜 t ] , [ 𝐯 t , 𝐜 t ] ′ ∈ 𝒱 t ∪ 𝒞 t [\mathbf{v}_{t},\mathbf{c}_{t}],[\mathbf{v}_{t},\mathbf{c}_{t}]^{\prime}\in\mathcal{V}_{t}\cup\mathcal{C}_{t} with [ 𝐯 t , 𝐜 t ] ≠ [ 𝐯 t , 𝐜 t ] ′ [\mathbf{v}_{t},\mathbf{c}_{t}]\neq[\mathbf{v}_{t},\mathbf{c}_{t}]^{\prime} the set { 𝐱 t : p ⁡ ( 𝐱 t | 𝐯 t , 𝐜 t ) ≠ p ⁡ ( 𝐱 t | 𝐯 t ′ , 𝐜 t ′ ) } \{\mathbf{x}_{t}:p(\mathbf{x}_{t}|\mathbf{v}_{t},\mathbf{c}_{t})\neq p(\mathbf{x}_{t}|\mathbf{v}_{t}^{\prime},\mathbf{c}_{t}^{\prime})\} has positive probability. 
+
+ Suppose that the learned ( g ^ , f ^ , p ϵ ^ ) (\hat{g},\hat{f},p_{\hat{\epsilon}}) to achieve Equation ( 1 ) - ( 3 ), then the latent variables ( 𝐯 t , 𝐜 t ) (\mathbf{v}_{t},\mathbf{c}_{t}) are block-wise identifiable. 
+
+## Proof.
+
+ We first follow Hu et al  [ 22 ] framework to prove that ( 𝐯 t , 𝐜 t ) (\mathbf{v}_{t},\mathbf{c}_{t}) is block-wise identifiable given sufficient observation. Sequentially, we prove that we require at least 5 5 adjacent observed variables to achieve block-wise identifiability. 
+
+ Given time series data with T T timesteps X = { 𝐱 1 , ⋯ , 𝐱 t , ⋯ , 𝐱 T } X=\{\mathbf{x}_{1},\cdots,\mathbf{x}_{t},\cdots,\mathbf{x}_{T}\} , 2 2 -layers of latent variables V = { 𝐯 1 , ⋯ , 𝐯 t , ⋯ , 𝐯 T } V=\{\mathbf{v}_{1},\cdots,\mathbf{v}_{t},\cdots,\mathbf{v}_{T}\} and C = { 𝐜 1 , ⋯ , 𝐜 t , ⋯ , 𝐜 T } C=\{\mathbf{c}_{1},\cdots,\mathbf{c}_{t},\cdots,\mathbf{c}_{T}\} . To simplify the notation, we let 𝐱 < t \mathbf{x}_{<t} , 𝐱 > t \mathbf{x}_{>t} and 𝐳 t \mathbf{z}_{t} be { 𝐱 t − 2 , 𝐱 t − 1 } \{\mathbf{x}_{t-2},\mathbf{x}_{t-1}\} , { 𝐱 t + 1 , 𝐱 t + 2 } \{\mathbf{x}_{t+1},\mathbf{x}_{t+2}\} and ( 𝐯 t , 𝐜 t ) (\mathbf{v}_{t},\mathbf{c}_{t}) , respectively. Sequentially, according to the data generation process in Figure 3 (a), we have: 
+
+ | 
+ P ⁡ ( 𝐱 < t | 𝐱 t , 𝐳 t ) = P ⁡ ( 𝐱 < t | 𝐳 t ) , P ⁡ ( 𝐱 > t | 𝐱 t , 𝐱 < t , 𝐳 t ) = P ⁡ ( 𝐱 > t | 𝐳 t ) . \begin{split}P(\mathbf{x}_{<t}|\mathbf{x}_{t},\mathbf{z}_{t})&=P(\mathbf{x}_{<t}|\mathbf{z}_{t}),\\
+\quad P(\mathbf{x}_{>t}|\mathbf{x}_{t},\mathbf{x}_{<t},\mathbf{z}_{t})&=P(\mathbf{x}_{>t}|\mathbf{z}_{t}).\end{split} | 
+ | 
+ (12) | 
+
+ Sequentially, the observed P ⁡ ( 𝐱 t − 1 ) P(\mathbf{x}_{t-1}) and joint distribution P ⁡ ( 𝐱 > t , 𝐱 t , 𝐱 < t ) P(\mathbf{x}_{>t},\mathbf{x}_{t},\mathbf{x}_{<t}) directly indicates P ⁡ ( 𝐱 > t , 𝐱 t | 𝐱 < t ) P(\mathbf{x}_{>t},\mathbf{x}_{t}|\mathbf{x}_{<t}) , and we have: 
+
+ | 
+ P ⁡ ( 𝐱 > t , 𝐱 t | 𝐱 < t ) = ∫ 𝒵 t P ⁡ ( 𝐱 > t , 𝐱 t , 𝐳 t | 𝐱 < t ) ​ d ​ 𝐳 t ⏟ Integration over  𝒵 t = ∫ 𝒵 t P ⁡ ( 𝐱 > t | 𝐱 t , 𝐳 t , 𝐱 < t ) ​ P ​ ( 𝐱 t , 𝐳 t | 𝐱 < t ) ​ d ​ 𝐳 t ⏟ Factorization of joint conditional probability = ∫ 𝒵 t P ⁡ ( 𝐱 > t | 𝐳 t ) ​ P ​ ( 𝐱 t , 𝐳 t | 𝐱 < t ) ​ d ​ 𝐳 t ⏟ Conditional Independence = ∫ 𝒵 t P ⁡ ( 𝐱 > t | 𝐳 t ) ​ P ​ ( 𝐱 t | 𝐳 t , 𝐱 < t ) ​ P ​ ( 𝐳 t | 𝐱 < t ) ​ d ​ 𝐳 t ⏟ Bayes Law = ∫ 𝒵 t P ⁡ ( 𝐱 > t | 𝐳 t ) ​ P ​ ( 𝐱 t | 𝐳 t ) ​ P ​ ( 𝐳 t | 𝐱 < t ) ​ d ​ 𝐳 t . \begin{split}\begin{split}&P(\mathbf{x}_{>t},\mathbf{x}_{t}|\mathbf{x}_{<t})\\
+&=\underbrace{\int_{\mathcal{Z}_{t}}P(\mathbf{x}_{>t},\mathbf{x}_{t},\mathbf{z}_{t}|\mathbf{x}_{<t})d\mathbf{z}_{t}}_{\text{Integration over $\mathcal{Z}_{t}$}}\\
+&=\underbrace{\int_{\mathcal{Z}_{t}}P(\mathbf{x}_{>t}|\mathbf{x}_{t},\mathbf{z}_{t},\mathbf{x}_{<t})P(\mathbf{x}_{t},\mathbf{z}_{t}|\mathbf{x}_{<t})d\mathbf{z}_{t}}_{\text{Factorization of joint conditional probability}}\\
+&=\underbrace{\int_{\mathcal{Z}_{t}}P(\mathbf{x}_{>t}|\mathbf{z}_{t})P(\mathbf{x}_{t},\mathbf{z}_{t}|\mathbf{x}_{<t})d\mathbf{z}_{t}}_{\text{Conditional Independence}}\\
+&=\underbrace{\int_{\mathcal{Z}_{t}}P(\mathbf{x}_{>t}|\mathbf{z}_{t})P(\mathbf{x}_{t}|\mathbf{z}_{t},\mathbf{x}_{<t})P(\mathbf{z}_{t}|\mathbf{x}_{<t})d\mathbf{z}_{t}}_{\text{Bayes Law}}\\
+&=\int_{\mathcal{Z}_{t}}P(\mathbf{x}_{>t}|\mathbf{z}_{t})P(\mathbf{x}_{t}|\mathbf{z}_{t})P(\mathbf{z}_{t}|\mathbf{x}_{<t})d\mathbf{z}_{t}.\end{split}\end{split} | 
+ | 
+ (13) | 
+
+ We further incorporate the integration over 𝒳 < t \mathcal{X}_{<t} as follows: 
+
+ | 
+ ∫ 𝒳 < t P ⁡ ( 𝐱 > t , 𝐱 t | 𝐱 < t ) ​ P ​ ( 𝐱 < t ) ​ d ​ 𝐱 < t = ∫ 𝒳 < t ∫ 𝒵 t P ⁡ ( 𝐱 > t | 𝐳 t ) ​ P ​ ( 𝐱 t | 𝐳 t ) ​ P ​ ( 𝐳 t | 𝐱 < t ) ​ P ​ ( 𝐱 < t ) ​ d ​ 𝐳 t ​ d ​ 𝐱 < t . \begin{split}&\int_{\mathcal{X}_{<t}}P(\mathbf{x}_{>t},\mathbf{x}_{t}|\mathbf{x}_{<t})P(\mathbf{x}_{<t})d\mathbf{x}_{<t}\\
+&=\int_{\mathcal{X}_{<t}}\int_{\mathcal{Z}_{t}}P(\mathbf{x}_{>t}|\mathbf{z}_{t})P(\mathbf{x}_{t}|\mathbf{z}_{t})P(\mathbf{z}_{t}|\mathbf{x}_{<t})P(\mathbf{x}_{<t})d\mathbf{z}_{t}d\mathbf{x}_{<t}.\end{split} | 
+ | 
+ (14) | 
+
+ According to the definition of linear operator, we have: 
+
+ | 
+ ∫ 𝒳 < t P ⁡ ( 𝐱 > t , 𝐱 t | 𝐱 < t ) ​ P ​ ( 𝐱 < t ) ​ d ​ 𝐱 < t = [ L 𝐱 > t , 𝐱 t | 𝐱 < t ∘ P ] ​ ( 𝐱 < t ) , ∫ 𝒳 < t P ⁡ ( 𝐳 t | 𝐱 < t ) ​ P ​ ( 𝐱 < t ) ​ d ​ 𝐱 < t = [ L 𝐳 t | 𝐱 < t ∘ P ] ​ ( 𝐱 < t ) ∫ 𝒵 t P ⁡ ( 𝐱 > t | 𝐳 t ) ​ d ​ 𝐳 t = L 𝐱 > t | 𝐳 t . \begin{split}\int_{\mathcal{X}_{<t}}P(\mathbf{x}_{>t},\mathbf{x}_{t}|\mathbf{x}_{<t})P(\mathbf{x}_{<t})d\mathbf{x}_{<t}&=[L_{\mathbf{x}_{>t},\mathbf{x}_{t}|\mathbf{x}_{<t}}\circ P](\mathbf{x}_{<t}),\\
+\int_{\mathcal{X}_{<t}}P(\mathbf{z}_{t}|\mathbf{x}_{<t})P(\mathbf{x}_{<t})d\mathbf{x}_{<t}&=[L_{\mathbf{z}_{t}|\mathbf{x}<t}\circ P](\mathbf{x}_{<t})\\
+\int_{\mathcal{Z}_{t}}P(\mathbf{x}_{>t}|\mathbf{z}_{t})d\mathbf{z}_{t}&=L_{\mathbf{x}_{>t}|\mathbf{z}_{t}}.\end{split} | 
+ | 
+ (15) | 
+
+ By combining Equation ( 14 ) and ( 15 ), we have: 
+
+ | 
+ [ L 𝐱 > t , 𝐱 t | 𝐱 < t ∘ P ] ​ ( 𝐱 < t ) = [ L 𝐱 > t | 𝐳 t ​ D 𝐱 t | 𝐳 t ​ L 𝐳 t | 𝐱 < t ∘ P ] ​ ( 𝐱 < t ) , [L_{\mathbf{x}_{>t},\mathbf{x}_{t}|\mathbf{x}_{<t}}\circ P](\mathbf{x}_{<t})=[L_{\mathbf{x}_{>t}|\mathbf{z}_{t}}D_{\mathbf{x}_{t}|\mathbf{z}_{t}}L_{\mathbf{z}_{t}|\mathbf{x}<t}\circ P](\mathbf{x}_{<t}), | 
+ | 
+ (16) | 
+
+ which implies the operator equivalence: 
+
+ | 
+ L 𝐱 > t , 𝐱 t | 𝐱 < t = L 𝐱 > t | 𝐳 t ​ D 𝐱 t | 𝐳 t ​ L 𝐳 t | 𝐱 < t . L_{\mathbf{x}_{>t},\mathbf{x}_{t}|\mathbf{x}_{<t}}=L_{\mathbf{x}_{>t}|\mathbf{z}_{t}}D_{\mathbf{x}_{t}|\mathbf{z}_{t}}L_{\mathbf{z}_{t}|\mathbf{x}<t}. | 
+ | 
+ (17) | 
+
+ Sequentially, we further integrate out 𝐱 t \mathbf{x}_{t} and have: 
+
+ | 
+ ∫ 𝒳 t L 𝐱 > t , 𝐱 t | 𝐱 < t ​ d ​ 𝐱 t = ∫ 𝒳 t L 𝐱 > t | 𝐳 t ​ D 𝐱 t | 𝐳 t ​ L 𝐳 t | 𝐱 < t ​ d ​ 𝐱 t , \int_{\mathcal{X}_{t}}L_{\mathbf{x}_{>t},\mathbf{x}_{t}|\mathbf{x}_{<t}}d\mathbf{x}_{t}=\int_{\mathcal{X}_{t}}L_{\mathbf{x}_{>t}|\mathbf{z}_{t}}D_{\mathbf{x}_{t}|\mathbf{z}_{t}}L_{\mathbf{z}_{t}|\mathbf{x}<t}d\mathbf{x}_{t}, | 
+ | 
+ (18) | 
+
+ and it results in: 
+
+ | 
+ L 𝐱 > t | 𝐱 < t = L 𝐱 > t | 𝐳 t ​ L 𝐳 t | 𝐱 < t . L_{\mathbf{x}_{>t}|\mathbf{x}_{<t}}=L_{\mathbf{x}_{>t}|\mathbf{z}_{t}}L_{\mathbf{z}_{t}|\mathbf{x}<t}. | 
+ | 
+ (19) | 
+
+ According to assumption A2, the linear operator L 𝐱 > t | 𝐳 t L_{\mathbf{x}_{>t}|\mathbf{z}_{t}} is injective, Equation ( 19 ) can be rewritten as: 
+
+ | 
+ L 𝐱 > t | 𝐳 t − 1 ​ L 𝐱 > t | 𝐱 < t = L 𝐳 t | 𝐱 < t . L_{\mathbf{x}>t|\mathbf{z}_{t}}^{-1}L_{\mathbf{x}_{>t}|\mathbf{x}_{<t}}=L_{\mathbf{z}_{t}|\mathbf{x}<t}. | 
+ | 
+ (20) | 
+
+ By combining Equation ( 17 ) and ( 20 ), we have 
+
+ | 
+ L 𝐱 > t , 𝐱 t | 𝐱 < t = L 𝐱 > t | 𝐳 t ​ D 𝐱 t | 𝐳 t ​ L 𝐱 > t | 𝐳 t − 1 ​ L 𝐱 > t | 𝐱 < t . L_{\mathbf{x}_{>t},\mathbf{x}_{t}|\mathbf{x}<t}=L_{\mathbf{x}>t|\mathbf{z}_{t}}D_{\mathbf{x}_{t}|\mathbf{z}_{t}}L_{\mathbf{x}>t|\mathbf{z}_{t}}^{-1}L_{\mathbf{x}>t|\mathbf{x}<t}. | 
+ | 
+ (21) | 
+
+ By leveraging Lemma 2 , if L 𝐱 < t | 𝐱 > t L_{\mathbf{x}_{<t}|\mathbf{x}_{>t}} is injective, then L 𝐱 > t | 𝐱 < t − 1 L_{\mathbf{x}_{>t}|\mathbf{x}_{<t}}^{-1} exists. Therefore, we have: 
+
+ | 
+ L 𝐱 > t , 𝐱 t | 𝐱 < t ​ L 𝐱 > t | 𝐱 < t − 1 = L 𝐱 > t | 𝐳 t ​ D 𝐱 t | 𝐳 t ​ L 𝐱 > t | 𝐳 t − 1 . L_{\mathbf{x}_{>t},\mathbf{x}_{t}|\mathbf{x}_{<t}}L_{\mathbf{x}>t|\mathbf{x}<t}^{-1}=L_{\mathbf{x}>t|\mathbf{z}_{t}}D_{\mathbf{x}_{t}|\mathbf{z}_{t}}L_{\mathbf{x}>t|\mathbf{z}_{t}}^{-1}. | 
+ | 
+ (22) | 
+
+ Then we can leverage assumption A3 and the linear operator is bounded. Consequently, L 𝐱 > t , 𝐱 t | 𝐱 < t ​ L 𝐱 > t | 𝐱 < t − 1 L_{\mathbf{x}_{>t},\mathbf{x}_{t}|\mathbf{x}_{<t}}L_{\mathbf{x}>t|\mathbf{x}<t}^{-1} is also bounded, which satisfies the condition of Theorem 2 , and hence the the operator L 𝐱 > t | 𝐳 t ​ D 𝐱 t | 𝐳 t ​ L 𝐱 > t | 𝐳 t − 1 L_{\mathbf{x}>t|\mathbf{z}_{t}}D_{\mathbf{x}_{t}|\mathbf{z}_{t}}L_{\mathbf{x}>t|\mathbf{z}_{t}}^{-1} have a unique spectral decomposition, where L 𝐱 > t | 𝐳 t L_{\mathbf{x}>t|\mathbf{z}_{t}} and D 𝐱 t | 𝐳 t D_{\mathbf{x}_{t}|\mathbf{z}_{t}} correspond to eigenfunctions and
+eigenvalues, respectively. 
+
+ Since both the marginal and conditional distributions of the observed variables are matched, the true model and the estimated model yield the same distribution over the observed variables. Therefore, we also have: 
+
+ | 
+ L 𝐱 > t , 𝐱 t | 𝐱 < t ​ L 𝐱 > t | 𝐱 < t − 1 = L 𝐱 ^ > t , 𝐱 ^ t | 𝐱 ^ < t ​ L 𝐱 ^ > t | 𝐱 ^ < t − 1 , L_{\mathbf{x}_{>t},\mathbf{x}_{t}|\mathbf{x}_{<t}}L^{-1}_{\mathbf{x}>t|\mathbf{x}<t}=L_{\hat{\mathbf{x}}_{>t},\hat{\mathbf{x}}_{t}|\hat{\mathbf{x}}_{<t}}L^{-1}_{\hat{\mathbf{x}}>t|\hat{\mathbf{x}}<t}, | 
+ | 
+ (23) | 
+
+ where the L.H.S corresponds to the true model and the R.H.S corresponds to the estimated model. Moreover, L 𝐱 ^ > t , 𝐱 ^ t | 𝐱 ^ < t ​ L 𝐱 ^ > t | 𝐱 ^ < t − 1 L_{\hat{\mathbf{x}}_{>t},\hat{\mathbf{x}}_{t}|\hat{\mathbf{x}}_{<t}}L^{-1}_{\hat{\mathbf{x}}>t|\hat{\mathbf{x}}<t} also have the unique decomposition, so the L.H.S of the Equation ( 23 ) can be written as: 
+
+ | 
+ L 𝐱 > t , 𝐱 t | 𝐱 < t ​ L 𝐱 > t | 𝐱 < t − 1 = L 𝐱 ^ > t | 𝐳 ^ t ​ D 𝐱 ^ t | 𝐳 ^ t ​ L 𝐱 ^ > t | 𝐳 ^ t − 1 , L_{\mathbf{x}_{>t},\mathbf{x}_{t}|\mathbf{x}_{<t}}L^{-1}_{\mathbf{x}>t|\mathbf{x}<t}=L_{\hat{\mathbf{x}}_{>t}|\hat{\mathbf{z}}_{t}}D_{\hat{\mathbf{x}}_{t}|\hat{\mathbf{z}}_{t}}L^{-1}_{\hat{\mathbf{x}}_{>t}|\hat{\mathbf{z}}_{t}}, | 
+ | 
+ (24) | 
+
+ Integrating Equation ( 22 ) and Equation ( 24 ), and noting that their L.H.S. are identical, it follows that they share the same spectral decomposition. This yields 
+
+ | 
+ L 𝐱 > t | 𝐳 t = C ​ L 𝐱 ^ > t | 𝐳 ^ t ​ P , D 𝐱 t | 𝐳 t = P − 1 ​ D 𝐱 ^ t | 𝐳 ^ t ​ P , L_{\mathbf{x}_{>t}|\mathbf{z}_{t}}=CL_{\hat{\mathbf{x}}_{>t}|\hat{\mathbf{z}}_{t}}P,\quad D_{\mathbf{x}_{t}|\mathbf{z}_{t}}=P^{-1}D_{\hat{\mathbf{x}}_{t}|\hat{\mathbf{z}}_{t}}P, | 
+ | 
+ (25) | 
+
+ where C C is a scalar accounting for scaling indeterminacy and P P is a permutation on the order of elements in D 𝐱 ^ t | 𝐳 ^ t D_{\hat{\mathbf{x}}_{t}|\hat{\mathbf{z}}_{t}} , as discussed in  [ 14 ] . These forms of indeterminacy are analogous to those in eigendecomposition, which can be viewed as a finite-dimensional special case. P is a mapping from distribution to distribution 
+
+ Since the normalizing condition 
+
+ | 
+ ∫ 𝒳 ^ t + 1 p 𝐱 ^ t | 𝐳 ^ t ​ d ​ 𝐱 ^ t = 1 \int_{\hat{\mathcal{X}}_{t+1}}p_{\hat{\mathbf{x}}_{t}|\hat{\mathbf{z}}_{t}}\,d\hat{\mathbf{x}}_{t}=1 | 
+ | 
+ (26) | 
+
+ must hold for every 𝐳 ^ t \hat{\mathbf{z}}_{t} , one only solution is to set C = 1 C=1 . 
+
+ Hence, D 𝐱 ^ t | 𝐳 ^ t D_{\hat{\mathbf{x}}_{t}|\hat{\mathbf{z}}_{t}} and D 𝐱 t | 𝐳 t D_{\mathbf{x}_{t}|\mathbf{z}_{t}} are identical up to a permutation on their repsective elements. We use unordered sets to express this equivalence: 
+
+ | 
+ { p ⁡ ( 𝐱 t ∣ 𝐳 t ) } = { p ⁡ ( 𝐱 t ∣ 𝐳 ^ t ) } , for all  ​ 𝐳 t , 𝐳 ^ t . \{p(\mathbf{x}_{t}\mid\mathbf{z}_{t})\}=\{p(\mathbf{x}_{t}\mid\hat{\mathbf{z}}_{t})\},\quad\text{for all }\mathbf{z}_{t},\hat{\mathbf{z}}_{t}. | 
+ | 
+ (27) | 
+
+ Due to the set being unordered, the only way to match the R.H.S. with the L.H.S. in a consistent order is to exchange the conditioning variables, that is, 
+
+ | 
+ { p ⁡ ( 𝐱 t | 𝐳 t ( 1 ) ) , p ⁡ ( 𝐱 t | 𝐳 t ( 2 ) ) , ⋯ } = { p ⁡ ( 𝐱 t | 𝐳 ^ t ( π ⁡ ( 1 ) ) ) , p ⁡ ( 𝐱 t | 𝐳 ^ t ( π ⁡ ( 2 ) ) ) , ⋯ } , \begin{split}&\Big\{p(\mathbf{x}_{t}|\mathbf{z}_{t}^{(1)}),p(\mathbf{x}_{t}|\mathbf{z}_{t}^{(2)}),\cdots\Big\}\\
+&=\Big\{p(\mathbf{x}_{t}|\hat{\mathbf{z}}_{t}^{(\pi(1))}),p(\mathbf{x}_{t}|\hat{\mathbf{z}}_{t}^{(\pi(2))}),\cdots\Big\},\end{split} | 
+ | 
+ (28) | 
+
+ where superscript ( ⋅ ) (\cdot) denotes the index of a conditioning variable, and π \pi is reindexing the conditioning variables. We use a relabeling map h h to represent its corresponding value mapping: 
+
+ | 
+ p ⁡ ( 𝐱 t | 𝐳 t ) = p ⁡ ( 𝐱 t | h ⁡ ( 𝐳 ^ t ) ) ,  for all  ​ 𝐳 t , 𝐳 ^ t p(\mathbf{x}_{t}|\mathbf{z}_{t})=p(\mathbf{x}_{t}|h(\hat{\mathbf{z}}_{t})),\text{ for all }\mathbf{z}_{t},\hat{\mathbf{z}}_{t} | 
+ | 
+ (29) | 
+
+ Since K 𝐳 ^ t , 𝐳 t , L 𝐱 > t | 𝐳 ^ t − 1 K_{\hat{\mathbf{z}}_{t},\mathbf{z}_{t}},L^{-1}_{{\mathbf{x}}_{>t}|\hat{\mathbf{z}}_{t}} , and L 𝐳 t | 𝐱 > t L_{\mathbf{z}_{t}|\mathbf{x}_{>t}} are continuous, h h is continuous and differentiable. Moreover, by leveraging assumption A3, different values of 𝐳 \mathbf{z} , i.e., 𝐳 t ( 1 ) , 𝐳 t ( 2 ) \mathbf{z}_{t}^{(1)},\mathbf{z}_{t}^{(2)} imply p ⁡ ( 𝐱 t | 𝐳 t ( 1 ) ) ≠ p ⁡ ( 𝐱 t | 𝐳 t ( 2 ) ) p(\mathbf{x}_{t}|\mathbf{z}_{t}^{(1)})\neq p(\mathbf{x}_{t}|\mathbf{z}_{t}^{(2)}) . So we can construct a function F : 𝒵 → p ⁡ ( 𝐱 t | 𝐳 t ) F:\mathcal{Z}\rightarrow p(\mathbf{x}_{t}|\mathbf{z}_{t}) , and we have: 
+
+ | 
+ 𝐳 t ( 1 ) ≠ 𝐳 t ( 2 ) ⟶ F ⁡ ( 𝐳 t ( 1 ) ) ≠ F ⁡ ( 𝐳 t ( 2 ) ) , \mathbf{z}_{t}^{(1)}\neq\mathbf{z}_{t}^{(2)}\longrightarrow F(\mathbf{z}_{t}^{(1)})\neq F(\mathbf{z}_{t}^{(2)}), | 
+ | 
+ (30) | 
+
+ implying that F F is injective. Moreover, by using Equation ( 29 ), we have F ⁡ ( 𝐳 t ) = F ⁡ ( h ⁡ ( 𝐳 ^ t ) ) F(\mathbf{z}_{t})=F(h(\hat{\mathbf{z}}_{t})) , which implies 𝐳 t = h ⁡ ( 𝐳 ^ t ) \mathbf{z}_{t}=h(\hat{\mathbf{z}}_{t}) . 
+
+ The aforementioned result leverage 𝐱 < t , 𝐱 t \mathbf{x}_{<t},\mathbf{x}_{t} , and 𝐱 > t \mathbf{x}_{>t} as three different measurement of 𝐳 t \mathbf{z}_{t} , where | 𝐱 < t | ​ ℊ ​ | 𝐳 t | |\mathbf{x}_{<t}|\mathcal{g}|\mathbf{z}_{t}| , | 𝐱 > t | ​ ℊ ​ | 𝐳 t | |\mathbf{x}_{>t}|\mathcal{g}|\mathbf{z}_{t}| and | 𝐱 t | < | 𝐳 t | |\mathbf{x}_{t}|<|\mathbf{z}_{t}| . It may imply that when the 𝐱 t \mathbf{x}_{t} cannot provide enough information to recover 𝐳 t \mathbf{z}_{t} , we can seek more information from 𝐱 < t \mathbf{x}_{<t} and 𝐱 > t \mathbf{x}_{>t} . 
+
+ Sequentially, we further prove that when the observed and 2 2 -layer latent variables follow the data generation process in Equation ( 1 ) and ( 2 ), we require at least 5 5 adjacent observed variables, i.e., { 𝐱 t − 2 , 𝐱 t − 1 , 𝐱 t , 𝐱 t + 1 , 𝐱 t + 2 } \{\mathbf{x}_{t-2},\mathbf{x}_{t-1},\mathbf{x}_{t},\mathbf{x}_{t+1},\mathbf{x}_{t+2}\} to make ( 𝐯 t , 𝐜 t ) (\mathbf{v}_{t},\mathbf{c}_{t}) block-wise identifiable. We prove it by contradiction as follows. 
+
+ Suppose we have 4 4 adjacent observations, which can be divided into two cases: 1) { 𝐱 t − 1 , 𝐱 t , 𝐱 t + 1 , 𝐱 t + 2 } \{\mathbf{x}_{t-1},\mathbf{x}_{t},\mathbf{x}_{t+1},\mathbf{x}_{t+2}\} and { 𝐱 t − 2 , 𝐱 t − 1 , 𝐱 t , 𝐱 t + 1 } \{\mathbf{x}_{t-2},\mathbf{x}_{t-1},\mathbf{x}_{t},\mathbf{x}_{t+1}\} . In the first case, suppose the dimension of 𝐱 t \mathbf{x}_{t} and that of latent variables 𝐳 t = ( 𝐯 t , 𝐜 t ) \mathbf{z}_{t}=(\mathbf{v}_{t},\mathbf{c}_{t}) are 2 ​ n 2n , the dimension of 𝐱 t − 1 \mathbf{x}_{t-1} is n n and the dimension of 𝐳 t \mathbf{z}_{t} is 2 ​ n 2n , conflicting with the assumption that L 𝐱 t + 1 , 𝐱 t + 2 | 𝐳 t L_{\mathbf{x}_{t+1},\mathbf{x}_{t+2}|\mathbf{z}_{t}} is injective. In the second case, the dimensions of 𝐱 t − 2 , 𝐱 t − 1 \mathbf{x}_{t-2},\mathbf{x}_{t-1} and 𝐱 t + 1 \mathbf{x}_{t+1} are 2 ​ n 2n and n n , respectively, conflicting with the assumption that L 𝐱 t − 2 , 𝐱 t − 1 | 𝐱 t + 1 L_{\mathbf{x}_{t-2},\mathbf{x}_{t-1}|\mathbf{x}_{t+1}} is injective. As a result, we require at least 5 5 adjacent observations, i.e., { 𝐱 t − 2 , 𝐱 t − 1 , 𝐱 t , 𝐱 t + 1 , 𝐱 t + 2 } \{\mathbf{x}_{t-2},\mathbf{x}_{t-1},\mathbf{x}_{t},\mathbf{x}_{t+1},\mathbf{x}_{t+2}\} to make ( 𝐯 t , 𝐜 t ) (\mathbf{v}_{t},\mathbf{c}_{t}) block-wise identifiable. In fact, as long as the total dimension of the observed variable 𝐱 t − τ , ⋯ , 𝐱 t − 1 \mathbf{x}_{t-\tau},\cdots,\mathbf{x}_{t-1} is greater than or equal to the total dimension of the latent variable ( 𝐯 t , 𝐜 t ) (\mathbf{v}_{t},\mathbf{c}_{t}) , the mapping from the latent variable to the observed variable is injective. Then the latent variable ( 𝐯 t , 𝐜 t ) (\mathbf{v}_{t},\mathbf{c}_{t}) is identifiable.
+∎ 
+
+## 10.3 Proof of Block-wise Identifiability of Latent Action variables.
+
+ In this section, we present the proof for Theorem 1 . We first give a general identifiability theory (i.e., Theorem 3 ) for the generating process in Figure 3 (b) and then make the connection to the proof of Theorem 1 . 
+
+## Theorem 3 . 
+
+ The generating process in Figure is defined as follows: 
+
+ | 
+ [ 𝐯 t − 1 , 𝐯 t + 1 ] \displaystyle[\mathbf{v}_{t-1},\mathbf{v}_{t+1}] | 
+ = f v ​ ( 𝐜 t , 𝐯 t − 2 , 𝐯 t , ϵ t − 1 v , ϵ t + 1 v ) , \displaystyle=f^{v}(\mathbf{c}_{t},\mathbf{v}_{t-2},\mathbf{v}_{t},\epsilon^{v}_{t-1},\epsilon^{v}_{t+1}), | 
+ | 
+ (31) | 
+
+ | 
+ 𝐯 t − 1 \displaystyle\mathbf{v}_{t-1} | 
+ = f t − 1 v ​ ( 𝐜 t , 𝐯 t − 2 , ϵ t − 1 v ) , \displaystyle=f^{v}_{t-1}(\mathbf{c}_{t},\mathbf{v}_{t-2},\epsilon^{v}_{t-1}), | 
+ | 
+ (32) | 
+
+ | 
+ 𝐯 t + 1 \displaystyle\mathbf{v}_{t+1} | 
+ = f t + 1 v ​ ( 𝐜 t , 𝐯 t , ϵ t + 1 v ) , \displaystyle=f^{v}_{t+1}(\mathbf{c}_{t},\mathbf{v}_{t},\epsilon^{v}_{t+1}), | 
+ | 
+ (33) | 
+
+ where 𝐜 t ∈ ℝ n c \mathbf{c}_{t}\in\mathbb{R}^{n_{c}} , ϵ t − 1 v ∈ ℝ n ϵ \epsilon^{v}_{t-1}\in\mathbb{R}^{n_{\epsilon}} , and ϵ t + 1 v ∈ ℝ n ϵ \epsilon^{v}_{t+1}\in\mathbb{R}^{n_{\epsilon}} .
+Both f t − 1 v f^{v}_{t-1} and f t + 1 v f^{v}_{t+1} are smooth and have non-singular Jacobian matrices almost anywhere, and f f is invertible. 
+
+ If f ^ t − 1 v \hat{f}^{v}_{t-1} and f ^ t + 1 v \hat{f}^{v}_{t+1} assume the generating process of the true model ( f t − 1 v , f t + 1 v ) (f^{v}_{t-1},f^{v}_{t+1}) and match the joint distribution p 𝐯 t − 1 , 𝐯 t + 1 p_{\mathbf{v}_{t-1},\mathbf{v}_{t+1}} , then 𝐜 t \mathbf{c}_{t} are block-wise identifiable. 
+
+## Proof.
+
+ To simplify the notation, we use f f , f t − 1 f_{t-1} , f t + 1 f_{t+1} , ϵ t − 1 \epsilon_{t-1} and ϵ t + 1 \epsilon_{t+1} represent f v f^{v} , f t − 1 v f^{v}_{t-1} , f t + 1 v f^{v}_{t+1} , ϵ t − 1 v \epsilon^{v}_{t-1} and ϵ t + 1 v \epsilon^{v}_{t+1} , respectively. 
+
+ For ( 𝐯 t − 1 , 𝐯 t + 1 ) ∼ p 𝐯 t − 1 , 𝐯 t + 1 (\mathbf{v}_{t-1},\mathbf{v}_{t+1})\sim p_{\mathbf{v}_{t-1},\mathbf{v}_{t+1}} , because of the matched joint distribution, we have the following relations between the true variables ( 𝐜 t , 𝐯 t − 2 , 𝐯 t , ϵ t − 1 , ϵ t + 1 ) (\mathbf{c}_{t},\mathbf{v}_{t-2},\mathbf{v}_{t},\epsilon_{t-1},\epsilon_{t+1}) and the estimated ones ( 𝐜 ^ t , 𝐯 ^ t − 2 , 𝐯 ^ t , ϵ ^ t − 1 , ϵ ^ t + 1 ) (\hat{\mathbf{c}}_{t},\hat{\mathbf{v}}_{t-2},\hat{\mathbf{v}}_{t},\hat{\epsilon}_{t-1},\hat{\epsilon}_{t+1}) : 
+
+ | 
+ | 
+ 𝐯 t − 1 = f t − 1 ​ ( 𝐜 t , 𝐯 t − 2 , ϵ t − 1 ) = f ^ t − 1 ​ ( 𝐜 ^ t , 𝐯 ^ t − 2 , ϵ ^ t − 1 ) , \displaystyle\mathbf{v}_{t-1}=f_{t-1}(\mathbf{c}_{t},\mathbf{v}_{t-2},\epsilon_{t-1})=\hat{f}_{t-1}(\hat{\mathbf{c}}_{t},\hat{\mathbf{v}}_{t-2},\hat{\epsilon}_{t-1}), | 
+ | 
+ (34) | 
+
+ | 
+ | 
+ 𝐯 t + 1 = f t + 1 ​ ( 𝐜 t , 𝐯 t , ϵ t + 1 ) = f ^ t + 1 ​ ( 𝐜 ^ t , 𝐯 ^ t , ϵ ^ t + 1 ) , \displaystyle\mathbf{v}_{t+1}=f_{t+1}(\mathbf{c}_{t},\mathbf{v}_{t},\epsilon_{t+1})=\hat{f}_{t+1}(\hat{\mathbf{c}}_{t},\hat{\mathbf{v}}_{t},\hat{\epsilon}_{t+1}), | 
+ | 
+ (35) | 
+
+ | 
+ ( 𝐜 ^ t , 𝐯 ^ t − 2 , 𝐯 ^ t , ϵ ^ t − 1 , ϵ ^ t + 1 ) = f ^ − 1 ​ ( 𝐯 t − 1 , 𝐯 t + 1 ) = f ^ − 1 ​ ( f ⁡ ( 𝐜 t , 𝐯 t − 2 , 𝐯 t , ϵ t − 1 , ϵ t + 1 ) ) = h ⁡ ( 𝐜 t , 𝐯 t − 2 , 𝐯 t , ϵ t − 1 , ϵ t + 1 ) , \displaystyle\begin{split}&(\hat{\mathbf{c}}_{t},\hat{\mathbf{v}}_{t-2},\hat{\mathbf{v}}_{t},\hat{\epsilon}_{t-1},\hat{\epsilon}_{t+1})\\
+&=\hat{f}^{-1}(\mathbf{v}_{t-1},\mathbf{v}_{t+1})\\
+&=\hat{f}^{-1}(f(\mathbf{c}_{t},\mathbf{v}_{t-2},\mathbf{v}_{t},\epsilon_{t-1},\epsilon_{t+1}))\\
+&=h(\mathbf{c}_{t},\mathbf{v}_{t-2},\mathbf{v}_{t},\epsilon_{t-1},\epsilon_{t+1}),\end{split} | 
+ | 
+ (36) | 
+
+ where f ^ t − 1 \hat{f}_{t-1} , f ^ t + 1 \hat{f}_{t+1} are the estimated invertible transition function and h := f ^ − 1 ∘ f h:=\hat{f}^{-1}\circ f denotes a smooth and invertible function that transforms the true variables 𝐜 t , 𝐯 t − 2 , 𝐯 t , ϵ t − 1 , ϵ t + 1 \mathbf{c}_{t},\mathbf{v}_{t-2},\mathbf{v}_{t},\epsilon_{t-1},\epsilon_{t+1} to the estimated ones 𝐜 ^ t , 𝐯 ^ t − 2 , 𝐯 ^ t , ϵ ^ t − 1 , ϵ ^ t + 1 \hat{\mathbf{c}}_{t},\hat{\mathbf{v}}_{t-2},\hat{\mathbf{v}}_{t},\hat{\epsilon}_{t-1},\hat{\epsilon}_{t+1} . 
+
+ By combining Equation ( 36 ) into Equation ( 34 ) yields the following: 
+
+ | 
+ f t − 1 ​ ( 𝐜 t , 𝐯 t − 2 , ϵ t − 1 ) = f ^ t − 1 ​ ( h 𝐜 t , 𝐯 t − 2 , ϵ t − 1 ​ ( 𝐜 t , 𝐯 t − 2 , 𝐯 t , ϵ t − 1 , ϵ t + 1 ) ) . \displaystyle\begin{split}&f_{t-1}(\mathbf{c}_{t},\mathbf{v}_{t-2},\epsilon_{t-1})\\
+&=\hat{f}_{t-1}(h_{\mathbf{c}_{t},\mathbf{v}_{t-2},\epsilon_{t-1}}(\mathbf{c}_{t},\mathbf{v}_{t-2},\mathbf{v}_{t},\epsilon_{t-1},\epsilon_{t+1})).\end{split} | 
+ | 
+ (37) | 
+
+ For i ∈ { 1 , … , n v } i\in\{1,\dots,n_{v}\} and j ∈ { 1 , … , n ϵ } j\in\{1,\dots,n_{\epsilon}\} , we take partial derivative of the i i -th dimension of 𝐯 t \mathbf{v}_{t} on both sides of Equation ( 37 ) w.r.t. ϵ t + 1 , j \epsilon_{t+1,j} and have: 
+
+ | 
+ 0 = ∂ f t − 1 , i ​ ( 𝐜 t , 𝐯 t − 2 , ϵ t − 1 ) ∂ ϵ t + 1 , j = ∂ f ^ t − 1 , i ​ ( h 𝐜 t , 𝐯 t − 2 , ϵ t − 1 ​ ( 𝐜 t , 𝐯 t − 2 , 𝐯 t , ϵ t − 1 , ϵ t + 1 ) ) ∂ ϵ t + 1 , j . \displaystyle\begin{split}0&=\frac{\partial f_{t-1,i}(\mathbf{c}_{t},\mathbf{v}_{t-2},\epsilon_{t-1})}{\partial\epsilon_{t+1,j}}\\
+&=\frac{\partial\hat{f}_{t-1,i}(h_{\mathbf{c}_{t},\mathbf{v}_{t-2},\epsilon_{t-1}}(\mathbf{c}_{t},\mathbf{v}_{t-2},\mathbf{v}_{t},\epsilon_{t-1},\epsilon_{t+1}))}{\partial\epsilon_{t+1,j}}.\end{split} | 
+ | 
+ (38) | 
+
+ The equation equals zero because there is no ϵ t + 1 , j \epsilon_{t+1,j} in the left-hand side of the equation.
+Expanding the derivative on the right-hand side gives: 
+
+ | 
+ ∑ l ∈ { 1 , … , n c + n v + n ϵ } ∂ f ^ t − 1 , i ∂ h ( 𝐜 t , 𝐯 t − 2 , ϵ t − 1 ) , l ⋅ ∂ h ( 𝐜 t , 𝐯 t − 2 , ϵ t − 1 ) , l ∂ ϵ t + 1 , j = 0 . \sum_{l\in\{1,\dots,n_{c}+n_{v}+n_{\epsilon}\}}\frac{\partial\hat{f}_{t-1,i}}{\partial h_{(\mathbf{c}_{t},\mathbf{v}_{t-2},\epsilon_{t-1}),l}}\cdot\frac{\partial h_{(\mathbf{c}_{t},\mathbf{v}_{t-2},\epsilon_{t-1}),l}}{\partial\epsilon_{t+1,j}}=0. | 
+ | 
+ (39) | 
+
+ Since f ^ t − 1 \hat{f}_{t-1} is invertible, the determinant of J f ^ t − 1 \textbf{J}_{\hat{f}_{t-1}} does not equal to 0, meaning that for n c + n v + n ϵ n_{c}+n_{v}+n_{\epsilon} different values of f ^ t − 1 , i \hat{f}_{t-1,i} , each vector [ ∂ f ^ t − 1 , i ∂ h ( 𝐜 t , 𝐯 t − 2 , ϵ t − 1 ) , 1 , … , ∂ f ^ t − 1 , i ∂ h ( 𝐜 t , 𝐯 t − 2 , ϵ t − 1 ) , n c + n v + n ϵ ] [\frac{\partial\hat{f}_{t-1,i}}{\partial h_{(\mathbf{c}_{t},\mathbf{v}_{t-2},\epsilon_{t-1}),1}},\dots,\frac{\partial\hat{f}_{t-1,i}}{\partial h_{(\mathbf{c}_{t},\mathbf{v}_{t-2},\epsilon_{t-1}),n_{c}+n_{v}+n_{\epsilon}}}] are linearly independent. Therefore, the ( n c + n v + n ϵ ) × ( n c + n v + n ϵ ) (n_{c}+n_{v}+n_{\epsilon})\times(n_{c}+n_{v}+n_{\epsilon}) linear system is invertible and has the unique solution as follows: 
+
+ | 
+ ∂ h ( 𝐜 t , 𝐯 t − 2 , ϵ t − 1 ) , l ∂ ϵ t + 1 , j ​ ( 𝐜 t , 𝐯 t − 2 , 𝐯 t , ϵ t − 1 , ϵ t + 1 ) = 0 . \frac{\partial h_{(\mathbf{c}_{t},\mathbf{v}_{t-2},\epsilon_{t-1}),l}}{\partial\epsilon_{t+1,j}}(\mathbf{c}_{t},\mathbf{v}_{t-2},\mathbf{v}_{t},\epsilon_{t-1},\epsilon_{t+1})=0. | 
+ | 
+ (40) | 
+
+ According to Equation ( 40 ), for any l ∈ { 1 , … , n c + n v + n ϵ } l\in\{1,\dots,n_{c}+n_{v}+n_{\epsilon}\} and j ∈ { 1 , … , n ϵ } j\in\{1,\dots,n_{\epsilon}\} , h ( 𝐜 t , 𝐯 t − 2 , ϵ t − 1 ) , l ​ ( 𝐜 t , 𝐯 t − 2 , 𝐯 t , ϵ t − 1 , ϵ t + 1 ) h_{(\mathbf{c}_{t},\mathbf{v}_{t-2},\epsilon_{t-1}),l}(\mathbf{c}_{t},\mathbf{v}_{t-2},\mathbf{v}_{t},\epsilon_{t-1},\epsilon_{t+1}) does not depend on ϵ t + 1 , j \epsilon_{t+1,j} . In other word, ( 𝐜 t , 𝐯 t − 2 , ϵ t − 1 ) (\mathbf{c}_{t},\mathbf{v}_{t-2},\epsilon_{t-1}) , does not depend on ϵ t + 1 \epsilon_{t+1} . 
+
+ For i ∈ { 1 , … , n v } i\in\{1,\dots,n_{v}\} and k ∈ { 1 , … , n v } k\in\{1,\dots,n_{v}\} , we take partial derivative of the i i -th dimension of 𝐯 t \mathbf{v}_{t} on both sides of Equation ( 37 ) w.r.t. 𝐯 t , k \mathbf{v}_{t,k} and have: 
+
+ | 
+ 0 = ∂ f t − 1 , i ​ ( 𝐜 t , 𝐯 t − 2 , ϵ t − 1 ) ∂ 𝐯 t , k = ∂ f ^ t − 1 , i ​ ( h 𝐜 t , 𝐯 t − 2 , ϵ t − 1 ​ ( 𝐜 t , 𝐯 t − 2 , 𝐯 t , ϵ t − 1 , ϵ t + 1 ) ) ∂ 𝐯 t , k = ∑ l ∈ { 1 , … , n c + n v + n ϵ } ∂ f ^ t − 1 , i ∂ h ( 𝐜 t , 𝐯 t − 2 , ϵ t − 1 ) , l ⋅ ∂ h ( 𝐜 t , 𝐯 t − 2 , ϵ t − 1 ) , l ∂ 𝐯 t , k = 0 . \displaystyle\begin{split}0&=\frac{\partial f_{t-1,i}(\mathbf{c}_{t},\mathbf{v}_{t-2},\epsilon_{t-1})}{\partial\mathbf{v}_{t,k}}\\
+&=\frac{\partial\hat{f}_{t-1,i}(h_{\mathbf{c}_{t},\mathbf{v}_{t-2},\epsilon_{t-1}}(\mathbf{c}_{t},\mathbf{v}_{t-2},\mathbf{v}_{t},\epsilon_{t-1},\epsilon_{t+1}))}{\partial\mathbf{v}_{t,k}}\\
+&=\sum_{l\in\{1,\dots,n_{c}+n_{v}+n_{\epsilon}\}}\frac{\partial\hat{f}_{t-1,i}}{\partial h_{(\mathbf{c}_{t},\mathbf{v}_{t-2},\epsilon_{t-1}),l}}\cdot\frac{\partial h_{(\mathbf{c}_{t},\mathbf{v}_{t-2},\epsilon_{t-1}),l}}{\partial\mathbf{v}_{t,k}}=0.\end{split} | 
+ | 
+ (41) | 
+
+ That means that for n c + n v + n ϵ n_{c}+n_{v}+n_{\epsilon} different values of f ^ t − 1 , i \hat{f}_{t-1,i} , each vector [ ∂ f ^ t − 1 , i ∂ h ( 𝐜 t , 𝐯 t − 2 , ϵ t − 1 ) , 1 , … , ∂ f ^ t − 1 , i ∂ h ( 𝐜 t , 𝐯 t − 2 , ϵ t − 1 ) , n c + n v + n ϵ ] [\frac{\partial\hat{f}_{t-1,i}}{\partial h_{(\mathbf{c}_{t},\mathbf{v}_{t-2},\epsilon_{t-1}),1}},\dots,\frac{\partial\hat{f}_{t-1,i}}{\partial h_{(\mathbf{c}_{t},\mathbf{v}_{t-2},\epsilon_{t-1}),n_{c}+n_{v}+n_{\epsilon}}}] are linearly independent. Therefore, the ( n c + n v + n ϵ ) × ( n c + n v + n ϵ ) (n_{c}+n_{v}+n_{\epsilon})\times(n_{c}+n_{v}+n_{\epsilon}) linear system is invertible. In other word, ( 𝐜 t , 𝐯 t − 2 , ϵ t − 1 ) (\mathbf{c}_{t},\mathbf{v}_{t-2},\epsilon_{t-1}) , does not depend on 𝐯 t \mathbf{v}_{t} . 
+
+ Similarly, by combining Equation ( 36 ) and ( 35 ), we have: 
+
+ | 
+ f t + 1 ​ ( 𝐜 t , 𝐯 t , ϵ t + 1 ) = f ^ t + 1 ​ ( h 𝐜 t , 𝐯 t , ϵ t + 1 ​ ( 𝐜 t , 𝐯 t − 2 , 𝐯 t , ϵ t − 1 , ϵ t + 1 ) ) . \displaystyle\begin{split}&f_{t+1}(\mathbf{c}_{t},\mathbf{v}_{t},\epsilon_{t+1})\\
+&=\hat{f}_{t+1}(h_{\mathbf{c}_{t},\mathbf{v}_{t},\epsilon_{t+1}}(\mathbf{c}_{t},\mathbf{v}_{t-2},\mathbf{v}_{t},\epsilon_{t-1},\epsilon_{t+1})).\end{split} | 
+ | 
+ (42) | 
+
+ For i ∈ { 1 , … , n c } i\in\{1,\dots,n_{c}\} and j ∈ { 1 , … , n ϵ } j\in\{1,\dots,n_{\epsilon}\} , we take partial derivative of the i i -th dimension of 𝐜 t \mathbf{c}_{t} on both sides of Equation ( 42 ) w.r.t. ϵ t − 1 , j \epsilon_{t-1,j} and have: 
+
+ | 
+ 0 = ∂ f t + 1 , i ​ ( 𝐜 t , 𝐯 t , ϵ t + 1 ) ∂ ϵ t − 1 , j = ∂ f ^ t + 1 , i ​ ( h 𝐜 t , 𝐯 t , ϵ t + 1 ​ ( 𝐜 t , 𝐯 t − 2 , 𝐯 t , ϵ t − 1 , ϵ t + 1 ) ) ∂ ϵ t − 1 , j = ∑ k ∈ { 1 , … , n c + n v + n ϵ } ∂ f ^ t + 1 , i ∂ h ( 𝐜 t , 𝐯 t , ϵ t + 1 ) , k ⋅ ∂ h ( 𝐜 t , 𝐯 t , ϵ t + 1 ) , k ∂ ϵ t − 1 , j . \begin{split}0=&\frac{\partial f_{t+1,i}(\mathbf{c}_{t},\mathbf{v}_{t},\epsilon_{t+1})}{\partial\epsilon_{t-1,j}}\\
+=&\frac{\partial\hat{f}_{t+1,i}(h_{\mathbf{c}_{t},\mathbf{v}_{t},\epsilon_{t+1}}(\mathbf{c}_{t},\mathbf{v}_{t-2},\mathbf{v}_{t},\epsilon_{t-1},\epsilon_{t+1}))}{\partial\epsilon_{t-1,j}}\\
+=&\sum_{k\in\{1,\dots,n_{c}+n_{v}+n_{\epsilon}\}}\frac{\partial\hat{f}_{t+1,i}}{\partial h_{(\mathbf{c}_{t},\mathbf{v}_{t},\epsilon_{t+1}),k}}\cdot\frac{\partial h_{(\mathbf{c}_{t},\mathbf{v}_{t},\epsilon_{t+1}),k}}{\partial\epsilon_{t-1,j}}.\end{split} | 
+ | 
+ (43) | 
+
+ Since f ^ t + 1 \hat{f}_{t+1} is invertible, for n c + n v + n ϵ n_{c}+n_{v}+n_{\epsilon} different values of f ^ t + 1 , i \hat{f}_{t+1,i} , each vector [ ∂ f ^ t + 1 , i ∂ h ( 𝐜 t , 𝐯 t , ϵ t + 1 ) , 1 , … , ∂ f ^ t + 1 , i ∂ h ( 𝐜 t , 𝐯 t , ϵ t + 1 ) , n c + n v + n ϵ ] [\frac{\partial\hat{f}_{t+1,i}}{\partial h_{(\mathbf{c}_{t},\mathbf{v}_{t},\epsilon_{t+1}),1}},\dots,\frac{\partial\hat{f}_{t+1,i}}{\partial h_{(\mathbf{c}_{t},\mathbf{v}_{t},\epsilon_{t+1}),n_{c}+n_{v}+n_{\epsilon}}}] are linearly independent. Therefore, the ( n c + n v + n ϵ ) × ( n c + n v + n ϵ ) (n_{c}+n_{v}+n_{\epsilon})\times(n_{c}+n_{v}+n_{\epsilon}) linear system is invertible and has the unique solution as follows: 
+
+ | 
+ ∂ h ( 𝐜 t , 𝐯 t , ϵ t + 1 ) , k ∂ ϵ t − 1 , j ​ ( 𝐜 t , 𝐯 t − 2 , 𝐯 t , ϵ t − 1 , ϵ t + 1 ) = 0 , \frac{\partial h_{(\mathbf{c}_{t},\mathbf{v}_{t},\epsilon_{t+1}),k}}{\partial\epsilon_{t-1,j}}(\mathbf{c}_{t},\mathbf{v}_{t-2},\mathbf{v}_{t},\epsilon_{t-1},\epsilon_{t+1})=0, | 
+ | 
+ (44) | 
+
+ meaning that ( 𝐜 t , 𝐯 t , ϵ t + 1 ) (\mathbf{c}_{t},\mathbf{v}_{t},\epsilon_{t+1}) does not depend on ϵ t − 1 \epsilon_{t-1} . 
+
+ For i ∈ { 1 , … , n c } i\in\{1,\dots,n_{c}\} and k ∈ { 1 , … , n v } k\in\{1,\dots,n_{v}\} , we take partial derivative of the i i -th dimension of 𝐯 t \mathbf{v}_{t} on both sides of Equation ( 42 ) w.r.t. 𝐯 t − 2 , k \mathbf{v}_{t-2,k} and have: 
+
+ | 
+ 0 = ∂ f t + 1 , i ​ ( 𝐜 t , 𝐯 t , ϵ t + 1 ) ∂ 𝐯 t − 2 , k = ∂ f ^ t + 1 , i ​ ( h 𝐜 t , 𝐯 t , ϵ t + 1 ​ ( 𝐜 t , 𝐯 t − 2 , 𝐯 t , ϵ t − 1 , ϵ t + 1 ) ) ∂ 𝐯 t − 2 , k = ∑ l ∈ { 1 , … , n c + n v + n ϵ } ∂ f ^ t + 1 , i ∂ h ( 𝐜 t , 𝐯 t , ϵ t + 1 ) , l ⋅ ∂ h ( 𝐜 t , 𝐯 t , ϵ t + 1 ) , l ∂ 𝐯 t − 2 , k , \begin{split}0=&\frac{\partial f_{t+1,i}(\mathbf{c}_{t},\mathbf{v}_{t},\epsilon_{t+1})}{\partial\mathbf{v}_{t-2,k}}\\
+=&\frac{\partial\hat{f}_{t+1,i}(h_{\mathbf{c}_{t},\mathbf{v}_{t},\epsilon_{t+1}}(\mathbf{c}_{t},\mathbf{v}_{t-2},\mathbf{v}_{t},\epsilon_{t-1},\epsilon_{t+1}))}{\partial\mathbf{v}_{t-2,k}}\\
+=&\sum_{l\in\{1,\dots,n_{c}+n_{v}+n_{\epsilon}\}}\frac{\partial\hat{f}_{t+1,i}}{\partial h_{(\mathbf{c}_{t},\mathbf{v}_{t},\epsilon_{t+1}),l}}\cdot\frac{\partial h_{(\mathbf{c}_{t},\mathbf{v}_{t},\epsilon_{t+1}),l}}{\partial\mathbf{v}_{t-2,k}},\end{split} | 
+ | 
+ (45) | 
+
+ meaning that ( 𝐜 t , 𝐯 t , ϵ t + 1 ) (\mathbf{c}_{t},\mathbf{v}_{t},\epsilon_{t+1}) does not depend on 𝐯 t − 2 \mathbf{v}_{t-2} .
+According to Equation ( 36 ), we have ( 𝐜 ^ t , 𝐯 ^ t − 2 , 𝐯 ^ t , ϵ ^ t − 1 , ϵ ^ t + 1 ) = h 𝐜 ​ ( 𝐜 t , 𝐯 t − 2 , 𝐯 t , ϵ t − 1 , ϵ t + 1 ) (\hat{\mathbf{c}}_{t},\hat{\mathbf{v}}_{t-2},\hat{\mathbf{v}}_{t},\hat{\epsilon}_{t-1},\hat{\epsilon}_{t+1})=h_{\mathbf{c}}(\mathbf{c}_{t},\mathbf{v}_{t-2},\mathbf{v}_{t},\epsilon_{t-1},\epsilon_{t+1}) . By using the fact that ( 𝐜 t , 𝐯 t − 2 , ϵ t − 1 ) (\mathbf{c}_{t},\mathbf{v}_{t-2},\epsilon_{t-1}) does not depend on ϵ t + 1 \epsilon_{t+1} and 𝐯 t \mathbf{v}_{t} , ( 𝐜 t , 𝐯 t , ϵ t + 1 ) (\mathbf{c}_{t},\mathbf{v}_{t},\epsilon_{t+1}) does not depend on ϵ t − 1 \epsilon_{t-1} and 𝐯 t − 2 \mathbf{v}_{t-2} , we have 𝐜 ^ t = h 𝐜 ​ ( 𝐜 t ) \hat{\mathbf{c}}_{t}=h_{\mathbf{c}}(\mathbf{c}_{t}) , i.e., the latent action variables are block-wise identifiable.
+∎ 
+
+## 11 Implementation Details
+
+ Figure 6 : Comparison of training and inference time between the proposed framework and baseline methods. The framework universally outperforms baselines in terms of faster inference speed and shorter training time across all experimental settings. 
+
+ Figure 7 : Sensitivity analysis of the hyperparameter for loss term ℒ s \mathcal{L}_{s} across datasets. Performance rises notably within a specific hyperparameter range and stabilizes thereafter, verifying the existence of a robust optimal hyperparameter range. 
+
+## 11.1 Model Details
+
+ We choose ATBA [ 78 ] as the backbone and Transformer as the encoder and decoder, while the classifier is implemented using linear layers. Architecture details of the proposed method are shown in Table 6 . 
+
+## 11.2 Experiment Details
+
+ We use ADAMW optimizer in all experiments and report the Mean-over-Frames(MoF), Mean-over-Frames without Background(MoF-bg), Intersection-over-Union(IoU) and Intersection-over-Detection(IoD) as evaluation metrics. The experiments are implemented by Pytorch on a single NVIDIA RTX 3090 24GB GPU. 
+
+ Table 6 : Architecture details. L:length of input feature, | 𝐱 t | |\mathbf{x}_{t}| :the dimension of 𝐱 t \mathbf{x}_{t} , | y | |y| : the numbers of action class, ReLU:Rectified Linear Unit. 
+
+ Configuration | 
+ Description | 
+ Output | 
+
+ 1 . ϕ 1.\phi | 
+ Transformer | 
+ | 
+
+ Input 𝐱 1 : T \mathbf{x}_{1:T} | 
+ Input Feature | 
+ B ​ a ​ t ​ c ​ h ​ S ​ i ​ z ​ e × T × | 𝐱 t | BatchSize\times T\times|\mathbf{x}_{t}| | 
+
+ Dense | 
+ 256 neurons | 
+ B ​ a ​ t ​ c ​ h ​ S ​ i ​ z ​ e × T × 256 BatchSize\times T\times 256 | 
+
+ 2 . ψ 2.\psi | 
+ Visual Encoder | 
+ | 
+
+ Input 𝐳 1 : T \mathbf{z}_{1:T} | 
+ Feature Latent Variables | 
+ B ​ a ​ t ​ c ​ h ​ S ​ i ​ z ​ e × T × 256 BatchSize\times T\times 256 | 
+
+ Dense | 
+ 256 neurons; ReLU | 
+ B ​ a ​ t ​ c ​ h ​ S ​ i ​ z ​ e × T × 256 BatchSize\times T\times 256 | 
+
+ 3 . η 3.\eta | 
+ Action Encoder | 
+ | 
+
+ Input 𝐯 1 : T \mathbf{v}_{1:T} | 
+ Visual Latent Variables | 
+ B ​ a ​ t ​ c ​ h ​ S ​ i ​ z ​ e × T × 256 BatchSize\times T\times 256 | 
+
+ Dense | 
+ 256 neurons; ReLU | 
+ B ​ a ​ t ​ c ​ h ​ S ​ i ​ z ​ e × T × 256 BatchSize\times T\times 256 | 
+
+ 4 . κ 4.\kappa | 
+ Visual Decoder | 
+ | 
+
+ Input 𝐯 1 : T \mathbf{v}_{1:T} | 
+ Visual Latent Variables | 
+ B ​ a ​ t ​ c ​ h ​ S ​ i ​ z ​ e × T × 256 BatchSize\times T\times 256 | 
+
+ Dense | 
+ 512 neurons; ReLU | 
+ B ​ a ​ t ​ c ​ h ​ S ​ i ​ z ​ e × T × 512 BatchSize\times T\times 512 | 
+
+ 5 . ξ 5.\xi | 
+ Action Decoder | 
+ | 
+
+ Input 𝐜 1 : T \mathbf{c}_{1:T} | 
+ Visual Latent Variables | 
+ B ​ a ​ t ​ c ​ h ​ S ​ i ​ z ​ e × T × 256 BatchSize\times T\times 256 | 
+
+ Dense | 
+ 512 neurons; ReLU | 
+ B ​ a ​ t ​ c ​ h ​ S ​ i ​ z ​ e × T × 512 BatchSize\times T\times 512 | 
+
+ 6 . Γ 6.\Gamma | 
+ Classifier | 
+ | 
+
+ Input 𝐜 1 : T \mathbf{c}_{1:T} | 
+ Action Latent Variables | 
+ B ​ a ​ t ​ c ​ h ​ S ​ i ​ z ​ e × T × 256 BatchSize\times T\times 256 | 
+
+ Dense | 
+ | y | |y| neurons; ReLU | 
+ B ​ a ​ t ​ c ​ h ​ S ​ i ​ z ​ e × T × | y | BatchSize\times T\times|y| | 
+
+## 11.3 Basic Training Settings
+
+ All model training adopts the AdamW optimizer with hyperparameter configurations set as 1e-4 for weight decay and 5e-4 for initial learning rate; the model is trained for 400/300/200/300 epochs for Breakfast  [ 37 ] , Hollywood  [ 3 ] , Crosstask  [ 88 ] , GTEA  [ 15 ] , respectively. 
+
+## 11.4 Computational Efficiency Analysis
+
+ This section compares the computational efficiency of the proposed framework against baseline methods, focusing on training and inference time. As shown in Fig.  6 , the framework achieves faster inference speed and shorter training time compared to existing baselines across all experimental settings. 
+
+## 11.5 Hyperparameter Sensitivity Analysis
+
+ This section analyzes the sensitivity of the hyperparameter for loss term ℒ s \mathcal{L}_{s} across different datasets. As shown in Fig.  7 , the performance of the proposed framework improves significantly as the hyperparameter value increases within a specific range, and then tends to stabilize with further increases in the hyperparameter value. 
+
+## 12 Additional Experimental Results
+
+## 12.1 Ablation Study Extensions
+
+ The minor performance gaps across distinct loss function configurations reflect the inherent design principle of our framework: rather than relying on a single loss term to drive performance gains, the model leverages the complementary nature of multiple loss objectives to achieve incremental improvements. An analysis of the extended ablation study results (Table  7 ) reveals that no individual loss term or simple pairwise combination (e.g., ℒ r + ℒ K ​ L \mathcal{L}_{r}+\mathcal{L}_{KL} ) can match the performance of multi-loss combinations, which demonstrates that each loss term targets a unique aspect of the learning process—such as reconstruction fidelity or latent space regularization—and their integration addresses the limitations of single-objective optimization. 
+
+ Table 7 : Experiment results on the GTEA dataset. 
+
+ EXP | 
+ ℒ r \mathcal{L}_{r} | 
+ ℒ s \mathcal{L}_{s} | 
+ ℒ K ​ L \mathcal{L}_{KL} | 
+ δ \delta | 
+ MoF | 
+ IoU | 
+ IoD | 
+
+ 1 | 
+ | 
+ | 
+ | 
+ | 
+ 53.3 | 
+ 40.9 | 
+ 58.7 | 
+
+ 2 | 
+ ✓ | 
+ | 
+ | 
+ | 
+ 54.3 | 
+ 38.4 | 
+ 61.6 | 
+
+ 3 | 
+ | 
+ ✓ | 
+ | 
+ | 
+ 54.6 | 
+ 40.3 | 
+ 61.6 | 
+
+ 4 | 
+ | 
+ | 
+ ✓ | 
+ | 
+ 54.5 | 
+ 42.0 | 
+ 61.0 | 
+
+ 5 | 
+ | 
+ | 
+ | 
+ ✓ | 
+ 53.9 | 
+ 41.1 | 
+ 59.4 | 
+
+ 6 | 
+ | 
+ ✓ | 
+ ✓ | 
+ | 
+ 54.7 | 
+ 39.3 | 
+ 61.4 | 
+
+ 7 | 
+ ✓ | 
+ | 
+ ✓ | 
+ | 
+ 55.2 | 
+ 42.4 | 
+ 60.7 | 
+
+ 8 | 
+ ✓ | 
+ ✓ | 
+ | 
+ | 
+ 55.4 | 
+ 41.0 | 
+ 60.9 | 
+
+ 9 | 
+ | 
+ ✓ | 
+ ✓ | 
+ ✓ | 
+ 56.4 | 
+ 41.9 | 
+ 61.6 | 
+
+ 10 | 
+ ✓ | 
+ ✓ | 
+ | 
+ ✓ | 
+ 55.5 | 
+ 40.8 | 
+ 60.9 | 
+
+ 11 | 
+ ✓ | 
+ ✓ | 
+ ✓ | 
+ | 
+ 56.4 | 
+ 41.6 | 
+ 63.3 | 
+
+ 12 | 
+ ✓ | 
+ ✓ | 
+ ✓ | 
+ ✓ | 
+ 56.6 | 
+ 42.6 | 
+ 62.1 | 
+
+## 12.2 Linear Probing Results
+
+ Linear probing results (Fig.  8 ) demonstrate that action latent variables yield higher F1 scores than raw visual features, with this performance divergence rooted in the distinct semantic encoding characteristics of the two feature forms. Visual features tend to capture transient, task-irrelevant visual fluctuations, whereas action latent variables, regularized by the hierarchical causal generative process, encode stable, temporally consistent semantic information of action states. The superior linear probing performance of action latent variables validates that the learned representations capture action-specific semantic structures instead of superficial visual patterns, which confirms the effective disentanglement of hierarchical latent variables and the efficacy of temporal smoothness regularization on the hierarchical causal data generation process. 
+
+ Figure 8 : The F1 score with linear probing on Breakfast. 
+
+## 12.3 Empirical Motivation
+
+ This section empirically validates the core motivation of the proposed method, as shown in Fig.  9 . Frame-to-frame visual feature distances exhibit large and frequent fluctuations, while ground-truth action boundaries typically occur after prolonged visual fluctuations instead of coinciding with such variations. 
+
+ Figure 9 : Frame-to-frame visual feature distance and ground-truth action boundary distribution. Visual features show large frequent fluctuations, and action boundaries arise after prolonged visual variations rather than coinciding with them. 
+
+## 13 Discussion of the Identification Results
+
+## 13.1 Bounded, Continues and Positive Density
+
+ The assumptions used in our theoretical analysis are also common in the field of identification, such as [ 22 ] and [ 35 ] . For example, the bounded and continuous density assumption requires that both observed and latent variables are continuous and lie within bounded ranges. In video data, such conditions are typically satisfied because pixel values and latent transitions change smoothly over time and usually remain within reasonable bounds, which ensures the corresponding probability densities are continuous and bounded. The positive density assumption is also achievable with sufficiently rich observational data. Moreover, injective linear operators imply that the information in the latent variables is equivalent to that contained in continuous multi-frame video observations. Please refer to Appendix B for the detailed explanations of the assumptions, how they relate to real-world scenarios, and under which conditions they are satisfied. 
+
+## 13.2 Injective Linear Operators
+
+ A common practice in nonparametric identification involves leveraging the injectivity property of linear operators [ 22 , 6 ] . At its core, this idea signifies that distinct input distributions fed into a linear operator will produce distinct output distributions from that same operator. To foster a clearer grasp of this premise, we present a series of illustrations depicting the distributional mapping p 𝐚 → p 𝐛 p_{\mathbf{a}}\rightarrow p_{\mathbf{b}} , where 𝐚 \mathbf{a} and 𝐛 \mathbf{b} represent random variables. 
+
+## Example 1 ( Inverse Transformation ) . 
+
+ b = g ⁡ ( a ) b=g(a) , where g g is an invertible function. 
+
+## Example 2 ( Additive Transformation ) . 
+
+ b = a + ϵ b=a+\epsilon , where p ⁡ ( ϵ ) p(\epsilon) must not vanish everywhere after the Fourier transform (Theorem 2.1 in [ 59 ] ). 
+
+## Example 3 . 
+
+ b = g ⁡ ( a ) + ϵ b=g(a)+\epsilon , where the same conditions from Examples 1 and 2 are required. 
+
+## Example 4 ( Post-linear Transformation ) . 
+
+ b = g 1 ​ ( g 2 ​ ( a ) + ϵ ) b=g_{1}(g_{2}(a)+\epsilon) , a post-nonlinear model with invertible nonlinear functions g 1 , g 2 g_{1},g_{2} , combining the assumptions in Examples 1 - 3 . 
+
+## Example 5 ( Nonlinear Transformation with Exponential Family ) . 
+
+ b = g ⁡ ( a , ϵ ) b=g(a,\epsilon) , where the joint distribution p ⁡ ( a , b ) p(a,b) follows an exponential family. 
+
+## Example 6 ( General Nonlinear Transformation ) . 
+
+ b = g ⁡ ( a , ϵ ) b=g(a,\epsilon) , a general nonlinear formulation. Certain deviations from the nonlinear additive model ( Example 3 ), e.g., polynomial perturbations, can still be tractable. 
+
+## 13.3 Non-singular Jacobia
+
+ This assumption also finds frequent application in the work of [ 35 ] . From a mathematical perspective, it indicates that the Jacobian matrix mapping latent variables to observed variables is of full rank. In practical situations, this translates to each latent variable having a corresponding observation. To meet this requirement, those independent latent variables that exert no impact on observations can be readily excluded. 
+
+## 14 More Qualitative Results
+
+ We provide more qualitative results on Breakfast  [ 37 ] , Hollywood  [ 3 ] and GTEA  [ 15 ] datasets in figure 10 . 
+
+ (a) P07-stereo01-P07-tea on Breakfast. 
+
+ (b) 0146 on Hollywood. 
+
+ (c) 0782 on Hollywood. 
+
+ (d) S1-Peanut-C1 on GTEA. 
+
+ (e) S4-CofHoney-C1 on GTEA. 
+
+ Figure 10 : More qualitative results. 
+
+ Experimental support, please
+ view the build logs 
+ for errors. Generated by
+
+ L
+ A 
+ T
+ E 
+
+ xml 
+
+ .
+
+## Instructions for reporting errors
+
+ We are continuing to improve HTML versions of papers, and your feedback helps enhance accessibility and mobile
+ support. To report errors in the HTML that will help us improve conversion and rendering, choose any of the
+ methods listed below: 
+
+ Click the "Report Issue" ( 
+
+ ) button, located in the page header. 
+
+ Tip: You can select the relevant text first, to include it in your report. 
+ Our team has already identified the following issues . We appreciate your time reviewing and reporting rendering errors we
+ may not have found yet. Your efforts will help us improve the HTML versions for all readers, because disability
+ should not be a barrier to accessing research. Thank you for your continued support in championing open access for
+ all. 
+ Have a free development cycle? Help support accessibility at arXiv! Our collaborators at LaTeXML maintain a list of packages that need conversion , and welcome developer contributions . 
+
+ We gratefully acknowledge support from
+ our major funders ,
+ member institutions , ,
+ and all contributors.
+
+ About 
+ · 
+ Help 
+ · 
+ Contact 
+ · 
+ Subscribe 
+ · 
+ Copyright 
+ · 
+ Privacy 
+ · 
+ Accessibility 
+ · 
+ Operational Status (opens in new tab) 
+
+ Major funding support from 
+

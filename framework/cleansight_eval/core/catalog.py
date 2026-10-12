@@ -24,12 +24,18 @@ SPLIT_OVERLAP_POLICIES = {"error", "frame", "allow"}
 # ROI 空间特征映射（temporal/features/roi_bbox.py）：按 feature_layout 声明校验维度，
 # 不在此重复 recipe 实现；core 层不 import 任何流水线。
 ROI_FEATURE_MAPPING_PREFIX = "actionmixed-roi-"
-# clean_bbox_v3 scope 坐标系契约（temporal/features/clean_bbox_v3.py）：布局为
-# hand_count(1) + hand×2×8 + 8 目标×9 + 7 pair×3 + 时间 3 = 113，core 层不 import 流水线，
-# 在此以常量声明维度断言（检测类数需为 8）。
-CLEAN_V3_FEATURE_MAPPING = "clean_bbox_v3_scope_frame"
-CLEAN_V3_INPUT_DIM = 113
-CLEAN_V3_REQUIRED_DETECTION_COUNT = 8
+# 框集合契约（`actionmixed-boxset-*`）：每帧把**面积最大的前 N 个框**填充成定长张量，
+# 每槽 `[one-hot(检测类) | cx | cy | w | h]`，故期望维度 = 槽位数 × (检测类数 + 4)。
+# 槽位数由条目里的 `feature_slots` 声明，catalog 据此校验维度（与 ROI 分支同一模式：
+# recipe 不重复实现，catalog 只拦住"声明维度与实现维度不一致"的登记错误）。
+BOXSET_FEATURE_MAPPING_PREFIX = "actionmixed-boxset-"
+# 拼接契约（`actionmixed-combo-*`）：由若干**异构分段**顺序拼成，分段维度在条目里用
+# `feature_parts`（正整数列表）声明，catalog 校验「分部和 == input_dim」。
+# 与 ROI/boxset 分支同一模式：recipe 不重复实现，catalog 只拦登记错误。
+COMBO_FEATURE_MAPPING_PREFIX = "actionmixed-combo-"
+# 图像 embedding 拼接契约（temporal/features/image_embed.py）：按 feature_embed 声明校验
+# 「检测类数×5 + embedding 维度」并核对产物存在，同样不在此重复 recipe 实现。
+IMAGE_EMBED_FEATURE_MAPPING_PREFIX = "actionmixed-bbox-embed-"
 
 
 @dataclass(frozen=True)
@@ -412,6 +418,61 @@ def _read_actionmixed_frame_keys(spec: TestsetSpec) -> set[tuple[str, int]]:
     return keys
 
 
+def _roi_group_layout_check(
+    layout: Mapping[str, Any],
+    channels: Any,
+    detection_class_names: list[str],
+    input_dim: int | None,
+) -> list[str]:
+    """校验 ROI **分组布局**（块宽不等契约，如 actionmixed-roi-grid-v2）并核对总维度。
+
+    分组布局按可见性给不同检测类分配不同网格：``feature_layout.groups`` 每项声明
+    ``classes``（检测类名，须无重无漏地覆盖 frames/data.yaml 的类表）与 ``rows``/``cols``；
+    期望维度 = Σ(组内类数 × rows × cols × channels)。这样做是为了让 catalog 不重复 recipe
+    实现，同时仍能拦住"声明维度与实现维度不一致"的登记错误。
+    """
+
+    errors: list[str] = []
+    groups = layout.get("groups")
+    if not isinstance(channels, int) or isinstance(channels, bool) or channels <= 0:
+        return ["ROI 分组布局缺少 feature_layout.channels（正整数）"]
+    if not isinstance(groups, list) or not groups:
+        return ["ROI 分组布局缺少 feature_layout.groups（非空列表）"]
+
+    expected = 0
+    seen: list[str] = []
+    for index, group in enumerate(groups):
+        if not isinstance(group, dict):
+            errors.append(f"feature_layout.groups[{index}] 必须是 mapping")
+            continue
+        classes = group.get("classes")
+        rows, cols = group.get("rows"), group.get("cols")
+        if not isinstance(classes, list) or not classes:
+            errors.append(f"feature_layout.groups[{index}] 缺少 classes（非空列表）")
+            continue
+        if not all(isinstance(v, int) and not isinstance(v, bool) and v > 0 for v in (rows, cols)):
+            errors.append(f"feature_layout.groups[{index}] 的 rows/cols 必须为正整数")
+            continue
+        expected += len(classes) * rows * cols * channels
+        seen.extend(str(name) for name in classes)
+
+    if detection_class_names:
+        missing = [name for name in detection_class_names if name not in seen]
+        unknown = [name for name in seen if name not in detection_class_names]
+        duplicated = sorted({name for name in seen if seen.count(name) > 1})
+        if missing:
+            errors.append(f"feature_layout.groups 未覆盖检测类: {missing}")
+        if unknown:
+            errors.append(f"feature_layout.groups 含未知检测类: {unknown}")
+        if duplicated:
+            errors.append(f"feature_layout.groups 重复声明检测类: {duplicated}")
+    if not errors and expected != input_dim:
+        errors.append(
+            f"ROI 分组布局 Σ(类数×区域×通道)={expected} 与 input_dim={input_dim} 不一致"
+        )
+    return errors
+
+
 def _validate_required_fields(spec: TestsetSpec) -> list[str]:
     """验证所有模型族共享的 testset 元数据。"""
 
@@ -498,56 +559,95 @@ def _validate_temporal(spec: TestsetSpec) -> list[str]:
                 detection_count = len(detection_names)
             else:
                 detection_count = 0
-            if spec.feature_mapping == CLEAN_V3_FEATURE_MAPPING:
-                if detection_count != CLEAN_V3_REQUIRED_DETECTION_COUNT:
-                    errors.append(
-                        f"clean_bbox_v3 要求检测类数={CLEAN_V3_REQUIRED_DETECTION_COUNT}，"
-                        f"实际={detection_count}"
-                    )
-                elif CLEAN_V3_INPUT_DIM != spec.input_dim:
-                    errors.append(
-                        f"clean_bbox_v3 固定维度={CLEAN_V3_INPUT_DIM} "
-                        f"与 input_dim={spec.input_dim} 不一致"
-                    )
-            elif str(spec.feature_mapping or "").startswith("ama-v4-"):
-                # v4 契约（docs/FEATURE_V4_DIM_SPEC.md）：核心类数与维度显式声明，
-                # roi 变体额外校验 类数×区域×通道。
+            if str(spec.feature_mapping or "").startswith(ROI_FEATURE_MAPPING_PREFIX):
                 layout = spec.raw.get("feature_layout") or {}
-                classes = layout.get("classes")
-                declared = layout.get("dim")
-                if not (isinstance(classes, int) and classes > 0):
-                    errors.append(
-                        f"ama-v4- 契约需要 feature_layout.classes（核心类数，正整数）"
-                    )
-                elif not (isinstance(declared, int) and declared == spec.input_dim):
-                    errors.append(
-                        f"ama-v4- feature_layout.dim={declared!r} 与 input_dim={spec.input_dim} 不一致"
-                    )
-                elif str(spec.feature_mapping).startswith("ama-v4-roi-"):
-                    rows, cols, channels = (
-                        layout.get("rows"), layout.get("cols"), layout.get("channels"),
-                    )
-                    if not all(isinstance(v, int) and v > 0 for v in (rows, cols, channels)):
-                        errors.append("ama-v4-roi- 需要 feature_layout rows/cols/channels（正整数）")
-                    elif classes * rows * cols * channels != spec.input_dim:
-                        errors.append(
-                            f"roi v4 类数×区域×通道={classes * rows * cols * channels} "
-                            f"与 input_dim={spec.input_dim} 不一致"
+                if isinstance(detection_names, dict):
+                    class_names = [
+                        str(detection_names[key])
+                        for key in sorted(detection_names, key=lambda value: int(value))
+                    ]
+                elif isinstance(detection_names, list):
+                    class_names = [str(name) for name in detection_names]
+                else:
+                    class_names = []
+                if layout.get("groups"):
+                    errors.extend(
+                        _roi_group_layout_check(
+                            layout, layout.get("channels"), class_names, spec.input_dim
                         )
-            elif str(spec.feature_mapping or "").startswith(ROI_FEATURE_MAPPING_PREFIX):
-                layout = spec.raw.get("feature_layout") or {}
-                rows, cols, channels = layout.get("rows"), layout.get("cols"), layout.get("channels")
-                if not all(isinstance(v, int) and v > 0 for v in (rows, cols, channels)):
-                    errors.append(
-                        f"ROI feature_mapping={spec.feature_mapping!r} 缺少 feature_layout"
-                        f"（rows/cols/channels 必须为正整数）"
                     )
                 else:
-                    expected = detection_count * rows * cols * channels
+                    rows, cols, channels = (
+                        layout.get("rows"), layout.get("cols"), layout.get("channels")
+                    )
+                    if not all(isinstance(v, int) and v > 0 for v in (rows, cols, channels)):
+                        errors.append(
+                            f"ROI feature_mapping={spec.feature_mapping!r} 缺少 feature_layout"
+                            f"（rows/cols/channels 必须为正整数）"
+                        )
+                    else:
+                        expected = detection_count * rows * cols * channels
+                        if expected != spec.input_dim:
+                            errors.append(
+                                f"ROI 检测类别数×区域×通道={expected} "
+                                f"与 input_dim={spec.input_dim} 不一致"
+                            )
+            elif str(spec.feature_mapping or "").startswith(IMAGE_EMBED_FEATURE_MAPPING_PREFIX):
+                embed = spec.raw.get("feature_embed") or {}
+                feat_dim, embed_root_rel = embed.get("feat_dim"), embed.get("root")
+                if not isinstance(feat_dim, int) or isinstance(feat_dim, bool) or feat_dim <= 0:
+                    errors.append(
+                        f"图像 embedding feature_mapping={spec.feature_mapping!r} 缺少 "
+                        f"feature_embed.feat_dim（正整数）"
+                    )
+                elif detection_count * 5 + feat_dim != spec.input_dim:
+                    errors.append(
+                        f"图像 embedding 检测类别数×5+维度={detection_count * 5 + feat_dim} "
+                        f"与 input_dim={spec.input_dim} 不一致"
+                    )
+                if not isinstance(embed_root_rel, str) or not embed_root_rel:
+                    errors.append(
+                        f"图像 embedding feature_mapping={spec.feature_mapping!r} 缺少 "
+                        f"feature_embed.root（产物根目录）"
+                    )
+                else:
+                    embed_root = resolve_path(embed_root_rel, spec.root)
+                    missing_embeddings = [
+                        f"{spec.split}/{name}.npy"
+                        for name in items
+                        if not (embed_root / spec.split / f"{name}.npy").is_file()
+                    ]
+                    if missing_embeddings:
+                        preview = missing_embeddings[:3]
+                        errors.append(
+                            f"embedding 产物缺失 {len(missing_embeddings)} 个"
+                            f"（{embed_root}）：{preview}"
+                        )
+            elif str(spec.feature_mapping or "").startswith(COMBO_FEATURE_MAPPING_PREFIX):
+                parts = spec.raw.get("feature_parts")
+                ok_parts = (isinstance(parts, list) and parts
+                            and all(isinstance(v, int) and not isinstance(v, bool) and v > 0
+                                    for v in parts))
+                if not ok_parts:
+                    errors.append(
+                        f"拼接 feature_mapping={spec.feature_mapping!r} 缺少 feature_parts"
+                        f"（正整数列表，按顺序给各分段维度）"
+                    )
+                elif sum(parts) != spec.input_dim:
+                    errors.append(
+                        f"拼接 分部和={sum(parts)} 与 input_dim={spec.input_dim} 不一致"
+                    )
+            elif str(spec.feature_mapping or "").startswith(BOXSET_FEATURE_MAPPING_PREFIX):
+                slots = spec.raw.get("feature_slots")
+                if not isinstance(slots, int) or isinstance(slots, bool) or slots <= 0:
+                    errors.append(
+                        f"框集合 feature_mapping={spec.feature_mapping!r} 缺少 feature_slots（正整数）"
+                    )
+                else:
+                    expected = slots * (detection_count + 4)
                     if expected != spec.input_dim:
                         errors.append(
-                            f"ROI 检测类别数×区域×通道={expected} "
-                            f"与 input_dim={spec.input_dim} 不一致"
+                            f"框集合 槽位数×(检测类别数+4)={expected} 与 input_dim={spec.input_dim} 不一致"
                         )
             else:
                 blocks = spec.raw.get("feature_blocks", 1)  # 每类特征块数（全局+手部双通道=2）

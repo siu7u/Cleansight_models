@@ -18,137 +18,415 @@ datasets:
     labels: [idle, air_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
     split_overlap_policy: frame
 
+  # 图像 embedding 契约（形态 B 第一步，机制床）：feature_mapping=
+  # actionmixed-bbox-embed-mbv3s-v1 = 左侧 40 维 bbox 块（同 actionmixed-bbox-8cls-v1）+
+  # 右侧 576 维逐帧整图 mobilenet_v3_small embedding = 616 维（recipe 见
+  # framework/cleansight_eval/temporal/features/image_embed.py）。revision 与
+  # actionmixed-v2 相同（原始数据未变），dataset_version 独立以便与 40 维基线对照训练。
+  # feature_embed.root 是该契约的 embedding 产物根目录（extract_embeddings.py 输出，
+  # 换 backbone / 换数据源只改这里或换登记条目，不改代码）；catalog 据此校验
+  # 「检测类数×5 + feat_dim == input_dim」并核对每个样本的 .npy 存在。
+  temporal.actionmixed-v2-embed-mbv3s-v1:
+    family: temporal
+    format: actionmixed_bbox
+    dataset_version: cleansight-actionmixed-v2-embed-mbv3s-v1
+    revision: b3cf7487f6f6fd6e5be404f8e72b24f82ebb73b4
+    data_root: datasets/cleansight-ActionMixed
+    feature_mapping: actionmixed-bbox-embed-mbv3s-v1
+    feature_embed:
+      root: datasets/cleansight-ActionMixed/embeddings/mobilenet_v3_small-v1
+      feat_dim: 576
+      backbone: mobilenet_v3_small
+    input_dim: 616
+    labels: [idle, air_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    split_overlap_policy: frame
+
   # 自动标注数据通道（YOLO 推理检测框 + 人工动作标签），与手动标注 actionmixed-v2 并存。
-  # 2026-08-28 v3 重建：数据源切换到 LS project-16（18 个 8 月新录视频，task id 记录于
-  # 数据集根 task_ids.yaml）；动作标签与 LS 同步——air_injection 更名 water_injection
-  # （action id 位置 1 不变）；检测源仍为 yolo11s-g1-v1/g2-v1。旧 v2（project-10 26
-  # 视频、air_injection 命名）产物备份于 datasets/cleansight-ActionMixed-auto-v2-backup，
-  # 指标与 v3 不可比。
-  # 2026-09-05 两次调整：① task#196/197/198/208/209/210 审核标注更新 + val 重划
-  # （#202→train、#205→val）；② 取消 test 集（#195→train、#199→val），此后 train 14 / val 4。
-  # revision 为剩余 split（train+val）manifest 拼接内容的 sha256。
-  # v3.1（2026-09-28）：LS 导出 0928 重生成标签（#193/194/201/202/205 变更）；
-  # #198 f173153a 遮挡严重隔离 labels|frames/occlusion/，#207 152453e5 仅废弃动作
-  # water_injection 隔离 deprecated/——train 14→13、val 4→3，test 不变。
-  # revision 自 v3.1 起统一显式算法：无 test 条目 = train+val manifest 字节拼接 sha256，
-  # 含 test 条目 = 三 split 拼接 sha256（旧 7b039550 无法从现行文件复现，系历史遗留值，
-  # 本次一并修正；validate 不做 revision 重算，更新仅影响身份记录）。
-  # v4.0（2026-10-08）：15fps 全量重采样（stride 4→2）+ LS 24fps×1.25 时间轴修正 + #221-238 入库
-  # ——train 28 视频 / val 7 / test 8。
-  # v4.1（同日）：train/val 重划分（均衡四类覆盖，数据本体未动）；revision 更新。
+  # 2026-08-28 升 v3：数据源换为 Label Studio project-16 导出（18 个 2026-08 新录视频，
+  # train 13 / val 3 / test 2，test 锚定团队指定 task#195/#199）；动作标签随 LS 更名
+  # air_injection → water_injection（id 位置不变）；检测源仍为 yolo11s-g1-v1/yolo11s-g2-v1
+  # （8 类全非零）；附 task_ids.yaml 溯源。旧 v2 指标不可比，v2 数据备份于本地 -v2-backup。
+  # 背景：docs/TEMPORAL_DATASET_TRANSFORMATION_PLAN.md；revision 为三个 split manifest
+  # 拼接内容的 sha256（b7edb874… 为 README 展示前缀）。
+  # 2026-09-03 同步 ModelScope HEAD（cd585c5）：train task#204（67aa31ca…）审核后修正
+  # sbc 标注（39→48 帧，10 帧 idle→sbc + 1 帧 sbc→idle）；仅 train 标签变化，manifest
+  # 不变故 revision 不变，train split 内容指纹已更新（旧 checkpoint 的 resume 会按指纹
+  # 拒绝——符合设计）；旧标签备份于原官方目录 datasets/cleansight-ActionMixed-auto/
+  # labels_backup_task204fix/（当前 data_root 为 -lhh 克隆目录，不含该备份）。
+  # 2026-09-05 同步（HEAD 6e78b075，数据集 README 记 v3(09-05)）：val 重划（#202→train、
+  # #205→val）并再次取消 test（#195→train、#199→val）→ train 14 / val 4 / 无 test。
+  # 当时 manifest 未跟着重划，出现过 manifest(13/3/2) 与数据本体(14/4/0) 不一致的空窗，
+  # 2026-09-17 一并修正。该版数据集 README 自报 revision 7b039550（仅 train+val 口径），
+  # 与本仓库配方不同且未能在本地复现，消费侧一律以本条目 revision 为准。
+  # 2026-09-17 同步 ModelScope HEAD（37cc70fd）恢复 test：project-18（action-test）
+  # task#213-220 共 8 视频 2,639 帧并入主树 labels/test + frames/test，train/val 一字未动；
+  # test 与 train/val 来自不同录制批次（project-18 vs project-16），逐类分布 idle 1,458、
+  # water_injection 0、flush 164、lb_insert 707、lb_withdraw 259、sbc 51 —— **test 无
+  # water_injection 帧，该 split 不能用于 water 类评测**；manifest 重划为 14/4/8，revision
+  # 按三 split manifest 拼接 sha256 重算（该配方可精确复现重算前的 b7edb874…）。
+  # 上游 task_ids.yaml 第 14 行 8634f3bc 视频名有一位数笔误（…8882820… vs 数据文件
+  # …8887820…，579 帧），manifest 以 labels/<split> 目录为准，待上游修正。
   temporal.actionmixed-auto-v3:
     family: temporal
     format: actionmixed_bbox
     dataset_version: cleansight-actionmixed-auto-v3
-    revision: af14568657de2857600192198c6b696eb67d0d39a99141a140715bcf03c9a3d7
-    data_root: datasets/cleansight-ActionMixed-auto
+    revision: 6375eba95c28b206207e607bb407f45ab589cda0015305df635aa9f686e1b3ad
+    data_root: datasets/cleansight-ActionMixed-auto-lhh
     feature_mapping: actionmixed-bbox-8cls-v1
     input_dim: 40
     labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
     split_overlap_policy: frame
 
-  # feature-lab 特征提取方案实验契约（docs/FEATURE_SCHEME_EVAL_PLAN.md）：与 v3 同一物理
-  # 数据与 revision，仅特征契约不同，故使用独立 dataset_version 以免泄漏检查跨契约误报。
-  # 2026-09-05 起无 test split（随 v3 取消）。
+  # ROI 空间特征版（同一份原始数据、不同的特征契约）：feature_mapping=
+  # actionmixed-roi-grid-v1 把画面按 2×3 网格分区，对每 (检测类, 区域) 统计
+  # [presence, count, max_area]，8 类 × 6 区域 × 3 通道 = 144 维（recipe 见
+  # framework/cleansight_eval/temporal/features/roi_bbox.py）。revision 与 v3 相同
+  # （原始数据未变），dataset_version 独立以便与 40 维基线对照训练；feature_layout
+  # 与 feature_mapping 一起构成 catalog 侧对该契约的声明，必须与 recipe 实现一致。
   temporal.actionmixed-auto-roi-v1:
     family: temporal
     format: actionmixed_bbox
     dataset_version: cleansight-actionmixed-auto-roi-v1
-    revision: af14568657de2857600192198c6b696eb67d0d39a99141a140715bcf03c9a3d7
-    data_root: datasets/cleansight-ActionMixed-auto
+    revision: 6375eba95c28b206207e607bb407f45ab589cda0015305df635aa9f686e1b3ad
+    data_root: datasets/cleansight-ActionMixed-auto-lhh
     feature_mapping: actionmixed-roi-grid-v1
     feature_layout: {rows: 2, cols: 3, channels: 3}
     input_dim: 144
     labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
     split_overlap_policy: frame
 
-  # clean_bbox_v3 scope 坐标系特征契约（docs/FEATURE_INPUT_DESIGN_V3.md）：与 v3 同一
-  # 物理数据与 revision，仅特征契约不同，独立 dataset_version 避免泄漏检查跨契约误报。
-  temporal.actionmixed-auto-clean-v3:
+  # **跨来源合并训练集**（2026-09-29 新增，帧准确率攻关第 2 轮）：把自动标注数据
+  # （auto-lhh，Label Studio project-16，14 视频 / 9,575 帧）与手动标注数据
+  # （`datasets/cleansight-ActionMixed`，16 视频 / 9,532 帧）合成**同构目录**当一个训练集用；
+  # 两者视频 stem 零交集（构建脚本内置断言），不会互相覆盖。
+  #
+  # 动机：旗舰在 8 视频 test 上的 acc 53.92 **低于**平凡基线（全 idle 55.25），误差分解显示
+  # 动作帧被判 idle 786/1181；两个失效模式都指向训练数据——① 跨批次（train/val 是
+  # project-16 的 2026-08 录制，test 是 project-18 的 2026-09「长短毛刷」专项）；
+  # ② 先验偏 idle（auto train idle 65.5% vs test 55.2%）。手动集 idle 只占 **25.6%**，
+  # 合并后 train 的 idle 降到 **45.6%**（30 视频 / 19,107 帧，帧数为 auto-only 的 2 倍）。
+  #
+  # **val / test 与 `temporal.actionmixed-auto-roi-v1` 逐字节相同**（目录符号链接 + 同一批
+  # manifest），所以选点口径（`best_metric=val_edit`）与验收口径同基线严格可比，是单变量对照。
+  # 手动集自身的 train/val/test 是**同一视频的不同帧区间**，并入 train 时按 stem 取并集
+  # （脚本断言帧号零重叠）。
+  #
+  # 产物是派生物、可随时重跑：`python tools/build_union_temporal_dataset.py`（只读原始数据集）。
+  # revision 口径同其它条目 = 三个 split manifest 拼接内容的 sha256（union train + auto val + auto test）。
+  temporal.actionmixed-union-roi-v1:
     family: temporal
     format: actionmixed_bbox
-    dataset_version: cleansight-actionmixed-auto-clean-v3
-    revision: af14568657de2857600192198c6b696eb67d0d39a99141a140715bcf03c9a3d7
-    data_root: datasets/cleansight-ActionMixed-auto
-    feature_mapping: clean_bbox_v3_scope_frame
-    input_dim: 113
+    dataset_version: cleansight-actionmixed-union-roi-v1
+    revision: 983ba4f470b507a81ea8d396de63d30411917b01eb65bd302536987c0462de38
+    data_root: datasets/cleansight-ActionMixed-union
+    feature_mapping: actionmixed-roi-grid-v1
+    feature_layout: {rows: 2, cols: 3, channels: 3}
+    input_dim: 144
     labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
     split_overlap_policy: frame
 
-  temporal.actionmixed-auto-hand-v1:
+  # 带**时间导数**的 ROI 契约：在 roi-grid-144 的每 (检测类, 区域) 三通道
+  # [presence, count, max_area] 之后追加 [d_count, d_max_area] 两个前向差分通道，
+  # 8 类 × 6 区域 × 5 通道 = 240 维（recipe 见
+  # framework/cleansight_eval/temporal/features/roi_bbox.py::build_roi_grid_delta_features）。
+  # 动机：现行 ROI-144 只有**瞬时**统计量、完全没有时间导数，而 insert/withdraw 的
+  # 判别量正是"方向"；文献（Funke et al., MICCAI 2019）在同样"帧准确率不动、段级指标
+  # 大涨"的形态下验证过加时空内容的价值（edit 41.4→64.0）。
+  # **因果但有状态**：Δ 只依赖当前帧与前一帧，可流式计算，但需保留 1 帧状态，
+  # 与 roi-grid-v1 的"逐帧独立、无状态"不同；离线/在线必须用同一份差分口径。
+  # revision 与 v1 相同（原始数据未变），dataset_version 独立以便与 144 维对照训练。
+  temporal.actionmixed-auto-roi-delta-v1:
     family: temporal
     format: actionmixed_bbox
-    dataset_version: cleansight-actionmixed-auto-hand-v1
-    revision: af14568657de2857600192198c6b696eb67d0d39a99141a140715bcf03c9a3d7
-    data_root: datasets/cleansight-ActionMixed-auto
-    feature_mapping: actionmixed-bbox-hand-8cls-v1
-    feature_blocks: 1
-    input_dim: 40
+    dataset_version: cleansight-actionmixed-auto-roi-delta-v1
+    revision: 6375eba95c28b206207e607bb407f45ab589cda0015305df635aa9f686e1b3ad
+    data_root: datasets/cleansight-ActionMixed-auto-lhh
+    feature_mapping: actionmixed-roi-grid-delta-v1
+    feature_layout: {rows: 2, cols: 3, channels: 5}
+    input_dim: 240
     labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
     split_overlap_policy: frame
 
-  temporal.actionmixed-auto-global-hand-v1:
+  # ROI presence 平面版（同一份原始数据、不同的特征契约）：feature_mapping=
+  # actionmixed-roi-grid-presence-v1 只保留 roi-grid-v1 的 **presence 通道**（丢弃 count /
+  # max_area），8 类 × 6 区域 × 1 通道 = 48 维（recipe 见
+  # framework/cleansight_eval/temporal/features/roi_bbox.py::build_roi_presence_frame_features）。
+  # 设计依据：docs/FEATURE_STRATEGY_COMPARE.md 第十七轮 §17.4——roi-144 三通道高度冗余
+  # （逐 (类,区域) |Pearson r| = 0.990/0.926/0.920），且 insert / short_brush_cleaning 的判别
+  # 信号集中在 presence（LDA 探针 presence-only 48 维 edit 14.60 > 全量 144 维 9.01）。
+  # revision 与 v3 相同（原始数据未变），dataset_version 独立以便与 v1(144) 对照；
+  # 均匀契约（每类 6 维），遮罩块宽按 48÷8=6 自动推导。
+  temporal.actionmixed-auto-roi-presence-v1:
     family: temporal
     format: actionmixed_bbox
-    dataset_version: cleansight-actionmixed-auto-global-hand-v1
-    revision: af14568657de2857600192198c6b696eb67d0d39a99141a140715bcf03c9a3d7
-    data_root: datasets/cleansight-ActionMixed-auto
-    feature_mapping: actionmixed-bbox-global-hand-8cls-v1
-    feature_blocks: 2
-    input_dim: 80
+    dataset_version: cleansight-actionmixed-auto-roi-presence-v1
+    revision: 6375eba95c28b206207e607bb407f45ab589cda0015305df635aa9f686e1b3ad
+    data_root: datasets/cleansight-ActionMixed-auto-lhh
+    feature_mapping: actionmixed-roi-grid-presence-v1
+    feature_layout: {rows: 2, cols: 3, channels: 1}
+    input_dim: 48
     labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
     split_overlap_policy: frame
 
-  temporal.actionmixed-auto-cnn-v1:
+  # ROI 可见性重排版（同一份原始数据、不同的特征契约）：feature_mapping=
+  # actionmixed-roi-grid-v2 不再"按类别表整齐分配"，而是按实测可见性分配维度预算——
+  # 高频 3 类（hand / scope_control_body / scope_mid_section，出现率 95.2/91.4/69.8%）
+  # 用 3×3 网格提高空间分辨率（每类 27 维），低频 5 类（scope_distal_end / syringe /
+  # air_gun / short_brush / brush_tip_out）合并为全局 1 区域（每类 3 维）→ 8 类共 96 维
+  # （recipe 见 framework/cleansight_eval/temporal/features/roi_bbox_v2.py；设计依据
+  # docs/features/INPUT_DESIGN_PROPOSAL.md §1.1 覆盖、§1.3 通道体检（v1 有 54/144 恒零）、
+  # §2 P2b）。revision 与 v3 相同（原始数据未变），dataset_version 独立以便与 v1(144) 对照；
+  # **每类块宽不等（27/3）**，feature_layout.groups 声明分组供 catalog 校验总维度，
+  # 遮罩/随机遮罩必须按 features.roi_grid_v2_block_dims 的显式块宽切片。
+  temporal.actionmixed-auto-roi-v2:
     family: temporal
     format: actionmixed_bbox
-    dataset_version: cleansight-actionmixed-auto-cnn-v1
-    revision: af14568657de2857600192198c6b696eb67d0d39a99141a140715bcf03c9a3d7
-    data_root: datasets/cleansight-ActionMixed-auto
-    feature_mapping: actionmixed-bbox-cnn-resnet18-v1
-    feature_blocks: 3
-    input_dim: 120
+    dataset_version: cleansight-actionmixed-auto-roi-v2
+    revision: 6375eba95c28b206207e607bb407f45ab589cda0015305df635aa9f686e1b3ad
+    data_root: datasets/cleansight-ActionMixed-auto-lhh
+    feature_mapping: actionmixed-roi-grid-v2
+    feature_layout:
+      channels: 3
+      groups:
+        - classes: [hand, scope_control_body, scope_mid_section]
+          rows: 3
+          cols: 3
+        - classes: [scope_distal_end, syringe, air_gun, short_brush, brush_tip_out]
+          rows: 1
+          cols: 1
+    input_dim: 96
     labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
     split_overlap_policy: frame
 
-  temporal.actionmixed-auto-hand-cnn-v1:
+  # ROI 分组布局的**更高空间分辨率**版（2026-09-29 帧准确率攻关第 4 轮）：与
+  # `temporal.actionmixed-auto-roi-v2` **只差高频类的网格**（3×3 → 4×4，每类 27 → 48 维），
+  # 低频 5 类同样压缩为全局 1 区域 × 3 通道。共 3×48 + 5×3 = **159 维**
+  # （recipe 见 framework/cleansight_eval/temporal/features/roi_bbox_v3.py）。
+  #
+  # 立项依据：实测发现帧准确率的杠杆是**"把维度预算花在有证据的类上"**——同一份数据、
+  # 同一模型与预算下，v2（3×3）与"v2 再遮掉低频类"相对 v1（2×3，144 维）分别
+  # **+2.37pp / +2.82pp（8/8 胜，Wilcoxon p=0.0078）**，而 v2 与 v2-nocold 彼此
+  # **无显著差异（p=0.5469）**→ 增益来自高频类的空间分辨率，与低频类是否保留无关。
+  # 本版把该变量继续外推一档（4×4），是相对 v2 的**单变量**对照。
+  #
+  # **每类块宽不等（48/3）**，遮罩/随机遮罩必须用
+  # `features.roi_grid_v3_block_dims` 的显式块宽切片（按总维÷类数推导会静默遮错列）。
+  temporal.actionmixed-auto-roi-v3:
     family: temporal
     format: actionmixed_bbox
-    dataset_version: cleansight-actionmixed-auto-hand-cnn-v1
-    revision: af14568657de2857600192198c6b696eb67d0d39a99141a140715bcf03c9a3d7
-    data_root: datasets/cleansight-ActionMixed-auto
-    feature_mapping: actionmixed-bbox-hand-cnn-v1
-    feature_blocks: 4
-    input_dim: 160
+    dataset_version: cleansight-actionmixed-auto-roi-v3
+    revision: 6375eba95c28b206207e607bb407f45ab589cda0015305df635aa9f686e1b3ad
+    data_root: datasets/cleansight-ActionMixed-auto-lhh
+    feature_mapping: actionmixed-roi-grid-v3
+    feature_layout:
+      channels: 3
+      groups:
+        - classes: [hand, scope_control_body, scope_mid_section]
+          rows: 4
+          cols: 4
+        - classes: [scope_distal_end, syringe, air_gun, short_brush, brush_tip_out]
+          rows: 1
+          cols: 1
+    input_dim: 159
     labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
     split_overlap_policy: frame
 
-  # v4 特征契约（docs/FEATURE_SCHEME_V4_DESIGN.md + FEATURE_V4_DIM_SPEC.md）：废弃目标
-  # 剔除（scope_distal_end/short_brush，presence 8%/2%）+ 主锚点 ctrl→mid 转正 +
-  # 事件类（syringe/air_gun/brush_tip_out）保留但不作定位判据。
-  # test split = project-18 action-test（task#213-220 长短毛刷专项，批次独立于 train/val，
-  # 评测解读需注明跨批次口径）。revision 算法 v4 起显式定义：三 split manifest 字节序拼接 sha256。
-  temporal.actionmixed-auto-v4:
-    family: temporal
-    format: actionmixed_bbox
-    dataset_version: cleansight-actionmixed-auto-v4
-    revision: 4aa9bf31a24789aae65ae579801e22d634e8bc3698b2dee9b25b38940fc5b600
-    data_root: datasets/cleansight-ActionMixed-auto
-    feature_mapping: ama-v4-scope-6c-60d
-    feature_layout: {classes: 6, dim: 60}
-    input_dim: 60
-    labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
-    split_overlap_policy: frame
-
+  # **通道语义替换**版（2026-09-29 帧准确率攻关第 6 轮）：布局与 `-roi-v2` 逐项一致
+  # （高频 3 类 3×3 网格、低频 5 类全局 1 区），只把**冗余的 `presence` 通道**换成
+  # 「最大面积框的宽、高」→ 每类块 = 区域数 × 4 通道，共 3×36 + 5×4 = **128 维**
+  # （recipe 见 framework/cleansight_eval/temporal/features/roi_bbox_v4.py）。
+  #
+  # 立项依据（源域实测，与 test 无关）：v2 的 `presence ≡ count>0` **完全冗余**
+  # （`2ch(count+max_area)` 与 `3ch` 的逐折 Δ 完全相同），而 `max_area` 不可省
+  # （去掉 −2.63pp）→ 每个区域的有效信息只有 2 个数，空槽位应放新信息。
+  # 源域 11 种通道组合的筛选中，本版（`count,max_area,w,h`）为一致性最好者：
+  # 相对 `p,c,a` **+0.82pp、8/2 胜、p=0.084**。`max_area = w×h` 丢了**长宽比**，
+  # 而器械的形状是有判别力的（细长内镜 vs 方正刷子）。
+  #
+  # **每类块宽不等（36/4）**，遮罩须用 `features.roi_grid_v4_block_dims` 显式块宽切片。
   temporal.actionmixed-auto-roi-v4:
     family: temporal
     format: actionmixed_bbox
     dataset_version: cleansight-actionmixed-auto-roi-v4
-    revision: 4aa9bf31a24789aae65ae579801e22d634e8bc3698b2dee9b25b38940fc5b600
-    data_root: datasets/cleansight-ActionMixed-auto
-    feature_mapping: ama-v4-roi-6c-108d
-    feature_layout: {classes: 6, dim: 108, rows: 2, cols: 3, channels: 3}
-    input_dim: 108
+    revision: 6375eba95c28b206207e607bb407f45ab589cda0015305df635aa9f686e1b3ad
+    data_root: datasets/cleansight-ActionMixed-auto-lhh
+    feature_mapping: actionmixed-roi-grid-v4
+    feature_layout:
+      channels: 4
+      groups:
+        - classes: [hand, scope_control_body, scope_mid_section]
+          rows: 3
+          cols: 3
+        - classes: [scope_distal_end, syringe, air_gun, short_brush, brush_tip_out]
+          rows: 1
+          cols: 1
+    input_dim: 128
+    labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    split_overlap_policy: frame
+
+  # **数据版本 v3.1（2026-09-28 标注修订）**：上游 ModelScope `lhh010/cleansight-ActionMixed-auto`
+  # 更新后于 2026-10-01 克隆到 `datasets/cleansight-ActionMixed-auto-v31`（**与 v3 并列保留，
+  # 不覆盖 `-lhh`** —— v3 条目钉住 2026-09 全部历史 run 的复现性）。
+  #
+  # 与 v3（`-lhh`）的**实测差异**（逐文件 sha256 + 逐行比对，脚本见 usage/FEATURE_EVAL_RUNBOOK 同类做法）：
+  #   · **test：8 视频逐字节未改**（标签与 `frames/` 检测框都相同）→ 跨版本 test 读数**同尺子可比**；
+  #   · train：−#198（`f173153a`，遮挡严重的 flush，移入 `occlusion/`）
+  #            +#203（`f809e944`，补录，266 帧 / flush 52）；
+  #     标签改动：#201（`39da2635`）**194/294 帧 = 66%**、#205（`c1367d51`）125 帧、
+  #     #202（`4cc6a009`）36 帧、#193/#194（`071eb2d6`）14 帧；
+  #     另有 8 个 train + 2 个 val 文件为**仅换行符**（CRLF→LF）差异，标签内容逐行相同；
+  #   · val：4→3（−#207（`152453e5`，只有已废弃动作 water_injection，移入 `deprecated/`）），
+  #     `e8ea5bb7` 改 1 帧；
+  #   · `frames/`（YOLO 自动检测框）**全部视频未变** → 特征差异只来自动作标签侧；
+  #   · `water_injection` 在 train/val 已无正样本（该类识别废弃，id 位置保留）。
+  #
+  # ⚠️ **选点风险**：val 由 4 视频降为 **3 视频**，`best_metric=val_edit` 的选点噪声进一步变大
+  # （参见 docs/EVAL.md 的选点体检：val 只有 4 视频时 val_f1@0.5 与 test 的 ρ 仅 0.199）。
+  #
+  # revision 口径同其它条目 = **三个 split manifest 拼接内容的 sha256**。
+  temporal.actionmixed-auto-v31:
+    family: temporal
+    format: actionmixed_bbox
+    dataset_version: cleansight-actionmixed-auto-v31
+    revision: 875d73d168ca95e8ba2b2e5d0ee9fc97e9a73f7dabaaa45a48eb51aa10f7c313
+    data_root: datasets/cleansight-ActionMixed-auto-v31
+    feature_mapping: actionmixed-bbox-8cls-v1
+    input_dim: 40
+    labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    split_overlap_policy: frame
+
+  # v3.1 数据的 ROI 契约版（配方与 `-roi-v1` 完全相同，只换数据版本）：
+  # 用于回答"在标注修订后的数据上，帧准确率结论是否仍成立"——两臂都必须落在同一数据版本上。
+  temporal.actionmixed-auto-roi-v1-v31:
+    family: temporal
+    format: actionmixed_bbox
+    dataset_version: cleansight-actionmixed-auto-roi-v1-v31
+    revision: 875d73d168ca95e8ba2b2e5d0ee9fc97e9a73f7dabaaa45a48eb51aa10f7c313
+    data_root: datasets/cleansight-ActionMixed-auto-v31
+    feature_mapping: actionmixed-roi-grid-v1
+    feature_layout: {rows: 2, cols: 3, channels: 3}
+    input_dim: 144
+    labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    split_overlap_policy: frame
+
+  # v3.1 数据的 v4 契约版（本周主结论的主语；128 维，通道 count/max_area/w/h）。
+  temporal.actionmixed-auto-roi-v4-v31:
+    family: temporal
+    format: actionmixed_bbox
+    dataset_version: cleansight-actionmixed-auto-roi-v4-v31
+    revision: 875d73d168ca95e8ba2b2e5d0ee9fc97e9a73f7dabaaa45a48eb51aa10f7c313
+    data_root: datasets/cleansight-ActionMixed-auto-v31
+    feature_mapping: actionmixed-roi-grid-v4
+    feature_layout:
+      channels: 4
+      groups:
+        - classes: [hand, scope_control_body, scope_mid_section]
+          rows: 3
+          cols: 3
+        - classes: [scope_distal_end, syringe, air_gun, short_brush, brush_tip_out]
+          rows: 1
+          cols: 1
+    input_dim: 128
+    labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    split_overlap_policy: frame
+
+  # **通道语义替换 + 格内亚格位置**版（2026-09-29 第 7 轮）：在 `-roi-v4`
+  # （`count, max_area, w, h`）之上再加「最大面积框在**格内的相对位置** dx/dy（−0.5~0.5）」，
+  # 每类块 = 区域数 × 6 通道，共 3×54 + 5×6 = **192 维**
+  # （recipe 见 framework/cleansight_eval/temporal/features/roi_bbox_v5.py）。
+  #
+  # 立项依据（源域筛选，与 test 无关）：`count,max_area,w,h,dx,dy` 相对 `p,c,a` 参考
+  # **+1.09pp、9/1 胜、p=0.037**，是第 6 轮源域表中收益最大且显著的候选。
+  # 机制：`dx/dy` 把网格**丢掉的亚格位置**补回来，且**不增加格子数**——
+  # 绕开"4×4 因每格过小而统计退化"的问题（v3 实测 −4.62pp）。
+  #
+  # **每类块宽不等（54/6）**，遮罩须用 `features.roi_grid_v5_block_dims` 显式块宽切片。
+  temporal.actionmixed-auto-roi-v5:
+    family: temporal
+    format: actionmixed_bbox
+    dataset_version: cleansight-actionmixed-auto-roi-v5
+    revision: 6375eba95c28b206207e607bb407f45ab589cda0015305df635aa9f686e1b3ad
+    data_root: datasets/cleansight-ActionMixed-auto-lhh
+    feature_mapping: actionmixed-roi-grid-v5
+    feature_layout:
+      channels: 6
+      groups:
+        - classes: [hand, scope_control_body, scope_mid_section]
+          rows: 3
+          cols: 3
+        - classes: [scope_distal_end, syringe, air_gun, short_brush, brush_tip_out]
+          rows: 1
+          cols: 1
+    input_dim: 192
+    labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    split_overlap_policy: frame
+
+  # **原始框集合**契约（2026-09-29 第 8 轮）：不再用手工 ROI 直方图，而是把每帧
+  # **面积最大的前 8 个框**的原始属性按定长填充成张量——每槽
+  # ``[one-hot(8) | cx | cy | w | h]`` = 12 维，共 8×12 = **96 维**
+  # （recipe 见 framework/cleansight_eval/temporal/features/boxset.py）。
+  #
+  # 动机：手工直方图把每帧压成"(类, 区域) 的计数与极值"，**丢掉了框与框之间的关系**；
+  # 前 7 轮在直方图路线内已饱和（网格 4×4 −4.62pp、格内位置无增益、容量/预算/集成/选点无增益）。
+  # 本契约配合**可学习集合编码器**（`model.type=boxset_mcn2` 对应的
+  # `framework/cleansight_eval/temporal/models/boxset.py`）由模型自行学跨类关系。
+  #
+  # **填充判据内建**：空槽的 one-hot 全零，模型据此算掩码，无需额外通道。
+  # **语义边界**：只保留面积最大的前 8 个框（auto 数据每帧平均 3.5 个框，绝大多数帧无损）。
+  # 坐标不做缩放/标准化（由编码器的 Linear 学），故该契约**不走 z-score 归一化**。
+  temporal.actionmixed-auto-boxset-v1:
+    family: temporal
+    format: actionmixed_bbox
+    dataset_version: cleansight-actionmixed-auto-boxset-v1
+    revision: 6375eba95c28b206207e607bb407f45ab589cda0015305df635aa9f686e1b3ad
+    data_root: datasets/cleansight-ActionMixed-auto-lhh
+    feature_mapping: actionmixed-boxset-v1
+    feature_slots: 8   # 每帧保留的框数上限；期望维度 = 8 × (8 检测类 + 4) = 96
+    input_dim: 96
+    labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    split_overlap_policy: frame
+
+  # **手工 ROI 先验 + 原始框集合**的拼接契约（2026-09-29 第 8 轮）：左段 128 维
+  # `roi-grid-v4`（(类,区域) 的 count/max_area/w/h），右段 96 维框集合
+  # （前 8 个框的 one-hot|cx|cy|w|h），共 **224 维**。用于回答"原始框信息里有没有
+  # ROI 直方图没表达的增量"——与 `-roi-v4` 构成单变量对照（只多右段 96 维）。
+  temporal.actionmixed-auto-combo-v1:
+    family: temporal
+    format: actionmixed_bbox
+    dataset_version: cleansight-actionmixed-auto-combo-v1
+    revision: 6375eba95c28b206207e607bb407f45ab589cda0015305df635aa9f686e1b3ad
+    data_root: datasets/cleansight-ActionMixed-auto-lhh
+    feature_mapping: actionmixed-combo-v1
+    feature_parts: [128, 96]   # 左段 roi-grid-v4、右段 boxset；校验分部和 = input_dim
+    input_dim: 224
+    labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    split_overlap_policy: frame
+
+  # 手部区域特征版（同一份原始数据）：feature_mapping=actionmixed-bbox-hand-8cls-v1
+  # 只编码中心落在"面积最大 hand 框扩张 1.5 倍"区域内的框（坐标相对该区域归一化），
+  # 仍为 8×5=40 维；无 hand 框时全零（见 features/hand_bbox.py）。
+  temporal.actionmixed-auto-hand-v1:
+    family: temporal
+    format: actionmixed_bbox
+    dataset_version: cleansight-actionmixed-auto-hand-v1
+    revision: 6375eba95c28b206207e607bb407f45ab589cda0015305df635aa9f686e1b3ad
+    data_root: datasets/cleansight-ActionMixed-auto-lhh
+    feature_mapping: actionmixed-bbox-hand-8cls-v1
+    input_dim: 40
+    labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
+    split_overlap_policy: frame
+
+  # "全局+手部"双通道版：feature_mapping=actionmixed-bbox-global-hand-8cls-v1 为
+  # 全局 40 维与手部 40 维拼接（80 维，feature_blocks=2 声明每类 10 维块）。
+  temporal.actionmixed-auto-global-hand-v1:
+    family: temporal
+    format: actionmixed_bbox
+    dataset_version: cleansight-actionmixed-auto-global-hand-v1
+    revision: 6375eba95c28b206207e607bb407f45ab589cda0015305df635aa9f686e1b3ad
+    data_root: datasets/cleansight-ActionMixed-auto-lhh
+    feature_mapping: actionmixed-bbox-global-hand-8cls-v1
+    feature_blocks: 2
+    input_dim: 80
     labels: [idle, water_injection, flush, long_brush_insert, long_brush_withdraw, short_brush_cleaning]
     split_overlap_policy: frame
 
@@ -206,6 +484,24 @@ testsets:
     manifest: benchmark/manifests/actionmixed/test.txt
     purpose: development_benchmark_frame_disjoint
 
+  temporal.actionmixed-v2-embed-mbv3s-v1.train:
+    dataset: temporal.actionmixed-v2-embed-mbv3s-v1
+    split: train
+    manifest: benchmark/manifests/actionmixed/train.txt
+    purpose: training_only
+
+  temporal.actionmixed-v2-embed-mbv3s-v1.val:
+    dataset: temporal.actionmixed-v2-embed-mbv3s-v1
+    split: val
+    manifest: benchmark/manifests/actionmixed/val.txt
+    purpose: validation_only
+
+  temporal.actionmixed-v2-embed-mbv3s-v1.test:
+    dataset: temporal.actionmixed-v2-embed-mbv3s-v1
+    split: test
+    manifest: benchmark/manifests/actionmixed/test.txt
+    purpose: development_benchmark_frame_disjoint
+
   temporal.actionmixed-auto-v3.train:
     dataset: temporal.actionmixed-auto-v3
     split: train
@@ -217,6 +513,12 @@ testsets:
     split: val
     manifest: benchmark/manifests/actionmixed-auto/val.txt
     purpose: validation_only
+
+  temporal.actionmixed-auto-v3.test:
+    dataset: temporal.actionmixed-auto-v3
+    split: test
+    manifest: benchmark/manifests/actionmixed-auto/test.txt
+    purpose: development_benchmark_frame_disjoint
 
   temporal.actionmixed-auto-roi-v1.train:
     dataset: temporal.actionmixed-auto-roi-v1
@@ -230,17 +532,235 @@ testsets:
     manifest: benchmark/manifests/actionmixed-auto/val.txt
     purpose: validation_only
 
-  temporal.actionmixed-auto-clean-v3.train:
-    dataset: temporal.actionmixed-auto-clean-v3
+  temporal.actionmixed-auto-roi-v1.test:
+    dataset: temporal.actionmixed-auto-roi-v1
+    split: test
+    manifest: benchmark/manifests/actionmixed-auto/test.txt
+    purpose: development_benchmark_frame_disjoint
+
+  # 合并集（见 datasets 段 `temporal.actionmixed-union-roi-v1` 的注释）：train 用合并 manifest，
+  # val/test **复用 auto 的 manifest**——保证选点与验收口径与基线逐字节一致。
+  temporal.actionmixed-union-roi-v1.train:
+    dataset: temporal.actionmixed-union-roi-v1
+    split: train
+    manifest: benchmark/manifests/actionmixed-union/train.txt
+    purpose: training_only
+
+  temporal.actionmixed-union-roi-v1.val:
+    dataset: temporal.actionmixed-union-roi-v1
+    split: val
+    manifest: benchmark/manifests/actionmixed-auto/val.txt
+    purpose: validation_only
+
+  temporal.actionmixed-union-roi-v1.test:
+    dataset: temporal.actionmixed-union-roi-v1
+    split: test
+    manifest: benchmark/manifests/actionmixed-auto/test.txt
+    purpose: development_benchmark_frame_disjoint
+
+  temporal.actionmixed-auto-roi-delta-v1.train:
+    dataset: temporal.actionmixed-auto-roi-delta-v1
     split: train
     manifest: benchmark/manifests/actionmixed-auto/train.txt
     purpose: training_only
 
-  temporal.actionmixed-auto-clean-v3.val:
-    dataset: temporal.actionmixed-auto-clean-v3
+  temporal.actionmixed-auto-roi-delta-v1.val:
+    dataset: temporal.actionmixed-auto-roi-delta-v1
     split: val
     manifest: benchmark/manifests/actionmixed-auto/val.txt
     purpose: validation_only
+
+  temporal.actionmixed-auto-roi-delta-v1.test:
+    dataset: temporal.actionmixed-auto-roi-delta-v1
+    split: test
+    manifest: benchmark/manifests/actionmixed-auto/test.txt
+    purpose: development_benchmark_frame_disjoint
+
+  temporal.actionmixed-auto-roi-v2.train:
+    dataset: temporal.actionmixed-auto-roi-v2
+    split: train
+    manifest: benchmark/manifests/actionmixed-auto/train.txt
+    purpose: training_only
+
+  temporal.actionmixed-auto-roi-v2.val:
+    dataset: temporal.actionmixed-auto-roi-v2
+    split: val
+    manifest: benchmark/manifests/actionmixed-auto/val.txt
+    purpose: validation_only
+
+  temporal.actionmixed-auto-roi-v2.test:
+    dataset: temporal.actionmixed-auto-roi-v2
+    split: test
+    manifest: benchmark/manifests/actionmixed-auto/test.txt
+    purpose: development_benchmark_frame_disjoint
+
+  # v3（4×4 高频网格，159 维）：数据与 split 与 v2 完全一致，只换特征契约。
+  temporal.actionmixed-auto-roi-v3.train:
+    dataset: temporal.actionmixed-auto-roi-v3
+    split: train
+    manifest: benchmark/manifests/actionmixed-auto/train.txt
+    purpose: training_only
+
+  temporal.actionmixed-auto-roi-v3.val:
+    dataset: temporal.actionmixed-auto-roi-v3
+    split: val
+    manifest: benchmark/manifests/actionmixed-auto/val.txt
+    purpose: validation_only
+
+  temporal.actionmixed-auto-roi-v3.test:
+    dataset: temporal.actionmixed-auto-roi-v3
+    split: test
+    manifest: benchmark/manifests/actionmixed-auto/test.txt
+    purpose: development_benchmark_frame_disjoint
+
+  # v4（通道语义替换，128 维）：数据与 split 与 v2 完全一致，只换特征契约。
+  temporal.actionmixed-auto-roi-v4.train:
+    dataset: temporal.actionmixed-auto-roi-v4
+    split: train
+    manifest: benchmark/manifests/actionmixed-auto/train.txt
+    purpose: training_only
+
+  temporal.actionmixed-auto-roi-v4.val:
+    dataset: temporal.actionmixed-auto-roi-v4
+    split: val
+    manifest: benchmark/manifests/actionmixed-auto/val.txt
+    purpose: validation_only
+
+  temporal.actionmixed-auto-roi-v4.test:
+    dataset: temporal.actionmixed-auto-roi-v4
+    split: test
+    manifest: benchmark/manifests/actionmixed-auto/test.txt
+    purpose: development_benchmark_frame_disjoint
+
+  # ---- 数据版本 v3.1 的三个 split（manifest 独立目录 actionmixed-auto-v31/）----
+  # 用途：在标注修订后的训练/验证集上重训，用**未变的 test** 与 v3 读数对照（同尺子）。
+  temporal.actionmixed-auto-v31.train:
+    dataset: temporal.actionmixed-auto-v31
+    split: train
+    manifest: benchmark/manifests/actionmixed-auto-v31/train.txt
+    purpose: training_only
+
+  temporal.actionmixed-auto-v31.val:
+    dataset: temporal.actionmixed-auto-v31
+    split: val
+    manifest: benchmark/manifests/actionmixed-auto-v31/val.txt
+    purpose: validation_only
+
+  temporal.actionmixed-auto-v31.test:
+    dataset: temporal.actionmixed-auto-v31
+    split: test
+    manifest: benchmark/manifests/actionmixed-auto-v31/test.txt
+    purpose: development_benchmark_frame_disjoint
+
+  temporal.actionmixed-auto-roi-v1-v31.train:
+    dataset: temporal.actionmixed-auto-roi-v1-v31
+    split: train
+    manifest: benchmark/manifests/actionmixed-auto-v31/train.txt
+    purpose: training_only
+
+  temporal.actionmixed-auto-roi-v1-v31.val:
+    dataset: temporal.actionmixed-auto-roi-v1-v31
+    split: val
+    manifest: benchmark/manifests/actionmixed-auto-v31/val.txt
+    purpose: validation_only
+
+  temporal.actionmixed-auto-roi-v1-v31.test:
+    dataset: temporal.actionmixed-auto-roi-v1-v31
+    split: test
+    manifest: benchmark/manifests/actionmixed-auto-v31/test.txt
+    purpose: development_benchmark_frame_disjoint
+
+  temporal.actionmixed-auto-roi-v4-v31.train:
+    dataset: temporal.actionmixed-auto-roi-v4-v31
+    split: train
+    manifest: benchmark/manifests/actionmixed-auto-v31/train.txt
+    purpose: training_only
+
+  temporal.actionmixed-auto-roi-v4-v31.val:
+    dataset: temporal.actionmixed-auto-roi-v4-v31
+    split: val
+    manifest: benchmark/manifests/actionmixed-auto-v31/val.txt
+    purpose: validation_only
+
+  temporal.actionmixed-auto-roi-v4-v31.test:
+    dataset: temporal.actionmixed-auto-roi-v4-v31
+    split: test
+    manifest: benchmark/manifests/actionmixed-auto-v31/test.txt
+    purpose: development_benchmark_frame_disjoint
+
+  # v5（v4 + 格内亚格位置，192 维）：数据与 split 与 v2/v4 完全一致，只换特征契约。
+  temporal.actionmixed-auto-roi-v5.train:
+    dataset: temporal.actionmixed-auto-roi-v5
+    split: train
+    manifest: benchmark/manifests/actionmixed-auto/train.txt
+    purpose: training_only
+
+  temporal.actionmixed-auto-roi-v5.val:
+    dataset: temporal.actionmixed-auto-roi-v5
+    split: val
+    manifest: benchmark/manifests/actionmixed-auto/val.txt
+    purpose: validation_only
+
+  temporal.actionmixed-auto-roi-v5.test:
+    dataset: temporal.actionmixed-auto-roi-v5
+    split: test
+    manifest: benchmark/manifests/actionmixed-auto/test.txt
+    purpose: development_benchmark_frame_disjoint
+
+  # 框集合契约：数据与 split 与 ROI 各版完全一致，只换特征契约与模型。
+  temporal.actionmixed-auto-boxset-v1.train:
+    dataset: temporal.actionmixed-auto-boxset-v1
+    split: train
+    manifest: benchmark/manifests/actionmixed-auto/train.txt
+    purpose: training_only
+
+  temporal.actionmixed-auto-boxset-v1.val:
+    dataset: temporal.actionmixed-auto-boxset-v1
+    split: val
+    manifest: benchmark/manifests/actionmixed-auto/val.txt
+    purpose: validation_only
+
+  temporal.actionmixed-auto-boxset-v1.test:
+    dataset: temporal.actionmixed-auto-boxset-v1
+    split: test
+    manifest: benchmark/manifests/actionmixed-auto/test.txt
+    purpose: development_benchmark_frame_disjoint
+
+  temporal.actionmixed-auto-combo-v1.train:
+    dataset: temporal.actionmixed-auto-combo-v1
+    split: train
+    manifest: benchmark/manifests/actionmixed-auto/train.txt
+    purpose: training_only
+
+  temporal.actionmixed-auto-combo-v1.val:
+    dataset: temporal.actionmixed-auto-combo-v1
+    split: val
+    manifest: benchmark/manifests/actionmixed-auto/val.txt
+    purpose: validation_only
+
+  temporal.actionmixed-auto-combo-v1.test:
+    dataset: temporal.actionmixed-auto-combo-v1
+    split: test
+    manifest: benchmark/manifests/actionmixed-auto/test.txt
+    purpose: development_benchmark_frame_disjoint
+
+  temporal.actionmixed-auto-roi-presence-v1.train:
+    dataset: temporal.actionmixed-auto-roi-presence-v1
+    split: train
+    manifest: benchmark/manifests/actionmixed-auto/train.txt
+    purpose: training_only
+
+  temporal.actionmixed-auto-roi-presence-v1.val:
+    dataset: temporal.actionmixed-auto-roi-presence-v1
+    split: val
+    manifest: benchmark/manifests/actionmixed-auto/val.txt
+    purpose: validation_only
+
+  temporal.actionmixed-auto-roi-presence-v1.test:
+    dataset: temporal.actionmixed-auto-roi-presence-v1
+    split: test
+    manifest: benchmark/manifests/actionmixed-auto/test.txt
+    purpose: development_benchmark_frame_disjoint
 
   temporal.actionmixed-auto-hand-v1.train:
     dataset: temporal.actionmixed-auto-hand-v1
@@ -254,6 +774,12 @@ testsets:
     manifest: benchmark/manifests/actionmixed-auto/val.txt
     purpose: validation_only
 
+  temporal.actionmixed-auto-hand-v1.test:
+    dataset: temporal.actionmixed-auto-hand-v1
+    split: test
+    manifest: benchmark/manifests/actionmixed-auto/test.txt
+    purpose: development_benchmark_frame_disjoint
+
   temporal.actionmixed-auto-global-hand-v1.train:
     dataset: temporal.actionmixed-auto-global-hand-v1
     split: train
@@ -266,32 +792,8 @@ testsets:
     manifest: benchmark/manifests/actionmixed-auto/val.txt
     purpose: validation_only
 
-  temporal.actionmixed-auto-cnn-v1.train:
-    dataset: temporal.actionmixed-auto-cnn-v1
-    split: train
-    manifest: benchmark/manifests/actionmixed-auto/train.txt
-    purpose: training_only
-
-  temporal.actionmixed-auto-cnn-v1.val:
-    dataset: temporal.actionmixed-auto-cnn-v1
-    split: val
-    manifest: benchmark/manifests/actionmixed-auto/val.txt
-    purpose: validation_only
-
-  temporal.actionmixed-auto-v4.train:
-    dataset: temporal.actionmixed-auto-v4
-    split: train
-    manifest: benchmark/manifests/actionmixed-auto/train.txt
-    purpose: training_only
-
-  temporal.actionmixed-auto-v4.val:
-    dataset: temporal.actionmixed-auto-v4
-    split: val
-    manifest: benchmark/manifests/actionmixed-auto/val.txt
-    purpose: validation_only
-
-  temporal.actionmixed-auto-v4.test:
-    dataset: temporal.actionmixed-auto-v4
+  temporal.actionmixed-auto-global-hand-v1.test:
+    dataset: temporal.actionmixed-auto-global-hand-v1
     split: test
     manifest: benchmark/manifests/actionmixed-auto/test.txt
     purpose: cross_batch_action_test

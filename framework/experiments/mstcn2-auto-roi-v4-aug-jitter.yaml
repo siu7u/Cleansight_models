@@ -1,0 +1,57 @@
+# 序列级数据增强对照（第 13 轮）：检测尺度抖动增强（feature_jitter sigma=0.15）
+#
+# 立项依据：test（LS project-18，2026-09 长短毛刷）与 train/val（project-16，2026-08）是
+# 两个采集批次，检测器的计数/面积/尺寸分布与动作速度都可能系统性偏移。第 12 轮的
+# ROI 镜像/偏移检验（tmp/acc-decomp/roi_shift.py）**否定**了画面镜像与取景偏移，
+# 但留下一个未测的自由度：**非空间**的批次差异（尺度抖动、时长/帧率节奏）。
+# 本配置只改 augmentation 一段，其余与 runs/acc-push/acc-roiv4 的 v4 配方逐项一致，
+# 以便与 32-seed 的 v4 基线（58.31）做 like-for-like 配对。
+#
+# 刻意不做网格镜像/翻转增强：翻转破坏 ROI 方向语义（把已训练模型跑在镜像 test 特征上
+# −2.96pp），放大已知错误的扰动等于把假设空间做错。
+#
+# 其余与 v4 配方一致；只扰动**非零**元素（零 = 该区域无检测，抖动它属于伪造证据）。
+
+schema_version: 1
+pipeline: full_sequence_temporal
+
+model:
+  type: mstcn2
+  input_dim: 128
+  num_classes: 6
+  hidden: 128
+  num_stages: 4
+  num_layers: 10
+
+data:
+  dataset_ref: temporal.actionmixed-auto-roi-v4
+  split_train: train
+  split_val: val
+  split_eval: test
+
+feature_schema:
+  dim: 128
+  version: actionmixed-roi-grid-v4
+
+augmentation:
+  temporal_scale:
+    enabled: false
+    max_rate: 0.0
+  # 非零特征元素乘 1 + N(0, 0.15)：模拟检测器计数/面积/尺寸的跨批次抖动。
+  feature_jitter:
+    enabled: true
+    sigma: 0.15
+
+
+evaluation:
+  mode: formal
+  visualize: true
+  save_predictions: true
+
+train:
+  epochs: 60
+  lr: 0.0005
+  grad_clip: 5.0
+  weight_decay: 0.0001
+  best_metric: val_edit
+  patience: null

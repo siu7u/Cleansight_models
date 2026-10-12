@@ -1,0 +1,128 @@
+{
+  "figure": "fig10_arch_fairness_grid",
+  "title": "Architecture fairness grid (lr x capacity per family)",
+  "source": "runs/arch-fair/*（本网格实跑）+ runs/acc-push/acc-roiv4*（参考与原配置点）；口径见 DEEP_DIVE_11_TOPICS_20261001.md §2⑤⑧(f)",
+  "data": {
+    "reference_acc_median_A8": 57.59,
+    "families": {
+      "mstcn (single-stage)": {
+        "best_point": "m-h128-l1e4",
+        "best_acc": 54.89,
+        "n_config_points": 3,
+        "all_acc": [
+          54.23,
+          54.38,
+          54.89
+        ],
+        "seeds_per_point": [
+          8
+        ],
+        "original_point_acc": 54.83,
+        "paired_delta_best_minus_orig": -1.4,
+        "paired_n": 8
+      },
+      "fact": {
+        "best_point": "f-d256-l5e4",
+        "best_acc": 53.64,
+        "n_config_points": 2,
+        "all_acc": [
+          51.92,
+          53.64
+        ],
+        "seeds_per_point": [
+          8
+        ],
+        "original_point_acc": 51.27,
+        "paired_delta_best_minus_orig": 1.73,
+        "paired_n": 8
+      },
+      "transformer": {
+        "best_point": "t-d128-l5e4-wc",
+        "best_acc": 53.41,
+        "n_config_points": 7,
+        "all_acc": [
+          48.48,
+          51.12,
+          51.53,
+          52.09,
+          52.09,
+          53.19,
+          53.41
+        ],
+        "seeds_per_point": [
+          8
+        ],
+        "original_point_acc": 52.2,
+        "paired_delta_best_minus_orig": 0.93,
+        "paired_n": 8
+      },
+      "clean_asformer (never trained before)": {
+        "best_point": "ca-h64-l5e4",
+        "best_acc": 53.24,
+        "n_config_points": 2,
+        "all_acc": [
+          52.78,
+          53.24
+        ],
+        "seeds_per_point": [
+          8
+        ]
+      },
+      "asformer": {
+        "best_point": "a-h64-l1e4",
+        "best_acc": 51.94,
+        "n_config_points": 4,
+        "all_acc": [
+          47.7,
+          47.73,
+          48.26,
+          51.94
+        ],
+        "seeds_per_point": [
+          8
+        ],
+        "original_point_acc": 53.79,
+        "paired_delta_best_minus_orig": -1.4,
+        "paired_n": 8
+      },
+      "gru (full_sequence, causal)": {
+        "best_point": "g-h128-l5e4-fs",
+        "best_acc": 51.49,
+        "n_config_points": 1,
+        "all_acc": [
+          51.49
+        ],
+        "seeds_per_point": [
+          8
+        ]
+      },
+      "clean_bigru (never trained before)": {
+        "best_point": "cb-h64-l5e4",
+        "best_acc": 52.01,
+        "n_config_points": 1,
+        "all_acc": [
+          52.01
+        ],
+        "seeds_per_point": [
+          8
+        ]
+      },
+      "clean_mstcn_bilstm": {
+        "best_point": "b-h256-l5e4",
+        "best_acc": 49.66,
+        "n_config_points": 2,
+        "all_acc": [
+          46.59,
+          49.66
+        ],
+        "seeds_per_point": [
+          8
+        ],
+        "original_point_acc": 47.06,
+        "paired_delta_best_minus_orig": 4.25,
+        "paired_n": 8
+      }
+    },
+    "note": "全部读数只用 A 批 seed（42,7,2026,1,2,3,4,5），与参考线同一批，故每族内的点、以及与原配置点之间都可逐 seed 配对；补种的 B 批结果见报告 (f4)。180 轮同预算对照见同节 (f3)。"
+  }
+}

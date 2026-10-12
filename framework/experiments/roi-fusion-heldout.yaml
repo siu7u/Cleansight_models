@@ -1,0 +1,41 @@
+# ROI 图像分类 · **留出集评估**配置（roi-fusion.yaml 的评测口径变体）。
+#
+# 与 roi-fusion.yaml 逐项一致，只多一个 `data.eval_split: test`：ROI 只从 YOLO 分组数据集的
+# `images/test` 现算（不落缓存、不碰 train+val 缓存），因此得到的是**跨批次留出集读数**。
+#
+# 背景：roi-fusion.yaml 走缓存（由 train+val 的 GT 框裁剪构成）整体评估属于 **in-sample**——
+# 同一源帧的近重复裁剪会同时出现在训练与评估两侧，读数会显著偏乐观（2026-09 实测该口径下
+# recall=1.0 / exact_match=0.9981）。两个口径必须分开报，见 docs/EVAL.md §3.5 与
+# docs/experiments/EXPERIMENT_REPORT_ROI_EVAL_PROTOCOL_20260927.md。
+#
+# 用法（同一个 checkpoint，只换口径，不重训）：
+#   python -m benchmark.cli.eval --config framework/experiments/roi-fusion-heldout.yaml \
+#       --ckpt runs/roi-real-airgun-brushtip/classification-20260922-113959/checkpoints/best.pt
+
+schema_version: 1
+pipeline: roi_classification
+
+model:
+  type: feature_fusion
+  backbone: resnet50
+  roi_size: 224
+  freeze_backbone: false
+  hidden_dim: 256
+  dropout: 0.3
+
+data:
+  name: fusion_small_eliminated
+  group_dir: datasets/cleansight-yolo/group2_small
+  classes: [air_gun, brush_tip_out]
+  neg_ratio: 1.0
+  val_split: 0.2
+  eval_split: test       # 留出集评估：只用 images/test 的裁剪，与训练/验证帧零重叠
+
+evaluation:
+  mode: exploratory
+  save_predictions: false
+
+train:
+  epochs: 80
+  batch_size: 32
+  lr: 0.001

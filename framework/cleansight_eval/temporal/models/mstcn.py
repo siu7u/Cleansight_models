@@ -16,6 +16,33 @@ import torch
 import torch.nn as nn
 
 
+SEQUENCE_NORMALIZATION_MODES = ("none", "demean")
+
+
+def _resolve_sequence_normalization(value) -> str:
+    """校验 ``sequence_normalization`` 口径：``none``（默认）或 ``demean``（按视频去均值）。
+
+    ``demean`` 在每个序列（一条视频一次前向）内部减去**该序列自身**的逐维均值，用于消掉
+    批次级的电平/构图差异（第十三轮探针：它把最差类 flush 的 train→test 可迁移性从 0.281
+    修到 0.604）。它需要看到整段序列，因此只适用于全序列离线模型。
+    """
+
+    mode = str(value or "none").lower()
+    if mode not in SEQUENCE_NORMALIZATION_MODES:
+        raise ValueError(
+            f"model.sequence_normalization 只支持 {list(SEQUENCE_NORMALIZATION_MODES)}，实际 {value!r}"
+        )
+    return mode
+
+
+def _apply_sequence_normalization(x: torch.Tensor, mode: str) -> torch.Tensor:
+    """按口径对 ``[B, T, F]`` 输入做序列级变换（``none`` 直通）。"""
+
+    if mode == "demean":
+        return x - x.mean(dim=1, keepdim=True)
+    return x
+
+
 class ResidualTemporalBlock(nn.Module):
     """残差膨胀卷积块：在时间轴上扩大上下文。"""
 
@@ -40,8 +67,10 @@ class MSTCN(nn.Module):
     0/1（直通），由 ``fit_normalization`` 在训练前按训练集统计写入。
     """
 
-    def __init__(self, in_dim: int, classes: int, hidden: int = 32):
+    def __init__(self, in_dim: int, classes: int, hidden: int = 32,
+                 sequence_normalization: str = "none"):
         super().__init__()
+        self.sequence_normalization = _resolve_sequence_normalization(sequence_normalization)
         self.input_projection = nn.Conv1d(in_dim, hidden, kernel_size=1)
         self.blocks = nn.Sequential(
             *(ResidualTemporalBlock(hidden, dilation) for dilation in [1, 2, 4, 8, 16, 1, 2, 4])
@@ -53,11 +82,18 @@ class MSTCN(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = (x - self.norm_mean) / self.norm_std
+        x = _apply_sequence_normalization(x, self.sequence_normalization)
         # Conv1d 需要 [B, channels, T]，先把 feature_dim 转到 channel 维。
         z = self.input_projection(x.transpose(1, 2))
         z = self.blocks(z)
         logits = self.classifier(z)  # [B, C, T]
         return logits.transpose(1, 2)  # [B, T, C]
+
+    def normalizer_spec(self) -> str:
+        """归一化口径的溯源声明（本模型恒按训练集 z-score 归一化）。"""
+
+        return ("zscore/train-set/buffers/v1" if self.sequence_normalization == "none"
+                else f"zscore/train-set/buffers/v1+sequence-{self.sequence_normalization}/v1")
 
     def fit_normalization(self, features: list) -> None:
         """训练前可选钩子：按训练集 z-score 统计写入归一化 buffer。

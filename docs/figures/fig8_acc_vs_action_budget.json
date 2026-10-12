@@ -1,0 +1,64 @@
+{
+  "figure": "fig8_acc_vs_action_budget",
+  "title": "Frame accuracy at a matched action-frame budget (v1 vs v4)",
+  "source": "runs/acc-push/acc-roiv{1,4}* 缓存 logits，32 对 seed（tmp/deepdive/score_audit.py → score_audit.json；口径见 docs/weeks/2026-09-26_2026-10-02/DEEP_DIVE_11_TOPICS_20261001.md §1.2）",
+  "data": {
+    "action_budget_pct": [
+      20.06,
+      23.97,
+      30.0,
+      40.0,
+      44.75,
+      55.0,
+      65.0
+    ],
+    "v1_acc": [
+      54.9,
+      54.05,
+      52.58,
+      49.07,
+      47.3,
+      43.97,
+      40.81
+    ],
+    "v4_acc": [
+      58.33,
+      57.83,
+      55.53,
+      50.72,
+      49.01,
+      45.17,
+      41.51
+    ],
+    "delta": [
+      3.56,
+      3.59,
+      2.48,
+      1.19,
+      0.98,
+      1.29,
+      -0.13
+    ],
+    "paired_p": [
+      0.0,
+      1e-06,
+      0.000307,
+      0.049769,
+      0.087208,
+      0.101799,
+      0.560757
+    ],
+    "win_lose": [
+      "29/3",
+      "28/4",
+      "25/7",
+      "20/12",
+      "20/12",
+      "18/14",
+      "16/16"
+    ],
+    "truth_action_rate_pct": 44.75,
+    "n_seeds": 32,
+    "note": "两臂在同一动作帧预算下比较；预算 = 预测非 idle 帧占比。两臂 argmax 各自落在 23.97% / 20.06%（不同预算），故 argmax 差 +4.47pp 含工作点效应。"
+  }
+}

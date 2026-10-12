@@ -1,0 +1,30 @@
+{
+  "figure": "fig6_serving_latency",
+  "title": "Serving latency: TimesFM vs existing GRU tick and frame budget",
+  "source": "docs/EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md §4.5（单序列 0.287-0.376 s、批处理折算 69 ms；本机 CPU 实测）+ docs/INFERENCE_CHAIN_PERF.md（GRU 1.49 ms、帧预算 133 ms）",
+  "data": {
+    "unit_note": "报告原文按 s 记录（TimesFM 折算 0.069 s、单序列 0.287-0.376 s；GRU 1.49 ms、帧预算 133 ms），本图统一换算为 ms 呈现",
+    "items": [
+      {
+        "name": "GRU sliding tick (yours)",
+        "ms_min": 1.49,
+        "ms_max": 1.49
+      },
+      {
+        "name": "frame budget (7.5 fps)",
+        "ms_min": 133.0,
+        "ms_max": 133.0
+      },
+      {
+        "name": "TimesFM batch=32 per series",
+        "ms_min": 69.0,
+        "ms_max": 69.0
+      },
+      {
+        "name": "TimesFM single series",
+        "ms_min": 287.0,
+        "ms_max": 376.0
+      }
+    ]
+  }
+}

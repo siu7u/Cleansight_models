@@ -3,26 +3,41 @@
 > 本目录是**特征提取方案（feature mapping）的唯一索引**：记录每个已实现/已登记的契约的
 > 语义、维度、代码位置、数据登记、训练配置与实测结论，供后续方案设计与横向对比参考。
 > **新增或修改方案时必须同步更新本索引**（见文末「新增方案检查清单」）。
+> **要动手跑一轮评测**（数据更新 → 登记 → 口径 → 矩阵 → 门禁）见
+> [`../../usage/FEATURE_EVAL_RUNBOOK.md`](../../usage/FEATURE_EVAL_RUNBOOK.md)（实操手册，含常见陷阱）。
 >
 > 图像（像素级）特征训练流程见 [`IMAGE_FEATURE_TRAINING.md`](./IMAGE_FEATURE_TRAINING.md)：
-> 正式训练方案已定稿（ROI 网格 144 + 健康配方，§3.4）；像素特征进时序（形态 B）为候选
-> 增强实验，提取工具已落地；独立 ROI 图像分类已移出训练主线（D7）。
+> 正式训练方案已定稿（ROI 网格 144 + 健康配方，§3.4）；像素特征进时序（形态 B）的**提取工具
+> 与训练侧接入均已落地**（§3.5），机制床 E0/E1 对照见本目录 §2.1；独立 ROI 图像分类已移出
+> 训练主线（D7）。
+>
+> 输入设计方向的**提案**（未跑训练对照、不含新模型指标）见
+> [`INPUT_DESIGN_PROPOSAL.md`](./INPUT_DESIGN_PROPOSAL.md)：体检探针
+> `tools/probe_input_features.py` + 本周推荐方案 P1/P2 + 有证据否掉的方向。
 
 ## 0. 总览
 
 | 契约版本（feature_mapping） | 维度 | 提取范围 | 语义要点 | 代码 | 数据集登记 | 训练配置 |
 |---|---|---|---|---|---|---|
 | `actionmixed-bbox-8cls-v1` | 40 | 整个画面 | 每类取面积最大框 `[presence,cx,cy,w,h]` | `temporal/data.py` `featurize_frame_bbox` | `temporal.actionmixed-auto-v3` | `gru/mstcn/transformer-actionmixed-auto.yaml` |
-| `actionmixed-roi-grid-v1` | 144 | 整个画面（2×3 网格） | 每 (类,区域) 统计 `[presence,count,max_area]` | `features/roi_bbox.py` | `temporal.actionmixed-auto-roi-v1` | `*-actionmixed-auto-roi.yaml` |
+| `actionmixed-roi-grid-v1` | 144 | 整个画面（2×3 网格） | 每 (类,区域) 统计 `[presence,count,max_area]` | `features/roi_bbox.py` | `temporal.actionmixed-auto-roi-v1`；`temporal.actionmixed-union-roi-v1`（跨来源合并训练集，2026-09-29 新增，同一契约、只换数据根） | `*-actionmixed-auto-roi.yaml` |
+| `actionmixed-roi-grid-v2` | 96 | 整个画面（**可见性重排**：高频 3 类 3×3、低频 5 类全局 1 区） | 每类块宽不等（27/3），通道语义同 v1 | `features/roi_bbox_v2.py` | `temporal.actionmixed-auto-roi-v2` | `gru-actionmixed-auto-roi-v2.yaml` |
+| `actionmixed-roi-grid-v3` | 159 | 整个画面（**高频 3 类 4×4、低频 5 类全局 1 区**） | 每类块宽不等（48/3），通道语义同 v1；与 v2 只差高频网格（3×3→4×4）。实测：v2 与「v2 遮低频类」相对 v1（144 维）**+2.37 / +2.82pp（8/8 胜，p=0.0078）**，两者彼此无差异 → 杠杆是**高频类的空间分辨率** | `features/roi_bbox_v3.py` | `temporal.actionmixed-auto-roi-v3` | 复用 `mstcn-actionmixed-auto-roi.yaml` + `-S` 覆盖 |
+| `actionmixed-combo-v1` | 224 | **拼接**：左 128 维 `roi-grid-v4` + 右 96 维 `actionmixed-boxset-v1` | 用于回答"原始框信息里有没有 ROI 直方图没表达的增量"。实测与 `roi-grid-v4` **无显著差异**（配对 Δ 中位 −1.29pp，3/5，p=0.844）→ **直方图已足够**，框间关系没有可测增量 | `features/combo.py` | `temporal.actionmixed-auto-combo-v1` | `mstcn-actionmixed-auto-roi.yaml` + `-S` 覆盖 |
+| `actionmixed-boxset-v1` | 96 | **原始框集合**（每帧面积最大的前 8 个框，按面积降序填充） | 每槽 `[one-hot(8) | cx | cy | w | h]` = 12 维 × 8 槽；空槽全零（模型据此算掩码）。**不丢框间关系**：手工 ROI 直方图把每帧压成"(类, 区域) 计数与极值"，丢掉了谁和谁同时出现、谁大谁小；本契约配合可学习集合编码器（`models/boxset.py`）由模型自学。坐标不做标准化（故该契约不走 z-score） | `features/boxset.py` + `models/boxset.py` | `temporal.actionmixed-auto-boxset-v1` | `mstcn-actionmixed-auto-roi.yaml` + `-S model.type=boxset_mstcn2` |
+| `actionmixed-roi-grid-v4` | 128 | 整个画面（高频 3 类 3×3、低频 5 类全局 1 区；**通道替换**） | 通道为 `[count, max_area, w, h]`——把 v2 里**完全冗余**的 `presence`（≡count>0）换成最大面积框的宽/高，补上 `max_area=w×h` 丢掉的**长宽比**；每类块宽 36/4。源域筛选（与 test 无关）相对 `p,c,a` **+0.82pp、8/2 胜、p=0.084** | `features/roi_bbox_v4.py` | `temporal.actionmixed-auto-roi-v4` | 复用 `mstcn-actionmixed-auto-roi.yaml` + `-S` 覆盖 |
+| `actionmixed-roi-grid-presence-v1` | 48 | 整个画面（2×3 网格，**只留 presence**） | roi-v1 的通道 0 切片：8 类 × 6 区域的存在性平面；丢弃 `count` / `max_area` | `features/roi_bbox.py` `build_roi_presence_frame_features` | `temporal.actionmixed-auto-roi-presence-v1` | 复用 `mstcn-actionmixed-auto-roi.yaml` + `-S` 覆盖（见 FEATURE_STRATEGY_COMPARE 第十八轮） |
+| `actionmixed-roi-grid-delta-v1` | 240 | 整个画面（2×3 网格）+ **时间导数** | 每 (类,区域) `[presence,count,max_area,d_count,d_max_area]`；`d = x[t] − x[t−1]`，首帧约定 0；只对 count/max_area 取 Δ。**因果但有 1 帧状态**（与 roi-v1 的"逐帧独立"不同） | `features/roi_bbox.py` `build_roi_grid_delta_features` | `temporal.actionmixed-auto-roi-delta-v1` | 复用 `-S` 覆盖（见本周简报） |
 | `actionmixed-bbox-hand-8cls-v1` | 40 | 仅手部周围 | 只编码 hand 框扩张 1.5 倍区域内的框，坐标相对区域归一化；无 hand 全零 | `features/hand_bbox.py` | `temporal.actionmixed-auto-hand-v1` | `gru-actionmixed-auto-hand.yaml` |
 | `actionmixed-bbox-global-hand-8cls-v1` | 80 | 全局 + 手部 | 全局 40 维与手部 40 维拼接（每类 10 维块） | `features/hand_bbox.py` + `data.py` 拼接 | `temporal.actionmixed-auto-global-hand-v1` | `gru-actionmixed-auto-global-hand.yaml` |
+| `actionmixed-bbox-embed-mbv3s-v1` | 616 | 整个画面（bbox）+ 逐帧整图 | 左 40 维 bbox 块（同 1.1）+ 右 576 维冻结 mobilenet_v3_small 整图 embedding；进 GRU 前经 64 维线性投影头；`mask_targets` 只作用 bbox 块 | `features/image_embed.py` + `models/gru.py`（投影头） | `temporal.actionmixed-v2-embed-mbv3s-v1` | `gru-actionmixed-embed.yaml` |
 | `legacy-20d-v1` | 20 | —（历史预存特征） | Endo Project npy 特征，仅评测兼容 | `temporal/data.py` `_load_legacy_endo_split` | `temporal.endo-project-v1` | `legacy-*.yaml` |
 | `clean_bbox_v2_*` 族（113/121/249） | 113/121/249 | 整个画面 | CLEAN 离线模型特征（含速度/业务先验），exploratory 评测用 | `features/clean_bbox_v2.py` | 未登记（外部 checkpoint 配套） | `external_checkpoints/*.yaml` |
-| `clean_bbox_v3_scope_frame` | 113 | 整个画面 | scope 器械轴相对坐标系 + 尺度归一（v2 对照实验），exploratory 评测用 | `features/clean_bbox_v3.py` | 未登记（复用 actionmixed-auto 数据） | `mstcn-clean-v3.yaml` |
 
 公共语义（所有 bbox 系契约）：因果、无状态、逐帧独立计算；空 bbox 文件 → 全零；
-`feature_schema.mask_targets` 按检测类整块清零（块宽随契约不同：bbox 5 / ROI 18 / 全局+手部 10）；
-目标遮罩增强的块宽由特征维 ÷ 检测类数自动推导。
+`feature_schema.mask_targets` 按检测类整块清零（块宽随契约不同：bbox 5 / ROI-v1 18 / ROI-presence 6 / ROI-v2 27 或 3 / 全局+手部 10）；
+目标遮罩增强的块宽默认由特征维 ÷ 检测类数推导，**块宽不等的契约（roi-grid-v2）必须走
+`features.block_dims_for_version` 的显式块宽**（否则静默遮错列，见 INPUT_DESIGN_PROPOSAL §4）。
 
 ## 1. 各方案详述
 
@@ -44,6 +59,27 @@
 - **状态**：正式训练 3 seed 已跑通——CPU 轮（2026-09-03，`runs/formal_roi/`）与 GPU 轮
   （2026-09-04，`runs/formal_roi_20260905/`，数据根 `-lhh`）均三 seed 零坍缩；中位指标与
   设备口径见 `IMAGE_FEATURE_TRAINING.md` §3.3/§3.4。
+
+### 1.2.1 `actionmixed-roi-grid-v2`（96 维，可见性重排 ROI）
+
+- **动机**：v1 按类别表整齐分配（每类 18 维），但实测 54/144 维恒零（38%）；高频 3 类
+  （hand / scope_control_body / scope_mid_section，出现率 95.2/91.4/69.8%）的空间信息被
+  低频类稀释，而低频类散在 6 个区域后每格几乎恒零（依据见 `INPUT_DESIGN_PROPOSAL.md`
+  §1.1 覆盖、§1.3 通道体检、§2 P2b）。
+- **布局**：高频 3 类用 3×3 网格（每类 27 维），低频 5 类（scope_distal_end / syringe /
+  air_gun / short_brush / brush_tip_out）合并为**全局 1 区域**（每类 3 维）→ 8 类共 96 维；
+  class-major，通道语义与区域编号规则同 v1。
+- **实测特征密度**（新数据：train 9,575 / val 3,384 / test 2,639 帧）：恒零通道
+  train 12/96（12%）、val 27/96（28%）、test 15/96（16%）；v1 同口径为 33%/48%/46%。
+  低频 5 类在 train 上由 v1 的稀疏格子变为 3/3 全活跃，非零密度 0.103 vs v1 0.065。
+- **实测指标**（2026-09-18，CPU，新 test = project-18 八视频，3 seed 中位数）：acc 53.09 /
+  edit 17.54 / F1@0.1 25.88 / F1@0.25 14.29；v1(144) 同口径为 52.97 / 19.89 / 25.58 / 13.64
+  —— **维度减到 2/3 不损指标，也没有换来泛化增益**；完整矩阵见
+  [`../FEATURE_STRATEGY_COMPARE.md`](../FEATURE_STRATEGY_COMPARE.md) 第五轮。
+- **实现要点**：块宽不等（高频 27 / 低频 3），catalog 用 `feature_layout.groups` 校验总维度，
+  遮罩与随机遮罩必须按 `features.roi_grid_v2_block_dims` 的显式块宽切片；单元测试
+  `framework/tests/test_roi_features_v2.py`。
+- **参数**：分组与网格为 v2 固定值；改分组/网格/通道数 = 新 feature mapping 版本。
 
 ### 1.3 `actionmixed-bbox-hand-8cls-v1`（40 维，仅手部周围）
 
@@ -68,22 +104,27 @@
 - Endo Project 时代预存 `features/*.npy` + `groundTruth/` + `mapping.txt`；仅框架兼容加载，
   不再有训练入口。三类（Idle/Long_Brushing/Short_Brushing）。
 
-### 1.6 `clean_bbox_v3_scope_frame`（113 维，scope 坐标系对照）
-
-- **动机**：v2 绝对图像坐标在内镜推拉镜头下非平稳；v3 以 `scope_control_body →
-  scope_distal_end` 定义器械轴，位置编码为沿轴/垂轴分量（÷轴长），面积编码为相对
-  `scope_distal_end` 面积的对数比；连续列 clip 有界，不依赖全局 z-score。
-- **布局**：块结构与 v2 base 一一对应（hand_count + hand×2 + 8 目标×9 + 7 pair×3 + 时间 3）。
-- **回退链**：轴依次 distal-control / distal-mid / mid-control / 上一帧有效 / (1,0)；
-  `ref_len`/`ref_area` 前向填充，序列无有效值回退中位数 / 常数。
-- **设计依据与验证计划**：`docs/FEATURE_INPUT_DESIGN_V3.md`；对照训练配置
-  `mstcn-clean-v3.yaml`。
-
-### 1.7 CLEAN 离线特征族（113/121/249 维）
+### 1.6 CLEAN 离线特征族（113/121/249 维）
 
 - 迁自 CleanSightBackend 的 CLEAN offline segmenter 数学口径（`features/clean_bbox_v2.py`），
   含速度特征、业务先验（pair features）与居中窗口统计；只供外部裸 checkpoint 的 exploratory
   评测，不冒充真实检测置信度下的正式结果。
+
+### 1.7 `actionmixed-bbox-embed-mbv3s-v1`（616 维，bbox + 图像 embedding，形态 B）
+
+- **布局**：左 40 维 bbox 块（口径同 1.1）× 8 类 × `[presence, cx, cy, w, h]`；右 576 维
+  逐帧整图 mobilenet_v3_small embedding（`extract_embeddings.py` 离线预计算，backbone 冻结）。
+- **对齐与因果**：按标签行**位置**对齐（第 i 个标签帧 ↔ npy 第 i 行）；行数/列数不符立即报错
+  （陈旧产物错位比训练失败更贵）；每帧只依赖当前帧图像与当前帧检测框，因果、无状态。
+- **产物根目录可换**：`data.embedding_root` 由 catalog 的 `feature_embed.root` 注入
+  （`{root, feat_dim, backbone}`）；换 backbone / 换数据源 = 换登记条目，不改代码；
+  embedding 维度变化 = 新 feature mapping 版本。
+- **投影头**：进 GRU 前经 `model.image_proj_dim`（E1 = 64）线性投影再拼接，是形态 B 唯一
+  新增的可训练参数（`models/gru.py`；非 GRU 架构声明 `image_dim` 直接报错）。
+- **遮罩语义**：`mask_targets` 与 train 期目标随机遮罩只作用于 bbox 块（图像块无检测类结构，
+  按总维度 ÷ 类数推导会错切）。
+- **状态**：机制床（人工标注 `cleansight-ActionMixed`，9,532 帧，576 维 embedding 已预计算）
+  E0 vs E1 多 seed 对照见 §2.1。
 
 ## 2. 横向对比结论速查（截至 2026-08-31，GRU 20 epoch 单 seed）
 
@@ -97,6 +138,27 @@
 | 仅手部 | 40 | 48.02 | 11.47 | 11.11 | 整体最弱 |
 
 完整过程与数据侧解释见 [`FEATURE_STRATEGY_COMPARE.md`](../FEATURE_STRATEGY_COMPARE.md)。
+
+### 2.1 形态 B（bbox + 图像 embedding）E0/E1 机制床对照（2026-09-11，CPU，GRU 健康配方，3 seed）
+
+数据为人工标注机制床 `cleansight-ActionMixed`（9,532 帧；E0 `temporal.actionmixed-v2` 40 维、
+E1 `temporal.actionmixed-v2-embed-mbv3s-v1` 616 维），运行目录 `runs/embed_ablation/`：
+
+| 指标（3 seed 中位数） | E0 bbox-40 | E1 bbox+embed-616 |
+|---|---:|---:|
+| 段级 edit | 42.49 | **45.22** |
+| 段级 F1@0.25 | 28.00 | **34.62** |
+| 段级 F1@0.5 | **15.69** | 7.69 |
+| 帧级 macro_f1 | **46.63** | 35.66 |
+| recall air_injection | **86.96** | 0.00 |
+| recall long_brush_insert | **55.94** | 5.59 |
+
+- 段级 edit / F1@0.25 在 3/3 seed 不劣于基线，但帧级宏指标与 `air_injection`、
+  `long_brush_insert` recall 明显下降 → **图像通道不是免费增益，机制床上未定论**。
+- 两臂 6/6 run 零坍缩；E1 早停更晚（8~9 epoch vs 5）说明投影头确实在学。
+- **限制**：机制床与正式 v3 auto 不同源、CPU 口径、3 seed、E2/E3 未跑——
+  不能并入方案b 正式数字。完整证据与复现命令见
+  [`EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md`](../experiments/EXPERIMENT_REPORT_IMAGE_EMBED_E1_20260911.md)。
 
 ## 3. 新增方案检查清单（后续追加时照此执行）
 

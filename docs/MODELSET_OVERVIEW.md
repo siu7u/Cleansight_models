@@ -5,6 +5,22 @@
 > 最新工作汇报见 [`YOLO_WORK_SUMMARY.md`](YOLO_WORK_SUMMARY.md)；架构原则见
 > [`ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) 与 [`DESIGN.md`](DESIGN.md)。
 
+> **最新状态（2026-09-24 更新）**
+>
+> - **当前最佳时序配方**：`mstcn2` `s4l10 h128`（331 万参）+ `roi-grid-144`(z-score)，
+>   lr 5e-4 / 60 轮 / `dropout 0.3` / T-MSE 0.15 / clip 0.1，
+>   **`best_metric = val_edit`** → edit 中位 **51.08**、F1@0.1 40.01、acc 53.98（8 seed）；
+>   换回默认选点 `val_f1_0.5` 时 3~8 seed 读数 51.47、逐 seed 摆幅 0.64。
+>   依据：[`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](experiments/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md) §2.1/§2.3/§2.4。
+> - **两条轴已探尽**：容量轴（加参数默认配方无用，`mstcn` h128 到顶）与特征轴
+>   （**无任何替代契约超过 `roi-grid-144`**，其唯一稳健优势是 insert 召回）。
+> - **本周新增契约**：`actionmixed-roi-grid-presence-v1`（48 维，presence 平面）。
+> - **选点口径是一等参数**：现行默认 `val_f1_0.5` 与 test 的 Spearman ρ 仅 **0.199**（326 run 体检）。
+> - **已否掉的外部方案**：TimesFM 时序基础模型（预测式预警路线证伪，见
+>   [`EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md`](experiments/EXPERIMENT_REPORT_TIMESFM_FEASIBILITY_20260924.md)）。
+> - 本周汇总与风险见 [`WEEKLY_REPORT_20260924.md`](WEEKLY_REPORT_20260924.md)；
+>   可复用图表见 [`figures/README.md`](figures/README.md)。
+
 ## 1. 总体结论
 
 `Cleansight_models` 已从零散模型整理成**可训练、可评估、可登记、可复现**的模型资产仓库：
@@ -77,12 +93,33 @@ export MPLCONFIGDIR=/tmp/matplotlib
 | YOLO small | `framework/experiments/yolo-clean-small.yaml` | `detection` |
 | ROI 分类（特征融合） | `framework/experiments/roi-fusion.yaml` | `roi_classification` |
 | GRU | `framework/experiments/gru-actionmixed.yaml` | `sliding_window_temporal` |
+| GRU（ROI 空间特征） | `framework/experiments/gru-actionmixed-auto-roi.yaml` | `sliding_window_temporal` |
+| GRU（ROI 可见性重排 96 维） | `framework/experiments/gru-actionmixed-auto-roi-v2.yaml` | `sliding_window_temporal` |
+| GRU（手部区域特征） | `framework/experiments/gru-actionmixed-auto-hand.yaml` | `sliding_window_temporal` |
+| GRU（全局+手部） | `framework/experiments/gru-actionmixed-auto-global-hand.yaml` | `sliding_window_temporal` |
+| GRU（bbox + 图像 embedding，形态 B） | `framework/experiments/gru-actionmixed-embed.yaml` | `sliding_window_temporal` |
 | MS-TCN | `framework/experiments/mstcn-actionmixed.yaml` | `full_sequence_temporal` |
+| MS-TCN（ROI 空间特征） | `framework/experiments/mstcn-actionmixed-auto-roi.yaml` | `full_sequence_temporal` |
 | MS-TCN++ | `framework/experiments/mstcn2-actionmixed.yaml` | `full_sequence_temporal` |
 | Transformer | `framework/experiments/transformer-actionmixed.yaml` | `full_sequence_temporal` |
+| Transformer（ROI 空间特征） | `framework/experiments/transformer-actionmixed-auto-roi.yaml` | `full_sequence_temporal` |
 | 历史 GRU v1 | `framework/experiments/legacy-gru-v1.yaml` | `sliding_window_temporal` |
 | 历史 Causal TCN v1 | `framework/experiments/legacy-causal-tcn-v1.yaml` | `sliding_window_temporal` |
 | 历史 Causal Transformer v1 | `framework/experiments/legacy-causal-transformer-v1.yaml` | `sliding_window_temporal` |
+
+ROI 空间特征变体（`-roi` 后缀）与对应 40 维 bbox 基线同模型同超参，仅特征契约不同：
+`actionmixed-roi-grid-v1` 把画面按 2×3 网格分区，每 (检测类, 区域) 统计
+[presence, count, max_area] 共 144 维（recipe 见 `framework/cleansight_eval/temporal/features/roi_bbox.py`），
+用于对照"空间分区信息"对动作识别的影响；`actionmixed-roi-grid-v2` 按实测可见性重排维度预算
+（高频 3 类 3×3 网格 27 维/类、低频 5 类全局 1 区域 3 维/类，共 96 维，
+recipe 见 `features/roi_bbox_v2.py`，依据 `docs/features/INPUT_DESIGN_PROPOSAL.md` §2 P2b），
+用于对照"按可见性分配 vs 按类别表整齐分配"。
+
+形态 B（像素特征进时序，E 系列）把冻结 backbone 预计算的逐帧整图 embedding 拼进时序输入：
+`actionmixed-bbox-embed-mbv3s-v1` = 40 维 bbox 块 + 576 维 mobilenet_v3_small embedding
+（recipe 见 `framework/cleansight_eval/temporal/features/image_embed.py`），进 GRU 前经 64 维
+线性投影头（`model.image_dim` / `model.image_proj_dim`）；embedding 产物由
+`features/extract_embeddings.py` 离线预计算，训练侧不依赖图像与 GPU。
 
 ## 5. 训练
 
@@ -147,15 +184,27 @@ python -m benchmark.cli.matrix --runs runs
 
 > 以上为新数据建设前的历史基线。新数据集（`datasets/cleansight-yolo`，5.6 万图 / 8 类）的
 > 正式基线正在重建中，见 [`YOLO_WORK_SUMMARY.md`](YOLO_WORK_SUMMARY.md)。
+>
+> **补注（2026-09-24）**：上表是**旧 20 维特征**口径，与当前主线（`roi-grid-144`）**不可直接比较**。
+> 当前 mainline 数据为 `temporal.actionmixed-auto-roi-v1`（144 维，revision `6375eba9…`，
+> test 8 视频 / 2,639 帧），最佳配方与指标见本文顶部「最新状态」及
+> [`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](experiments/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md)。
 
 ## 9. 当前最大缺口
 
 1. **YOLO 指标未达标**：large 组 P/R 需 ≥0.7；small 组 <0.3 的类转 ROI 特征融合。
-2. **新 YOLO 特征尚未闭环到时序**：`feature_mapping.py` 新版为 64 维
-   （8 类 × [present, cx, cy, w, h, conf, dcx, dcy]），现有时序 v1 checkpoint 仍是旧 20 维，
-   需要用新 YOLO 输出重新生成 64 维特征并重训时序模型。
+2. ~~**新 YOLO 特征尚未闭环到时序**（旧 20 维 / 64 维叙事）~~ —— **已过期（2026-09-24 更新）**：
+   时序输入早已切到 `actionmixed-roi-grid-v1`（144 维），特征轴也已探尽。**当前真实缺口是精度天花板**：
+   最强模型上 **51.6% 的真值段连标签都认错**（flush 20/21、withdraw 25/27、sbc 18/18），
+   错误的大头**不在标签边界附近**（距最近切换 ≤3 帧的帧占 16.1%、只承载 21.9% 的错误）
+   —— 即瓶颈不在模型/特征/损失，见 [`EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md`](experiments/EXPERIMENT_REPORT_FEATURE_ACCURACY_20260923.md) §4.1。
 3. **端到端真实验收未完成**：`benchmark/e2e_3min` 评分器已存在，但真实
    `clean_001.prediction.json` 需要 `CleanSightBackend` 在线推理导出。
+4. **架构门禁红灯（2026-09-24 新增识别）**：`tests/test_architecture_boundaries.py` 2 条失败，
+   12 个违规文件中 **10 个来自已提交旧文件**（HEAD 上即红），需一次决策（放宽 `tools/` 运行规则
+   vs 下沉执行模型的工具）。
+5. **`--resume` 语义错位（已知未修）**：会导致"以为续训、实际未续训"，属会污染实验结论的隐患
+   （记录见 [`mstcn-capacity/MSTCN_CAPACITY_STUDY.md`](mstcn-capacity/MSTCN_CAPACITY_STUDY.md) §0.1）。
 4. **ModelScope 与复刻链路未完全落地**：本地上传目录已整理，仍需上传、回填地址/revision、
    完善 `pin.yaml` schema 与一键复刻脚本。
 
