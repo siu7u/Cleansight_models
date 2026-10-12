@@ -1,0 +1,89 @@
+# group1 检测：仓库里第一次**全量数据**训练（2026-10-12 起）
+
+> 分支：`feat/yolo-group1`。回应用户目标里的"链路当中的 YOLO 提升"这一半。
+
+## 0. 一句话
+
+**此前 group1 的所有 run 都是 `fraction=0.2` 的探针**（15 轮、只用 20% 训练数据）——
+包括各种文档里被当作"结果"引用的 mAP50 0.4271 那批。本轮起的是**仓库第一次
+`fraction=1.0` 的 group1 全量训练**，且 ep1 就超出 registry legacy 的全量读数。
+
+## 1. 先把上一轮的疑问查清（这是本轮第一件事）
+
+上一轮我留了一个必须解释的差距：同一 `large_baseline` 配方，2026-08-10 的 ep1 是
+mAP50 **0.4163**，本轮 ep1 是 **0.6208**，差 0.20。逐一比对 `args.yaml` 后**原因明确**：
+
+| 键 | 2026-08 的 run | 本轮 |
+|---|---|---|
+| **`fraction`** | **0.2** | **1.0** |
+| `epochs` | 15 | 150 |
+| batch / imgsz / model / data / device / seed | 16 / 640 / yolo11n.pt / 同一 data.yaml / 0 / 0 | **完全相同** |
+
+→ 那 0.20 是**"只喂 20% 数据"造成的**，不是数据集换代、也不是配方差异。
+
+**并且这不是个别 run 的问题**：逐个扫 `runs/cleansight-yolo/opt-group1*` 的 `args.yaml`，
+**全部 11 个历史 run 都是 `fraction=0.2` / `epochs=15`**（实际只跑到 9~15 轮）：
+
+```
+large_baseline   0.2 ×3        large_s        0.2 ×2
+large_m_960      0.2           large_s_960    0.2 ×3
+large_s_freeze   0.2           （本轮）large_baseline_lowmem 1.0 ← 第一次
+```
+
+**因此本仓库此前的 group1 读数一律是 smoke 口径**，按 `verification-first` 的纪律不得当作
+模型质量结论；`docs/YOLO_OPTIMIZATION.md` 的目标（P/R ≥ 0.7）也从未在足量数据上被检验过。
+
+## 2. 本轮的全量 run
+
+配方 `large_baseline_lowmem`：yolo11n / 640 / batch 16 / 默认增强 / `fraction=1.0` /
+150 轮 / patience 30 / workers 2（唯一相对 `large_baseline` 的变量是 worker 数，12GB WSL 需要）。
+run：`runs/cleansight-yolo/opt-group1_large-large_baseline_lowmem-20261012-175339`。
+**实测节奏（`results.csv` 的 `time` 列即为逐轮秒数）**：
+
+| epoch | 用时 | val mAP50 | P | R |
+|---:|---:|---:|---:|---:|
+| 1 | **272 s**（另加进程启动/建缓存约 1 分钟） | 0.6208 | 0.6615 | 0.6423 |
+| 2 | **521 s（8.7 min，即稳态）** | 0.5560 | 0.6338 | 0.6203 |
+
+⇒ 稳态 **约 8.7 min/epoch**（1345 iter ⇒ 2.6 it/s），**150 轮约 21.7 小时**；
+patience 30 早停可能提前，但量级就是"过夜到一天"。
+（本文先后更正过两次自己的估计：先写"4~5 min/epoch、约 10 h"（未计 setup 的乐观值），
+再写"5.5 min/epoch、约 14 h"（把 ep1 的一次性开销当成了每轮成本）；上表是实测稳态值。）
+
+**读 ep1 → ep2 的回落**：mAP50 0.6208 → **0.5560**。这是早期训练的正常波动
+（且 ep1 偏高本身有运气成分），**不能**用 ep1 单点去比任何基线——本文 §2 表格里那个
+"ep1 已超出 legacy"的说法只作**过程观察**，**不作为结论**。真正的对照要等收敛后（或早停点）。
+
+### 当前读数（val，全量数据）
+
+| 来源 | 口径 | mAP50 | mAP50-95 | P | R |
+|---|---|---:|---:|---:|---:|
+| **本轮 ep1**（进行中） | 全量 21,526 图 | **0.6208** | 0.2235 | **0.6615** | **0.6423** |
+| registry `yolo-group1-large-v1` | 全量（但**旧数据视图** project-10-2026-07-04） | 0.522 | 0.181 | 0.594 | 0.501 |
+| 历史最好（`large_s_960` ep5） | **20% 数据** | 0.4271 | — | 0.531 | 0.422 |
+
+**读数纪律**：
+- 与 registry 那行**不是严格同口径**——它来自 `legacy/yolo-detection/pipeline` 且在 2026-07-04
+  的旧数据视图上（`dataset_view_a: project-10-at-2026-07-04-11-10-13954db4`）。故只能说
+  "在**当前数据**上 ep1 已超出该 legacy 全量读数"，**不能**说成"同数据同口径下的改进"。
+- 历史那批 0.4271 等数字**是 20% 数据口径**，与本行不可比（这正是上一轮差点误判的地方）。
+- 本轮才跑到 **ep1 / 150**，**不构成最终模型质量结论**；结论要等跑完（或至少到早停）。
+
+## 3. 本轮同时固化的两个配方
+
+| 配方 | 用途 | 关键实测 |
+|---|---|---|
+| `large_baseline_lowmem` | 全量可完成基线（yolo11n@640，150 轮） | 实测 **约 5.5 min/epoch** ⇒ 全程约 14 h |
+| `large_m_960_lowmem` | 文档里的"推荐冲刺"（yolo11m@960，200 轮） | **1.83 it/s ⇒ 约 49 min/epoch ⇒ 约 163 h，本机不可行**（已停，未跑完首轮） |
+
+`large_m_960_lowmem` 保留（换更大显存/更好的机器仍可用），并在注释里写明那 49 min/epoch，
+避免下次重复踩。
+
+## 4. 下一步
+
+1. 等 `large_baseline_lowmem` 跑完（或到早停），拿到**第一个全量 group1 基线**并登记为新版本
+   （`registry/detection/` 新增条目 + `CARD.md` + `pin.yaml`），把 legacy v1 换成同数据口径的对照。
+2. 若全量基线仍离 P/R ≥ 0.7 有明显差距，再按读数决定上 `large_s_960` / `large_m_960`
+   （在更好机器上）。
+3. **顺带要改的文档**：`docs/YOLO_OPTIMIZATION.md` 与 `external_checkpoints/EXPERIMENTS/LOG.md`
+   里那批 `fraction=0.2` 的读数应显式标注为 smoke 口径，否则下一个人还会拿它们当结果。
