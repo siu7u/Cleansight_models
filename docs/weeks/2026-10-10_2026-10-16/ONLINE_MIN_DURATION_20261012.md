@@ -72,3 +72,43 @@ sbc −32.7），但**没有单独查过这段差距里有多少是这条硬门�
 
 **注意**：本机此前 YOLO 全量训练在跑（占 GPU），故本文只做到机制验证这一步，
 在线臂的实际扫描留到 GPU 空闲时执行。
+
+
+## 5. 为什么这条门槛一直没被扫过：在线产物是**有损**的（2026-10-12 补查）
+
+本想直接用已存盘产物离线重套门槛（像离线侧 `tools/probe_offline_postprocess.py` 那样），
+**做不到**。查在线臂产物 `runs/v41-push/online-gru-hand-v2/h128/gru-*/artifacts/
+sliding_window_temporal-*.predictions.json` 的字段：
+
+```
+顶层: schema_version / task_type / prediction_format / inference / labels / items
+item: prediction_start_frame / num_predictions /
+      predicted_label_ids / truth_label_ids / predicted_labels / truth_labels
+```
+
+**只有"迟滞之后"的标签**，没有逐帧候选、也没有概率/分数。
+
+这一点决定了可扫与不可扫的分界：
+
+| | 离线（`full_sequence_temporal`） | 在线（`sliding_window_temporal`） |
+|---|---|---|
+| 逐帧 argmax 序列 | 就是产物本身 | **未保存** |
+| 后处理位置 | argmax **之后**（median / mindur） | 迟滞**在因果循环内部**（`pending/count/stable` 有状态） |
+| 能否离线重套参数 | **能**（`probe_offline_postprocess.py` 即如此） | **不能**——迟到门槛的输入是**未过门槛**的候选序列，而它没被存下来 |
+
+所以在线轨的 `smoothing_min_duration` **只能靠重跑推理来扫**，这大概也是它从 2026-09-18
+被记为"召回上限"之后**一直没有被真正扫过**的原因：代价不对称，而离线侧只要读产物即可。
+
+### 由此得出一条便宜的可做改进（建议，本轮未实施）
+
+在在线产物里**多存一列逐帧候选**（即 `causal_decision` 里那个 `candidate = argmax(scores)`，
+或等价地存 per-frame 分数），则：
+
+- 该门槛以及今后所有在线解码类工作都能**离线扫描**，与离线侧口径对齐；
+- 需要动的是产物 schema（`schema_version` 递增 + 消费方同步），属**中等改动**，
+  故本轮只登记建议、不动手；
+- 收益是可复用的：本轮为了扫一个常数本来要重跑 6 个 arm 的推理，有这一列则读产物即可。
+
+**本轮结论汇总**：① 门槛机制已合成验证（§1，精确上限）；② 它确实与 `sbc` 的段长冲突（§2）；
+③ 6 个在线臂全走默认 25、从未扫过（§3）；④ **无法离线扫，须重跑推理**；若要做，
+先在产物里存逐帧候选更划算（§5）。
