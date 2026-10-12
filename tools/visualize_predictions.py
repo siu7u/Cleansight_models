@@ -5,7 +5,10 @@
 **不重新加载 checkpoint、不重新推理**）与训练数据集（labels/ GT 动作 +
 frames/ 检测框）一起渲染成预览视频：顶部横幅显示当前抽样帧的**预测动作阶段**
 （Pred，动作色整条填充），其下小字显示人工真值（GT），帧内叠加 YOLO 检测框
-（``--no-boxes`` 关闭）。每帧对应数据集 ``labels/<split>/<seq>.txt`` 的一个
+（``--no-boxes`` 关闭）。横幅配色与时间码：动作色按类别 id 排序取 matplotlib `tab10`
+前 n 色（与 ``benchmark/visualizers/temporal.py`` 的色带图一致，见 ``action_palette``），
+右侧显示抽样帧号与真实时间码（``frame 271  t=9.0s``，无视频帧率时只给帧号）。
+每帧对应数据集 ``labels/<split>/<seq>.txt`` 的一个
 抽样帧，预测序列与标签行严格对齐（长度不一致直接报错，防静默错渲）。
 
 与 ``tools/visualize_dataset.py``（只渲染数据集 GT 产物）互补：本工具渲染的是
@@ -55,6 +58,35 @@ DETECTION_CLASSES = [
 
 BANNER_HEIGHT = 30   # 顶部预测横幅高度
 GT_STRIP_HEIGHT = 20  # 预测横幅下方的 GT 小字条高度
+
+# matplotlib `tab10` 前 10 色（默认色序）转 OpenCV BGR。
+# 动作配色按"类别 id 排序后的位置"取色（与 `benchmark/visualizers/temporal.py` 的
+# ListedColormap 一致）——这样视频横幅与 GT/Pred 色带图的颜色对得上：
+# idle 蓝 / flush 橙 / long_brush_insert 绿 / long_brush_withdraw 红 / short_brush_cleaning 紫。
+# 不要按动作 id 直接索引本表（会得到 flush 绿、withdraw 紫的错配）。
+TAB10_BGR: list[tuple[int, int, int]] = [
+    (180, 119, 31),   # blue
+    (14, 127, 255),   # orange
+    (44, 160, 44),    # green
+    (40, 39, 214),    # red
+    (189, 103, 148),  # purple
+    (75, 86, 140),    # brown
+    (194, 119, 227),  # pink
+    (127, 127, 127),  # gray
+    (34, 189, 188),   # olive
+    (53, 190, 207),   # cyan
+]
+
+
+def action_palette(used_ids) -> dict[int, tuple[int, int, int]]:
+    """动作 id → 横幅颜色：只在**本产物里实际出现过的类别**之间按 id 排序取 tab10 前 n 色。
+
+    与 ``benchmark/visualizers/temporal.py`` 的 GT/Pred 色带图保持同一映射——
+    v4.1 test 上即 idle 蓝 / flush 橙 / long_brush_insert 绿 / long_brush_withdraw 红 /
+    short_brush_cleaning 紫；``water_injection`` 无正样本，不占色位。
+    """
+
+    return {cid: TAB10_BGR[i % len(TAB10_BGR)] for i, cid in enumerate(sorted(used_ids))}
 
 
 def load_artifact(path: Path) -> dict:
@@ -148,6 +180,12 @@ def render_prediction_video(
             f"{sequence}: 真值序列长度 {len(truth_ids)} 与标签帧数 {len(label_frames)} 不一致"
         )
     label_id_to_name = {int(l["id"]): str(l["name"]) for l in artifact["labels"]}
+    # 配色只在"本产物里真的出现过的类别"之间分配，保证与色带图同色（见 action_palette）
+    used_ids: set[int] = set()
+    for _item in items.values():
+        used_ids.update(int(x) for x in _item.get("truth_label_ids", []))
+        used_ids.update(int(x) for x in _item.get("predicted_label_ids", []))
+    palette = action_palette(used_ids or label_id_to_name)
     detection_names = load_class_names(dataset_root / "frames" / "data.yaml", DETECTION_CLASSES)
     frames_dir = dataset_root / "frames" / split
 
@@ -219,13 +257,20 @@ def render_prediction_video(
                     cv2.putText(frame, name, (x1, max(0, y1 - 6)),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
-            # 顶部预测横幅：动作色整条填充 + 白字动作名 + 帧号
-            pred_color = CLASS_COLORS[pred_id % len(CLASS_COLORS)]
+            # 顶部预测横幅：动作色整条填充 + 白字动作名 + 帧号/时间码
+            pred_color = palette.get(pred_id, TAB10_BGR[pred_id % len(TAB10_BGR)])
             cv2.rectangle(frame, (0, 0), (width, BANNER_HEIGHT), pred_color, -1)
             pred_name = label_id_to_name.get(pred_id, f"cls_{pred_id}")
             cv2.putText(frame, f"Pred: {pred_name}", (8, 21),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
-            cv2.putText(frame, f"frame {frame_id}", (width - 140, 21),
+            # 右侧帧号；有视频帧率时同时给真实时间码（便于与报告里的秒级时间码对照）
+            right_text = f"frame {frame_id}"
+            if video_fps > 0:
+                right_text += f"  t={frame_id / video_fps:.1f}s"
+            (text_w, _text_h), _baseline = cv2.getTextSize(
+                right_text, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 1
+            )
+            cv2.putText(frame, right_text, (max(8, width - text_w - 8), 21),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
 
             # 真值小字条：深色底 + 白字；预测不符时标注 MISMATCH

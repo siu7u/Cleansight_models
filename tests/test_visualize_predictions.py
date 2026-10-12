@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from tools.visualize_predictions import (  # noqa: E402
+    action_palette,
     load_artifact,
     main,
     parse_args,
@@ -30,6 +31,12 @@ from tools.visualize_predictions import (  # noqa: E402
 from tools.visualize_dataset import CLASS_COLORS  # noqa: E402
 
 GRAY = 128
+
+
+def _assert_banner_color(banner: np.ndarray, expected: tuple[int, int, int]) -> None:
+    """横幅取样色 ≈ 期望色（视频是有损编码，逐通道留 ±40 容差）。"""
+
+    assert all(abs(int(b) - e) < 40 for b, e in zip(banner, expected)), (banner, expected)
 
 
 def _make_artifact(path: Path, sequences: dict) -> dict:
@@ -132,14 +139,15 @@ class TestRenderPredictionVideo:
         assert output.is_file()
         frames = _read_video_frames(output)
         assert len(frames) == 3
-        # 帧 1 预测动作 1 → 横幅 CLASS_COLORS[1]（蓝）；GT 小字条深色底
-        banner = _banner_color(frames[0])
-        blue = CLASS_COLORS[1]
-        assert int(banner[0]) - int(banner[1]) > 60  # B 明显大于 R
+        # 横幅配色 = 按"出现过的类别"排序取 tab10（与 benchmark/visualizers/temporal.py 色带图同色）：
+        # 本例类别 {0,1,2} → 0 蓝 / 1 橙 / 2 绿。
+        palette = action_palette({0, 1, 2})
+        # 帧 1 预测动作 1 → 横幅取动作 1 的颜色（橙）；GT 小字条深色底
+        _assert_banner_color(_banner_color(frames[0]), palette[1])
         assert _gt_strip_gray(frames[0])
-        # 帧 3 预测动作 0 → 横幅 CLASS_COLORS[0]（绿）
-        green = _banner_color(frames[2])
-        assert int(green[1]) - int(green[2]) > 60  # G 明显大于 R
+        # 帧 3 预测动作 0 → 横幅取动作 0 的颜色（蓝），且明显不是动作 2 的颜色
+        _assert_banner_color(_banner_color(frames[2]), palette[0])
+        assert not all(abs(int(b) - e) < 40 for b, e in zip(_banner_color(frames[2]), palette[2]))
 
     def test_mismatch_frame_renders(self, tmp_path, capsys):
         root = tmp_path / "ds"

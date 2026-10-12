@@ -251,6 +251,45 @@ broken link means the change is incomplete.
 新增周文件夹后，在 `docs/weeks/README.md` §3 的索引表登记一行。
 约定建立之前产生的文档**不回填**，保留原位。
 
+## 可视化产物约定（2026-10-09 起生效）
+
+**所有可视化产物统一落在 `outputs/visualizations/`**，按主题/形态建子目录：
+
+- `outputs/visualizations/<主题>/`，例：`bands/`（色带图与时间码对照表）、`timeline/`
+  （`predict_timeline.py` 的动作段时间线 JSON 与带状图）。
+
+**不要再把可视化散落**到 `tmp/`（随时清理、不入库）、仓库根或临时目录。两处例外：
+
+- `runs/<run>/viz/` 与 `runs/<run>/evals/viz/` 是**该 run 自己的评测产物**，被 delivery manifest
+  以相对路径引用 —— **不要搬动、改名或删除**，否则清单失效；需要引用时用路径链接过去。
+- 需要**版本控制**的"报告图"仍放 `docs/figures/`（那里有 `figN_*.png` 命名与 `README.md` 索引）。
+  `outputs/` 被 `.gitignore` 的 `**/outputs/` 忽略，属"可再生、不入库"区。
+
+**渲染约定（务必遵守，否则图之间会串色/不可用）**：
+
+- **配色**：按类别 id 排序后的**位置**取 `tab10` 前 n 色 —— idle 蓝 / flush 橙 / long_brush_insert 绿 /
+  long_brush_withdraw 红 / short_brush_cleaning 紫（与 `benchmark/visualizers/temporal.py` 一致）。
+  **不要按类别 id 直接索引 tab10**（会得到 flush 绿、withdraw 紫的错配）；`water_injection` 在 v4.1
+  无正样本，不出现在图中。
+- **横轴**：凡要对照真实视频的图**必须给秒**（源视频 30fps、抽样步长 2 → 秒 = 抽样索引 / 15），并在
+  上轴标真实帧号（= 1 + 2 × 索引）；只给 0-based 抽样索引的图不能用于定位视频。
+  注意 artifact 里的 `prediction_start_frame` 是 **0-based 索引基准**，不是真实帧号。
+- **中文标签**：本机**没有中文字体**（`fc-list :lang=zh` 为空、matplotlib 无 CJK 字体），图中文字
+  一律用英文/ASCII，否则渲染成方框（仓库既有 `tools/plot_report_figures.py` 同样只用英文）。
+- **代表性**：跨臂对比图统一取「acc 最接近中位」的 seed，并在标题写明口径；不要挑最好或最差的 seed。
+
+**现成工具**（只读已存盘预测产物，不推理、不加载 checkpoint）：
+
+| 工具 | 作用 |
+|---|---|
+| `tools/plot_gt_vs_pred_bands.py` | GT vs 各臂 色带图；`--axis seconds\|index`、`--arm NAME=LABEL`、`--all-arms`、`--per-page`、`--seed-pick` |
+| `tools/report_band_timecodes.py` | 色带内容 ↔ 真实视频时间码：`--mode segments`（逐视频逐段明细）/ `matrix`（GT 动作段 × 各臂），`--csv` 附 Excel 表 |
+
+```bash
+python tools/plot_gt_vs_pred_bands.py                    # → outputs/visualizations/bands/gt_vs_pred_tc_pNN.png
+python tools/report_band_timecodes.py --mode both --csv   # → band_timecodes_{segments,matrix}.{md,csv}
+```
+
 ## Backend Integration Rules
 
 Before claiming a model is integrated into `CleanSightBackend`, verify:
