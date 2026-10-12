@@ -5,6 +5,14 @@
 
 ## 目标
 
+> **读历史读数前必看（2026-10-12 补）**：本页与
+> [`../external_checkpoints/EXPERIMENTS/LOG.md`](../external_checkpoints/EXPERIMENTS/LOG.md)
+> 里 2026-08 的 mAP50 / P / R **全部是 `fraction=0.2` 的探针口径**
+> （20% 数据、15 轮上限）。逐个核对 `runs/cleansight-yolo/opt-group1*` 的 `args.yaml`，
+> **11 个历史 run 无一例外**——所以本页下面提到的"目标 P/R ≥ 0.7"在此前**从未在足量数据上
+> 被检验过**。全量口径（`fraction=1.0`）的 group1 首个 run 起于 2026-10-12
+> （`large_baseline_lowmem`，150 轮）。
+
 - **group1_large**（hand / scope_control_body / scope_mid_section）：通过多方法对比，把
   整体 Precision 与 Recall 提升到 **≥ 0.7**。
 - **group2_small**（syringe / air_gun / scope_distal_end / short_brush / brush_tip_out）：
