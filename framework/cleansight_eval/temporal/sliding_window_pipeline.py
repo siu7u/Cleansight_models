@@ -235,9 +235,58 @@ class SlidingWindowTemporalPipeline(Pipeline):
                 train_loader, num_classes=model_cfg["num_classes"],
                 clip=train_cfg.get("class_weight_clip"),
             )
-            criterion = nn.CrossEntropyLoss(
-                weight=torch.tensor([weights[i] for i in sorted(weights)], dtype=torch.float32).to(device)
-            )
+            # 类别权重（冻结或自动）
+            frozen_weights = train_cfg.get("class_weights")
+            if frozen_weights is not None:
+                if len(frozen_weights) != model_cfg["num_classes"]:
+                    raise ValueError(f"train.class_weights 长度 {len(frozen_weights)} != num_classes")
+                criterion = nn.CrossEntropyLoss(
+                    weight=torch.tensor(frozen_weights, dtype=torch.float32).to(device),
+                    reduction="none" if train_cfg.get("boundary_aware") else "mean"
+                )
+            else:
+                criterion = nn.CrossEntropyLoss(
+                    weight=torch.tensor([weights[i] for i in sorted(weights)], dtype=torch.float32).to(device),
+                    reduction="none" if train_cfg.get("boundary_aware") else "mean"
+                )
+            # 边界感知：为每个训练样本预计算帧级权重
+            boundary_aware = train_cfg.get("boundary_aware", False)
+            boundary_radius = int(train_cfg.get("boundary_radius", 15))
+            boundary_weight = float(train_cfg.get("boundary_weight", 3.0))
+            transition_only = bool(train_cfg.get("transition_only", False))
+            sample_frame_weights = None
+            if boundary_aware:
+                # 预计算每个视频的边界帧 mask
+                all_frame_weights = []
+                for vi in range(len(features)):
+                    t = truths[vi]
+                    T = len(t)
+                    fw = np.ones(T, dtype=np.float32)
+                    # 找 GT 段边界
+                    for i in range(1, T):
+                        if t[i] != t[i-1]:
+                            lo = max(0, i - boundary_radius)
+                            hi = min(T, i + boundary_radius)
+                            for j in range(lo, hi):
+                                if transition_only:
+                                    # 只加权 idle↔action 过渡（t[i-1]==0 or t[i]==0）
+                                    if t[i-1] == 0 or t[i] == 0:
+                                        fw[j] = boundary_weight
+                                else:
+                                    fw[j] = boundary_weight
+                    all_frame_weights.append(fw)
+                # 展开为与 train_ds 样本对齐的权重数组
+                sample_frame_weights = []
+                for vi in range(len(features)):
+                    T = len(truths[vi])
+                    for start in range(T - window + 1):
+                        end = start + window - 1  # 末帧索引
+                        sample_frame_weights.append(all_frame_weights[vi][end])
+                sample_frame_weights = torch.tensor(sample_frame_weights, dtype=torch.float32).to(device)
+                log_info = f"boundary_aware={boundary_aware}, radius={boundary_radius}, weight={boundary_weight}, transition_only={transition_only}"
+                print(f"[train] {log_info}")
+                print(f"[train] 边界帧占比: {float((sample_frame_weights > 1.0).float().mean()):.2%}")
+
             optimizer = torch.optim.Adam(
                 model.parameters(),
                 lr=train_cfg.get("lr", 1e-3),
@@ -310,10 +359,21 @@ class SlidingWindowTemporalPipeline(Pipeline):
                 epoch_start = time.perf_counter()
                 model.train()
                 losses: list[float] = []
-                for x, y in train_loader:
+                for batch_idx, (x, y) in enumerate(train_loader):
                     x, y = x.to(device), y.to(device)
                     logits = model(x)  # [B, window, C]
-                    loss = criterion(logits[:, -1, :], y)
+                    if boundary_aware and sample_frame_weights is not None:
+                        # 逐帧加权 loss（reduction='none' 时返回 [B] 向量）
+                        raw_loss = criterion(logits[:, -1, :], y)  # [B]
+                        # 取当前 batch 对应的帧权重
+                        start_idx = batch_idx * train_loader.batch_size
+                        end_idx = min(start_idx + len(y), len(sample_frame_weights))
+                        bw = sample_frame_weights[start_idx:end_idx]
+                        if len(bw) != len(raw_loss):
+                            bw = torch.ones_like(raw_loss)  # 尾部 batch 兜底
+                        loss = (raw_loss * bw).mean()
+                    else:
+                        loss = criterion(logits[:, -1, :], y)
                     if not _loss_is_finite(loss):
                         raise FloatingPointError(f"epoch={epoch}: loss is NaN/Inf")
                     optimizer.zero_grad()
