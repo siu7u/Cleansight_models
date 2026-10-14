@@ -123,3 +123,15 @@ IDLE_FACTOR = 1.0                 # 不惩罚
 ---
 
 *分析日期：2026-10-14 · 分支 feat/lhh/feature-scheme · LOVO npz（v4.1, seed42）*
+
+---
+
+## 六、Ensemble 实验（同日追加）
+
+| 策略 | test edit | test F1@0.25 |
+|---|---:|---:|
+| GRU×5 ensemble | 61.50 | **66.24** |
+| GRU×5 + TCN×3 | 54.83 | 62.16 |
+
+> GRU×5 的 F1@0.25 +1.3（vs 最佳单 seed 64.90）；TCN 混合全面失败。详见 FEATURE_LAB §18。
+> 部署建议：推理延迟允许 → GRU×5；延迟敏感 → 单模型。

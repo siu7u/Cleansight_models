@@ -747,3 +747,38 @@ test 的 8 个视频跨版本未变（同源 project-18），属**合法同集�
 
 > 执行注记：合并 feat/roi-training 后 data.py 的 nodep 分发被 -X theirs 覆盖丢失，
 > 本轮修复（commit 记录在案）后探针才跑通。测试缓存中的 40 维 bbox 特征也一并清除重建。
+
+## 18. 多 Seed Ensemble：GRU×5 的 F1@0.25 +1.3，TCN 混合全面失败（2026-10-14）
+
+> 设计：5 个 GRU w32 seed（42/7/2026/0/1）+ 3 个 TCN seed，test split 8 视频，
+> 最优后处理参数（min_len=[11,1,3,19,8,2], k=5）。`tmp/ensemble_probe.py`。
+
+### 18.1 单模型 vs Ensemble
+
+| 策略 | test edit | test F1@0.25 | 判读 |
+|---|---:|---:|---|
+| GRU seed42 alone | 59.24 | 62.16 | |
+| GRU seed0 alone | 62.03 | 60.98 | |
+| GRU seed1 alone | 60.65 | 63.35 | |
+| GRU seed7 alone | **63.74** | 56.25 | 单 seed edit 最佳 |
+| GRU seed2026 alone | 62.73 | **64.90** | 单 seed F1 最佳 |
+| GRU ensemble ×2 | 58.25 | 62.89 | ❌ 低于最佳单 seed |
+| GRU ensemble ×3 | 63.55 | 62.34 | ≈最佳单 seed |
+| **GRU ensemble ×5** | 61.50 | **66.24** | 🏆 **F1@0.25 全场最高** |
+| GRU×5 + TCN×3 (avg) | 54.83 | 62.16 | ❌ TCN 拖累 |
+| GRU×5 + TCN×3 w=8:2 | 60.76 | 62.75 | ❌ 仍低于纯 GRU |
+
+### 18.2 结论
+
+1. **GRU×5 ensemble 在 F1@0.25 上显著领先**（66.24 vs 最佳单 seed 64.90，+1.3）
+   ——多 seed 概率平均平滑了帧级抖动，直接改善边界定位；但 edit 未同步提升（61.50 vs 63.74），
+   因 edit 更看段级全局结构，seed 间的段级差异无法靠概率平均消除。
+2. **TCN 混合 ensemble 全面失败**——即使 8:2 加权也低于纯 GRU。TCN 的概率分布与 GRU
+   差异太大（§17 已确认），叠加稀释了 GRU 的高置信预测。
+3. **注意**：test 仅 8 视频，edit 波动大；F1@0.25 的提升更可信（帧级指标对样本量更稳健）。
+4. **部署建议**：边界精度优先 → GRU×5 ensemble（+1.3 F1@0.25，推理成本 5×）；
+   推理延迟敏感 → 单模型（seed 7 edit 最佳或 seed 2026 F1 最佳）。
+
+> 注意：§17 单 seed 融合探针中 GRU seed42 的 flush F1=0.118 异常低，但本 ensemble 实验
+> 中 seed42 test edit 59.24 为最差——两实验一致，确认 seed42 是一个偏弱的 seed。
+> ensemble 平均后该弱点被其他 seed 覆盖。
