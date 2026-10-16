@@ -76,6 +76,7 @@ from .features import (
     resolve_embedding_root,
     roi_grid_v2_block_dims,
 )
+VELOCITY_BBOX_VERSION = "bbox-velocity-56d-v1"
 from .features.nodep_concat import (
     NODEP_CONCAT_DIM,
     NODEP_CONCAT_VERSION,
@@ -714,6 +715,7 @@ def load_split(
     roi_v4_recipe = feature_version == ROI_GRID_V4_VERSION
     roi_v5_recipe = feature_version == ROI_GRID_V5_VERSION
     nodep_concat_recipe = feature_version == NODEP_CONCAT_VERSION
+    velocity_recipe = feature_version == VELOCITY_BBOX_VERSION
     boxset_recipe = feature_version == BOXSET_VERSION
     combo_recipe = feature_version == COMBO_VERSION
     hand_recipe = feature_version == HAND_BBOX_VERSION
@@ -868,6 +870,26 @@ def load_split(
                     for path in frame_paths
                 ]
             ).astype(np.float32)
+        velocity_done = False
+        if velocity_recipe:
+            # bbox-40 + 速度通道：帧间差分 (dcx, dcy) × 8 类 = 16 维 → 56 维
+            base = np.stack(
+                [
+                    featurize_frame_bbox(path, mask_target_ids=mask_target_ids)
+                    for path in frame_paths
+                ]
+            ).astype(np.float32)  # [T, 40]
+            T = base.shape[0]
+            vel = np.zeros((T, 16), dtype=np.float32)
+            for ti in range(1, T):
+                prev, cur = base[ti - 1].reshape(8, 5), base[ti].reshape(8, 5)
+                for ci in range(8):
+                    # 两帧都检出该类才算真实位移（presence 位都为 1）
+                    if prev[ci, 0] > 0.5 and cur[ci, 0] > 0.5:
+                        vel[ti, ci * 2] = cur[ci, 1] - prev[ci, 1]      # dcx
+                        vel[ti, ci * 2 + 1] = cur[ci, 2] - prev[ci, 2]  # dcy
+            feats = np.concatenate([base, vel], axis=1)  # [T, 56]
+            velocity_done = True
         if nodep_concat_recipe:
             feats, _names, actual_version = build_nodep_concat_features(
                 frame_paths,
@@ -881,7 +903,7 @@ def load_split(
             if feats.shape[1] != NODEP_CONCAT_DIM:
                 raise ValueError(f"nodep 维度 {feats.shape[1]} != {NODEP_CONCAT_DIM}")
 
-        else:
+        elif not velocity_done:
             feats = np.stack(
                 [
                     featurize_frame_bbox(path, mask_target_ids=mask_target_ids)
