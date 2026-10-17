@@ -69,6 +69,43 @@ def build_temporal_prediction_artifact(
     return artifact
 
 
+def build_temporal_segments_artifact(
+    frame_artifact: Mapping[str, Any],
+    *,
+    decode_config: Mapping[str, Any] | None = None,
+) -> dict:
+    """从 frame_labels artifact 派生段级 artifact（可由 frame_labels 逐位重算）。
+
+    每段 [start, end) 半开区间（帧号），label 为动作名；decode_config 记录解码
+    参数（如 v1.2 的 min_len/max_len/smooth_k/merge_mode），保证段产物可复现。
+    """
+    segments_items = {}
+    for name, payload in frame_artifact.get("items", {}).items():
+        ids = payload.get("predicted_label_ids", [])
+        id_to_name = {int(l["id"]): l["name"] for l in frame_artifact.get("labels", [])}
+        segs = []
+        start = 0
+        for i in range(1, len(ids) + 1):
+            if i == len(ids) or ids[i] != ids[start]:
+                segs.append({
+                    "start": start + int(payload.get("prediction_start_frame", 0)),
+                    "end": i + int(payload.get("prediction_start_frame", 0)),
+                    "label": id_to_name.get(int(ids[start]), str(ids[start])),
+                })
+                start = i
+        segments_items[name] = {"segments": segs, "n_segments": len(segs)}
+
+    artifact = {
+        "schema_version": 1,
+        "task_type": "temporal_segments",
+        "prediction_format": "segments",
+        "derived_from": "frame_labels",
+        "decode_config": dict(decode_config or {}),
+        "items": segments_items,
+    }
+    return artifact
+
+
 def validate_temporal_prediction_artifact(artifact: Mapping[str, Any]) -> None:
     """校验逐视频时序 artifact 的 schema、标签和逐帧对齐。"""
 
@@ -154,12 +191,40 @@ def validate_detection_prediction_artifact(artifact: Mapping[str, Any]) -> None:
                 raise ValueError(f"{name}[{index}]: xywhn 必须为数值")
 
 
+def validate_temporal_segments_artifact(artifact: Mapping[str, Any]) -> None:
+    """校验段级 artifact：items 内 segments 半开区间单调递增且解码配置在场。"""
+
+    if artifact.get("prediction_format") != "segments":
+        raise ValueError("temporal_segments artifact 的 prediction_format 必须是 segments")
+    if "decode_config" not in artifact:
+        raise ValueError("temporal_segments artifact 缺少 decode_config")
+    items = artifact.get("items")
+    if not isinstance(items, Mapping) or not items:
+        raise ValueError("temporal_segments artifact 缺少 items")
+    for name, payload in items.items():
+        segs = payload.get("segments")
+        if not isinstance(segs, list):
+            raise ValueError(f"{name}: segments 必须是列表")
+        prev_end = None
+        for seg in segs:
+            start, end = int(seg["start"]), int(seg["end"])
+            if end <= start:
+                raise ValueError(f"{name}: 段必须 end > start: {start},{end}")
+            if prev_end is not None and start < prev_end:
+                raise ValueError(f"{name}: 段起点 {start} 小于上一段终点 {prev_end}")
+            prev_end = end
+        if payload.get("n_segments") != len(segs):
+            raise ValueError(f"{name}: n_segments 与段数不一致")
+
+
 def validate_prediction_artifact(artifact: Mapping[str, Any]) -> None:
     """按 task_type 分派到唯一的 artifact schema 校验器。"""
 
     task_type = artifact.get("task_type")
     if task_type == "temporal":
         validate_temporal_prediction_artifact(artifact)
+    elif task_type == "temporal_segments":
+        validate_temporal_segments_artifact(artifact)
     elif task_type == "detection":
         validate_detection_prediction_artifact(artifact)
     else:
@@ -204,4 +269,6 @@ def prediction_artifact_recomputable(artifact: Mapping[str, Any]) -> bool | None
     if artifact.get("task_type") == "temporal":
         temporal_metrics_from_prediction_artifact(artifact)
         return True
+    if artifact.get("task_type") == "temporal_segments":
+        return None  # 段产物由 frame_labels 派生，指标复算走 predictions artifact
     return None

@@ -71,7 +71,14 @@ TEMPORAL_METRIC_SPECS: dict[str, dict[str, object]] = {
 }
 # 分段 F1 逐阈值展开（summary 键 `f1@0.1/0.25/0.5`，details 键 `0.10/0.25/0.50`）。
 for _threshold in DEFAULT_INTERVAL_IOU_THRESHOLDS:
-    TEMPORAL_METRIC_SPECS[f"f1@{_threshold:g}"] = {
+    BOUNDARY_METRIC_VERSION = "boundary-f1-v1"
+for _btol in (5, 10):
+    TEMPORAL_METRIC_SPECS[f"boundary_f1@{_btol}"] = {
+        "spec": f"{BOUNDARY_METRIC_VERSION}:tolerance={_btol}frames/half-open-start/end/matched-by-max-overlap",
+        "unit": "ratio",
+        "detail_path": ("segment", "boundary", str(_btol)),
+    }
+TEMPORAL_METRIC_SPECS[f"f1@{_threshold:g}"] = {
         "spec": SEGMENTAL_F1_SPEC,
         "unit": "percent",
         "detail_path": ("segment", "f1_at_iou", f"{float(_threshold):.2f}"),
@@ -227,6 +234,67 @@ def segments_from_labels(
             current = values[index]
     return segments
 
+
+def boundary_f1_by_tolerance(
+    pred_by_item: Mapping[str, Sequence[Label]],
+    truth_by_item: Mapping[str, Sequence[Label]],
+    tolerances: Sequence[int] = (5, 10),
+) -> dict[int, dict[str, float]]:
+    """段边界 F1：同类段按最大重叠配对，边界差 <= 容差帧算命中。
+
+    每段贡献 2 个边界（start/end）。precision = 命中预测边界 / 预测总边界，
+    recall = 命中 GT 边界 / GT 总边界，F1 为调和平均。跨 item 池化。
+    """
+    results: dict[int, dict[str, float]] = {}
+    for tol in tolerances:
+        hit_gt = hit_pred = total_gt = total_pred = 0
+        for name, truth in truth_by_item.items():
+            pred = pred_by_item.get(name, [])
+            gt_segs = segments_from_labels(truth)
+            pr_segs = segments_from_labels(pred)
+            total_gt += 2 * len(gt_segs)
+            total_pred += 2 * len(pr_segs)
+            for g in gt_segs:
+                best = None
+                for p_ in pr_segs:
+                    if p_.label != g.label:
+                        continue
+                    ov = min(g.end, p_.end) - max(g.start, p_.start)
+                    if ov > 0 and (best is None or ov > best[0]):
+                        best = (ov, p_)
+                if best is not None:
+                    ps, pe = best[1].start, best[1].end
+                    if abs(ps - g.start) <= tol:
+                        hit_gt += 1
+                    if abs(pe - g.end) <= tol:
+                        hit_gt += 1
+            for p_ in pr_segs:
+                best = None
+                for g in gt_segs:
+                    if g.label != p_.label:
+                        continue
+                    ov = min(g.end, p_.end) - max(g.start, p_.start)
+                    if ov > 0 and (best is None or ov > best[0]):
+                        best = (ov, g)
+                if best is not None:
+                    gs, ge = best[1].start, best[1].end
+                    if abs(p_.start - gs) <= tol:
+                        hit_pred += 1
+                    if abs(p_.end - ge) <= tol:
+                        hit_pred += 1
+        precision = hit_pred / total_pred if total_pred else 0.0
+        recall = hit_gt / total_gt if total_gt else 0.0
+        f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+        results[tol] = {
+            "precision": precision,
+            "recall": recall,
+            "f1": f1,
+            "gt_boundaries": total_gt,
+            "pred_boundaries": total_pred,
+            "hit_gt": hit_gt,
+            "hit_pred": hit_pred,
+        }
+    return results
 
 def match_intervals(
     predictions: Sequence[Interval], truths: Sequence[Interval], iou_threshold: float
@@ -449,6 +517,10 @@ def temporal_metrics(
             "edit": mean(edits) if edits else None,
             "f1_at_iou": {key: value["f1"] for key, value in details.items()},
             "details_at_iou": details,
+            "boundary": {
+                str(tol): counts
+                for tol, counts in boundary_f1_by_tolerance(pred_by_item, truth_by_item).items()
+            },
         },
     }
 

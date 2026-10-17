@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
-from benchmark.core.artifacts import build_temporal_prediction_artifact
+from benchmark.core.artifacts import build_temporal_prediction_artifact, build_temporal_segments_artifact
 from framework.cleansight_eval.core.metrics import (
     ACC_SPEC,
     DEFAULT_INTERVAL_IOU_THRESHOLDS,
@@ -91,6 +91,15 @@ def compute_temporal_metrics_by_item(
         "frame.macro_iou": _percent_metric(frame.get("macro_iou"), SPEC_FRAME_CLASS),
         "frame.micro_f1": _percent_metric(frame.get("micro_f1"), SPEC_FRAME_CLASS),
     }
+    boundary = segment.get("boundary", {})
+    for tol in (5, 10):
+        b = boundary.get(str(tol))
+        if b is not None:
+            import framework.cleansight_eval.core.metrics as _m
+            metrics[f"boundary_f1@{tol}"] = MetricValue.computed(
+                round(float(b["f1"]), 4),
+                spec=_m.metric_spec(f"boundary_f1@{tol}"),
+            )
     for threshold in DEFAULT_INTERVAL_IOU_THRESHOLDS:
         key = f"{threshold:.2f}"
         detail = segment["details_at_iou"][key]
@@ -211,5 +220,12 @@ def evaluate(output: Any, options: Mapping[str, Any] | None = None) -> Evaluatio
         inference_semantics=dict(_value(output, "inference_semantics", {}) or {}),
         num_params=_value(output, "num_params"),
     )
-    result.pending_artifacts["predictions"] = _prediction_artifact(output)
+    frame_artifact = _prediction_artifact(output)
+    result.pending_artifacts["predictions"] = frame_artifact
+    # 段级 artifact：由 frame_labels 派生（可逐位重算），decode_config 记录解码参数
+    metadata = dict(_value(output, "metadata", {}) or {})
+    decode_config = metadata.get("decode_config") or {"decoder": "collapse-argmax"}
+    result.pending_artifacts["segments"] = build_temporal_segments_artifact(
+        frame_artifact, decode_config=decode_config
+    )
     return result

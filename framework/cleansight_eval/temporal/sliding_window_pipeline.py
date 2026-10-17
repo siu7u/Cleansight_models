@@ -580,6 +580,11 @@ class SlidingWindowTemporalPipeline(Pipeline):
             num_params=meta.get("num_params"),
             timing=timing,
             metadata={
+                "decode_config": (
+                    {"decoder": "v1.2", **{k: list(v) if isinstance(v, tuple) else v for k, v in pp_params.items()}}
+                    if postprocess_mode == "v12"
+                    else {"decoder": "causal_decision", "min_duration": min_duration}
+                ),
                 "split": cfg["data"]["split_eval"],
                 "window": window,
                 "input_dim": model_cfg["input_dim"],
