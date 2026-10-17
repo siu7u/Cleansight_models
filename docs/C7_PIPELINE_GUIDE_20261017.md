@@ -42,3 +42,12 @@
 - 仅离线（角色平滑用未来 0.5s + 双向卷积 + v1.2 中心窗平滑）
 - 纯 flush 视频可能幻觉长毛刷动作（67edf4f9 案例，edit 23-31）
 - flush 帧级 F1 < 0.1（syringe 检出率 3% 的上游瓶颈）
+
+## 后端集成状态（2026-10-17 晚）
+
+后端仓库 CleanSightBackend 的 `feature/offline-c7-role-hands` 分支已完成 C7 全量集成
+（默认离线模型，含 15 分钟截断/帧率门禁/嵌入缓存/GPU 钉卡）——但解码器仍为 pp20。
+
+**已备未推**：本地分支 `feature/offline-c7-v12-decoder`（基于其 c7 分支）——
+`decoder_v12.py` 逐位移植 + segmenter 增 `decoder: pp20|v12` 构造参数（默认 pp20 行为不变）。
+py_compile 通过。**待协调后端负责人后推送**。
