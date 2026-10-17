@@ -27,7 +27,8 @@
 以下为 **v4.1 版**（§16，2026-10-09：15fps 重采样 + LS 时间轴 ×1.25 修正 + 均衡划分）：
 
 | `fig7_lovo_summary_v41.png` | v4.1 LOVO **35 折**汇总：GT/原始/双向过滤(min+max) 三行段条，按原始 edit 升序；中位 edit **47.83 → 56.25** |
-| `lovo_probs_v41/foldXX_*.png` | v4.1 逐折概率图（35 张）：15fps 采样，概率曲线 + 三行段条 |
+| `lovo_probs_v41/foldXX_*.png` | v4.1 逐折概率图（35 张）：15fps 采样，概率曲线 + 三行段条
+| `test_probs_v41/foldXX_*.png` | **test split 8 视频**逐折概率图：生产后处理配置（min×0.2 + max），概率曲线 + 三行段条 | |
 | `fig8_fusion_probe.png` | GRU+TCN 融合探针（§17）：左=6 策略柱状图（Class route 唯一胜出），右=逐类 F1（TCN flush 5.1× 领先） |
 | `lovo_probs/foldXX_*.png` | 每折 held-out 视频的"各标签概率-时间"图：上=6 类 softmax 概率曲线 + GT 背景色带，下=GT vs 预测段条 |
 
