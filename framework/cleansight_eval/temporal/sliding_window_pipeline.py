@@ -50,6 +50,8 @@ from .data import (
 )
 from .external import configure_external_model
 from .models import build_model, is_causal
+from .postprocess import apply_v12
+from .postprocess import resolve_params as resolve_postprocess_params
 from .training_validation import summarize_training_metrics
 from .util import (
     causal_decision,
@@ -479,6 +481,11 @@ class SlidingWindowTemporalPipeline(Pipeline):
         )
         datasets = [SlidingWindowDataset(features[i], truths[i], window) for i in range(len(features))]
 
+        postprocess_mode = str((cfg.get("evaluation") or {}).get("postprocess", "none"))
+        if postprocess_mode not in ("none", "v12"):
+            raise ValueError(f"evaluation.postprocess 必须是 none/v12，实际 {postprocess_mode!r}")
+        pp_params = resolve_postprocess_params(cfg.get("evaluation") or {}) if postprocess_mode == "v12" else None
+
         model.eval()
         video_preds, video_gts = [], []
         with torch.no_grad():
@@ -487,15 +494,26 @@ class SlidingWindowTemporalPipeline(Pipeline):
                 preds = np.zeros(total_frames, dtype=np.int64)
                 preds[: window - 1] = IDLE_ID  # 冷启动
 
-                pending, stable, count = None, IDLE_ID, 0  # 每视频 reset
-                for i in range(len(ds)):
-                    x, _ = ds[i]
-                    x = x.unsqueeze(0).to(device)  # [1, window, F]
-                    last = model(x)[0, -1]  # 末帧 logits
-                    pending, stable, count = causal_decision(
-                        last, pending, stable, count, min_duration=min_duration
-                    )
-                    preds[i + window - 1] = stable
+                if postprocess_mode == "v12":
+                    # v1.2 批式后处理：先收集逐帧概率，视频级整体处理
+                    probs = np.zeros((total_frames, model_cfg["num_classes"]), dtype=np.float32)
+                    probs[: window - 1, IDLE_ID] = 1.0
+                    for i in range(len(ds)):
+                        x, _ = ds[i]
+                        x = x.unsqueeze(0).to(device)
+                        last = model(x)[0, -1]
+                        probs[i + window - 1] = torch.softmax(last, dim=-1).cpu().numpy()
+                    preds = apply_v12(probs, **pp_params)
+                else:
+                    pending, stable, count = None, IDLE_ID, 0  # 每视频 reset
+                    for i in range(len(ds)):
+                        x, _ = ds[i]
+                        x = x.unsqueeze(0).to(device)  # [1, window, F]
+                        last = model(x)[0, -1]  # 末帧 logits
+                        pending, stable, count = causal_decision(
+                            last, pending, stable, count, min_duration=min_duration
+                        )
+                        preds[i + window - 1] = stable
                 video_preds.append(preds)
                 video_gts.append(ds.y.numpy())
 

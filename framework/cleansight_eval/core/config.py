@@ -87,7 +87,7 @@ KNOWN_SECTION_KEYS = {
     "evaluation": {
         "mode", "testset_id", "save_predictions", "measure_latency", "latency_warmup",
         "latency_runs", "limits", "conf", "iou", "max_det", "agnostic_nms",
-        "visualize", "viz_per_page", "smoothing_min_duration",
+        "visualize", "viz_per_page", "postprocess", "postprocess_params", "smoothing_min_duration",
     },
     "train": {
         "epochs", "lr", "batch", "batch_size", "patience", "window", "grad_clip",
