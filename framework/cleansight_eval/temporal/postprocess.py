@@ -171,3 +171,38 @@ def resolve_params(evaluation_cfg):
     if out["merge_mode"] not in _VALID_MODES:
         raise ValueError(f"merge_mode 必须是 {_VALID_MODES}，实际 {out['merge_mode']!r}")
     return out
+
+
+def trailing_smooth(probs, k: int = DEFAULT_SMOOTH_K) -> np.ndarray:
+    """因果（尾随）平滑：只看过去 k 帧——流式部署用，与中心窗质量等效
+    （LOVO 35 折实测 edit 中位完全一致 71.43=71.43，见 §25）。"""
+    if k <= 1:
+        return probs
+    out = np.empty_like(probs)
+    cs = np.cumsum(probs, axis=0)
+    for i in range(len(probs)):
+        lo = max(0, i - k + 1)
+        if lo == 0:
+            out[i] = cs[i] / (i + 1)
+        else:
+            out[i] = (cs[i] - cs[lo - 1]) / k
+    return out
+
+
+def apply_v12_causal(probs, **kwargs) -> np.ndarray:
+    """流式版 v1.2：尾随平滑替代中心窗；min/max 合并需在缓冲后定案。
+
+    实证（§25）：H=15 帧前缀一致率 99.6%，H=90 帧为 100%——merge/split 对历史的
+    修正传播不超过 ~90 帧（6s@15fps）。流式实现：维护尾随缓冲，仅对 [0..t-90] 定案。
+    """
+    smoothed = trailing_smooth(probs, kwargs.get("smooth_k", DEFAULT_SMOOTH_K))
+    labels = smoothed.argmax(axis=1)
+    labels = merge_short(
+        labels,
+        kwargs.get("min_len", DEFAULT_MIN_LEN),
+        kwargs.get("merge_mode", DEFAULT_MERGE_MODE),
+    )
+    return split_long(labels, kwargs.get("max_len", DEFAULT_MAX_LEN))
+
+
+CAUSAL_DELAY_FRAMES = 90  # 6s @15fps：超此延迟的定案帧与批处理完全一致（实证 H）
