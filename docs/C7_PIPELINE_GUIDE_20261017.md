@@ -51,3 +51,12 @@
 **已备未推**：本地分支 `feature/offline-c7-v12-decoder`（基于其 c7 分支）——
 `decoder_v12.py` 逐位移植 + segmenter 增 `decoder: pp20|v12` 构造参数（默认 pp20 行为不变）。
 py_compile 通过。**待协调后端负责人后推送**。
+
+## 全量重训完成（2026-10-18）
+
+43 视频（44,649 帧）按 C7 完整配方重训（复用框架 MSTCN2 多阶段 CE+T-MSE；
+hidden32/stages2/layers5/dropout0.3/tmse0.15-4.0/norm-floor0.05/30ep/lr5e-4/
+类权重截断[0.03,5]/末轮）。4 seed 训练，**seed2026 部署后端**
+（in-sample 选种：edit 均值 75.9 / F1 81.0；泛化预期以 C7 包 5 折 CV 79.8 为准）。
+产物：runs/c7_full_retrain/full-seed*.pt；嵌入缓存 tmp/c7_hand_embeddings/（43/43，
+本地视频池补算）；特征缓存 tmp/c7_features_alldata/。
