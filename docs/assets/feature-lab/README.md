@@ -44,3 +44,4 @@
 注意：脚本内的输入/输出路径按其原位置（`tmp/`，本地工作区）写死；移出后运行需相应调整路径。
 LOVO 概率的推理语义与训练期 `_evaluate_sliding_window` 一致（逐窗末帧、原始 softmax、无
 causal_decision 平滑；冷启动前 window-1 帧置 idle=1.0，与 predict() 冷启动约定相同）。
+| `c7_test_probs_v41/foldXX_*.png` | **C7 管线（离线最优）test 8 视频**逐折图：v1.2 后处理，fold-held-out 权重 |
