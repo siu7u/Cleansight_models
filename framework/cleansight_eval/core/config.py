@@ -67,7 +67,7 @@ KNOWN_SECTION_KEYS = {
     "data": {
         "name", "dataset_ref", "data_yaml", "eval_split", "root", "action_mapping", "labels_dir",
         "frames_dir", "split_train", "split_val", "split_eval", "names", "fps",
-        "feature_cache",
+        "feature_cache", "c7_feature_dir",
         # 训练视频子采样比例（学习曲线横轴；只作用于 train split，val/test 恒全量）
         "train_video_fraction",
         # 形态 B：embedding 产物根目录（catalog 的 feature_embed.root 为默认值）

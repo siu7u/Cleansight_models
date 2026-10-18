@@ -77,6 +77,8 @@ from .features import (
     roi_grid_v2_block_dims,
 )
 VELOCITY_BBOX_VERSION = "bbox-velocity-56d-v1"
+C7_ROLE_VERSION = "c7-role-106d-v1"          # C7 角色化特征直喂（预计算目录）
+NODEP_ROLE_VERSION = "nodep-role-332d-v1"    # nodep-226d ⊕ C7-106d 拼接
 from .features.nodep_concat import (
     NODEP_CONCAT_DIM,
     NODEP_CONCAT_VERSION,
@@ -716,6 +718,8 @@ def load_split(
     roi_v5_recipe = feature_version == ROI_GRID_V5_VERSION
     nodep_concat_recipe = feature_version == NODEP_CONCAT_VERSION
     velocity_recipe = feature_version == VELOCITY_BBOX_VERSION
+    c7_role_recipe = feature_version == C7_ROLE_VERSION
+    nodep_role_recipe = feature_version == NODEP_ROLE_VERSION
     boxset_recipe = feature_version == BOXSET_VERSION
     combo_recipe = feature_version == COMBO_VERSION
     hand_recipe = feature_version == HAND_BBOX_VERSION
@@ -870,7 +874,34 @@ def load_split(
                     for path in frame_paths
                 ]
             ).astype(np.float32)
-        velocity_done = False
+        # C7 特征直喂/拼接（预计算目录 data.c7_feature_dir，按 stem8 查 npz）
+        if c7_role_recipe or nodep_role_recipe:
+            c7_dir = Path(data_cfg.get("c7_feature_dir", ""))
+            if not c7_dir:
+                raise ValueError(f"{feature_version} 需要 data.c7_feature_dir 指向 C7 预计算特征目录")
+            c7_path = c7_dir / f"{stem[:8]}.npz"
+            if not c7_path.exists():
+                raise FileNotFoundError(f"C7 特征缺失: {c7_path}")
+            c7_feats = np.load(c7_path, allow_pickle=True)["feats"].astype(np.float32)
+            if c7_feats.shape[1] != 106:
+                raise ValueError(f"C7 特征维度 {c7_feats.shape[1]} != 106")
+        if c7_role_recipe:
+            feats = c7_feats
+            velocity_done = True
+        elif nodep_role_recipe:
+            base = np.stack(
+                [featurize_frame_bbox(path, mask_target_ids=mask_target_ids) for path in frame_paths]
+            ).astype(np.float32)  # bbox-40 底座 → 用 nodep 全算
+            feats_nodep, _names, actual_version = build_nodep_concat_features(
+                frame_paths, detection_mapping=detection_mapping or {}, fps=fps,
+                confidence_default=confidence_default, mask_target_ids=mask_target_ids,
+            )
+            if feats_nodep.shape[0] != c7_feats.shape[0]:
+                raise ValueError(f"nodep T={feats_nodep.shape[0]} 与 C7 T={c7_feats.shape[0]} 不齐: {stem[:8]}")
+            feats = np.concatenate([feats_nodep, c7_feats], axis=1)
+            velocity_done = True
+        else:
+            velocity_done = False
         if velocity_recipe:
             # bbox-40 + 速度通道：帧间差分 (dcx, dcy) × 8 类 = 16 维 → 56 维
             base = np.stack(
